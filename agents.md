@@ -2,6 +2,7 @@ Project guidance for the mobile app currently referred to as the TV/movie tracki
 This file is a living project memory. Update it only when Tom validates a product, architecture, security, or business decision.
 Working Method
 Move in small validated blocks.
+For each step, explain how Tom can validate the result before moving on.
 Do not jump ahead into implementation before the current block is agreed.
 Execution should be milestone-based and page-by-page.
 Do not move to the next page until the current page has its UI, backend/API contract, key states, privacy rules, and verification handled.
