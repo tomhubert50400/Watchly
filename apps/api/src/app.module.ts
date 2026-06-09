@@ -9,6 +9,7 @@ import { HealthController } from './health.controller';
     ConfigModule.forRoot({
       isGlobal: true,
       validationSchema: Joi.object({
+        CORS_ORIGIN: Joi.string().uri().optional(),
         NODE_ENV: Joi.string().valid('development', 'test', 'production').default('development'),
         PORT: Joi.number().integer().min(1).max(65535).default(3000),
       }),

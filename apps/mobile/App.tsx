@@ -3,8 +3,10 @@ import { NavigationContainer, NavigatorScreenParams, useNavigation } from '@reac
 import { createNativeStackNavigator, NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { Home, ListChecks, Search, Settings, UserCircle } from 'lucide-react-native';
+import { PropsWithChildren } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ApiStatus } from './src/api/ApiStatus';
 
 type TabParamList = {
   HomeFeed: undefined;
@@ -65,7 +67,7 @@ const tabs: Record<
   },
 };
 
-function AppScreen({ body, eyebrow, showSettings, title }: ScreenProps) {
+function AppScreen({ body, children, eyebrow, showSettings, title }: PropsWithChildren<ScreenProps>) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   return (
@@ -91,12 +93,17 @@ function AppScreen({ body, eyebrow, showSettings, title }: ScreenProps) {
         <Text style={styles.emptyTitle}>{title}</Text>
         <Text style={styles.emptyBody}>{body}</Text>
       </View>
+      {children}
     </View>
   );
 }
 
 function HomeFeedScreen() {
-  return <AppScreen {...tabs.HomeFeed} />;
+  return (
+    <AppScreen {...tabs.HomeFeed}>
+      <ApiStatus />
+    </AppScreen>
+  );
 }
 
 function SearchDiscoverScreen() {
@@ -112,13 +119,7 @@ function ProfileScreen() {
 }
 
 function SettingsScreen() {
-  return (
-    <AppScreen
-      body="This area is empty for now."
-      eyebrow="Account"
-      title="No settings yet"
-    />
-  );
+  return <AppScreen body="This area is empty for now." eyebrow="Account" title="No settings yet" />;
 }
 
 function tabIcon(routeName: TabRoute, color: string, size: number) {
