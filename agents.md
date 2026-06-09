@@ -8,6 +8,7 @@ This file is a living project memory. Update it only when Tom validates a produc
 
 - Move in small validated blocks.
 - For each step, explain how Tom can validate the result before moving on.
+- If a step has no user-facing feature to inspect, Codex can self-validate with the agreed checks and move to the next step.
 - Do not jump ahead into implementation before the current block is agreed.
 - Execution should be milestone-based and page-by-page.
 - Do not move to the next page until the current page has its UI, backend/API contract, key states, privacy rules, and verification handled.
