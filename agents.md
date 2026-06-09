@@ -167,6 +167,10 @@ Candidate direction:
 - M0.8 Security Baseline: keep secrets backend-only, separate environments, add lightweight API rate limiting, input validation, safe logs, protected route checks, and avoid logging tokens or secrets.
 - M0.9 Final Validation: run mobile, run API, verify navigation, verify Settings entry, verify mobile healthcheck to API, verify DB connection, verify protected route behavior, run available lint/tests, and document commands.
 
+### M0 Validation Status
+
+- M0.1 Repo is validated: monorepo structure exists, pnpm workspace scripts are configured, install works, and root scripts run.
+
 ### Later Milestones
 
 - M1 Catalogue: Search/Discover plus film, series, season, and episode detail pages.
