@@ -7,6 +7,8 @@ dist/
 build/
 coverage/
 
+apps/api/src/generated/
+
 .expo/
 .expo-shared/
 
