@@ -17,3 +17,6 @@ apps/api/src/generated/
 !.env.example
 
 *.log
+*.pyc
+__pycache__/
+expo-go-*-qr.png
