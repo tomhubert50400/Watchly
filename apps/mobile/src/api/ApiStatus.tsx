@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { Button } from '../components/Button';
+import { colors, radii, spacing, typography } from '../design/tokens';
 import { getHealth, HealthResponse } from './health';
 
 export function ApiStatus() {
@@ -26,31 +28,71 @@ export function ApiStatus() {
   }, [loadHealth]);
 
   return (
-    <View style={styles.panel}>
-      <Text style={styles.label}>API status</Text>
+    <View style={[styles.panel, health ? styles.panelSuccess : null]}>
+      <View style={styles.header}>
+        <View style={[styles.dot, health ? styles.dotSuccess : styles.dotMuted]} />
+        <Text style={styles.label}>API status</Text>
+      </View>
       <Text style={styles.status}>
-        {isLoading ? 'Checking API...' : health ? 'Connected to API' : 'API unavailable'}
+        {isLoading ? 'Checking connection' : health ? 'Backend connected' : 'Backend offline'}
       </Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {!isLoading && !health ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={loadHealth}
-          style={({ pressed }) => [styles.retryButton, pressed && styles.pressed]}
-        >
-          <Text style={styles.retryText}>Retry</Text>
-        </Pressable>
+        <View style={styles.action}>
+          <Button label="Retry" onPress={loadHealth} />
+        </View>
       ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  error: { color: '#B91C1C', fontSize: 14, letterSpacing: 0, lineHeight: 20, marginTop: 8 },
-  label: { color: '#64748B', fontSize: 12, fontWeight: '700', letterSpacing: 0, textTransform: 'uppercase' },
-  panel: { backgroundColor: '#EEF2FF', borderColor: '#C7D2FE', borderRadius: 8, borderWidth: 1, marginTop: 16, padding: 16 },
-  pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
-  retryButton: { alignItems: 'center', alignSelf: 'flex-start', backgroundColor: '#111827', borderRadius: 8, marginTop: 14, paddingHorizontal: 14, paddingVertical: 10 },
-  retryText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700', letterSpacing: 0 },
-  status: { color: '#111827', fontSize: 16, fontWeight: '700', letterSpacing: 0, lineHeight: 22, marginTop: 6 },
+  action: {
+    alignItems: 'flex-start',
+    marginTop: spacing.md,
+  },
+  error: {
+    ...typography.body,
+    color: colors.danger,
+    marginTop: spacing.sm,
+  },
+  dot: {
+    borderRadius: 8,
+    height: 8,
+    marginRight: spacing.sm,
+    width: 8,
+  },
+  dotMuted: {
+    backgroundColor: colors.danger,
+  },
+  dotSuccess: {
+    backgroundColor: colors.success,
+  },
+  header: {
+    alignItems: 'center',
+    flexDirection: 'row',
+  },
+  label: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0,
+    textTransform: 'uppercase',
+  },
+  panel: {
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    marginTop: spacing.lg,
+    padding: spacing.lg,
+  },
+  panelSuccess: {
+    backgroundColor: colors.successBackground,
+  },
+  status: {
+    color: colors.text,
+    ...typography.title,
+    marginTop: spacing.sm,
+  },
 });

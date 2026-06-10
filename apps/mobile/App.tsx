@@ -1,117 +1,115 @@
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { NavigationContainer, NavigatorScreenParams, useNavigation } from '@react-navigation/native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator, NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
-import { Home, ListChecks, Search, Settings, UserCircle } from 'lucide-react-native';
-import { PropsWithChildren } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Home, Search, Settings, Tv, UserCircle } from 'lucide-react-native';
+import { Animated, Easing, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ApiStatus } from './src/api/ApiStatus';
+import { EmptyState } from './src/components/EmptyState';
+import { IconButton } from './src/components/IconButton';
+import { Screen } from './src/components/Screen';
+import { colors } from './src/design/tokens';
 
 type TabParamList = {
-  HomeFeed: undefined;
-  SearchDiscover: undefined;
-  Watchlists: undefined;
+  Feed: undefined;
+  Explore: undefined;
+  MyTV: undefined;
   Profile: undefined;
 };
 
 type RootStackParamList = {
-  MainTabs: NavigatorScreenParams<TabParamList>;
+  MainTabs: undefined;
   Settings: undefined;
 };
 
 type TabRoute = keyof TabParamList;
 
-type ScreenProps = {
+type AppScreenProps = {
   body: string;
-  eyebrow: string;
-  title: string;
+  emptyTitle: string;
+  headline: string;
   showSettings?: boolean;
 };
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
-const Tab = createBottomTabNavigator<TabParamList>();
+type TabContent = AppScreenProps & {
+  Icon: typeof Home;
+  label: string;
+};
 
-const tabs: Record<
-  TabRoute,
-  ScreenProps & { Icon: typeof Home; label: string }
-> = {
-  HomeFeed: {
+type AppNavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
+const tabOrder: TabRoute[] = ['Feed', 'Explore', 'MyTV', 'Profile'];
+
+const tabs: Record<TabRoute, TabContent> = {
+  Feed: {
     Icon: Home,
-    body: 'Public reviews from followed people will appear here.',
-    eyebrow: 'Followed reviews',
-    label: 'Home/Feed',
-    title: 'No feed items yet',
+    body: 'Follow people you trust and their public reviews will shape this feed.',
+    emptyTitle: 'No reviews from your circle yet',
+    headline: 'Track what matters next',
+    label: 'Feed',
   },
-  SearchDiscover: {
+  Explore: {
     Icon: Search,
-    body: 'Films and shows will appear here after search is connected.',
-    eyebrow: 'Catalogue',
-    label: 'Search/Discover',
-    title: 'No catalogue results yet',
+    body: 'Search will connect to the catalogue provider in the next milestone.',
+    emptyTitle: 'Search is not connected yet',
+    headline: 'Find films and series fast',
+    label: 'Explore',
   },
-  Watchlists: {
-    Icon: ListChecks,
-    body: 'Personal lists and shared voting sessions will appear here.',
-    eyebrow: 'Personal and shared',
-    label: 'Watchlists',
-    title: 'No watchlists yet',
+  MyTV: {
+    Icon: Tv,
+    body: 'Your films, series, progress, lists, and shared voting sessions will live here.',
+    emptyTitle: 'Your TV space is empty for now',
+    headline: 'Manage your watch life',
+    label: 'My TV',
   },
   Profile: {
     Icon: UserCircle,
-    body: 'Reviews visible on your profile will appear here.',
-    eyebrow: 'Public profile',
+    body: 'Public reviews will appear here. Viewing history stays private by default.',
+    emptyTitle: 'No public profile activity yet',
+    headline: 'Your public shelf',
     label: 'Profile',
     showSettings: true,
-    title: 'No profile activity yet',
   },
 };
 
-function AppScreen({ body, children, eyebrow, showSettings, title }: PropsWithChildren<ScreenProps>) {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+function AppScreen({ body, children, emptyTitle, headline, showSettings }: React.PropsWithChildren<AppScreenProps>) {
+  const navigation = useNavigation<AppNavigationProp>();
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.eyebrow}>{eyebrow}</Text>
-          <Text style={styles.heading}>{showSettings ? 'Profile' : eyebrow}</Text>
-        </View>
-        {showSettings ? (
-          <Pressable
+    <Screen
+      title={headline}
+      trailing={
+        showSettings ? (
+          <IconButton
             accessibilityLabel="Open settings"
-            accessibilityRole="button"
+            icon={<Settings color={colors.text} size={22} strokeWidth={2} />}
             onPress={() => navigation.navigate('Settings')}
-            style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
-          >
-            <Settings color="#111827" size={22} strokeWidth={2} />
-          </Pressable>
-        ) : null}
-      </View>
-
-      <View style={styles.emptyState}>
-        <Text style={styles.emptyTitle}>{title}</Text>
-        <Text style={styles.emptyBody}>{body}</Text>
-      </View>
+          />
+        ) : undefined
+      }
+    >
+      <EmptyState body={body} title={emptyTitle} />
       {children}
-    </View>
+    </Screen>
   );
 }
 
-function HomeFeedScreen() {
+function FeedScreen() {
   return (
-    <AppScreen {...tabs.HomeFeed}>
+    <AppScreen {...tabs.Feed}>
       <ApiStatus />
     </AppScreen>
   );
 }
 
-function SearchDiscoverScreen() {
-  return <AppScreen {...tabs.SearchDiscover} />;
+function ExploreScreen() {
+  return <AppScreen {...tabs.Explore} />;
 }
 
-function WatchlistsScreen() {
-  return <AppScreen {...tabs.Watchlists} />;
+function MyTVScreen() {
+  return <AppScreen {...tabs.MyTV} />;
 }
 
 function ProfileScreen() {
@@ -119,43 +117,208 @@ function ProfileScreen() {
 }
 
 function SettingsScreen() {
-  return <AppScreen body="This area is empty for now." eyebrow="Account" title="No settings yet" />;
+  return (
+    <Screen eyebrow="Account" title="Settings">
+      <EmptyState
+        body="Privacy and account controls will appear here. They stay separate from the main tabs."
+        title="Settings foundation ready"
+      />
+    </Screen>
+  );
 }
 
 function tabIcon(routeName: TabRoute, color: string, size: number) {
   const Icon = tabs[routeName].Icon;
-  return <Icon color={color} size={size} strokeWidth={2} />;
+  return (
+    <View style={styles.tabIconFrame}>
+      <Icon color={color} size={size} strokeWidth={2} />
+    </View>
+  );
+}
+
+function renderTabScreen(routeName: TabRoute) {
+  if (routeName === 'Feed') {
+    return <FeedScreen />;
+  }
+
+  if (routeName === 'Explore') {
+    return <ExploreScreen />;
+  }
+
+  if (routeName === 'MyTV') {
+    return <MyTVScreen />;
+  }
+
+  return <ProfileScreen />;
+}
+
+function clampPagerOffset(value: number, width: number) {
+  const min = -(tabOrder.length - 1) * width;
+
+  if (value > 0) {
+    return value * 0.28;
+  }
+
+  if (value < min) {
+    return min + (value - min) * 0.28;
+  }
+
+  return value;
 }
 
 function MainTabs() {
+  const { width } = useWindowDimensions();
+  const [activeIndex, setActiveIndex] = useState(0);
+  const activeIndexRef = useRef(activeIndex);
+  const currentOffsetRef = useRef(0);
+  const dragStartRef = useRef(0);
+  const gestureReadyRef = useRef(true);
+  const isDraggingRef = useRef(false);
+  const pendingGestureDxRef = useRef(0);
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    activeIndexRef.current = activeIndex;
+  }, [activeIndex]);
+
+  useEffect(() => {
+    const offset = -activeIndexRef.current * width;
+
+    currentOffsetRef.current = offset;
+    dragStartRef.current = offset;
+    translateX.setValue(offset);
+  }, [translateX, width]);
+
+  const animateToIndex = useMemo(
+    () => (nextIndex: number) => {
+      const index = Math.max(0, Math.min(nextIndex, tabOrder.length - 1));
+
+      setActiveIndex(index);
+      activeIndexRef.current = index;
+      currentOffsetRef.current = -index * width;
+
+      Animated.timing(translateX, {
+        duration: 240,
+        easing: Easing.out(Easing.cubic),
+        toValue: -index * width,
+        useNativeDriver: true,
+      }).start();
+    },
+    [translateX, width],
+  );
+
+  const pagerResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          Math.abs(gesture.dx) > 10 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.25,
+        onPanResponderGrant: () => {
+          isDraggingRef.current = true;
+          gestureReadyRef.current = false;
+          pendingGestureDxRef.current = 0;
+          translateX.stopAnimation((value) => {
+            if (!isDraggingRef.current) {
+              return;
+            }
+
+            currentOffsetRef.current = value;
+            dragStartRef.current = value;
+            gestureReadyRef.current = true;
+
+            if (pendingGestureDxRef.current !== 0) {
+              const nextOffset = clampPagerOffset(
+                dragStartRef.current + pendingGestureDxRef.current,
+                width,
+              );
+
+              currentOffsetRef.current = nextOffset;
+              translateX.setValue(nextOffset);
+            }
+          });
+        },
+        onPanResponderMove: (_, gesture) => {
+          if (!gestureReadyRef.current) {
+            pendingGestureDxRef.current = gesture.dx;
+            return;
+          }
+
+          const nextOffset = clampPagerOffset(dragStartRef.current + gesture.dx, width);
+
+          currentOffsetRef.current = nextOffset;
+          translateX.setValue(nextOffset);
+        },
+        onPanResponderRelease: (_, gesture) => {
+          isDraggingRef.current = false;
+          gestureReadyRef.current = true;
+          pendingGestureDxRef.current = 0;
+          const currentIndex = activeIndexRef.current;
+          const shouldMove =
+            Math.abs(gesture.dx) > width * 0.2 || Math.abs(gesture.vx) > 0.65;
+          const direction = gesture.dx < 0 ? 1 : -1;
+          const nextIndex = shouldMove ? currentIndex + direction : currentIndex;
+
+          animateToIndex(nextIndex);
+        },
+        onPanResponderTerminate: () => {
+          isDraggingRef.current = false;
+          gestureReadyRef.current = true;
+          pendingGestureDxRef.current = 0;
+          animateToIndex(activeIndexRef.current);
+        },
+      }),
+    [animateToIndex, translateX, width],
+  );
+
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarActiveTintColor: '#111827',
-        tabBarInactiveTintColor: '#6B7280',
-        tabBarIcon: ({ color, size }) => tabIcon(route.name, color, size),
-        tabBarLabelStyle: styles.tabLabel,
-        tabBarStyle: styles.tabBar,
-      })}
-    >
-      <Tab.Screen
-        component={HomeFeedScreen}
-        name="HomeFeed"
-        options={{ title: tabs.HomeFeed.label }}
-      />
-      <Tab.Screen
-        component={SearchDiscoverScreen}
-        name="SearchDiscover"
-        options={{ title: tabs.SearchDiscover.label }}
-      />
-      <Tab.Screen
-        component={WatchlistsScreen}
-        name="Watchlists"
-        options={{ title: tabs.Watchlists.label }}
-      />
-      <Tab.Screen component={ProfileScreen} name="Profile" />
-    </Tab.Navigator>
+    <View style={styles.mainTabs}>
+      <View style={styles.pagerViewport} {...pagerResponder.panHandlers}>
+        <Animated.View
+          style={[
+            styles.pagerTrack,
+            {
+              transform: [{ translateX }],
+              width: width * tabOrder.length,
+            },
+          ]}
+        >
+          {tabOrder.map((routeName, index) => (
+            <View
+              accessibilityElementsHidden={index !== activeIndex}
+              importantForAccessibility={index === activeIndex ? 'auto' : 'no-hide-descendants'}
+              key={routeName}
+              style={[styles.page, { width }]}
+            >
+              {renderTabScreen(routeName)}
+            </View>
+          ))}
+        </Animated.View>
+      </View>
+      <SafeAreaView edges={['bottom']} style={styles.tabBarSafe}>
+        <View style={styles.tabBar}>
+          {tabOrder.map((routeName, index) => {
+            const isActive = index === activeIndex;
+            const color = isActive ? colors.accent : colors.muted;
+
+            return (
+              <Pressable
+                accessibilityLabel={tabs[routeName].label}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isActive }}
+                key={routeName}
+                onPress={() => animateToIndex(index)}
+                style={({ pressed }) => [
+                  styles.tabButton,
+                  pressed && styles.tabButtonPressed,
+                ]}
+              >
+                {tabIcon(routeName, color, 24)}
+                <Text style={[styles.tabLabel, { color }]}>{tabs[routeName].label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -163,8 +326,16 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <NavigationContainer>
-        <StatusBar style="dark" />
-        <Stack.Navigator>
+        <StatusBar style="light" />
+        <Stack.Navigator
+          screenOptions={{
+            contentStyle: { backgroundColor: colors.background },
+            headerShadowVisible: false,
+            headerStyle: { backgroundColor: colors.background },
+            headerTintColor: colors.text,
+            headerTitleStyle: styles.stackHeaderTitle,
+          }}
+        >
           <Stack.Screen
             component={MainTabs}
             name="MainTabs"
@@ -173,7 +344,7 @@ export default function App() {
           <Stack.Screen
             component={SettingsScreen}
             name="Settings"
-            options={{ headerShadowVisible: false, title: 'Settings' }}
+            options={{ title: 'Settings' }}
           />
         </Stack.Navigator>
       </NavigationContainer>
@@ -182,15 +353,55 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  emptyBody: { color: '#475569', fontSize: 15, letterSpacing: 0, lineHeight: 22, marginTop: 8 },
-  emptyState: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB', borderRadius: 8, borderWidth: 1, marginTop: 32, padding: 20 },
-  emptyTitle: { color: '#111827', fontSize: 18, fontWeight: '700', letterSpacing: 0, lineHeight: 24 },
-  eyebrow: { color: '#64748B', fontSize: 13, fontWeight: '700', letterSpacing: 0, marginBottom: 10, textTransform: 'uppercase' },
-  header: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between' },
-  heading: { color: '#111827', fontSize: 34, fontWeight: '800', letterSpacing: 0, lineHeight: 40 },
-  iconButton: { alignItems: 'center', backgroundColor: '#FFFFFF', borderColor: '#D1D5DB', borderRadius: 8, borderWidth: 1, height: 44, justifyContent: 'center', width: 44 },
-  pressed: { opacity: 0.72, transform: [{ scale: 0.98 }] },
-  screen: { backgroundColor: '#F8FAFC', flex: 1, paddingHorizontal: 24, paddingTop: 68 },
-  tabBar: { borderTopColor: '#E5E7EB', height: 64, paddingBottom: 8, paddingTop: 8 },
-  tabLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0 },
+  mainTabs: {
+    backgroundColor: colors.background,
+    flex: 1,
+  },
+  page: {
+    flex: 1,
+  },
+  pagerTrack: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  pagerViewport: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  stackHeaderTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0,
+  },
+  tabBar: {
+    alignItems: 'center',
+    backgroundColor: colors.panel,
+    borderTopColor: colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    height: 82,
+    paddingBottom: 14,
+    paddingTop: 10,
+  },
+  tabBarSafe: {
+    backgroundColor: colors.panel,
+  },
+  tabButton: {
+    alignItems: 'center',
+    flex: 1,
+    gap: 5,
+    height: 58,
+    justifyContent: 'center',
+  },
+  tabButtonPressed: {
+    opacity: 0.72,
+  },
+  tabIconFrame: {
+    alignItems: 'center',
+    height: 24,
+    justifyContent: 'center',
+    width: 28,
+  },
+  tabLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 0, lineHeight: 12 },
 });
