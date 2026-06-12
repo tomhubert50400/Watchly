@@ -6,21 +6,26 @@ import { Home, Search, Settings, Tv, UserCircle } from 'lucide-react-native';
 import { Animated, Easing, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { ApiStatus } from './src/api/ApiStatus';
+import { AuthSessionProvider } from './src/auth/AuthSessionContext';
+import { ProfileAuthCard } from './src/auth/ProfileAuthCard';
+import { EpisodeDetailScreen } from './src/catalogue/EpisodeDetailScreen';
+import { ExploreScreen } from './src/catalogue/ExploreScreen';
+import { FilmDetailScreen } from './src/catalogue/FilmDetailScreen';
+import { SeasonDetailScreen } from './src/catalogue/SeasonDetailScreen';
+import { SeriesDetailScreen } from './src/catalogue/SeriesDetailScreen';
 import { EmptyState } from './src/components/EmptyState';
 import { IconButton } from './src/components/IconButton';
 import { Screen } from './src/components/Screen';
 import { colors } from './src/design/tokens';
+import { RootStackParamList } from './src/navigation/types';
+import { SettingsScreen } from './src/profile/SettingsScreen';
+import { MyTvScreen } from './src/tracking/MyTvScreen';
 
 type TabParamList = {
   Feed: undefined;
   Explore: undefined;
   MyTV: undefined;
   Profile: undefined;
-};
-
-type RootStackParamList = {
-  MainTabs: undefined;
-  Settings: undefined;
 };
 
 type TabRoute = keyof TabParamList;
@@ -104,26 +109,11 @@ function FeedScreen() {
   );
 }
 
-function ExploreScreen() {
-  return <AppScreen {...tabs.Explore} />;
-}
-
-function MyTVScreen() {
-  return <AppScreen {...tabs.MyTV} />;
-}
-
 function ProfileScreen() {
-  return <AppScreen {...tabs.Profile} />;
-}
-
-function SettingsScreen() {
   return (
-    <Screen eyebrow="Account" title="Settings">
-      <EmptyState
-        body="Privacy and account controls will appear here. They stay separate from the main tabs."
-        title="Settings foundation ready"
-      />
-    </Screen>
+    <AppScreen {...tabs.Profile}>
+      <ProfileAuthCard />
+    </AppScreen>
   );
 }
 
@@ -146,7 +136,7 @@ function renderTabScreen(routeName: TabRoute) {
   }
 
   if (routeName === 'MyTV') {
-    return <MyTVScreen />;
+    return <MyTvScreen />;
   }
 
   return <ProfileScreen />;
@@ -325,29 +315,51 @@ function MainTabs() {
 export default function App() {
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <StatusBar style="light" />
-        <Stack.Navigator
-          screenOptions={{
-            contentStyle: { backgroundColor: colors.background },
-            headerShadowVisible: false,
-            headerStyle: { backgroundColor: colors.background },
-            headerTintColor: colors.text,
-            headerTitleStyle: styles.stackHeaderTitle,
-          }}
-        >
-          <Stack.Screen
-            component={MainTabs}
-            name="MainTabs"
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            component={SettingsScreen}
-            name="Settings"
-            options={{ title: 'Settings' }}
-          />
-        </Stack.Navigator>
-      </NavigationContainer>
+      <AuthSessionProvider>
+        <NavigationContainer>
+          <StatusBar style="light" />
+          <Stack.Navigator
+            screenOptions={{
+              contentStyle: { backgroundColor: colors.background },
+              headerShadowVisible: false,
+              headerStyle: { backgroundColor: colors.background },
+              headerTintColor: colors.text,
+              headerTitleStyle: styles.stackHeaderTitle,
+            }}
+          >
+            <Stack.Screen
+              component={MainTabs}
+              name="MainTabs"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              component={SettingsScreen}
+              name="Settings"
+              options={{ title: 'Settings' }}
+            />
+            <Stack.Screen
+              component={EpisodeDetailScreen}
+              name="EpisodeDetail"
+              options={({ route }) => ({ title: route.params.title })}
+            />
+            <Stack.Screen
+              component={FilmDetailScreen}
+              name="FilmDetail"
+              options={({ route }) => ({ title: route.params.title })}
+            />
+            <Stack.Screen
+              component={SeasonDetailScreen}
+              name="SeasonDetail"
+              options={({ route }) => ({ title: route.params.title })}
+            />
+            <Stack.Screen
+              component={SeriesDetailScreen}
+              name="SeriesDetail"
+              options={({ route }) => ({ title: route.params.title })}
+            />
+          </Stack.Navigator>
+        </NavigationContainer>
+      </AuthSessionProvider>
     </SafeAreaProvider>
   );
 }
