@@ -2,12 +2,17 @@
   "expo": {
     "name": "Untitled TV App",
     "slug": "tv-app",
+    "scheme": "tvapp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "bundleIdentifier": "com.tom.tvapp.dev",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -20,6 +25,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "58f2b198-56a0-4c86-bb77-af0a628faf04"
+      }
     }
   }
 }
