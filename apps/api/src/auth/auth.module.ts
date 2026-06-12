@@ -8,6 +8,7 @@ import { FirebaseTokenVerifier } from './firebase-token-verifier.service';
 
 @Module({
   controllers: [AuthController],
+  exports: [AuthGuard, AuthService, FirebaseTokenVerifier],
   imports: [ConfigModule],
   providers: [AuthGuard, AuthService, FirebaseTokenVerifier, PrismaService],
 })
