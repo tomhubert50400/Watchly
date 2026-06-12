@@ -24,12 +24,30 @@ enum SharedWatchlistVisibility {
   PRIVATE
 }
 
+enum TrackedContentType {
+  MOVIE
+  SERIES
+}
+
+enum UserContentStatus {
+  WATCHLISTED
+  WATCHING
+  WATCHED
+  DROPPED
+}
+
 model User {
   id              String           @id @default(uuid()) @db.Uuid
   displayName     String?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   authIdentities  AuthIdentity[]
+  contentStates   UserContentState[]
+  episodeProgress UserEpisodeProgress[]
+  episodeRatings  UserEpisodeRating[]
+  episodeReviews  UserEpisodeReview[]
+  movieRatings    UserMovieRating[]
+  movieReviews    UserMovieReview[]
   privacySettings PrivacySettings?
 
   @@map("users")
@@ -61,4 +79,102 @@ model PrivacySettings {
   user                      User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("privacy_settings")
+}
+
+model UserContentState {
+  id          String             @id @default(uuid()) @db.Uuid
+  userId      String             @db.Uuid
+  contentType TrackedContentType
+  tmdbId      Int
+  status      UserContentStatus?
+  favorite    Boolean            @default(false)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contentType, tmdbId])
+  @@index([userId])
+  @@index([contentType, tmdbId])
+  @@map("user_content_states")
+}
+
+model UserMovieRating {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  tmdbId         Int
+  scoreHalfSteps Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tmdbId])
+  @@index([userId])
+  @@index([tmdbId])
+  @@map("user_movie_ratings")
+}
+
+model UserEpisodeRating {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  seriesTmdbId   Int
+  seasonNumber   Int
+  episodeNumber  Int
+  scoreHalfSteps Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, seriesTmdbId, seasonNumber, episodeNumber])
+  @@index([userId])
+  @@index([seriesTmdbId, seasonNumber])
+  @@map("user_episode_ratings")
+}
+
+model UserMovieReview {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  tmdbId    Int
+  body      String   @db.VarChar(5000)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tmdbId])
+  @@index([userId])
+  @@index([tmdbId])
+  @@map("user_movie_reviews")
+}
+
+model UserEpisodeReview {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @db.Uuid
+  seriesTmdbId  Int
+  seasonNumber  Int
+  episodeNumber Int
+  body          String   @db.VarChar(5000)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, seriesTmdbId, seasonNumber, episodeNumber])
+  @@index([userId])
+  @@index([seriesTmdbId, seasonNumber])
+  @@map("user_episode_reviews")
+}
+
+model UserEpisodeProgress {
+  id            String   @id @default(uuid()) @db.Uuid
+  userId        String   @db.Uuid
+  seriesTmdbId  Int
+  seasonNumber  Int
+  episodeNumber Int
+  watchedAt     DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, seriesTmdbId, seasonNumber, episodeNumber])
+  @@index([userId])
+  @@index([seriesTmdbId, seasonNumber])
+  @@map("user_episode_progress")
 }
