@@ -1,4 +1,6 @@
-const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+import { publicEnv } from '../config/publicEnv';
+
+const apiUrl = publicEnv.EXPO_PUBLIC_API_URL;
 
 type ApiRequestOptions = {
   body?: unknown;

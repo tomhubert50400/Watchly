@@ -12,6 +12,7 @@ import {
   User,
 } from '@firebase/auth';
 import * as FirebaseAuth from '@firebase/auth';
+import { publicEnv } from '../config/publicEnv';
 
 const firebaseConfigKeys = [
   'EXPO_PUBLIC_FIREBASE_API_KEY',
@@ -19,6 +20,13 @@ const firebaseConfigKeys = [
   'EXPO_PUBLIC_FIREBASE_PROJECT_ID',
   'EXPO_PUBLIC_FIREBASE_APP_ID',
 ] as const;
+
+const firebaseConfig = {
+  EXPO_PUBLIC_FIREBASE_API_KEY: publicEnv.EXPO_PUBLIC_FIREBASE_API_KEY,
+  EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: publicEnv.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  EXPO_PUBLIC_FIREBASE_PROJECT_ID: publicEnv.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  EXPO_PUBLIC_FIREBASE_APP_ID: publicEnv.EXPO_PUBLIC_FIREBASE_APP_ID,
+} satisfies Record<(typeof firebaseConfigKeys)[number], string | undefined>;
 
 export type FirebaseSession = {
   displayName: string | null;
@@ -32,7 +40,7 @@ const reactNativeAuth = FirebaseAuth as typeof FirebaseAuth & {
 };
 
 export function getMissingFirebaseConfig(): string[] {
-  return firebaseConfigKeys.filter((key) => !process.env[key]);
+  return firebaseConfigKeys.filter((key) => !firebaseConfig[key]);
 }
 
 export async function signInWithGoogleIdToken(googleIdToken: string): Promise<FirebaseSession> {
@@ -86,9 +94,9 @@ function getAuthInstance() {
 
 function getFirebaseConfig(): FirebaseOptions {
   return {
-    apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
-    appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
-    authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+    apiKey: firebaseConfig.EXPO_PUBLIC_FIREBASE_API_KEY,
+    appId: firebaseConfig.EXPO_PUBLIC_FIREBASE_APP_ID,
+    authDomain: firebaseConfig.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    projectId: firebaseConfig.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
   };
 }

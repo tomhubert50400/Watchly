@@ -1,11 +1,12 @@
 import { Platform } from 'react-native';
+import { publicEnv } from '../config/publicEnv';
 
 export const authRedirectScheme = 'tvapp';
 
 export const googleClientIds = {
-  androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-  iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+  androidClientId: publicEnv.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+  iosClientId: publicEnv.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+  webClientId: publicEnv.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
 };
 
 export function getMissingGoogleClientConfig(): string[] {
