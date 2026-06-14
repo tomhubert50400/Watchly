@@ -8,8 +8,12 @@
     "db:migrate": "prisma migrate dev",
     "db:verify": "tsx src/database/verify-database.ts",
     "prisma:generate": "prisma generate",
+    "security:audit-smoke": "tsx src/security/audit-log-smoke.ts",
+    "security:backup-readiness": "tsx src/security/backup-readiness.ts",
+    "security:privacy-smoke": "tsx src/security/privacy-smoke.ts",
     "start": "node dist/main.js",
     "start:dev": "tsx watch src/main.ts",
+    "test": "tsx src/security/security-qa.ts",
     "typecheck": "pnpm run prisma:generate && tsc --noEmit"
   },
   "dependencies": {
