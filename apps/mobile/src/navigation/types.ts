@@ -11,6 +11,7 @@ export type RootStackParamList = {
     tmdbId: number;
   };
   MainTabs: undefined;
+  Onboarding: undefined;
   PublicProfile: {
     previewOwnProfile?: boolean;
     userId: string;

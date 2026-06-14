@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Home, Search, Settings, Tv, UserCircle } from 'lucide-react-native';
 import { Animated, Easing, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { AuthSessionProvider } from './src/auth/AuthSessionContext';
+import { AuthSessionProvider, useAuthSession } from './src/auth/AuthSessionContext';
 import { ProfileAuthCard } from './src/auth/ProfileAuthCard';
 import { EpisodeDetailScreen } from './src/catalogue/EpisodeDetailScreen';
 import { ExploreScreen } from './src/catalogue/ExploreScreen';
@@ -18,6 +18,7 @@ import { Screen } from './src/components/Screen';
 import { colors } from './src/design/tokens';
 import { FeedScreen } from './src/feed/FeedScreen';
 import { RootStackParamList } from './src/navigation/types';
+import { OnboardingScreen } from './src/onboarding/OnboardingScreen';
 import { PublicProfileScreen } from './src/profile/PublicProfileScreen';
 import { SettingsScreen } from './src/profile/SettingsScreen';
 import { MyTvScreen } from './src/tracking/MyTvScreen';
@@ -311,16 +312,37 @@ export default function App() {
     <SafeAreaProvider>
       <AuthSessionProvider>
         <NavigationContainer>
-          <StatusBar style="light" />
-          <Stack.Navigator
-            screenOptions={{
-              contentStyle: { backgroundColor: colors.background },
-              headerShadowVisible: false,
-              headerStyle: { backgroundColor: colors.background },
-              headerTintColor: colors.text,
-              headerTitleStyle: styles.stackHeaderTitle,
-            }}
-          >
+          <AppNavigator />
+        </NavigationContainer>
+      </AuthSessionProvider>
+    </SafeAreaProvider>
+  );
+}
+
+function AppNavigator() {
+  const { currentUser } = useAuthSession();
+  const needsOnboarding = currentUser && !currentUser.onboardingCompleted;
+
+  return (
+    <>
+      <StatusBar style="light" />
+      <Stack.Navigator
+        screenOptions={{
+          contentStyle: { backgroundColor: colors.background },
+          headerShadowVisible: false,
+          headerStyle: { backgroundColor: colors.background },
+          headerTintColor: colors.text,
+          headerTitleStyle: styles.stackHeaderTitle,
+        }}
+      >
+        {needsOnboarding ? (
+          <Stack.Screen
+            component={OnboardingScreen}
+            name="Onboarding"
+            options={{ headerShown: false }}
+          />
+        ) : (
+          <>
             <Stack.Screen
               component={MainTabs}
               name="MainTabs"
@@ -361,10 +383,10 @@ export default function App() {
               name="SeriesDetail"
               options={({ route }) => ({ title: route.params.title })}
             />
-          </Stack.Navigator>
-        </NavigationContainer>
-      </AuthSessionProvider>
-    </SafeAreaProvider>
+          </>
+        )}
+      </Stack.Navigator>
+    </>
   );
 }
 

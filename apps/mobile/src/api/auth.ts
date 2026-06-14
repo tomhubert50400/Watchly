@@ -3,6 +3,7 @@ import { apiGet } from './client';
 export type CurrentUser = {
   displayName: string | null;
   id: string;
+  onboardingCompleted: boolean;
   provider: 'GOOGLE' | 'APPLE' | 'MICROSOFT';
 };
 

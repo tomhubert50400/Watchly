@@ -18,6 +18,12 @@ export type UserProfile = {
   privacy: ProfilePrivacy;
 };
 
+export type OnboardingCompletion = {
+  displayName: string | null;
+  id: string;
+  onboardingCompleted: boolean;
+};
+
 export type PublicProfile = {
   displayName: string | null;
   id: string;
@@ -69,4 +75,12 @@ export function updatePrivacy(
   input: UpdatePrivacyInput,
 ): Promise<UserProfile> {
   return apiPut<UserProfile>('/profile/privacy', input, { token: firebaseIdToken });
+}
+
+export function completeOnboarding(firebaseIdToken: string): Promise<OnboardingCompletion> {
+  return apiPut<OnboardingCompletion>(
+    '/profile/me/onboarding-completed',
+    {},
+    { token: firebaseIdToken },
+  );
 }
