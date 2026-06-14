@@ -67,6 +67,9 @@ model User {
   following          UserFollow[]         @relation("UserFollowsMade")
   followers          UserFollow[]         @relation("UserFollowsReceived")
   personalWatchlists PersonalWatchlist[]
+  ownedSharedWatchlists SharedWatchlist[]       @relation("SharedWatchlistOwner")
+  sharedWatchlistMemberships SharedWatchlistMember[]
+  sharedVotingVotes SharedVotingVote[]
 
   @@map("users")
 }
@@ -247,6 +250,88 @@ model PersonalWatchlistItem {
   @@unique([watchlistId, contentType, tmdbId])
   @@index([contentType, tmdbId])
   @@map("personal_watchlist_items")
+}
+
+model SharedWatchlist {
+  id        String                  @id @default(uuid()) @db.Uuid
+  ownerId   String                  @db.Uuid
+  name      String                  @db.VarChar(80)
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+  items     SharedWatchlistItem[]
+  members   SharedWatchlistMember[]
+  owner     User                    @relation("SharedWatchlistOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  votingSessions SharedVotingSession[]
+
+  @@index([ownerId])
+  @@map("shared_watchlists")
+}
+
+model SharedWatchlistMember {
+  id          String          @id @default(uuid()) @db.Uuid
+  watchlistId String          @db.Uuid
+  userId      String          @db.Uuid
+  createdAt   DateTime        @default(now())
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  watchlist   SharedWatchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+
+  @@unique([watchlistId, userId])
+  @@index([userId])
+  @@map("shared_watchlist_members")
+}
+
+model SharedWatchlistItem {
+  id          String             @id @default(uuid()) @db.Uuid
+  watchlistId String             @db.Uuid
+  contentType TrackedContentType
+  tmdbId      Int
+  createdAt   DateTime           @default(now())
+  candidates  SharedVotingCandidate[]
+  watchlist   SharedWatchlist    @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+
+  @@unique([watchlistId, contentType, tmdbId])
+  @@index([contentType, tmdbId])
+  @@map("shared_watchlist_items")
+}
+
+model SharedVotingSession {
+  id          String                  @id @default(uuid()) @db.Uuid
+  watchlistId String                  @db.Uuid
+  title       String                  @db.VarChar(80)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  candidates  SharedVotingCandidate[]
+  watchlist   SharedWatchlist         @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+
+  @@index([watchlistId])
+  @@map("shared_voting_sessions")
+}
+
+model SharedVotingCandidate {
+  id        String              @id @default(uuid()) @db.Uuid
+  sessionId String              @db.Uuid
+  itemId    String              @db.Uuid
+  createdAt DateTime            @default(now())
+  item      SharedWatchlistItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  session   SharedVotingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  votes     SharedVotingVote[]
+
+  @@unique([sessionId, itemId])
+  @@index([itemId])
+  @@map("shared_voting_candidates")
+}
+
+model SharedVotingVote {
+  id          String                @id @default(uuid()) @db.Uuid
+  candidateId String                @db.Uuid
+  userId      String                @db.Uuid
+  createdAt   DateTime              @default(now())
+  candidate   SharedVotingCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([candidateId, userId])
+  @@index([userId])
+  @@map("shared_voting_votes")
 }
 
 model ReleaseNotification {

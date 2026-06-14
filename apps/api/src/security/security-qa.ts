@@ -22,6 +22,7 @@ import {
   SeriesRatingsController,
 } from '../ratings/ratings.controller';
 import { EpisodeReviewsController, MovieReviewsController } from '../reviews/reviews.controller';
+import { SharedWatchlistsController } from '../shared-watchlists/shared-watchlists.controller';
 import { TrackingController } from '../tracking/tracking.controller';
 import { WatchlistsController } from '../watchlists/watchlists.controller';
 
@@ -40,6 +41,7 @@ const protectedControllers = [
   SeriesRatingsController,
   EpisodeReviewsController,
   MovieReviewsController,
+  SharedWatchlistsController,
   TrackingController,
   WatchlistsController,
 ];
