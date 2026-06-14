@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Trash2 } from 'lucide-react-native';
+import { Trash2, Users } from 'lucide-react-native';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getMovieDetails, getSeriesDetails, SeriesDetails } from '../api/catalogue';
 import {
@@ -10,6 +10,12 @@ import {
   SeriesProgressSummary,
 } from '../api/progress';
 import { listMovieRatings, MovieRating } from '../api/ratings';
+import {
+  createSharedWatchlist,
+  deleteSharedWatchlist,
+  listSharedWatchlists,
+  SharedWatchlistSummary,
+} from '../api/sharedWatchlists';
 import { listTrackingStates, TrackingState } from '../api/tracking';
 import {
   createWatchlist,
@@ -61,6 +67,10 @@ export function MyTvScreen() {
   const [items, setItems] = useState<HydratedLibraryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSavingWatchlist, setIsSavingWatchlist] = useState(false);
+  const [isSavingSharedWatchlist, setIsSavingSharedWatchlist] = useState(false);
+  const [sharedWatchlistActionError, setSharedWatchlistActionError] = useState<string | null>(null);
+  const [sharedWatchlistName, setSharedWatchlistName] = useState('');
+  const [sharedWatchlists, setSharedWatchlists] = useState<SharedWatchlistSummary[]>([]);
   const [watchlistActionError, setWatchlistActionError] = useState<string | null>(null);
   const [watchlistName, setWatchlistName] = useState('');
   const [watchlists, setWatchlists] = useState<PersonalWatchlistSummary[]>([]);
@@ -69,6 +79,7 @@ export function MyTvScreen() {
     if (!firebaseIdToken) {
       setItems([]);
       setError(null);
+      setSharedWatchlists([]);
       setWatchlists([]);
       return;
     }
@@ -77,43 +88,65 @@ export function MyTvScreen() {
     setIsLoading(true);
 
     try {
-      const [statesResult, ratingsResult, progressResult, watchlistsResult] = await Promise.allSettled([
+      const [statesResult, ratingsResult, progressResult, watchlistsResult, sharedWatchlistsResult] =
+        await Promise.allSettled([
         listTrackingStates(firebaseIdToken),
         listMovieRatings(firebaseIdToken),
         listSeriesProgressSummaries(firebaseIdToken),
         listWatchlists(firebaseIdToken),
+        listSharedWatchlists(firebaseIdToken),
       ]);
 
       if (
         statesResult.status === 'rejected' &&
         ratingsResult.status === 'rejected' &&
         progressResult.status === 'rejected' &&
-        watchlistsResult.status === 'rejected'
+        watchlistsResult.status === 'rejected' &&
+        sharedWatchlistsResult.status === 'rejected'
       ) {
-        throw new Error(buildPartialErrorMessage(statesResult, ratingsResult, progressResult, watchlistsResult));
+        throw new Error(
+          buildPartialErrorMessage(
+            statesResult,
+            ratingsResult,
+            progressResult,
+            watchlistsResult,
+            sharedWatchlistsResult,
+          ),
+        );
       }
 
       const states = statesResult.status === 'fulfilled' ? statesResult.value : [];
       const ratings = ratingsResult.status === 'fulfilled' ? ratingsResult.value : [];
       const progress = progressResult.status === 'fulfilled' ? progressResult.value.items : [];
       const nextWatchlists = watchlistsResult.status === 'fulfilled' ? watchlistsResult.value.items : [];
+      const nextSharedWatchlists =
+        sharedWatchlistsResult.status === 'fulfilled' ? sharedWatchlistsResult.value.items : [];
       const hasPartialFailure =
         statesResult.status === 'rejected' ||
         ratingsResult.status === 'rejected' ||
         progressResult.status === 'rejected' ||
-        watchlistsResult.status === 'rejected';
+        watchlistsResult.status === 'rejected' ||
+        sharedWatchlistsResult.status === 'rejected';
       const libraryItems = mergeLibraryItems(states, ratings, progress);
       const hydratedItems = await Promise.all(libraryItems.map(hydrateLibraryItem));
 
       setItems(hydratedItems);
+      setSharedWatchlists(nextSharedWatchlists);
       setWatchlists(nextWatchlists);
       setError(
         hasPartialFailure
-          ? buildPartialErrorMessage(statesResult, ratingsResult, progressResult, watchlistsResult)
+          ? buildPartialErrorMessage(
+              statesResult,
+              ratingsResult,
+              progressResult,
+              watchlistsResult,
+              sharedWatchlistsResult,
+            )
           : null,
       );
     } catch (loadError) {
       setItems([]);
+      setSharedWatchlists([]);
       setWatchlists([]);
       setError(loadError instanceof Error ? loadError.message : 'Could not load your tracked titles.');
     } finally {
@@ -164,6 +197,30 @@ export function MyTvScreen() {
     }
   }
 
+  async function handleCreateSharedWatchlist() {
+    const name = sharedWatchlistName.trim();
+
+    if (!firebaseIdToken || name.length === 0) {
+      return;
+    }
+
+    setIsSavingSharedWatchlist(true);
+    setSharedWatchlistActionError(null);
+
+    try {
+      const watchlist = await createSharedWatchlist(firebaseIdToken, name);
+
+      setSharedWatchlists((current) => [watchlist, ...current]);
+      setSharedWatchlistName('');
+    } catch (createError) {
+      setSharedWatchlistActionError(
+        createError instanceof Error ? createError.message : 'Could not create the shared list.',
+      );
+    } finally {
+      setIsSavingSharedWatchlist(false);
+    }
+  }
+
   async function handleDeleteWatchlist(watchlistId: string) {
     if (!firebaseIdToken) {
       return;
@@ -181,6 +238,30 @@ export function MyTvScreen() {
     }
   }
 
+  async function handleDeleteSharedWatchlist(watchlistId: string) {
+    if (!firebaseIdToken) {
+      return;
+    }
+
+    setSharedWatchlistActionError(null);
+
+    try {
+      await deleteSharedWatchlist(firebaseIdToken, watchlistId);
+      setSharedWatchlists((current) => current.filter((watchlist) => watchlist.id !== watchlistId));
+    } catch (deleteError) {
+      setSharedWatchlistActionError(
+        deleteError instanceof Error ? deleteError.message : 'Could not delete the shared list.',
+      );
+    }
+  }
+
+  function openSharedWatchlist(watchlist: SharedWatchlistSummary) {
+    navigation.navigate('SharedWatchlist', {
+      title: watchlist.name,
+      watchlistId: watchlist.id,
+    });
+  }
+
   return (
     <Screen title="Manage your watch life">
       {!firebaseIdToken ? (
@@ -193,11 +274,11 @@ export function MyTvScreen() {
           <ActivityIndicator color={colors.accent} />
           <Text style={styles.loadingText}>Loading My TV</Text>
         </View>
-      ) : error && items.length === 0 && watchlists.length === 0 ? (
+      ) : error && items.length === 0 && watchlists.length === 0 && sharedWatchlists.length === 0 ? (
         <EmptyState body={error} title="My TV failed">
           <Button label="Retry" onPress={loadItems} />
         </EmptyState>
-      ) : items.length === 0 && watchlists.length === 0 ? (
+      ) : items.length === 0 && watchlists.length === 0 && sharedWatchlists.length === 0 ? (
         <>
           <WatchlistsSection
             actionError={watchlistActionError}
@@ -207,6 +288,16 @@ export function MyTvScreen() {
             onCreate={handleCreateWatchlist}
             onDelete={handleDeleteWatchlist}
             watchlists={watchlists}
+          />
+          <SharedWatchlistsSection
+            actionError={sharedWatchlistActionError}
+            isSaving={isSavingSharedWatchlist}
+            name={sharedWatchlistName}
+            onChangeName={setSharedWatchlistName}
+            onCreate={handleCreateSharedWatchlist}
+            onDelete={handleDeleteSharedWatchlist}
+            onOpen={openSharedWatchlist}
+            watchlists={sharedWatchlists}
           />
           <EmptyState
             body="Open a film or series from Explore, then track it, rate it, or mark an episode watched."
@@ -224,6 +315,16 @@ export function MyTvScreen() {
             onCreate={handleCreateWatchlist}
             onDelete={handleDeleteWatchlist}
             watchlists={watchlists}
+          />
+          <SharedWatchlistsSection
+            actionError={sharedWatchlistActionError}
+            isSaving={isSavingSharedWatchlist}
+            name={sharedWatchlistName}
+            onChangeName={setSharedWatchlistName}
+            onCreate={handleCreateSharedWatchlist}
+            onDelete={handleDeleteSharedWatchlist}
+            onOpen={openSharedWatchlist}
+            watchlists={sharedWatchlists}
           />
           {items.length > 0 ? (
             <View style={styles.section}>
@@ -338,6 +439,97 @@ function WatchlistsSection({
   );
 }
 
+type SharedWatchlistsSectionProps = {
+  actionError: string | null;
+  isSaving: boolean;
+  name: string;
+  onChangeName: (name: string) => void;
+  onCreate: () => void;
+  onDelete: (watchlistId: string) => void;
+  onOpen: (watchlist: SharedWatchlistSummary) => void;
+  watchlists: SharedWatchlistSummary[];
+};
+
+function SharedWatchlistsSection({
+  actionError,
+  isSaving,
+  name,
+  onChangeName,
+  onCreate,
+  onDelete,
+  onOpen,
+  watchlists,
+}: SharedWatchlistsSectionProps) {
+  const canCreate = name.trim().length > 0 && !isSaving;
+
+  return (
+    <View style={styles.section}>
+      <View style={styles.watchlistsPanel}>
+        <View>
+          <Text style={styles.sectionTitle}>Shared lists</Text>
+          <Text style={styles.sectionBody}>Member-only lists for planning what to watch together.</Text>
+        </View>
+        <TextInput
+          label="Shared list name"
+          maxLength={80}
+          onChangeText={onChangeName}
+          onSubmitEditing={canCreate ? onCreate : undefined}
+          placeholder="Tonight"
+          returnKeyType="done"
+          value={name}
+        />
+        <Button
+          disabled={!canCreate}
+          label={isSaving ? 'Creating...' : 'Create shared list'}
+          onPress={onCreate}
+        />
+        {actionError ? <Text style={styles.warning}>{actionError}</Text> : null}
+        {watchlists.length === 0 ? (
+          <Text style={styles.emptyInline}>No shared lists yet.</Text>
+        ) : (
+          <View style={styles.watchlistRows}>
+            {watchlists.map((watchlist) => (
+              <Pressable
+                accessibilityLabel={`Open ${watchlist.name}`}
+                accessibilityRole="button"
+                key={watchlist.id}
+                onPress={() => onOpen(watchlist)}
+                style={({ pressed }) => [styles.watchlistRow, pressed && styles.rowPressed]}
+              >
+                <View style={styles.sharedIconFrame}>
+                  <Users color={colors.accent} size={18} strokeWidth={2} />
+                </View>
+                <View style={styles.rowCopy}>
+                  <Text numberOfLines={1} style={styles.watchlistName}>
+                    {watchlist.name}
+                  </Text>
+                  <Text style={styles.meta}>
+                    {watchlist.memberCount === 1 ? '1 member' : `${watchlist.memberCount} members`} /{' '}
+                    {watchlist.itemCount === 1 ? '1 title' : `${watchlist.itemCount} titles`}
+                  </Text>
+                </View>
+                {watchlist.isOwner ? (
+                  <Pressable
+                    accessibilityLabel={`Delete ${watchlist.name}`}
+                    accessibilityRole="button"
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      onDelete(watchlist.id);
+                    }}
+                    style={({ pressed }) => [styles.deleteButton, pressed && styles.rowPressed]}
+                  >
+                    <Trash2 color={colors.danger} size={18} strokeWidth={2} />
+                  </Pressable>
+                ) : null}
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
 function mergeLibraryItems(
   states: TrackingState[],
   ratings: MovieRating[],
@@ -408,6 +600,7 @@ function buildPartialErrorMessage(
   ratingsResult: PromiseSettledResult<MovieRating[]>,
   progressResult: PromiseSettledResult<SeriesProgressSummariesResponse>,
   watchlistsResult: PromiseSettledResult<{ items: PersonalWatchlistSummary[] }>,
+  sharedWatchlistsResult: PromiseSettledResult<{ items: SharedWatchlistSummary[] }>,
 ) {
   const failedLabels = [
     statesResult.status === 'rejected' ? `tracking (${getErrorLabel(statesResult.reason)})` : null,
@@ -415,6 +608,9 @@ function buildPartialErrorMessage(
     progressResult.status === 'rejected' ? `progress (${getErrorLabel(progressResult.reason)})` : null,
     watchlistsResult.status === 'rejected'
       ? `watchlists (${getErrorLabel(watchlistsResult.reason)})`
+      : null,
+    sharedWatchlistsResult.status === 'rejected'
+      ? `shared lists (${getErrorLabel(sharedWatchlistsResult.reason)})`
       : null,
   ].filter(Boolean);
 
@@ -607,6 +803,12 @@ const styles = StyleSheet.create({
   section: {
     gap: spacing.md,
     marginBottom: spacing.xl,
+  },
+  sharedIconFrame: {
+    alignItems: 'center',
+    height: 24,
+    justifyContent: 'center',
+    width: 24,
   },
   sectionBody: {
     ...typography.body,

@@ -10,6 +10,7 @@ import { RootStackParamList } from '../navigation/types';
 import { MovieReviewEditor } from '../reviews/MovieReviewEditor';
 import { MovieRatingControl } from '../tracking/MovieRatingControl';
 import { TrackingControls } from '../tracking/TrackingControls';
+import { SharedWatchlistControls } from '../watchlists/SharedWatchlistControls';
 import { WatchlistControls } from '../watchlists/WatchlistControls';
 import { StreamingAvailabilityPanel } from './StreamingAvailabilityPanel';
 
@@ -103,6 +104,7 @@ function MovieDetailContent({ movie }: { movie: MovieDetails }) {
       {movie.tagline ? <Text style={styles.tagline}>{movie.tagline}</Text> : null}
       <TrackingControls contentType="movie" tmdbId={movie.tmdbId} />
       <WatchlistControls contentType="movie" tmdbId={movie.tmdbId} />
+      <SharedWatchlistControls contentType="movie" tmdbId={movie.tmdbId} />
       <StreamingAvailabilityPanel contentType="movie" tmdbId={movie.tmdbId} />
       <MovieRatingControl tmdbId={movie.tmdbId} />
       <MovieReviewEditor tmdbId={movie.tmdbId} />

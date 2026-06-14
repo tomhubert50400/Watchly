@@ -11,6 +11,7 @@ import { RootStackParamList } from '../navigation/types';
 import { ComputedRatingSummary } from '../tracking/ComputedRatingSummary';
 import { SeriesProgressSummary } from '../tracking/SeriesProgressSummary';
 import { TrackingControls } from '../tracking/TrackingControls';
+import { SharedWatchlistControls } from '../watchlists/SharedWatchlistControls';
 import { WatchlistControls } from '../watchlists/WatchlistControls';
 import { StreamingAvailabilityPanel } from './StreamingAvailabilityPanel';
 
@@ -106,6 +107,7 @@ function SeriesDetailContent({ series }: { series: SeriesDetails }) {
       {series.tagline ? <Text style={styles.tagline}>{series.tagline}</Text> : null}
       <TrackingControls contentType="series" tmdbId={series.tmdbId} />
       <WatchlistControls contentType="series" tmdbId={series.tmdbId} />
+      <SharedWatchlistControls contentType="series" tmdbId={series.tmdbId} />
       <StreamingAvailabilityPanel contentType="series" tmdbId={series.tmdbId} />
       <SeriesProgressSummary
         seasons={series.seasons}

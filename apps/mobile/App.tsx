@@ -21,6 +21,7 @@ import { RootStackParamList } from './src/navigation/types';
 import { PublicProfileScreen } from './src/profile/PublicProfileScreen';
 import { SettingsScreen } from './src/profile/SettingsScreen';
 import { MyTvScreen } from './src/tracking/MyTvScreen';
+import { SharedWatchlistScreen } from './src/watchlists/SharedWatchlistScreen';
 
 type TabParamList = {
   Feed: undefined;
@@ -329,6 +330,11 @@ export default function App() {
               component={SettingsScreen}
               name="Settings"
               options={{ title: 'Settings' }}
+            />
+            <Stack.Screen
+              component={SharedWatchlistScreen}
+              name="SharedWatchlist"
+              options={({ route }) => ({ title: route.params.title })}
             />
             <Stack.Screen
               component={EpisodeDetailScreen}

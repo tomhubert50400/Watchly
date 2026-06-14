@@ -26,4 +26,8 @@ export type RootStackParamList = {
     tmdbId: number;
   };
   Settings: undefined;
+  SharedWatchlist: {
+    title: string;
+    watchlistId: string;
+  };
 };
