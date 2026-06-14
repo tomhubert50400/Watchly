@@ -6,7 +6,11 @@ type ApiRequestOptions = {
 };
 
 export class ApiError extends Error {
-  constructor(message: string, readonly status?: number) {
+  constructor(
+    message: string,
+    readonly status?: number,
+    readonly serverMessage?: string,
+  ) {
     super(message);
     this.name = 'ApiError';
   }
@@ -14,6 +18,10 @@ export class ApiError extends Error {
 
 export function apiGet<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   return apiRequest<T>('GET', path, options);
+}
+
+export function apiPost<T>(path: string, body: unknown, options: ApiRequestOptions = {}): Promise<T> {
+  return apiRequest<T>('POST', path, { ...options, body });
 }
 
 export function apiPut<T>(path: string, body: unknown, options: ApiRequestOptions = {}): Promise<T> {
@@ -45,8 +53,32 @@ async function apiRequest<T>(method: string, path: string, options: ApiRequestOp
   }
 
   if (!response.ok) {
-    throw new ApiError(`API request failed with status ${response.status}.`, response.status);
+    const serverMessage = await getServerMessage(response);
+
+    throw new ApiError(
+      serverMessage ?? `API request failed with status ${response.status}.`,
+      response.status,
+      serverMessage,
+    );
   }
 
   return response.json() as Promise<T>;
+}
+
+async function getServerMessage(response: Response) {
+  try {
+    const body = (await response.json()) as { message?: unknown };
+
+    if (typeof body.message === 'string') {
+      return body.message;
+    }
+
+    if (Array.isArray(body.message)) {
+      return body.message.filter((item) => typeof item === 'string').join(' ');
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
 }

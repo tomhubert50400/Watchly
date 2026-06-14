@@ -1,20 +1,22 @@
 import { PropsWithChildren, ReactNode } from 'react';
-import { GestureResponderHandlers, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { GestureResponderHandlers, ScrollView, ScrollViewProps, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing, typography } from '../design/tokens';
 
 type ScreenProps = PropsWithChildren<{
   eyebrow?: string;
   gestureHandlers?: GestureResponderHandlers;
+  refreshControl?: ScrollViewProps['refreshControl'];
   title: string;
   trailing?: ReactNode;
 }>;
 
-export function Screen({ children, eyebrow, gestureHandlers, title, trailing }: ScreenProps) {
+export function Screen({ children, eyebrow, gestureHandlers, refreshControl, title, trailing }: ScreenProps) {
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea} {...gestureHandlers}>
       <ScrollView
         contentContainerStyle={styles.content}
+        refreshControl={refreshControl}
         showsVerticalScrollIndicator={false}
         style={styles.container}
       >

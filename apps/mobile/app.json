@@ -2,8 +2,9 @@
   "expo": {
     "name": "Untitled TV App",
     "slug": "tv-app",
-    "scheme": "tvapp",
+    "scheme": ["tvapp", "com.tom.tvapp.dev"],
     "version": "1.0.0",
+    "newArchEnabled": false,
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -15,6 +16,7 @@
       }
     },
     "android": {
+      "package": "com.tom.tvapp.dev",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",

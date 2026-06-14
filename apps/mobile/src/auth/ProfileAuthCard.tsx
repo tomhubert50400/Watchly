@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LogIn, LogOut } from 'lucide-react-native';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { ApiError } from '../api/client';
+import { getDevTestProfile } from '../api/profile';
 import { Button } from '../components/Button';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { RootStackParamList } from '../navigation/types';
 import { useAuthSession } from './AuthSessionContext';
 import { getMissingFirebaseConfig } from './firebase';
 import { authRedirectScheme, getMissingGoogleClientConfig, googleClientIds } from './googleAuthConfig';
@@ -13,8 +17,16 @@ import { authRedirectScheme, getMissingGoogleClientConfig, googleClientIds } fro
 WebBrowser.maybeCompleteAuthSession();
 
 type AuthStatus = 'idle' | 'loading' | 'signedIn' | 'error';
+type ProfileNavigation = NativeStackNavigationProp<RootStackParamList>;
+
+const googleRequestClientIds = {
+  androidClientId: googleClientIds.androidClientId ?? 'missing-android-client-id',
+  iosClientId: googleClientIds.iosClientId ?? 'missing-ios-client-id',
+  webClientId: googleClientIds.webClientId ?? 'missing-web-client-id',
+};
 
 export function ProfileAuthCard() {
+  const navigation = useNavigation<ProfileNavigation>();
   const authSession = useAuthSession();
   const { currentUser, signInWithGoogle, signOut } = authSession;
   const [localStatus, setLocalStatus] = useState<AuthStatus>('idle');
@@ -25,7 +37,7 @@ export function ProfileAuthCard() {
   );
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest(
     {
-      ...googleClientIds,
+      ...googleRequestClientIds,
       selectAccount: true,
     },
     {
@@ -117,6 +129,27 @@ export function ProfileAuthCard() {
     }
   }
 
+  async function openDevTestProfile() {
+    if (!authSession.firebaseIdToken) {
+      return;
+    }
+
+    setLocalStatus('loading');
+    setMessage(null);
+
+    try {
+      const profile = await getDevTestProfile(authSession.firebaseIdToken);
+
+      setLocalStatus('signedIn');
+      navigation.navigate('PublicProfile', {
+        userId: profile.id,
+      });
+    } catch {
+      setLocalStatus('error');
+      setMessage('Could not open the test profile.');
+    }
+  }
+
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
@@ -145,7 +178,26 @@ export function ProfileAuthCard() {
       <View style={styles.actionRow}>
         {status === 'loading' ? <ActivityIndicator color={colors.accent} /> : null}
         {currentUser ? (
-          <Button label="Sign out" onPress={clearSession} variant="secondary" />
+          <>
+            <Button
+              label="Preview public profile"
+              onPress={() =>
+                navigation.navigate('PublicProfile', {
+                  previewOwnProfile: true,
+                  userId: currentUser.id,
+                })
+              }
+              variant="secondary"
+            />
+            {__DEV__ ? (
+              <Button
+                label="Open test profile"
+                onPress={openDevTestProfile}
+                variant="secondary"
+              />
+            ) : null}
+            <Button label="Sign out" onPress={clearSession} variant="secondary" />
+          </>
         ) : (
           <Button disabled={!canSignIn} label="Continue with Google" onPress={startSignIn} />
         )}
@@ -177,7 +229,6 @@ function getSafeErrorMessage(error: unknown) {
 const styles = StyleSheet.create({
   actionRow: {
     alignItems: 'center',
-    flexDirection: 'row',
     gap: spacing.md,
     marginTop: spacing.lg,
   },

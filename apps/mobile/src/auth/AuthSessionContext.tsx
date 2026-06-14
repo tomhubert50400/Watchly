@@ -11,11 +11,13 @@ type AuthSessionStatus = 'idle' | 'loading' | 'signedIn' | 'error';
 
 type AuthSessionContextValue = {
   currentUser: CurrentUser | null;
+  notifySocialChanged: () => void;
   firebaseIdToken: string | null;
   notifyTrackingChanged: () => void;
   refreshCurrentUser: () => Promise<void>;
   signInWithGoogle: (googleIdToken: string) => Promise<void>;
   signOut: () => Promise<void>;
+  socialRevision: number;
   status: AuthSessionStatus;
   trackingRevision: number;
 };
@@ -25,8 +27,12 @@ const AuthSessionContext = createContext<AuthSessionContextValue | null>(null);
 export function AuthSessionProvider({ children }: PropsWithChildren) {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [firebaseIdToken, setFirebaseIdToken] = useState<string | null>(null);
+  const [socialRevision, setSocialRevision] = useState(0);
   const [status, setStatus] = useState<AuthSessionStatus>('idle');
   const [trackingRevision, setTrackingRevision] = useState(0);
+  const notifySocialChanged = useCallback(() => {
+    setSocialRevision((revision) => revision + 1);
+  }, []);
   const notifyTrackingChanged = useCallback(() => {
     setTrackingRevision((revision) => revision + 1);
   }, []);
@@ -99,6 +105,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     await signOutFromFirebase();
     setFirebaseIdToken(null);
     setCurrentUser(null);
+    setSocialRevision(0);
     setTrackingRevision(0);
     setStatus('idle');
   }, []);
@@ -107,20 +114,24 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     () => ({
       currentUser,
       firebaseIdToken,
+      notifySocialChanged,
       notifyTrackingChanged,
       refreshCurrentUser,
       signInWithGoogle,
       signOut,
+      socialRevision,
       status,
       trackingRevision,
     }),
     [
       currentUser,
       firebaseIdToken,
+      notifySocialChanged,
       notifyTrackingChanged,
       refreshCurrentUser,
       signInWithGoogle,
       signOut,
+      socialRevision,
       status,
       trackingRevision,
     ],

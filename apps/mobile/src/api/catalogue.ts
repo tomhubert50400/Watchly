@@ -119,6 +119,28 @@ export type EpisodeDetailsResponse = {
   provider: 'tmdb';
 };
 
+export type StreamingProvider = {
+  id: number;
+  logoUrl: string | null;
+  name: string;
+};
+
+export type StreamingAvailability = {
+  country: string;
+  groups: {
+    buy: StreamingProvider[];
+    free: StreamingProvider[];
+    rent: StreamingProvider[];
+    stream: StreamingProvider[];
+  };
+  link: string | null;
+};
+
+export type StreamingAvailabilityResponse = {
+  availability: StreamingAvailability;
+  provider: 'tmdb';
+};
+
 export function searchCatalogue(query: string, type: CatalogueSearchType) {
   const params = new URLSearchParams({ query, type });
 
@@ -140,5 +162,21 @@ export function getSeasonDetails(tmdbId: number, seasonNumber: number) {
 export function getEpisodeDetails(tmdbId: number, seasonNumber: number, episodeNumber: number) {
   return apiGet<EpisodeDetailsResponse>(
     `/catalog/series/${tmdbId}/seasons/${seasonNumber}/episodes/${episodeNumber}`,
+  );
+}
+
+export function getMovieStreamingAvailability(tmdbId: number, country = 'US') {
+  const params = new URLSearchParams({ country });
+
+  return apiGet<StreamingAvailabilityResponse>(
+    `/catalog/movies/${tmdbId}/watch-providers?${params.toString()}`,
+  );
+}
+
+export function getSeriesStreamingAvailability(tmdbId: number, country = 'US') {
+  const params = new URLSearchParams({ country });
+
+  return apiGet<StreamingAvailabilityResponse>(
+    `/catalog/series/${tmdbId}/watch-providers?${params.toString()}`,
   );
 }

@@ -18,6 +18,12 @@ export type UserProfile = {
   privacy: ProfilePrivacy;
 };
 
+export type PublicProfile = {
+  displayName: string | null;
+  id: string;
+  profileVisibility: PrivacyVisibility;
+};
+
 export type UpdateProfileInput = {
   displayName: string | null;
 };
@@ -32,6 +38,23 @@ export type UpdatePrivacyInput = {
 
 export function getProfile(firebaseIdToken: string): Promise<UserProfile> {
   return apiGet<UserProfile>('/profile/me', { token: firebaseIdToken });
+}
+
+export function getOwnPublicProfilePreview(firebaseIdToken: string): Promise<PublicProfile> {
+  return apiGet<PublicProfile>('/profile/me/public-preview', { token: firebaseIdToken });
+}
+
+export function getPublicProfile(
+  firebaseIdToken: string,
+  userId: string,
+): Promise<PublicProfile> {
+  return apiGet<PublicProfile>(`/profile/users/${encodeURIComponent(userId)}`, {
+    token: firebaseIdToken,
+  });
+}
+
+export function getDevTestProfile(firebaseIdToken: string): Promise<PublicProfile> {
+  return apiPut<PublicProfile>('/profile/dev-test-user', {}, { token: firebaseIdToken });
 }
 
 export function updateProfile(

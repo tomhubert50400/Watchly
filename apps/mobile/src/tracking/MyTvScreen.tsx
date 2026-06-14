@@ -1,15 +1,27 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Trash2 } from 'lucide-react-native';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getMovieDetails, getSeriesDetails, SeriesDetails } from '../api/catalogue';
-import { listSeriesProgressSummaries, SeriesProgressSummary } from '../api/progress';
+import {
+  listSeriesProgressSummaries,
+  SeriesProgressSummariesResponse,
+  SeriesProgressSummary,
+} from '../api/progress';
 import { listMovieRatings, MovieRating } from '../api/ratings';
 import { listTrackingStates, TrackingState } from '../api/tracking';
+import {
+  createWatchlist,
+  deleteWatchlist,
+  listWatchlists,
+  PersonalWatchlistSummary,
+} from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Screen';
+import { TextInput } from '../components/TextInput';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 
@@ -48,11 +60,16 @@ export function MyTvScreen() {
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<HydratedLibraryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSavingWatchlist, setIsSavingWatchlist] = useState(false);
+  const [watchlistActionError, setWatchlistActionError] = useState<string | null>(null);
+  const [watchlistName, setWatchlistName] = useState('');
+  const [watchlists, setWatchlists] = useState<PersonalWatchlistSummary[]>([]);
 
   const loadItems = useCallback(async () => {
     if (!firebaseIdToken) {
       setItems([]);
       setError(null);
+      setWatchlists([]);
       return;
     }
 
@@ -60,18 +77,45 @@ export function MyTvScreen() {
     setIsLoading(true);
 
     try {
-      const [states, ratings, progress] = await Promise.all([
+      const [statesResult, ratingsResult, progressResult, watchlistsResult] = await Promise.allSettled([
         listTrackingStates(firebaseIdToken),
         listMovieRatings(firebaseIdToken),
         listSeriesProgressSummaries(firebaseIdToken),
+        listWatchlists(firebaseIdToken),
       ]);
-      const libraryItems = mergeLibraryItems(states, ratings, progress.items);
+
+      if (
+        statesResult.status === 'rejected' &&
+        ratingsResult.status === 'rejected' &&
+        progressResult.status === 'rejected' &&
+        watchlistsResult.status === 'rejected'
+      ) {
+        throw new Error(buildPartialErrorMessage(statesResult, ratingsResult, progressResult, watchlistsResult));
+      }
+
+      const states = statesResult.status === 'fulfilled' ? statesResult.value : [];
+      const ratings = ratingsResult.status === 'fulfilled' ? ratingsResult.value : [];
+      const progress = progressResult.status === 'fulfilled' ? progressResult.value.items : [];
+      const nextWatchlists = watchlistsResult.status === 'fulfilled' ? watchlistsResult.value.items : [];
+      const hasPartialFailure =
+        statesResult.status === 'rejected' ||
+        ratingsResult.status === 'rejected' ||
+        progressResult.status === 'rejected' ||
+        watchlistsResult.status === 'rejected';
+      const libraryItems = mergeLibraryItems(states, ratings, progress);
       const hydratedItems = await Promise.all(libraryItems.map(hydrateLibraryItem));
 
       setItems(hydratedItems);
-    } catch {
+      setWatchlists(nextWatchlists);
+      setError(
+        hasPartialFailure
+          ? buildPartialErrorMessage(statesResult, ratingsResult, progressResult, watchlistsResult)
+          : null,
+      );
+    } catch (loadError) {
       setItems([]);
-      setError('Could not load your tracked titles.');
+      setWatchlists([]);
+      setError(loadError instanceof Error ? loadError.message : 'Could not load your tracked titles.');
     } finally {
       setIsLoading(false);
     }
@@ -96,6 +140,47 @@ export function MyTvScreen() {
     });
   }
 
+  async function handleCreateWatchlist() {
+    const name = watchlistName.trim();
+
+    if (!firebaseIdToken || name.length === 0) {
+      return;
+    }
+
+    setIsSavingWatchlist(true);
+    setWatchlistActionError(null);
+
+    try {
+      const watchlist = await createWatchlist(firebaseIdToken, name);
+
+      setWatchlists((current) => [watchlist, ...current]);
+      setWatchlistName('');
+    } catch (createError) {
+      setWatchlistActionError(
+        createError instanceof Error ? createError.message : 'Could not create the watchlist.',
+      );
+    } finally {
+      setIsSavingWatchlist(false);
+    }
+  }
+
+  async function handleDeleteWatchlist(watchlistId: string) {
+    if (!firebaseIdToken) {
+      return;
+    }
+
+    setWatchlistActionError(null);
+
+    try {
+      await deleteWatchlist(firebaseIdToken, watchlistId);
+      setWatchlists((current) => current.filter((watchlist) => watchlist.id !== watchlistId));
+    } catch (deleteError) {
+      setWatchlistActionError(
+        deleteError instanceof Error ? deleteError.message : 'Could not delete the watchlist.',
+      );
+    }
+  }
+
   return (
     <Screen title="Manage your watch life">
       {!firebaseIdToken ? (
@@ -108,46 +193,148 @@ export function MyTvScreen() {
           <ActivityIndicator color={colors.accent} />
           <Text style={styles.loadingText}>Loading My TV</Text>
         </View>
-      ) : error ? (
+      ) : error && items.length === 0 && watchlists.length === 0 ? (
         <EmptyState body={error} title="My TV failed">
           <Button label="Retry" onPress={loadItems} />
         </EmptyState>
-      ) : items.length === 0 ? (
-        <EmptyState
-          body="Open a film or series from Explore, then track it, rate it, or mark an episode watched."
-          title="No tracked titles yet"
-        />
+      ) : items.length === 0 && watchlists.length === 0 ? (
+        <>
+          <WatchlistsSection
+            actionError={watchlistActionError}
+            isSaving={isSavingWatchlist}
+            name={watchlistName}
+            onChangeName={setWatchlistName}
+            onCreate={handleCreateWatchlist}
+            onDelete={handleDeleteWatchlist}
+            watchlists={watchlists}
+          />
+          <EmptyState
+            body="Open a film or series from Explore, then track it, rate it, or mark an episode watched."
+            title="No tracked titles yet"
+          />
+        </>
       ) : (
-        <View style={styles.list}>
-          {items.map((item) => (
-            <Pressable
-              accessibilityLabel={`Open ${item.title}`}
-              accessibilityRole="button"
-              key={item.key}
-              onPress={() => openItem(item)}
-              style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-            >
-              {item.posterUrl ? (
-                <Image
-                  accessibilityIgnoresInvertColors
-                  accessibilityLabel={`${item.title} poster`}
-                  source={{ uri: item.posterUrl }}
-                  style={styles.poster}
-                />
-              ) : (
-                <View style={styles.posterPlaceholder} />
-              )}
-              <View style={styles.rowCopy}>
-                <Text numberOfLines={2} style={styles.title}>
-                  {item.title}
-                </Text>
-                <Text style={styles.meta}>{buildMeta(item)}</Text>
+        <>
+          {error ? <Text style={styles.warning}>{error}</Text> : null}
+          <WatchlistsSection
+            actionError={watchlistActionError}
+            isSaving={isSavingWatchlist}
+            name={watchlistName}
+            onChangeName={setWatchlistName}
+            onCreate={handleCreateWatchlist}
+            onDelete={handleDeleteWatchlist}
+            watchlists={watchlists}
+          />
+          {items.length > 0 ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Tracked titles</Text>
+              <View style={styles.list}>
+                {items.map((item) => (
+                  <Pressable
+                    accessibilityLabel={`Open ${item.title}`}
+                    accessibilityRole="button"
+                    key={item.key}
+                    onPress={() => openItem(item)}
+                    style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                  >
+                    {item.posterUrl ? (
+                      <Image
+                        accessibilityIgnoresInvertColors
+                        accessibilityLabel={`${item.title} poster`}
+                        source={{ uri: item.posterUrl }}
+                        style={styles.poster}
+                      />
+                    ) : (
+                      <View style={styles.posterPlaceholder} />
+                    )}
+                    <View style={styles.rowCopy}>
+                      <Text numberOfLines={2} style={styles.title}>
+                        {item.title}
+                      </Text>
+                      <Text style={styles.meta}>{buildMeta(item)}</Text>
+                    </View>
+                  </Pressable>
+                ))}
               </View>
-            </Pressable>
-          ))}
-        </View>
+            </View>
+          ) : null}
+        </>
       )}
     </Screen>
+  );
+}
+
+type WatchlistsSectionProps = {
+  actionError: string | null;
+  isSaving: boolean;
+  name: string;
+  onChangeName: (name: string) => void;
+  onCreate: () => void;
+  onDelete: (watchlistId: string) => void;
+  watchlists: PersonalWatchlistSummary[];
+};
+
+function WatchlistsSection({
+  actionError,
+  isSaving,
+  name,
+  onChangeName,
+  onCreate,
+  onDelete,
+  watchlists,
+}: WatchlistsSectionProps) {
+  const canCreate = name.trim().length > 0 && !isSaving;
+
+  return (
+    <View style={styles.section}>
+      <View style={styles.watchlistsPanel}>
+        <View>
+          <Text style={styles.sectionTitle}>Personal lists</Text>
+          <Text style={styles.sectionBody}>Private lists for films and series. Shared lists come later.</Text>
+        </View>
+        <TextInput
+          label="List name"
+          maxLength={80}
+          onChangeText={onChangeName}
+          onSubmitEditing={canCreate ? onCreate : undefined}
+          placeholder="Weekend ideas"
+          returnKeyType="done"
+          value={name}
+        />
+        <Button
+          disabled={!canCreate}
+          label={isSaving ? 'Creating...' : 'Create list'}
+          onPress={onCreate}
+        />
+        {actionError ? <Text style={styles.warning}>{actionError}</Text> : null}
+        {watchlists.length === 0 ? (
+          <Text style={styles.emptyInline}>No personal lists yet.</Text>
+        ) : (
+          <View style={styles.watchlistRows}>
+            {watchlists.map((watchlist) => (
+              <View key={watchlist.id} style={styles.watchlistRow}>
+                <View style={styles.rowCopy}>
+                  <Text numberOfLines={1} style={styles.watchlistName}>
+                    {watchlist.name}
+                  </Text>
+                  <Text style={styles.meta}>
+                    {watchlist.itemCount === 1 ? '1 title' : `${watchlist.itemCount} titles`}
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityLabel={`Delete ${watchlist.name}`}
+                  accessibilityRole="button"
+                  onPress={() => onDelete(watchlist.id)}
+                  style={({ pressed }) => [styles.deleteButton, pressed && styles.rowPressed]}
+                >
+                  <Trash2 color={colors.danger} size={18} strokeWidth={2} />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    </View>
   );
 }
 
@@ -214,6 +401,32 @@ function mergeLibraryItems(
   return Array.from(byContent.values()).sort((left, right) =>
     right.updatedAt.localeCompare(left.updatedAt),
   );
+}
+
+function buildPartialErrorMessage(
+  statesResult: PromiseSettledResult<TrackingState[]>,
+  ratingsResult: PromiseSettledResult<MovieRating[]>,
+  progressResult: PromiseSettledResult<SeriesProgressSummariesResponse>,
+  watchlistsResult: PromiseSettledResult<{ items: PersonalWatchlistSummary[] }>,
+) {
+  const failedLabels = [
+    statesResult.status === 'rejected' ? `tracking (${getErrorLabel(statesResult.reason)})` : null,
+    ratingsResult.status === 'rejected' ? `ratings (${getErrorLabel(ratingsResult.reason)})` : null,
+    progressResult.status === 'rejected' ? `progress (${getErrorLabel(progressResult.reason)})` : null,
+    watchlistsResult.status === 'rejected'
+      ? `watchlists (${getErrorLabel(watchlistsResult.reason)})`
+      : null,
+  ].filter(Boolean);
+
+  return `Some My TV data could not load: ${failedLabels.join(', ')}.`;
+}
+
+function getErrorLabel(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return 'unknown error';
 }
 
 async function hydrateLibraryItem(item: LibraryItemBase): Promise<HydratedLibraryItem> {
@@ -319,6 +532,20 @@ function getResumeEpisode(
 }
 
 const styles = StyleSheet.create({
+  deleteButton: {
+    alignItems: 'center',
+    backgroundColor: colors.dangerBackground,
+    borderColor: colors.danger,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
+  },
+  emptyInline: {
+    ...typography.body,
+    color: colors.muted,
+  },
   list: {
     gap: spacing.md,
   },
@@ -377,8 +604,52 @@ const styles = StyleSheet.create({
   rowPressed: {
     opacity: 0.78,
   },
+  section: {
+    gap: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  sectionBody: {
+    ...typography.body,
+    color: colors.muted,
+  },
+  sectionTitle: {
+    ...typography.title,
+    color: colors.text,
+  },
   title: {
     ...typography.title,
     color: colors.text,
+  },
+  warning: {
+    ...typography.body,
+    color: colors.danger,
+  },
+  watchlistName: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0,
+  },
+  watchlistRow: {
+    alignItems: 'center',
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    padding: spacing.md,
+  },
+  watchlistRows: {
+    gap: spacing.sm,
+  },
+  watchlistsPanel: {
+    ...shadows.panel,
+    backgroundColor: colors.panelElevated,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md,
   },
 });

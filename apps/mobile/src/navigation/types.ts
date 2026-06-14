@@ -11,6 +11,10 @@ export type RootStackParamList = {
     tmdbId: number;
   };
   MainTabs: undefined;
+  PublicProfile: {
+    previewOwnProfile?: boolean;
+    userId: string;
+  };
   SeasonDetail: {
     seasonNumber: number;
     seriesTitle: string;

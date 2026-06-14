@@ -5,7 +5,6 @@ import { StatusBar } from 'expo-status-bar';
 import { Home, Search, Settings, Tv, UserCircle } from 'lucide-react-native';
 import { Animated, Easing, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import { ApiStatus } from './src/api/ApiStatus';
 import { AuthSessionProvider } from './src/auth/AuthSessionContext';
 import { ProfileAuthCard } from './src/auth/ProfileAuthCard';
 import { EpisodeDetailScreen } from './src/catalogue/EpisodeDetailScreen';
@@ -17,7 +16,9 @@ import { EmptyState } from './src/components/EmptyState';
 import { IconButton } from './src/components/IconButton';
 import { Screen } from './src/components/Screen';
 import { colors } from './src/design/tokens';
+import { FeedScreen } from './src/feed/FeedScreen';
 import { RootStackParamList } from './src/navigation/types';
+import { PublicProfileScreen } from './src/profile/PublicProfileScreen';
 import { SettingsScreen } from './src/profile/SettingsScreen';
 import { MyTvScreen } from './src/tracking/MyTvScreen';
 
@@ -98,14 +99,6 @@ function AppScreen({ body, children, emptyTitle, headline, showSettings }: React
       <EmptyState body={body} title={emptyTitle} />
       {children}
     </Screen>
-  );
-}
-
-function FeedScreen() {
-  return (
-    <AppScreen {...tabs.Feed}>
-      <ApiStatus />
-    </AppScreen>
   );
 }
 
@@ -346,6 +339,11 @@ export default function App() {
               component={FilmDetailScreen}
               name="FilmDetail"
               options={({ route }) => ({ title: route.params.title })}
+            />
+            <Stack.Screen
+              component={PublicProfileScreen}
+              name="PublicProfile"
+              options={{ title: 'Public profile' }}
             />
             <Stack.Screen
               component={SeasonDetailScreen}

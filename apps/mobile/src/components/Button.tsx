@@ -1,7 +1,7 @@
 import { Pressable, PressableProps, StyleSheet, Text } from 'react-native';
 import { colors, radii, spacing } from '../design/tokens';
 
-type ButtonVariant = 'primary' | 'secondary';
+type ButtonVariant = 'danger' | 'primary' | 'secondary';
 
 type ButtonProps = Omit<PressableProps, 'children' | 'style'> & {
   label: string;
@@ -15,13 +15,15 @@ export function Button({ disabled, label, variant = 'primary', ...pressableProps
       disabled={disabled}
       style={({ pressed }) => [
         styles.base,
-        variant === 'primary' ? styles.primary : styles.secondary,
+        variant === 'danger' ? styles.danger : null,
+        variant === 'primary' ? styles.primary : null,
+        variant === 'secondary' ? styles.secondary : null,
         pressed && !disabled ? styles.pressed : null,
         disabled ? styles.disabled : null,
       ]}
       {...pressableProps}
     >
-      <Text style={[styles.label, variant === 'primary' ? styles.primaryLabel : styles.secondaryLabel]}>
+      <Text style={[styles.label, variant === 'primary' || variant === 'danger' ? styles.primaryLabel : styles.secondaryLabel]}>
         {label}
       </Text>
     </Pressable>
@@ -40,6 +42,10 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.48,
+  },
+  danger: {
+    backgroundColor: colors.dangerBackground,
+    borderColor: colors.danger,
   },
   label: {
     fontSize: 15,
