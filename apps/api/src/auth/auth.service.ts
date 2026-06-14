@@ -1,23 +1,27 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { AuthenticatedIdentity } from './auth.types';
 import { PrismaService } from '../database/prisma.service';
+import { withPrismaConnectionRetry } from '../database/prisma-retry';
 
 @Injectable()
 export class AuthService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async getOrCreateUser(identity: AuthenticatedIdentity) {
-    const existingIdentity = await this.prisma.authIdentity.findUnique({
-      include: {
-        user: true,
-      },
-      where: {
-        provider_providerUserId: {
-          provider: identity.provider,
-          providerUserId: identity.providerUserId,
-        },
-      },
-    });
+    const existingIdentity = await withPrismaConnectionRetry(
+      () =>
+        this.prisma.authIdentity.findUnique({
+          include: {
+            user: true,
+          },
+          where: {
+            provider_providerUserId: {
+              provider: identity.provider,
+              providerUserId: identity.providerUserId,
+            },
+          },
+        }),
+    );
 
     if (existingIdentity) {
       return {

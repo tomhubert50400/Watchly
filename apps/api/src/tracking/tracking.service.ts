@@ -2,6 +2,7 @@ import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { TrackedContentType, UserContentStatus } from '../generated/prisma/enums';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
+import { withPrismaConnectionRetry } from '../database/prisma-retry';
 import { PrismaService } from '../database/prisma.service';
 import { TrackingContentType, TrackingStatus, UpsertContentStateDto } from './tracking.dto';
 
@@ -14,15 +15,18 @@ export class TrackingService {
 
   async listStates(identity: AuthenticatedIdentity, contentType?: TrackingContentType) {
     const userId = await this.getUserId(identity);
-    const states = await this.prisma.userContentState.findMany({
-      orderBy: {
-        updatedAt: 'desc',
-      },
-      where: {
-        userId,
-        ...(contentType ? { contentType: toTrackedContentType(contentType) } : {}),
-      },
-    });
+    const states = await withPrismaConnectionRetry(
+      () =>
+        this.prisma.userContentState.findMany({
+          orderBy: {
+            updatedAt: 'desc',
+          },
+          where: {
+            userId,
+            ...(contentType ? { contentType: toTrackedContentType(contentType) } : {}),
+          },
+        }),
+    );
 
     return states.map(toApiState);
   }

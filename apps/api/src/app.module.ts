@@ -4,13 +4,18 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import Joi from 'joi';
 import { AuthModule } from './auth/auth.module';
+import { BlocksModule } from './blocks/blocks.module';
 import { CatalogueModule } from './catalogue/catalogue.module';
+import { FeedModule } from './feed/feed.module';
+import { FollowsModule } from './follows/follows.module';
 import { HealthController } from './health.controller';
+import { NotificationsModule } from './notifications/notifications.module';
 import { ProgressModule } from './progress/progress.module';
 import { ProfileModule } from './profile/profile.module';
 import { RatingsModule } from './ratings/ratings.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { TrackingModule } from './tracking/tracking.module';
+import { WatchlistsModule } from './watchlists/watchlists.module';
 
 @Module({
   controllers: [HealthController],
@@ -39,12 +44,17 @@ import { TrackingModule } from './tracking/tracking.module';
       ],
     }),
     AuthModule,
+    BlocksModule,
     CatalogueModule,
+    FeedModule,
+    FollowsModule,
+    NotificationsModule,
     ProgressModule,
     ProfileModule,
     RatingsModule,
     ReviewsModule,
     TrackingModule,
+    WatchlistsModule,
   ],
   providers: [
     {

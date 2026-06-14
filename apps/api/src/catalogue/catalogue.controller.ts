@@ -28,9 +28,25 @@ export class CatalogueController {
     return this.catalogue.getMovie(tmdbId);
   }
 
+  @Get('movies/:tmdbId/watch-providers')
+  async movieWatchProviders(
+    @Param('tmdbId', ParseIntPipe) tmdbId: number,
+    @Query('country') country?: string,
+  ) {
+    return this.catalogue.getMovieWatchProviders(tmdbId, parseCountry(country));
+  }
+
   @Get('series/:tmdbId')
   async seriesDetails(@Param('tmdbId', ParseIntPipe) tmdbId: number) {
     return this.catalogue.getSeries(tmdbId);
+  }
+
+  @Get('series/:tmdbId/watch-providers')
+  async seriesWatchProviders(
+    @Param('tmdbId', ParseIntPipe) tmdbId: number,
+    @Query('country') country?: string,
+  ) {
+    return this.catalogue.getSeriesWatchProviders(tmdbId, parseCountry(country));
   }
 
   @Get('series/:tmdbId/seasons/:seasonNumber')
@@ -49,4 +65,14 @@ export class CatalogueController {
   ) {
     return this.catalogue.getEpisode(tmdbId, seasonNumber, episodeNumber);
   }
+}
+
+function parseCountry(value: string | undefined) {
+  const country = (value?.trim() || 'US').toUpperCase();
+
+  if (!/^[A-Z]{2}$/.test(country)) {
+    throw new BadRequestException('country must be a two-letter country code.');
+  }
+
+  return country;
 }

@@ -36,6 +36,18 @@ enum UserContentStatus {
   DROPPED
 }
 
+enum ReleaseNotificationType {
+  MOVIE_RELEASE
+  SEASON_RELEASE
+  EPISODE_RELEASE
+}
+
+enum AuditAction {
+  PRIVACY_UPDATED
+  USER_BLOCKED
+  USER_UNBLOCKED
+}
+
 model User {
   id              String           @id @default(uuid()) @db.Uuid
   displayName     String?
@@ -48,7 +60,13 @@ model User {
   episodeReviews  UserEpisodeReview[]
   movieRatings    UserMovieRating[]
   movieReviews    UserMovieReview[]
+  releaseNotifications ReleaseNotification[]
   privacySettings PrivacySettings?
+  blockedUsers       UserBlock[]          @relation("UserBlocksMade")
+  blockedBy          UserBlock[]          @relation("UserBlocksReceived")
+  following          UserFollow[]         @relation("UserFollowsMade")
+  followers          UserFollow[]         @relation("UserFollowsReceived")
+  personalWatchlists PersonalWatchlist[]
 
   @@map("users")
 }
@@ -177,4 +195,92 @@ model UserEpisodeProgress {
   @@index([userId])
   @@index([seriesTmdbId, seasonNumber])
   @@map("user_episode_progress")
+}
+
+model UserBlock {
+  id            String   @id @default(uuid()) @db.Uuid
+  blockerId     String   @db.Uuid
+  blockedUserId String   @db.Uuid
+  createdAt     DateTime @default(now())
+  blockedUser   User     @relation("UserBlocksReceived", fields: [blockedUserId], references: [id], onDelete: Cascade)
+  blocker       User     @relation("UserBlocksMade", fields: [blockerId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedUserId])
+  @@index([blockedUserId])
+  @@map("user_blocks")
+}
+
+model UserFollow {
+  id              String   @id @default(uuid()) @db.Uuid
+  followerId      String   @db.Uuid
+  followedUserId  String   @db.Uuid
+  createdAt       DateTime @default(now())
+  followedUser    User     @relation("UserFollowsReceived", fields: [followedUserId], references: [id], onDelete: Cascade)
+  follower        User     @relation("UserFollowsMade", fields: [followerId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followedUserId])
+  @@index([followedUserId])
+  @@map("user_follows")
+}
+
+model PersonalWatchlist {
+  id        String                  @id @default(uuid()) @db.Uuid
+  userId    String                  @db.Uuid
+  name      String                  @db.VarChar(80)
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+  items     PersonalWatchlistItem[]
+  user      User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("personal_watchlists")
+}
+
+model PersonalWatchlistItem {
+  id          String             @id @default(uuid()) @db.Uuid
+  watchlistId String             @db.Uuid
+  contentType TrackedContentType
+  tmdbId      Int
+  createdAt   DateTime           @default(now())
+  watchlist   PersonalWatchlist  @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+
+  @@unique([watchlistId, contentType, tmdbId])
+  @@index([contentType, tmdbId])
+  @@map("personal_watchlist_items")
+}
+
+model ReleaseNotification {
+  id            String                  @id @default(uuid()) @db.Uuid
+  userId        String                  @db.Uuid
+  type          ReleaseNotificationType
+  contentType   TrackedContentType
+  tmdbId        Int
+  seasonNumber  Int?
+  episodeNumber Int?
+  title         String                  @db.VarChar(160)
+  body          String                  @db.VarChar(500)
+  releasedAt    DateTime?
+  readAt        DateTime?
+  generatedKey  String                  @db.VarChar(160)
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  user          User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, generatedKey])
+  @@index([userId, readAt, createdAt])
+  @@index([contentType, tmdbId])
+  @@map("release_notifications")
+}
+
+model AuditLog {
+  id          String      @id @default(uuid()) @db.Uuid
+  actorUserId String      @db.Uuid
+  action      AuditAction
+  targetUserId String?    @db.Uuid
+  metadata    Json?
+  createdAt   DateTime    @default(now())
+
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
 }

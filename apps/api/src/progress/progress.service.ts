@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
+import { withPrismaConnectionRetry } from '../database/prisma-retry';
 import { PrismaService } from '../database/prisma.service';
 
 @Injectable()
@@ -78,22 +79,25 @@ export class ProgressService {
 
   async listSeriesProgressSummaries(identity: AuthenticatedIdentity) {
     const userId = await this.getUserId(identity);
-    const progress = await this.prisma.userEpisodeProgress.findMany({
-      orderBy: [
-        {
-          seriesTmdbId: 'asc',
-        },
-        {
-          seasonNumber: 'asc',
-        },
-        {
-          episodeNumber: 'asc',
-        },
-      ],
-      where: {
-        userId,
-      },
-    });
+    const progress = await withPrismaConnectionRetry(
+      () =>
+        this.prisma.userEpisodeProgress.findMany({
+          orderBy: [
+            {
+              seriesTmdbId: 'asc',
+            },
+            {
+              seasonNumber: 'asc',
+            },
+            {
+              episodeNumber: 'asc',
+            },
+          ],
+          where: {
+            userId,
+          },
+        }),
+    );
     const bySeries = new Map<number, SeriesProgressSummaryAccumulator>();
 
     progress.forEach((episode) => {

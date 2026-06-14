@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
+import { withPrismaConnectionRetry } from '../database/prisma-retry';
 import { PrismaService } from '../database/prisma.service';
 
 @Injectable()
@@ -12,14 +13,17 @@ export class RatingsService {
 
   async listMovieRatings(identity: AuthenticatedIdentity) {
     const userId = await this.getUserId(identity);
-    const ratings = await this.prisma.userMovieRating.findMany({
-      orderBy: {
-        updatedAt: 'desc',
-      },
-      where: {
-        userId,
-      },
-    });
+    const ratings = await withPrismaConnectionRetry(
+      () =>
+        this.prisma.userMovieRating.findMany({
+          orderBy: {
+            updatedAt: 'desc',
+          },
+          where: {
+            userId,
+          },
+        }),
+    );
 
     return ratings.map(toApiMovieRating);
   }

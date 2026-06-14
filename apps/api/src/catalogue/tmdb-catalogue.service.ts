@@ -95,6 +95,26 @@ type TmdbEpisodeDetailsResponse = {
   vote_average?: number;
 };
 
+type TmdbWatchProvider = {
+  display_priority?: number;
+  logo_path?: string | null;
+  provider_id: number;
+  provider_name?: string;
+};
+
+type TmdbWatchProviderCountry = {
+  buy?: TmdbWatchProvider[];
+  flatrate?: TmdbWatchProvider[];
+  free?: TmdbWatchProvider[];
+  link?: string;
+  rent?: TmdbWatchProvider[];
+};
+
+type TmdbWatchProvidersResponse = {
+  id: number;
+  results?: Record<string, TmdbWatchProviderCountry>;
+};
+
 export type CatalogueSearchItem = {
   id: string;
   mediaType: 'movie' | 'series';
@@ -185,6 +205,23 @@ export type EpisodeDetails = {
   title: string;
   tmdbId: number;
   voteAverage: number | null;
+};
+
+export type StreamingAvailability = {
+  country: string;
+  groups: {
+    buy: StreamingProvider[];
+    free: StreamingProvider[];
+    rent: StreamingProvider[];
+    stream: StreamingProvider[];
+  };
+  link: string | null;
+};
+
+export type StreamingProvider = {
+  id: number;
+  logoUrl: string | null;
+  name: string;
 };
 
 @Injectable()
@@ -292,6 +329,36 @@ export class TmdbCatalogueService {
 
     return {
       item: this.toEpisodeDetails(tmdbId, payload),
+      provider: 'tmdb',
+    };
+  }
+
+  async getMovieWatchProviders(tmdbId: number, country: string) {
+    const accessToken = this.getAccessToken();
+    const endpoint = `${this.tmdbBaseUrl}/movie/${tmdbId}/watch/providers`;
+    const payload = await this.fetchTmdb<TmdbWatchProvidersResponse>(
+      endpoint,
+      accessToken,
+      'movie watch providers',
+    );
+
+    return {
+      availability: this.toStreamingAvailability(payload, country),
+      provider: 'tmdb',
+    };
+  }
+
+  async getSeriesWatchProviders(tmdbId: number, country: string) {
+    const accessToken = this.getAccessToken();
+    const endpoint = `${this.tmdbBaseUrl}/tv/${tmdbId}/watch/providers`;
+    const payload = await this.fetchTmdb<TmdbWatchProvidersResponse>(
+      endpoint,
+      accessToken,
+      'series watch providers',
+    );
+
+    return {
+      availability: this.toStreamingAvailability(payload, country),
       provider: 'tmdb',
     };
   }
@@ -457,5 +524,35 @@ export class TmdbCatalogueService {
       tmdbId: item.id,
       voteAverage: typeof item.vote_average === 'number' ? item.vote_average : null,
     };
+  }
+
+  private toStreamingAvailability(
+    payload: TmdbWatchProvidersResponse,
+    country: string,
+  ): StreamingAvailability {
+    const countryKey = country.toUpperCase();
+    const countryProviders = payload.results?.[countryKey];
+
+    return {
+      country: countryKey,
+      groups: {
+        buy: this.toStreamingProviders(countryProviders?.buy),
+        free: this.toStreamingProviders(countryProviders?.free),
+        rent: this.toStreamingProviders(countryProviders?.rent),
+        stream: this.toStreamingProviders(countryProviders?.flatrate),
+      },
+      link: countryProviders?.link ?? null,
+    };
+  }
+
+  private toStreamingProviders(providers: TmdbWatchProvider[] | undefined): StreamingProvider[] {
+    return (providers ?? [])
+      .filter((provider) => provider.provider_name)
+      .sort((left, right) => (left.display_priority ?? 0) - (right.display_priority ?? 0))
+      .map((provider) => ({
+        id: provider.provider_id,
+        logoUrl: provider.logo_path ? `${this.imageBaseUrl}${provider.logo_path}` : null,
+        name: provider.provider_name ?? `Provider ${provider.provider_id}`,
+      }));
   }
 }

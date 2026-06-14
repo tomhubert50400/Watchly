@@ -24,6 +24,12 @@ async function main() {
     await prisma.userEpisodeReview.count();
     await prisma.userMovieRating.count();
     await prisma.userMovieReview.count();
+    await prisma.userBlock.count();
+    await prisma.userFollow.count();
+    await prisma.personalWatchlist.count();
+    await prisma.personalWatchlistItem.count();
+    await prisma.releaseNotification.count();
+    await prisma.auditLog.count();
     console.log('Database connection ok');
   } finally {
     await prisma.$disconnect();

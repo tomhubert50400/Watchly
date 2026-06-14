@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
+import { withPrismaConnectionRetry } from '../database/prisma-retry';
 import { PrismaService } from '../database/prisma.service';
 
 @Injectable()
@@ -12,14 +13,17 @@ export class ReviewsService {
 
   async getMovieReview(identity: AuthenticatedIdentity, tmdbId: number) {
     const userId = await this.getUserId(identity);
-    const review = await this.prisma.userMovieReview.findUnique({
-      where: {
-        userId_tmdbId: {
-          tmdbId,
-          userId,
-        },
-      },
-    });
+    const review = await withPrismaConnectionRetry(
+      () =>
+        this.prisma.userMovieReview.findUnique({
+          where: {
+            userId_tmdbId: {
+              tmdbId,
+              userId,
+            },
+          },
+        }),
+    );
 
     return review ? toApiMovieReview(review) : null;
   }
@@ -27,22 +31,25 @@ export class ReviewsService {
   async upsertMovieReview(identity: AuthenticatedIdentity, tmdbId: number, body: string) {
     const userId = await this.getUserId(identity);
     const reviewBody = normalizeBody(body);
-    const review = await this.prisma.userMovieReview.upsert({
-      create: {
-        body: reviewBody,
-        tmdbId,
-        userId,
-      },
-      update: {
-        body: reviewBody,
-      },
-      where: {
-        userId_tmdbId: {
-          tmdbId,
-          userId,
-        },
-      },
-    });
+    const review = await withPrismaConnectionRetry(
+      () =>
+        this.prisma.userMovieReview.upsert({
+          create: {
+            body: reviewBody,
+            tmdbId,
+            userId,
+          },
+          update: {
+            body: reviewBody,
+          },
+          where: {
+            userId_tmdbId: {
+              tmdbId,
+              userId,
+            },
+          },
+        }),
+    );
 
     return toApiMovieReview(review);
   }
@@ -50,12 +57,15 @@ export class ReviewsService {
   async deleteMovieReview(identity: AuthenticatedIdentity, tmdbId: number) {
     const userId = await this.getUserId(identity);
 
-    await this.prisma.userMovieReview.deleteMany({
-      where: {
-        tmdbId,
-        userId,
-      },
-    });
+    await withPrismaConnectionRetry(
+      () =>
+        this.prisma.userMovieReview.deleteMany({
+          where: {
+            tmdbId,
+            userId,
+          },
+        }),
+    );
   }
 
   async getEpisodeReview(
@@ -65,16 +75,19 @@ export class ReviewsService {
     episodeNumber: number,
   ) {
     const userId = await this.getUserId(identity);
-    const review = await this.prisma.userEpisodeReview.findUnique({
-      where: {
-        userId_seriesTmdbId_seasonNumber_episodeNumber: {
-          episodeNumber,
-          seasonNumber,
-          seriesTmdbId,
-          userId,
-        },
-      },
-    });
+    const review = await withPrismaConnectionRetry(
+      () =>
+        this.prisma.userEpisodeReview.findUnique({
+          where: {
+            userId_seriesTmdbId_seasonNumber_episodeNumber: {
+              episodeNumber,
+              seasonNumber,
+              seriesTmdbId,
+              userId,
+            },
+          },
+        }),
+    );
 
     return review ? toApiEpisodeReview(review) : null;
   }
@@ -88,26 +101,29 @@ export class ReviewsService {
   ) {
     const userId = await this.getUserId(identity);
     const reviewBody = normalizeBody(body);
-    const review = await this.prisma.userEpisodeReview.upsert({
-      create: {
-        body: reviewBody,
-        episodeNumber,
-        seasonNumber,
-        seriesTmdbId,
-        userId,
-      },
-      update: {
-        body: reviewBody,
-      },
-      where: {
-        userId_seriesTmdbId_seasonNumber_episodeNumber: {
-          episodeNumber,
-          seasonNumber,
-          seriesTmdbId,
-          userId,
-        },
-      },
-    });
+    const review = await withPrismaConnectionRetry(
+      () =>
+        this.prisma.userEpisodeReview.upsert({
+          create: {
+            body: reviewBody,
+            episodeNumber,
+            seasonNumber,
+            seriesTmdbId,
+            userId,
+          },
+          update: {
+            body: reviewBody,
+          },
+          where: {
+            userId_seriesTmdbId_seasonNumber_episodeNumber: {
+              episodeNumber,
+              seasonNumber,
+              seriesTmdbId,
+              userId,
+            },
+          },
+        }),
+    );
 
     return toApiEpisodeReview(review);
   }
@@ -120,14 +136,17 @@ export class ReviewsService {
   ) {
     const userId = await this.getUserId(identity);
 
-    await this.prisma.userEpisodeReview.deleteMany({
-      where: {
-        episodeNumber,
-        seasonNumber,
-        seriesTmdbId,
-        userId,
-      },
-    });
+    await withPrismaConnectionRetry(
+      () =>
+        this.prisma.userEpisodeReview.deleteMany({
+          where: {
+            episodeNumber,
+            seasonNumber,
+            seriesTmdbId,
+            userId,
+          },
+        }),
+    );
   }
 
   private async getUserId(identity: AuthenticatedIdentity) {

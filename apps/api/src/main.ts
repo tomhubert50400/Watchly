@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import helmet from 'helmet';
 import 'reflect-metadata';
 import { AppModule } from './app.module';
+import { DevExceptionFilter } from './dev-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -12,6 +13,7 @@ async function bootstrap() {
   const config = app.get(ConfigService);
   const logger = new Logger('Bootstrap');
   const corsOrigin = config.get<string>('CORS_ORIGIN');
+  const isDevelopment = config.get<string>('NODE_ENV') !== 'production';
   const port = config.getOrThrow<number>('PORT');
 
   app.use(helmet());
@@ -22,6 +24,7 @@ async function bootstrap() {
       whitelist: true,
     }),
   );
+  app.useGlobalFilters(new DevExceptionFilter(isDevelopment));
 
   if (corsOrigin) {
     app.enableCors({ origin: corsOrigin });

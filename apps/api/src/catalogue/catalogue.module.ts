@@ -4,6 +4,7 @@ import { TmdbCatalogueService } from './tmdb-catalogue.service';
 
 @Module({
   controllers: [CatalogueController],
+  exports: [TmdbCatalogueService],
   providers: [TmdbCatalogueService],
 })
 export class CatalogueModule {}
