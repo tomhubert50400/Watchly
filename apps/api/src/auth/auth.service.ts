@@ -27,6 +27,7 @@ export class AuthService {
       return {
         id: existingIdentity.user.id,
         displayName: existingIdentity.user.displayName,
+        onboardingCompleted: existingIdentity.user.onboardingCompleted,
         provider: existingIdentity.provider,
       };
     }
@@ -49,6 +50,7 @@ export class AuthService {
     return {
       id: user.id,
       displayName: user.displayName,
+      onboardingCompleted: user.onboardingCompleted,
       provider: identity.provider,
     };
   }

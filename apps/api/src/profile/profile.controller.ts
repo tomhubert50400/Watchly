@@ -54,6 +54,11 @@ export class ProfileController {
   ) {
     return this.profile.updatePrivacy(getIdentity(request), body);
   }
+
+  @Put('me/onboarding-completed')
+  async completeOnboarding(@Req() request: AuthenticatedRequest) {
+    return this.profile.completeOnboarding(getIdentity(request));
+  }
 }
 
 function getIdentity(request: AuthenticatedRequest) {

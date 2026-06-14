@@ -194,6 +194,24 @@ export class ProfileService {
     return this.getProfileByUserId(userId);
   }
 
+  async completeOnboarding(identity: AuthenticatedIdentity) {
+    const userId = await this.getUserId(identity);
+    const user = await this.prisma.user.update({
+      data: {
+        onboardingCompleted: true,
+      },
+      where: {
+        id: userId,
+      },
+    });
+
+    return {
+      displayName: user.displayName,
+      id: user.id,
+      onboardingCompleted: user.onboardingCompleted,
+    };
+  }
+
   private async getUserId(identity: AuthenticatedIdentity) {
     const user = await this.authService.getOrCreateUser(identity);
 
