@@ -97,8 +97,8 @@ function MovieDetailContent({ movie }: { movie: MovieDetails }) {
         <ReleaseAlertControl contentType="movie" tmdbId={movie.tmdbId} />
       </View>
       {movie.tagline ? <Text style={styles.tagline}>{movie.tagline}</Text> : null}
-      <SynopsisPanel overview={movie.overview} />
       <TrackingControls contentType="movie" tmdbId={movie.tmdbId} />
+      <SynopsisPanel overview={movie.overview} />
       <StreamingAvailabilityPanel contentType="movie" tmdbId={movie.tmdbId} />
       <MovieRatingControl tmdbId={movie.tmdbId} />
       <MovieReviewEditor tmdbId={movie.tmdbId} />

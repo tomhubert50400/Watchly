@@ -100,8 +100,8 @@ function SeriesDetailContent({ series }: { series: SeriesDetails }) {
         <ReleaseAlertControl contentType="series" tmdbId={series.tmdbId} />
       </View>
       {series.tagline ? <Text style={styles.tagline}>{series.tagline}</Text> : null}
-      <SynopsisPanel overview={series.overview} />
       <TrackingControls contentType="series" tmdbId={series.tmdbId} />
+      <SynopsisPanel overview={series.overview} />
       <StreamingAvailabilityPanel contentType="series" tmdbId={series.tmdbId} />
       <SeriesProgressSummary
         seasons={series.seasons}

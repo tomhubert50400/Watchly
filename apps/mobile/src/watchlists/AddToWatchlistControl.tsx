@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   ActivityIndicator,
   Modal,
   Pressable,
@@ -47,7 +48,7 @@ type WatchlistOption = {
 type CreateWatchlistKind = 'personal' | 'shared';
 
 export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistControlProps) {
-  const { firebaseIdToken, getFirebaseIdToken, notifyTrackingChanged } = useAuthSession();
+  const { firebaseIdToken, getFirebaseIdToken } = useAuthSession();
   const [error, setError] = useState<string | null>(null);
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
   const [initialSelectedKeys, setInitialSelectedKeys] = useState<Set<string>>(new Set());
@@ -57,20 +58,27 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   const [isSaving, setIsSaving] = useState(false);
   const [newWatchlistKind, setNewWatchlistKind] = useState<CreateWatchlistKind>('personal');
   const [newWatchlistName, setNewWatchlistName] = useState('');
+  const [optionsContentKey, setOptionsContentKey] = useState<string | null>(null);
   const [options, setOptions] = useState<WatchlistOption[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const loadVersionRef = useRef(0);
+  const saveVersionRef = useRef(0);
+  const sheetProgress = useRef(new Animated.Value(0)).current;
+  const contentKey = `${contentType}:${tmdbId}`;
 
-  async function openModal() {
+  const loadOptions = useCallback(async (showLoading: boolean) => {
     if (!firebaseIdToken) {
       return;
     }
 
-    setIsOpen(true);
+    const loadVersion = loadVersionRef.current + 1;
+
+    loadVersionRef.current = loadVersion;
     setError(null);
-    setIsCreateFormOpen(false);
-    setIsLoading(true);
-    setNewWatchlistKind('personal');
-    setNewWatchlistName('');
+
+    if (showLoading) {
+      setIsLoading(true);
+    }
 
     try {
       const token = await getFirebaseIdToken();
@@ -91,17 +99,70 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
         nextOptions.filter((option) => option.containsTitle).map((option) => option.key),
       );
 
+      if (loadVersionRef.current !== loadVersion) {
+        return;
+      }
+
       setOptions(nextOptions);
+      setOptionsContentKey(contentKey);
       setInitialSelectedKeys(nextSelectedKeys);
       setSelectedKeys(new Set(nextSelectedKeys));
     } catch (loadError) {
+      if (loadVersionRef.current === loadVersion) {
+        setOptions([]);
+        setOptionsContentKey(contentKey);
+        setInitialSelectedKeys(new Set());
+        setSelectedKeys(new Set());
+        setError(loadError instanceof Error ? loadError.message : 'Could not load watchlists.');
+      }
+    } finally {
+      if (loadVersionRef.current === loadVersion) {
+        setIsLoading(false);
+      }
+    }
+  }, [contentKey, contentType, firebaseIdToken, getFirebaseIdToken, tmdbId]);
+
+  useEffect(() => {
+    if (!firebaseIdToken) {
+      setOptions([]);
+      setOptionsContentKey(null);
+      setInitialSelectedKeys(new Set());
+      setSelectedKeys(new Set());
+      return;
+    }
+
+    void loadOptions(false);
+  }, [firebaseIdToken, loadOptions]);
+
+  async function openModal() {
+    if (!firebaseIdToken) {
+      return;
+    }
+
+    setIsOpen(true);
+    setError(null);
+    setIsCreateFormOpen(false);
+    setNewWatchlistKind('personal');
+    setNewWatchlistName('');
+
+    if (optionsContentKey !== contentKey) {
       setOptions([]);
       setInitialSelectedKeys(new Set());
       setSelectedKeys(new Set());
-      setError(loadError instanceof Error ? loadError.message : 'Could not load watchlists.');
-    } finally {
-      setIsLoading(false);
+      void loadOptions(true);
     }
+  }
+
+  function closeModal() {
+    Animated.timing(sheetProgress, {
+      duration: 180,
+      toValue: 0,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) {
+        setIsOpen(false);
+      }
+    });
   }
 
   async function createWatchlistFromModal() {
@@ -156,7 +217,18 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
       return;
     }
 
+    const previousInitialKeys = new Set(initialSelectedKeys);
+    const previousSelectedKeys = new Set(selectedKeys);
+    const previousOptions = options;
+    const nextSelectedKeys = new Set(selectedKeys);
+    const saveOptions = options;
+    const saveVersion = saveVersionRef.current + 1;
+
+    saveVersionRef.current = saveVersion;
     setError(null);
+    setInitialSelectedKeys(nextSelectedKeys);
+    setOptions((current) => updateOptionSelection(current, previousInitialKeys, nextSelectedKeys));
+    closeModal();
     setIsSaving(true);
 
     try {
@@ -167,9 +239,9 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
       }
 
       await Promise.all(
-        options.map((option) => {
-          const wasSelected = initialSelectedKeys.has(option.key);
-          const isSelected = selectedKeys.has(option.key);
+        saveOptions.map((option) => {
+          const wasSelected = previousInitialKeys.has(option.key);
+          const isSelected = nextSelectedKeys.has(option.key);
 
           if (wasSelected === isSelected) {
             return Promise.resolve();
@@ -186,16 +258,46 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
             : removeSharedWatchlistItem(token, option.id, contentType, tmdbId);
         }),
       );
-
-      setInitialSelectedKeys(new Set(selectedKeys));
-      notifyTrackingChanged();
-      setIsOpen(false);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Could not update watchlists.');
+      if (saveVersionRef.current === saveVersion) {
+        setOptions(previousOptions);
+        setInitialSelectedKeys(previousInitialKeys);
+        setSelectedKeys(previousSelectedKeys);
+        setError(saveError instanceof Error ? saveError.message : 'Could not update watchlists.');
+        setIsOpen(true);
+      }
     } finally {
-      setIsSaving(false);
+      if (saveVersionRef.current === saveVersion) {
+        setIsSaving(false);
+      }
     }
   }
+
+  const hasCurrentOptions = optionsContentKey === contentKey;
+  const sheetStyle = {
+    opacity: sheetProgress,
+    transform: [
+      {
+        translateY: sheetProgress.interpolate({
+          inputRange: [0, 1],
+          outputRange: [48, 0],
+        }),
+      },
+    ],
+  };
+
+  useEffect(() => {
+    if (!isOpen) {
+      sheetProgress.setValue(0);
+      return;
+    }
+
+    Animated.timing(sheetProgress, {
+      duration: 220,
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  }, [isOpen, sheetProgress]);
 
   return (
     <>
@@ -214,9 +316,9 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
         <Text style={styles.triggerLabel}>Add to watchlist</Text>
       </Pressable>
 
-      <Modal animationType="fade" onRequestClose={() => setIsOpen(false)} transparent visible={isOpen}>
+      <Modal animationType="fade" onRequestClose={closeModal} transparent visible={isOpen}>
         <View style={styles.overlay}>
-          <View style={styles.sheet}>
+          <Animated.View style={[styles.sheet, sheetStyle]}>
             <View style={styles.sheetHeader}>
               <View>
                 <Text style={styles.sheetTitle}>Add to watchlist</Text>
@@ -225,19 +327,19 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
               <Pressable
                 accessibilityLabel="Close watchlist picker"
                 accessibilityRole="button"
-                onPress={() => setIsOpen(false)}
+                onPress={closeModal}
                 style={({ pressed }) => [styles.closeButton, pressed && styles.triggerPressed]}
               >
                 <X color={colors.text} size={18} strokeWidth={2.4} />
               </Pressable>
             </View>
 
-            {isLoading ? (
+            {isLoading && !hasCurrentOptions ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator color={colors.accent} />
                 <Text style={styles.loadingText}>Loading watchlists</Text>
               </View>
-            ) : options.length === 0 ? (
+            ) : options.length === 0 || !hasCurrentOptions ? (
               <Text style={styles.emptyText}>No watchlists yet.</Text>
             ) : (
               <ScrollView contentContainerStyle={styles.optionList} showsVerticalScrollIndicator={false}>
@@ -303,24 +405,24 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
 
             <View style={styles.footer}>
               <View style={styles.actions}>
-                <Button disabled={isSaving} label="Cancel" onPress={() => setIsOpen(false)} variant="secondary" />
-                <Button disabled={isLoading || isSaving || isCreating || options.length === 0} label={isSaving ? 'Saving' : 'Save'} onPress={saveSelection} />
+                <Button label="Cancel" onPress={closeModal} variant="secondary" />
+                <Button disabled={isLoading || isCreating || options.length === 0 || !hasCurrentOptions} label="Save" onPress={saveSelection} />
               </View>
               <Pressable
                 accessibilityLabel="Show create watchlist field"
                 accessibilityRole="button"
-                disabled={isCreating || isSaving}
+                disabled={isCreating}
                 onPress={() => setIsCreateFormOpen(true)}
                 style={({ pressed }) => [
                   styles.createFab,
-                  pressed && !isCreating && !isSaving ? styles.triggerPressed : null,
-                  (isCreating || isSaving) && styles.disabled,
+                  pressed && !isCreating ? styles.triggerPressed : null,
+                  isCreating && styles.disabled,
                 ]}
               >
                 <Plus color={colors.textOnAccent} size={20} strokeWidth={2.8} />
               </Pressable>
             </View>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
     </>
@@ -416,6 +518,24 @@ function buildOptionMeta(option: WatchlistOption) {
   }
 
   return `Shared / ${titleCount} / ${option.memberCount ?? 0} members`;
+}
+
+function updateOptionSelection(
+  options: WatchlistOption[],
+  previousSelectedKeys: Set<string>,
+  nextSelectedKeys: Set<string>,
+) {
+  return options.map((option) => {
+    const wasSelected = previousSelectedKeys.has(option.key);
+    const isSelected = nextSelectedKeys.has(option.key);
+    const itemDelta = wasSelected === isSelected ? 0 : isSelected ? 1 : -1;
+
+    return {
+      ...option,
+      containsTitle: isSelected,
+      itemCount: Math.max(0, option.itemCount + itemDelta),
+    };
+  });
 }
 
 const styles = StyleSheet.create({

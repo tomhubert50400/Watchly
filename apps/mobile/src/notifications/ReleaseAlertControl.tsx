@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Pressable, StyleSheet } from 'react-native';
 import { BellOff, BellRing } from 'lucide-react-native';
 import {
   disableReleaseAlert,
@@ -17,9 +17,10 @@ type ReleaseAlertControlProps = {
 };
 
 export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControlProps) {
-  const { firebaseIdToken } = useAuthSession();
+  const { firebaseIdToken, getFirebaseIdToken } = useAuthSession();
   const [isLoading, setIsLoading] = useState(false);
   const [state, setState] = useState<ReleaseAlertState | null>(null);
+  const toggleVersionRef = useRef(0);
 
   const loadAlert = useCallback(async () => {
     if (!firebaseIdToken) {
@@ -27,38 +28,65 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
       return;
     }
 
+    const loadVersion = toggleVersionRef.current;
+
     setIsLoading(true);
 
     try {
-      setState(await getReleaseAlert(firebaseIdToken, contentType, tmdbId));
+      const token = await getFirebaseIdToken();
+
+      if (!token) {
+        throw new Error('Sign in again to load release alerts.');
+      }
+
+      const loadedState = await getReleaseAlert(token, contentType, tmdbId);
+
+      if (toggleVersionRef.current === loadVersion) {
+        setState(loadedState);
+      }
     } catch (loadError) {
-      setState(null);
+      if (toggleVersionRef.current === loadVersion) {
+        setState(null);
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [contentType, firebaseIdToken, tmdbId]);
+  }, [contentType, firebaseIdToken, getFirebaseIdToken, tmdbId]);
 
   useEffect(() => {
     void loadAlert();
   }, [loadAlert]);
 
   async function toggleAlert() {
-    if (!firebaseIdToken || isLoading) {
+    if (!firebaseIdToken) {
       return;
     }
 
-    setIsLoading(true);
+    const previousState = state;
+    const nextEnabled = !state?.enabled;
+    const toggleVersion = toggleVersionRef.current + 1;
+
+    toggleVersionRef.current = toggleVersion;
+    setState({ enabled: nextEnabled, items: state?.items ?? [] });
 
     try {
-      const nextState = state?.enabled
-        ? await disableReleaseAlert(firebaseIdToken, contentType, tmdbId)
-        : await enableReleaseAlert(firebaseIdToken, contentType, tmdbId);
+      const token = await getFirebaseIdToken();
 
-      setState(nextState);
+      if (!token) {
+        throw new Error('Sign in again to update release alerts.');
+      }
+
+      const nextState = state?.enabled
+        ? await disableReleaseAlert(token, contentType, tmdbId)
+        : await enableReleaseAlert(token, contentType, tmdbId);
+
+      if (toggleVersionRef.current === toggleVersion) {
+        setState(nextState);
+      }
     } catch (toggleError) {
-      setState(state);
-    } finally {
-      setIsLoading(false);
+      if (toggleVersionRef.current === toggleVersion) {
+        setState(previousState);
+      }
     }
   }
 
@@ -69,17 +97,15 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
       accessibilityLabel={enabled ? 'Disable release alert' : 'Enable release alert'}
       accessibilityRole="button"
       accessibilityState={{ selected: enabled }}
-      disabled={!firebaseIdToken || isLoading}
+      disabled={!firebaseIdToken}
       onPress={toggleAlert}
       style={({ pressed }) => [
         styles.iconButton,
         enabled && styles.iconButtonEnabled,
-        (pressed || isLoading) && styles.pressed,
+        pressed && styles.pressed,
       ]}
     >
-      {isLoading ? (
-        <ActivityIndicator color={enabled ? colors.textOnAccent : colors.muted} />
-      ) : enabled ? (
+      {enabled ? (
         <BellRing color={colors.textOnAccent} size={19} strokeWidth={2.2} />
       ) : (
         <BellOff color={colors.muted} size={19} strokeWidth={2.2} />
