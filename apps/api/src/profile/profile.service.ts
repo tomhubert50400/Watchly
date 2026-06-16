@@ -15,7 +15,6 @@ import {
 import { assertUuid } from '../blocks/blocks.service';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
-import { withPrismaConnectionRetry } from '../database/prisma-retry';
 import { PrismaService } from '../database/prisma.service';
 import {
   PrivacyVisibilityValue,
@@ -63,7 +62,7 @@ export class ProfileService {
       provider: AuthProvider.GOOGLE,
       providerUserId: '__dev_block_test_profile__',
     };
-    const existingIdentity = await withPrismaConnectionRetry(
+    const existingIdentity = await this.prisma.withConnectionRetry(
       () =>
         this.prisma.authIdentity.findUnique({
           include: {
@@ -85,7 +84,8 @@ export class ProfileService {
       return this.getPublicProfileByUserId(existingIdentity.user.id, true);
     }
 
-    const user = await this.prisma.user.create({
+    const user = await this.prisma.withConnectionRetry(() =>
+      this.prisma.user.create({
       data: {
         authIdentities: {
           create: identityKey,
@@ -98,7 +98,8 @@ export class ProfileService {
           },
         },
       },
-    });
+      }),
+    );
 
     await this.ensurePublicTestProfile(user.id, viewerId);
 
@@ -113,14 +114,16 @@ export class ProfileService {
     const userId = await this.getUserId(identity);
     const displayName = normalizeDisplayName(input.displayName);
 
-    await this.prisma.user.update({
+    await this.prisma.withConnectionRetry(() =>
+      this.prisma.user.update({
       data: {
         displayName,
       },
       where: {
         id: userId,
       },
-    });
+      }),
+    );
 
     return this.getProfileByUserId(userId);
   }
@@ -135,7 +138,8 @@ export class ProfileService {
       ? toPrivacyVisibility(input.profileVisibility)
       : undefined;
 
-    await this.prisma.$transaction(async (tx) => {
+    await this.prisma.withConnectionRetry(() =>
+      this.prisma.$transaction(async (tx) => {
       await tx.privacySettings.upsert({
         create: {
           episodeProgressVisibility: input.episodeProgressVisibility
@@ -189,21 +193,24 @@ export class ProfileService {
           },
         },
       });
-    });
+      }),
+    );
 
     return this.getProfileByUserId(userId);
   }
 
   async completeOnboarding(identity: AuthenticatedIdentity) {
     const userId = await this.getUserId(identity);
-    const user = await this.prisma.user.update({
+    const user = await this.prisma.withConnectionRetry(() =>
+      this.prisma.user.update({
       data: {
         onboardingCompleted: true,
       },
       where: {
         id: userId,
       },
-    });
+      }),
+    );
 
     return {
       displayName: user.displayName,
@@ -219,22 +226,26 @@ export class ProfileService {
   }
 
   private async getProfileByUserId(userId: string) {
-    const user = await this.prisma.user.findUniqueOrThrow({
-      include: {
-        privacySettings: true,
-      },
-      where: {
-        id: userId,
-      },
-    });
-
-    const privacySettings =
-      user.privacySettings ??
-      (await this.prisma.privacySettings.create({
-        data: {
-          userId,
+    const { privacySettings, user } = await this.prisma.withConnectionRetry(async () => {
+      const user = await this.prisma.user.findUniqueOrThrow({
+        include: {
+          privacySettings: true,
         },
-      }));
+        where: {
+          id: userId,
+        },
+      });
+
+      const privacySettings =
+        user.privacySettings ??
+        (await this.prisma.privacySettings.create({
+          data: {
+            userId,
+          },
+        }));
+
+      return { privacySettings, user };
+    });
 
     return {
       displayName: user.displayName,
@@ -261,7 +272,7 @@ export class ProfileService {
     allowOwnerPrivateView: boolean,
     viewerId?: string,
   ) {
-    const user = await withPrismaConnectionRetry(
+    const user = await this.prisma.withConnectionRetry(
       () =>
         this.prisma.user.findUnique({
           include: {
@@ -298,7 +309,7 @@ export class ProfileService {
   }
 
   private async ensurePublicTestProfile(userId: string, viewerId: string) {
-    await withPrismaConnectionRetry(
+    await this.prisma.withConnectionRetry(
       () =>
         this.prisma.user.update({
           data: {
@@ -322,7 +333,7 @@ export class ProfileService {
         }),
     );
 
-    await withPrismaConnectionRetry(
+    await this.prisma.withConnectionRetry(
       () =>
         this.prisma.userBlock.deleteMany({
           where: {
@@ -340,7 +351,7 @@ export class ProfileService {
         }),
     );
 
-    await withPrismaConnectionRetry(
+    await this.prisma.withConnectionRetry(
       () =>
         this.prisma.userMovieReview.upsert({
           create: {
@@ -362,7 +373,8 @@ export class ProfileService {
   }
 
   private async assertNotBlockedByEitherUser(viewerId: string, targetUserId: string) {
-    const block = await this.prisma.userBlock.findFirst({
+    const block = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userBlock.findFirst({
       where: {
         OR: [
           {
@@ -375,7 +387,8 @@ export class ProfileService {
           },
         ],
       },
-    });
+      }),
+    );
 
     if (block) {
       throw new ForbiddenException('This profile is unavailable.');

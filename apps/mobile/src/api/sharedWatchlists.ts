@@ -86,6 +86,10 @@ export function addSharedWatchlistItem(
   return apiPut<SharedWatchlistItem>(`/shared-watchlists/${watchlistId}/items`, input, { token });
 }
 
+export function addSharedWatchlistMember(token: string, watchlistId: string, userId: string) {
+  return apiPut<{ added: true }>(`/shared-watchlists/${watchlistId}/members`, { userId }, { token });
+}
+
 export function removeSharedWatchlistItem(
   token: string,
   watchlistId: string,

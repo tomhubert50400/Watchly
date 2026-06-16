@@ -18,8 +18,16 @@ export type CatalogueSearchResponse = {
   provider: 'tmdb';
 };
 
+export type DisplayRating = {
+  average: number;
+  count: number | null;
+  scale: 5 | 10;
+  source: 'kinora' | 'tmdb';
+};
+
 export type MovieDetails = {
   backdropUrl: string | null;
+  displayRating: DisplayRating | null;
   genres: string[];
   id: string;
   mediaType: 'movie';

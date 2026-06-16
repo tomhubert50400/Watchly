@@ -2,7 +2,6 @@ import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { TrackedContentType, UserContentStatus } from '../generated/prisma/enums';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
-import { withPrismaConnectionRetry } from '../database/prisma-retry';
 import { PrismaService } from '../database/prisma.service';
 import { TrackingContentType, TrackingStatus, UpsertContentStateDto } from './tracking.dto';
 
@@ -15,7 +14,7 @@ export class TrackingService {
 
   async listStates(identity: AuthenticatedIdentity, contentType?: TrackingContentType) {
     const userId = await this.getUserId(identity);
-    const states = await withPrismaConnectionRetry(
+    const states = await this.prisma.withConnectionRetry(
       () =>
         this.prisma.userContentState.findMany({
           orderBy: {
@@ -33,7 +32,8 @@ export class TrackingService {
 
   async getState(identity: AuthenticatedIdentity, contentType: TrackingContentType, tmdbId: number) {
     const userId = await this.getUserId(identity);
-    const state = await this.prisma.userContentState.findUnique({
+    const state = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userContentState.findUnique({
       where: {
         userId_contentType_tmdbId: {
           contentType: toTrackedContentType(contentType),
@@ -41,7 +41,8 @@ export class TrackingService {
           userId,
         },
       },
-    });
+      }),
+    );
 
     return state ? toApiState(state) : null;
   }
@@ -57,18 +58,21 @@ export class TrackingService {
     const favorite = input.favorite ?? false;
 
     if (status === null && favorite === false) {
-      await this.prisma.userContentState.deleteMany({
+      await this.prisma.withConnectionRetry(() =>
+        this.prisma.userContentState.deleteMany({
         where: {
           contentType,
           tmdbId: input.tmdbId,
           userId,
         },
-      });
+        }),
+      );
 
       return null;
     }
 
-    const state = await this.prisma.userContentState.upsert({
+    const state = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userContentState.upsert({
       create: {
         contentType,
         favorite,
@@ -87,7 +91,8 @@ export class TrackingService {
           userId,
         },
       },
-    });
+      }),
+    );
 
     return toApiState(state);
   }
@@ -95,13 +100,15 @@ export class TrackingService {
   async deleteState(identity: AuthenticatedIdentity, contentType: TrackingContentType, tmdbId: number) {
     const userId = await this.getUserId(identity);
 
-    await this.prisma.userContentState.deleteMany({
+    await this.prisma.withConnectionRetry(() =>
+      this.prisma.userContentState.deleteMany({
       where: {
         contentType: toTrackedContentType(contentType),
         tmdbId,
         userId,
       },
-    });
+      }),
+    );
   }
 
   private async getUserId(identity: AuthenticatedIdentity) {

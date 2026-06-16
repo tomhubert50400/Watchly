@@ -1,7 +1,6 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
-import { withPrismaConnectionRetry } from '../database/prisma-retry';
 import { PrismaService } from '../database/prisma.service';
 
 @Injectable()
@@ -13,7 +12,7 @@ export class RatingsService {
 
   async listMovieRatings(identity: AuthenticatedIdentity) {
     const userId = await this.getUserId(identity);
-    const ratings = await withPrismaConnectionRetry(
+    const ratings = await this.prisma.withConnectionRetry(
       () =>
         this.prisma.userMovieRating.findMany({
           orderBy: {
@@ -30,14 +29,16 @@ export class RatingsService {
 
   async getMovieRating(identity: AuthenticatedIdentity, tmdbId: number) {
     const userId = await this.getUserId(identity);
-    const rating = await this.prisma.userMovieRating.findUnique({
+    const rating = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userMovieRating.findUnique({
       where: {
         userId_tmdbId: {
           tmdbId,
           userId,
         },
       },
-    });
+      }),
+    );
 
     return rating ? toApiMovieRating(rating) : null;
   }
@@ -45,7 +46,8 @@ export class RatingsService {
   async upsertMovieRating(identity: AuthenticatedIdentity, tmdbId: number, score: number) {
     const userId = await this.getUserId(identity);
     const scoreHalfSteps = toScoreHalfSteps(score);
-    const rating = await this.prisma.userMovieRating.upsert({
+    const rating = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userMovieRating.upsert({
       create: {
         scoreHalfSteps,
         tmdbId,
@@ -60,7 +62,8 @@ export class RatingsService {
           userId,
         },
       },
-    });
+      }),
+    );
 
     return toApiMovieRating(rating);
   }
@@ -68,12 +71,14 @@ export class RatingsService {
   async deleteMovieRating(identity: AuthenticatedIdentity, tmdbId: number) {
     const userId = await this.getUserId(identity);
 
-    await this.prisma.userMovieRating.deleteMany({
+    await this.prisma.withConnectionRetry(() =>
+      this.prisma.userMovieRating.deleteMany({
       where: {
         tmdbId,
         userId,
       },
-    });
+      }),
+    );
   }
 
   async getEpisodeRating(
@@ -83,7 +88,8 @@ export class RatingsService {
     episodeNumber: number,
   ) {
     const userId = await this.getUserId(identity);
-    const rating = await this.prisma.userEpisodeRating.findUnique({
+    const rating = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userEpisodeRating.findUnique({
       where: {
         userId_seriesTmdbId_seasonNumber_episodeNumber: {
           episodeNumber,
@@ -92,7 +98,8 @@ export class RatingsService {
           userId,
         },
       },
-    });
+      }),
+    );
 
     return rating ? toApiEpisodeRating(rating) : null;
   }
@@ -106,7 +113,8 @@ export class RatingsService {
   ) {
     const userId = await this.getUserId(identity);
     const scoreHalfSteps = toScoreHalfSteps(score);
-    const rating = await this.prisma.userEpisodeRating.upsert({
+    const rating = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userEpisodeRating.upsert({
       create: {
         episodeNumber,
         scoreHalfSteps,
@@ -125,7 +133,8 @@ export class RatingsService {
           userId,
         },
       },
-    });
+      }),
+    );
 
     return toApiEpisodeRating(rating);
   }
@@ -138,19 +147,22 @@ export class RatingsService {
   ) {
     const userId = await this.getUserId(identity);
 
-    await this.prisma.userEpisodeRating.deleteMany({
+    await this.prisma.withConnectionRetry(() =>
+      this.prisma.userEpisodeRating.deleteMany({
       where: {
         episodeNumber,
         seasonNumber,
         seriesTmdbId,
         userId,
       },
-    });
+      }),
+    );
   }
 
   async getSeriesRatingSummary(identity: AuthenticatedIdentity, seriesTmdbId: number) {
     const userId = await this.getUserId(identity);
-    const ratings = await this.prisma.userEpisodeRating.findMany({
+    const ratings = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userEpisodeRating.findMany({
       orderBy: {
         seasonNumber: 'asc',
       },
@@ -162,7 +174,8 @@ export class RatingsService {
         seriesTmdbId,
         userId,
       },
-    });
+      }),
+    );
     const seasonTotals = new Map<number, { count: number; totalHalfSteps: number }>();
     let totalHalfSteps = 0;
 

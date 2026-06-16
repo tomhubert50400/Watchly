@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Trash2, Users } from 'lucide-react-native';
+import {
+  Bell,
+  CheckCircle2,
+  Clapperboard,
+  MessageSquareText,
+  PlusCircle,
+  Shield,
+  Star,
+  Trash2,
+  Users,
+  Vote,
+} from 'lucide-react-native';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getMovieDetails, getSeriesDetails, SeriesDetails } from '../api/catalogue';
 import {
@@ -53,6 +64,19 @@ type HydratedLibraryItem = LibraryItemBase & {
   title: string;
 };
 
+type MyTvTab = 'overview' | 'watchlists' | 'trackedTitles';
+
+type WatchlistItem = {
+  id: string;
+  isOwner: boolean;
+  itemCount: number;
+  key: string;
+  kind: 'personal' | 'shared';
+  memberCount: number | null;
+  name: string;
+  updatedAt: string;
+};
+
 const statusLabels: Record<NonNullable<TrackingState['status']>, string> = {
   dropped: 'Dropped',
   watched: 'Watched',
@@ -62,17 +86,16 @@ const statusLabels: Record<NonNullable<TrackingState['status']>, string> = {
 
 export function MyTvScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { firebaseIdToken, trackingRevision } = useAuthSession();
+  const { firebaseIdToken, getFirebaseIdToken, trackingRevision } = useAuthSession();
+  const [activeTab, setActiveTab] = useState<MyTvTab>('overview');
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<HydratedLibraryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSavingWatchlist, setIsSavingWatchlist] = useState(false);
-  const [isSavingSharedWatchlist, setIsSavingSharedWatchlist] = useState(false);
-  const [sharedWatchlistActionError, setSharedWatchlistActionError] = useState<string | null>(null);
-  const [sharedWatchlistName, setSharedWatchlistName] = useState('');
+  const [newWatchlistKind, setNewWatchlistKind] = useState<WatchlistItem['kind']>('personal');
+  const [newWatchlistName, setNewWatchlistName] = useState('');
   const [sharedWatchlists, setSharedWatchlists] = useState<SharedWatchlistSummary[]>([]);
   const [watchlistActionError, setWatchlistActionError] = useState<string | null>(null);
-  const [watchlistName, setWatchlistName] = useState('');
   const [watchlists, setWatchlists] = useState<PersonalWatchlistSummary[]>([]);
 
   const loadItems = useCallback(async () => {
@@ -88,13 +111,19 @@ export function MyTvScreen() {
     setIsLoading(true);
 
     try {
+      const token = await getFirebaseIdToken();
+
+      if (!token) {
+        throw new Error('Sign in again to load My TV.');
+      }
+
       const [statesResult, ratingsResult, progressResult, watchlistsResult, sharedWatchlistsResult] =
         await Promise.allSettled([
-        listTrackingStates(firebaseIdToken),
-        listMovieRatings(firebaseIdToken),
-        listSeriesProgressSummaries(firebaseIdToken),
-        listWatchlists(firebaseIdToken),
-        listSharedWatchlists(firebaseIdToken),
+        listTrackingStates(token),
+        listMovieRatings(token),
+        listSeriesProgressSummaries(token),
+        listWatchlists(token),
+        listSharedWatchlists(token),
       ]);
 
       if (
@@ -152,7 +181,7 @@ export function MyTvScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [firebaseIdToken]);
+  }, [firebaseIdToken, getFirebaseIdToken]);
 
   useEffect(() => {
     void loadItems();
@@ -174,9 +203,9 @@ export function MyTvScreen() {
   }
 
   async function handleCreateWatchlist() {
-    const name = watchlistName.trim();
+    const name = newWatchlistName.trim();
 
-    if (!firebaseIdToken || name.length === 0) {
+    if (!firebaseIdToken || name.length === 0 || isSavingWatchlist) {
       return;
     }
 
@@ -184,44 +213,33 @@ export function MyTvScreen() {
     setWatchlistActionError(null);
 
     try {
-      const watchlist = await createWatchlist(firebaseIdToken, name);
+      const token = await getFirebaseIdToken();
 
-      setWatchlists((current) => [watchlist, ...current]);
-      setWatchlistName('');
+      if (!token) {
+        throw new Error('Sign in again to create a watchlist.');
+      }
+
+      if (newWatchlistKind === 'personal') {
+        const watchlist = await createWatchlist(token, name);
+
+        setWatchlists((current) => [watchlist, ...current]);
+      } else {
+        const watchlist = await createSharedWatchlist(token, name);
+
+        setSharedWatchlists((current) => [watchlist, ...current]);
+      }
+
+      setNewWatchlistName('');
     } catch (createError) {
       setWatchlistActionError(
-        createError instanceof Error ? createError.message : 'Could not create the watchlist.',
+        createError instanceof Error ? createError.message : 'Could not create this watchlist.',
       );
     } finally {
       setIsSavingWatchlist(false);
     }
   }
 
-  async function handleCreateSharedWatchlist() {
-    const name = sharedWatchlistName.trim();
-
-    if (!firebaseIdToken || name.length === 0) {
-      return;
-    }
-
-    setIsSavingSharedWatchlist(true);
-    setSharedWatchlistActionError(null);
-
-    try {
-      const watchlist = await createSharedWatchlist(firebaseIdToken, name);
-
-      setSharedWatchlists((current) => [watchlist, ...current]);
-      setSharedWatchlistName('');
-    } catch (createError) {
-      setSharedWatchlistActionError(
-        createError instanceof Error ? createError.message : 'Could not create the shared list.',
-      );
-    } finally {
-      setIsSavingSharedWatchlist(false);
-    }
-  }
-
-  async function handleDeleteWatchlist(watchlistId: string) {
+  async function handleDeleteWatchlist(watchlist: WatchlistItem) {
     if (!firebaseIdToken) {
       return;
     }
@@ -229,33 +247,35 @@ export function MyTvScreen() {
     setWatchlistActionError(null);
 
     try {
-      await deleteWatchlist(firebaseIdToken, watchlistId);
-      setWatchlists((current) => current.filter((watchlist) => watchlist.id !== watchlistId));
+      const token = await getFirebaseIdToken();
+
+      if (!token) {
+        throw new Error('Sign in again to delete a watchlist.');
+      }
+
+      if (watchlist.kind === 'personal') {
+        await deleteWatchlist(token, watchlist.id);
+        setWatchlists((current) => current.filter((item) => item.id !== watchlist.id));
+      } else {
+        await deleteSharedWatchlist(token, watchlist.id);
+        setSharedWatchlists((current) => current.filter((item) => item.id !== watchlist.id));
+      }
     } catch (deleteError) {
       setWatchlistActionError(
-        deleteError instanceof Error ? deleteError.message : 'Could not delete the watchlist.',
+        deleteError instanceof Error ? deleteError.message : 'Could not delete this watchlist.',
       );
     }
   }
 
-  async function handleDeleteSharedWatchlist(watchlistId: string) {
-    if (!firebaseIdToken) {
+  function openWatchlist(watchlist: WatchlistItem) {
+    if (watchlist.kind === 'personal') {
+      navigation.navigate('PersonalWatchlist', {
+        title: watchlist.name,
+        watchlistId: watchlist.id,
+      });
       return;
     }
 
-    setSharedWatchlistActionError(null);
-
-    try {
-      await deleteSharedWatchlist(firebaseIdToken, watchlistId);
-      setSharedWatchlists((current) => current.filter((watchlist) => watchlist.id !== watchlistId));
-    } catch (deleteError) {
-      setSharedWatchlistActionError(
-        deleteError instanceof Error ? deleteError.message : 'Could not delete the shared list.',
-      );
-    }
-  }
-
-  function openSharedWatchlist(watchlist: SharedWatchlistSummary) {
     navigation.navigate('SharedWatchlist', {
       title: watchlist.name,
       watchlistId: watchlist.id,
@@ -278,256 +298,475 @@ export function MyTvScreen() {
         <EmptyState body={error} title="My TV failed">
           <Button label="Retry" onPress={loadItems} />
         </EmptyState>
-      ) : items.length === 0 && watchlists.length === 0 && sharedWatchlists.length === 0 ? (
-        <>
-          <WatchlistsSection
-            actionError={watchlistActionError}
-            isSaving={isSavingWatchlist}
-            name={watchlistName}
-            onChangeName={setWatchlistName}
-            onCreate={handleCreateWatchlist}
-            onDelete={handleDeleteWatchlist}
-            watchlists={watchlists}
-          />
-          <SharedWatchlistsSection
-            actionError={sharedWatchlistActionError}
-            isSaving={isSavingSharedWatchlist}
-            name={sharedWatchlistName}
-            onChangeName={setSharedWatchlistName}
-            onCreate={handleCreateSharedWatchlist}
-            onDelete={handleDeleteSharedWatchlist}
-            onOpen={openSharedWatchlist}
-            watchlists={sharedWatchlists}
-          />
-          <EmptyState
-            body="Open a film or series from Explore, then track it, rate it, or mark an episode watched."
-            title="No tracked titles yet"
-          />
-        </>
       ) : (
         <>
-          {error ? <Text style={styles.warning}>{error}</Text> : null}
-          <WatchlistsSection
-            actionError={watchlistActionError}
-            isSaving={isSavingWatchlist}
-            name={watchlistName}
-            onChangeName={setWatchlistName}
-            onCreate={handleCreateWatchlist}
-            onDelete={handleDeleteWatchlist}
-            watchlists={watchlists}
-          />
-          <SharedWatchlistsSection
-            actionError={sharedWatchlistActionError}
-            isSaving={isSavingSharedWatchlist}
-            name={sharedWatchlistName}
-            onChangeName={setSharedWatchlistName}
-            onCreate={handleCreateSharedWatchlist}
-            onDelete={handleDeleteSharedWatchlist}
-            onOpen={openSharedWatchlist}
-            watchlists={sharedWatchlists}
-          />
-          {items.length > 0 ? (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Tracked titles</Text>
-              <View style={styles.list}>
-                {items.map((item) => (
-                  <Pressable
-                    accessibilityLabel={`Open ${item.title}`}
-                    accessibilityRole="button"
-                    key={item.key}
-                    onPress={() => openItem(item)}
-                    style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-                  >
-                    {item.posterUrl ? (
-                      <Image
-                        accessibilityIgnoresInvertColors
-                        accessibilityLabel={`${item.title} poster`}
-                        source={{ uri: item.posterUrl }}
-                        style={styles.poster}
-                      />
-                    ) : (
-                      <View style={styles.posterPlaceholder} />
-                    )}
-                    <View style={styles.rowCopy}>
-                      <Text numberOfLines={2} style={styles.title}>
-                        {item.title}
-                      </Text>
-                      <Text style={styles.meta}>{buildMeta(item)}</Text>
-                    </View>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-          ) : null}
+          <MyTvTabs activeTab={activeTab} onChangeTab={setActiveTab} />
+          {activeTab === 'overview' ? (
+            <OverviewTab
+              items={items}
+              onOpenItem={openItem}
+              onOpenWatchlist={openWatchlist}
+              sharedWatchlists={sharedWatchlists}
+              watchlists={watchlists}
+            />
+          ) : activeTab === 'watchlists' ? (
+            <WatchlistsTab
+              actionError={watchlistActionError}
+              isSaving={isSavingWatchlist}
+              name={newWatchlistName}
+              onChangeKind={setNewWatchlistKind}
+              onChangeName={setNewWatchlistName}
+              onCreate={handleCreateWatchlist}
+              onDelete={handleDeleteWatchlist}
+              onOpen={openWatchlist}
+              selectedKind={newWatchlistKind}
+              sharedWatchlists={sharedWatchlists}
+              watchlists={watchlists}
+            />
+          ) : (
+            <TrackedTitlesTab items={items} onOpenItem={openItem} />
+          )}
         </>
       )}
     </Screen>
   );
 }
 
-type WatchlistsSectionProps = {
-  actionError: string | null;
-  isSaving: boolean;
-  name: string;
-  onChangeName: (name: string) => void;
-  onCreate: () => void;
-  onDelete: (watchlistId: string) => void;
-  watchlists: PersonalWatchlistSummary[];
-};
-
-function WatchlistsSection({
-  actionError,
-  isSaving,
-  name,
-  onChangeName,
-  onCreate,
-  onDelete,
+function OverviewTab({
+  items,
+  onOpenItem,
+  onOpenWatchlist,
+  sharedWatchlists,
   watchlists,
-}: WatchlistsSectionProps) {
-  const canCreate = name.trim().length > 0 && !isSaving;
+}: {
+  items: HydratedLibraryItem[];
+  onOpenItem: (item: HydratedLibraryItem) => void;
+  onOpenWatchlist: (watchlist: WatchlistItem) => void;
+  sharedWatchlists: SharedWatchlistSummary[];
+  watchlists: PersonalWatchlistSummary[];
+}) {
+  const listItems = getWatchlistItems(watchlists, sharedWatchlists);
+  const firstPersonalList = listItems.find((item) => item.kind === 'personal');
+  const firstSharedList = listItems.find((item) => item.kind === 'shared');
+  const firstTrackedTitle = items[0] ?? null;
 
   return (
     <View style={styles.section}>
-      <View style={styles.watchlistsPanel}>
-        <View>
-          <Text style={styles.sectionTitle}>Personal lists</Text>
-          <Text style={styles.sectionBody}>Private lists for films and series. Shared lists come later.</Text>
-        </View>
-        <TextInput
-          label="List name"
-          maxLength={80}
-          onChangeText={onChangeName}
-          onSubmitEditing={canCreate ? onCreate : undefined}
-          placeholder="Weekend ideas"
-          returnKeyType="done"
-          value={name}
-        />
-        <Button
-          disabled={!canCreate}
-          label={isSaving ? 'Creating...' : 'Create list'}
-          onPress={onCreate}
-        />
-        {actionError ? <Text style={styles.warning}>{actionError}</Text> : null}
-        {watchlists.length === 0 ? (
-          <Text style={styles.emptyInline}>No personal lists yet.</Text>
-        ) : (
-          <View style={styles.watchlistRows}>
-            {watchlists.map((watchlist) => (
-              <View key={watchlist.id} style={styles.watchlistRow}>
-                <View style={styles.rowCopy}>
-                  <Text numberOfLines={1} style={styles.watchlistName}>
-                    {watchlist.name}
-                  </Text>
-                  <Text style={styles.meta}>
-                    {watchlist.itemCount === 1 ? '1 title' : `${watchlist.itemCount} titles`}
-                  </Text>
-                </View>
-                <Pressable
-                  accessibilityLabel={`Delete ${watchlist.name}`}
-                  accessibilityRole="button"
-                  onPress={() => onDelete(watchlist.id)}
-                  style={({ pressed }) => [styles.deleteButton, pressed && styles.rowPressed]}
-                >
-                  <Trash2 color={colors.danger} size={18} strokeWidth={2} />
-                </Pressable>
-              </View>
-            ))}
+      <View style={styles.overviewPanel}>
+        <View style={styles.overviewHeader}>
+          <View style={styles.rowCopy}>
+            <Text style={styles.overviewEyebrow}>Kinora overview</Text>
+            <Text style={styles.overviewTitle}>Everything in one user surface</Text>
+            <Text style={styles.overviewBody}>
+              Tracking, ratings, reviews, personal lists, shared lists, voting, alerts, profile safety, and feed states.
+            </Text>
           </View>
-        )}
+        </View>
+      </View>
+
+      <View style={styles.featureGrid}>
+        <FeatureCard
+          icon={Clapperboard}
+          label="Tracking"
+          value={items.length === 1 ? '1 title' : `${items.length} titles`}
+        />
+        <FeatureCard icon={Star} label="Ratings" value={getRatingSummary(items)} />
+        <FeatureCard icon={MessageSquareText} label="Reviews" value="Film and episode review states" />
+        <FeatureCard icon={Users} label="Shared lists" value={`${sharedWatchlists.length} active`} />
+        <FeatureCard icon={Vote} label="Voting" value="Shared decision sessions" />
+        <FeatureCard icon={Bell} label="Alerts" value="Release bell states" />
+        <FeatureCard icon={Shield} label="Privacy" value="Profile, reviews, blocks" />
+        <FeatureCard icon={CheckCircle2} label="Progress" value={getProgressSummary(items)} />
+      </View>
+
+      <View style={styles.overviewPanel}>
+        <Text style={styles.sectionTitle}>Open key surfaces</Text>
+        <View style={styles.quickRows}>
+          {firstTrackedTitle ? (
+            <OverviewQuickRow
+              label="Tracked title"
+              meta={buildMeta(firstTrackedTitle)}
+              onPress={() => onOpenItem(firstTrackedTitle)}
+              title={firstTrackedTitle.title}
+            />
+          ) : null}
+          {firstPersonalList ? (
+            <OverviewQuickRow
+              label="Personal watchlist"
+              meta={buildWatchlistMeta(firstPersonalList)}
+              onPress={() => onOpenWatchlist(firstPersonalList)}
+              title={firstPersonalList.name}
+            />
+          ) : null}
+          {firstSharedList ? (
+            <OverviewQuickRow
+              label="Shared watchlist"
+              meta={`${buildWatchlistMeta(firstSharedList)} / Members and votes`}
+              onPress={() => onOpenWatchlist(firstSharedList)}
+              title={firstSharedList.name}
+            />
+          ) : null}
+          {!firstTrackedTitle && !firstPersonalList && !firstSharedList ? (
+            <Text style={styles.emptyInline}>Add sample activity or start from Explore.</Text>
+          ) : null}
+        </View>
       </View>
     </View>
   );
 }
 
-type SharedWatchlistsSectionProps = {
-  actionError: string | null;
-  isSaving: boolean;
-  name: string;
-  onChangeName: (name: string) => void;
-  onCreate: () => void;
-  onDelete: (watchlistId: string) => void;
-  onOpen: (watchlist: SharedWatchlistSummary) => void;
-  watchlists: SharedWatchlistSummary[];
-};
+function FeatureCard({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Clapperboard;
+  label: string;
+  value: string;
+}) {
+  return (
+    <View style={styles.featureCard}>
+      <View style={styles.featureIconFrame}>
+        <Icon color={colors.accent} size={17} strokeWidth={2.2} />
+      </View>
+      <Text style={styles.featureLabel}>{label}</Text>
+      <Text numberOfLines={2} style={styles.featureValue}>
+        {value}
+      </Text>
+    </View>
+  );
+}
 
-function SharedWatchlistsSection({
+function OverviewQuickRow({
+  label,
+  meta,
+  onPress,
+  title,
+}: {
+  label: string;
+  meta: string;
+  onPress: () => void;
+  title: string;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={`Open ${title}`}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.quickRow, pressed && styles.rowPressed]}
+    >
+      <View style={styles.rowCopy}>
+        <Text style={styles.quickLabel}>{label}</Text>
+        <Text numberOfLines={1} style={styles.watchlistName}>
+          {title}
+        </Text>
+        <Text numberOfLines={2} style={styles.previewMeta}>
+          {meta}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
+function MyTvTabs({
+  activeTab,
+  onChangeTab,
+}: {
+  activeTab: MyTvTab;
+  onChangeTab: (tab: MyTvTab) => void;
+}) {
+  return (
+    <View style={styles.segmentedControl}>
+      <MyTvTabButton
+        isSelected={activeTab === 'overview'}
+        label="Overview"
+        onPress={() => onChangeTab('overview')}
+      />
+      <MyTvTabButton
+        isSelected={activeTab === 'watchlists'}
+        label="Watchlists"
+        onPress={() => onChangeTab('watchlists')}
+      />
+      <MyTvTabButton
+        isSelected={activeTab === 'trackedTitles'}
+        label="Tracked titles"
+        onPress={() => onChangeTab('trackedTitles')}
+      />
+    </View>
+  );
+}
+
+function MyTvTabButton({
+  isSelected,
+  label,
+  onPress,
+}: {
+  isSelected: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isSelected }}
+      onPress={onPress}
+      style={[styles.segmentButton, isSelected && styles.segmentButtonSelected]}
+    >
+      <Text style={[styles.segmentLabel, isSelected && styles.segmentLabelSelected]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function WatchlistsTab({
   actionError,
   isSaving,
   name,
+  onChangeKind,
   onChangeName,
   onCreate,
   onDelete,
   onOpen,
+  selectedKind,
+  sharedWatchlists,
   watchlists,
-}: SharedWatchlistsSectionProps) {
+}: {
+  actionError: string | null;
+  isSaving: boolean;
+  name: string;
+  onChangeKind: (kind: WatchlistItem['kind']) => void;
+  onChangeName: (name: string) => void;
+  onCreate: () => void;
+  onDelete: (watchlist: WatchlistItem) => void;
+  onOpen: (watchlist: WatchlistItem) => void;
+  selectedKind: WatchlistItem['kind'];
+  sharedWatchlists: SharedWatchlistSummary[];
+  watchlists: PersonalWatchlistSummary[];
+}) {
+  const listItems = getWatchlistItems(watchlists, sharedWatchlists);
   const canCreate = name.trim().length > 0 && !isSaving;
 
   return (
     <View style={styles.section}>
-      <View style={styles.watchlistsPanel}>
-        <View>
-          <Text style={styles.sectionTitle}>Shared lists</Text>
-          <Text style={styles.sectionBody}>Member-only lists for planning what to watch together.</Text>
+      <View style={styles.watchlistCreatePanel}>
+        <View style={styles.kindControl}>
+          <WatchlistKindButton
+            isSelected={selectedKind === 'personal'}
+            label="Personal"
+            onPress={() => onChangeKind('personal')}
+          />
+          <WatchlistKindButton
+            isSelected={selectedKind === 'shared'}
+            label="Shared"
+            onPress={() => onChangeKind('shared')}
+          />
         </View>
-        <TextInput
-          label="Shared list name"
-          maxLength={80}
-          onChangeText={onChangeName}
-          onSubmitEditing={canCreate ? onCreate : undefined}
-          placeholder="Tonight"
-          returnKeyType="done"
-          value={name}
-        />
-        <Button
-          disabled={!canCreate}
-          label={isSaving ? 'Creating...' : 'Create shared list'}
-          onPress={onCreate}
-        />
-        {actionError ? <Text style={styles.warning}>{actionError}</Text> : null}
-        {watchlists.length === 0 ? (
-          <Text style={styles.emptyInline}>No shared lists yet.</Text>
-        ) : (
-          <View style={styles.watchlistRows}>
-            {watchlists.map((watchlist) => (
-              <Pressable
-                accessibilityLabel={`Open ${watchlist.name}`}
-                accessibilityRole="button"
-                key={watchlist.id}
-                onPress={() => onOpen(watchlist)}
-                style={({ pressed }) => [styles.watchlistRow, pressed && styles.rowPressed]}
-              >
-                <View style={styles.sharedIconFrame}>
-                  <Users color={colors.accent} size={18} strokeWidth={2} />
-                </View>
-                <View style={styles.rowCopy}>
-                  <Text numberOfLines={1} style={styles.watchlistName}>
-                    {watchlist.name}
-                  </Text>
-                  <Text style={styles.meta}>
-                    {watchlist.memberCount === 1 ? '1 member' : `${watchlist.memberCount} members`} /{' '}
-                    {watchlist.itemCount === 1 ? '1 title' : `${watchlist.itemCount} titles`}
-                  </Text>
-                </View>
-                {watchlist.isOwner ? (
-                  <Pressable
-                    accessibilityLabel={`Delete ${watchlist.name}`}
-                    accessibilityRole="button"
-                    onPress={(event) => {
-                      event.stopPropagation();
-                      onDelete(watchlist.id);
-                    }}
-                    style={({ pressed }) => [styles.deleteButton, pressed && styles.rowPressed]}
-                  >
-                    <Trash2 color={colors.danger} size={18} strokeWidth={2} />
-                  </Pressable>
-                ) : null}
-              </Pressable>
-            ))}
+        <View style={styles.createRow}>
+          <View style={styles.createInput}>
+            <TextInput
+              label="New watchlist"
+              maxLength={80}
+              onChangeText={onChangeName}
+              onSubmitEditing={canCreate ? onCreate : undefined}
+              placeholder={selectedKind === 'personal' ? 'Weekend ideas' : 'Tonight'}
+              returnKeyType="done"
+              value={name}
+            />
           </View>
-        )}
+          <Pressable
+            accessibilityLabel={`Create ${selectedKind} watchlist`}
+            accessibilityRole="button"
+            disabled={!canCreate}
+            onPress={onCreate}
+            style={({ pressed }) => [
+              styles.createButton,
+              !canCreate && styles.disabledButton,
+              pressed && canCreate ? styles.rowPressed : null,
+            ]}
+          >
+            {isSaving ? (
+              <ActivityIndicator color={colors.textOnAccent} />
+            ) : (
+              <PlusCircle color={colors.textOnAccent} size={21} strokeWidth={2.2} />
+            )}
+          </Pressable>
+        </View>
+      </View>
+      {actionError ? <Text style={styles.warning}>{actionError}</Text> : null}
+      {listItems.length === 0 ? (
+        <Text style={styles.emptyInline}>No watchlists yet.</Text>
+      ) : (
+        <View style={styles.watchlistRows}>
+          {listItems.map((watchlist) => (
+            <Pressable
+              accessibilityLabel={`Open ${watchlist.name}`}
+              accessibilityRole="button"
+              key={watchlist.key}
+              onPress={() => onOpen(watchlist)}
+              style={({ pressed }) => [styles.watchlistRow, pressed && styles.rowPressed]}
+            >
+              {watchlist.kind === 'shared' ? (
+                <View style={styles.sharedIconFrame}>
+                  <Users color={colors.accent} size={16} strokeWidth={2} />
+                </View>
+              ) : null}
+              <View style={styles.rowCopy}>
+                <Text numberOfLines={1} style={styles.watchlistName}>
+                  {watchlist.name}
+                </Text>
+                <Text style={styles.previewMeta}>{buildWatchlistMeta(watchlist)}</Text>
+              </View>
+              {watchlist.isOwner ? (
+                <Pressable
+                  accessibilityLabel={`Delete ${watchlist.name}`}
+                  accessibilityRole="button"
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    void onDelete(watchlist);
+                  }}
+                  style={({ pressed }) => [styles.deleteButton, pressed && styles.rowPressed]}
+                >
+                  <Trash2 color={colors.danger} size={17} strokeWidth={2} />
+                </Pressable>
+              ) : null}
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+function WatchlistKindButton({
+  isSelected,
+  label,
+  onPress,
+}: {
+  isSelected: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={`Create ${label.toLowerCase()} watchlist`}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isSelected }}
+      onPress={onPress}
+      style={[styles.kindButton, isSelected && styles.kindButtonSelected]}
+    >
+      <Text style={[styles.kindLabel, isSelected && styles.kindLabelSelected]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function TrackedTitlesTab({
+  items,
+  onOpenItem,
+}: {
+  items: HydratedLibraryItem[];
+  onOpenItem: (item: HydratedLibraryItem) => void;
+}) {
+  if (items.length === 0) {
+    return (
+      <EmptyState
+        body="Open a film or series from Explore, then track it, rate it, or mark an episode watched."
+        title="No tracked titles yet"
+      />
+    );
+  }
+
+  return (
+    <View style={styles.section}>
+      <View style={styles.list}>
+        {items.map((item) => (
+          <Pressable
+            accessibilityLabel={`Open ${item.title}`}
+            accessibilityRole="button"
+            key={item.key}
+            onPress={() => onOpenItem(item)}
+            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+          >
+            {item.posterUrl ? (
+              <Image
+                accessibilityIgnoresInvertColors
+                accessibilityLabel={`${item.title} poster`}
+                source={{ uri: item.posterUrl }}
+                style={styles.poster}
+              />
+            ) : (
+              <View style={styles.posterPlaceholder} />
+            )}
+            <View style={styles.rowCopy}>
+              <Text numberOfLines={2} style={styles.title}>
+                {item.title}
+              </Text>
+              <Text style={styles.meta}>{buildMeta(item)}</Text>
+            </View>
+          </Pressable>
+        ))}
       </View>
     </View>
   );
+}
+
+function getWatchlistItems(
+  watchlists: PersonalWatchlistSummary[],
+  sharedWatchlists: SharedWatchlistSummary[],
+): WatchlistItem[] {
+  return [
+    ...watchlists.map((watchlist) => ({
+      id: watchlist.id,
+      isOwner: true,
+      itemCount: watchlist.itemCount,
+      key: `personal:${watchlist.id}`,
+      kind: 'personal' as const,
+      memberCount: null,
+      name: watchlist.name,
+      updatedAt: watchlist.updatedAt,
+    })),
+    ...sharedWatchlists.map((watchlist) => ({
+      id: watchlist.id,
+      isOwner: watchlist.isOwner,
+      itemCount: watchlist.itemCount,
+      key: `shared:${watchlist.id}`,
+      kind: 'shared' as const,
+      memberCount: watchlist.memberCount,
+      name: watchlist.name,
+      updatedAt: watchlist.updatedAt,
+    })),
+  ].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+function buildWatchlistMeta(list: WatchlistItem) {
+  const titleLabel = list.itemCount === 1 ? '1 title' : `${list.itemCount} titles`;
+
+  if (list.kind === 'personal') {
+    return `Personal / ${titleLabel}`;
+  }
+
+  const memberLabel = list.memberCount === 1 ? '1 member' : `${list.memberCount ?? 0} members`;
+
+  return `Shared / ${memberLabel} / ${titleLabel}`;
+}
+
+function getRatingSummary(items: HydratedLibraryItem[]) {
+  const ratedCount = items.filter((item) => item.ratingScore !== null).length;
+
+  if (ratedCount === 0) {
+    return 'Half-star ratings';
+  }
+
+  return ratedCount === 1 ? '1 rated title' : `${ratedCount} rated titles`;
+}
+
+function getProgressSummary(items: HydratedLibraryItem[]) {
+  const watchedCount = items.reduce((total, item) => total + item.watchedEpisodeCount, 0);
+
+  if (watchedCount === 0) {
+    return 'Resume watching';
+  }
+
+  return watchedCount === 1 ? '1 episode watched' : `${watchedCount} episodes watched`;
 }
 
 function mergeLibraryItems(
@@ -728,19 +967,170 @@ function getResumeEpisode(
 }
 
 const styles = StyleSheet.create({
+  emptyInline: {
+    ...typography.body,
+    color: colors.muted,
+  },
+  createButton: {
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    backgroundColor: colors.accent,
+    borderRadius: radii.md,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
+  },
+  featureCard: {
+    backgroundColor: colors.panelElevated,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexBasis: '48%',
+    flexGrow: 1,
+    gap: spacing.xs,
+    minHeight: 118,
+    padding: spacing.md,
+  },
+  featureGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  featureIconFrame: {
+    alignItems: 'center',
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
+  },
+  featureLabel: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0,
+  },
+  featureValue: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0,
+    lineHeight: 17,
+  },
+  overviewActionText: {
+    ...typography.body,
+    color: colors.muted,
+    marginTop: spacing.xs,
+  },
+  overviewBody: {
+    ...typography.body,
+    color: colors.muted,
+    marginTop: spacing.xs,
+  },
+  overviewButton: {
+    alignItems: 'center',
+    backgroundColor: colors.accent,
+    borderRadius: radii.md,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
+  },
+  overviewEyebrow: {
+    ...typography.eyebrow,
+    color: colors.accent,
+  },
+  overviewHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  overviewPanel: {
+    ...shadows.panel,
+    backgroundColor: colors.panelElevated,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md,
+  },
+  overviewTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 22,
+  },
+  quickLabel: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0,
+    marginBottom: 3,
+    textTransform: 'uppercase',
+  },
+  quickRow: {
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    minHeight: 72,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  quickRows: {
+    gap: spacing.sm,
+  },
+  createInput: {
+    flex: 1,
+    minWidth: 0,
+  },
+  createRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
   deleteButton: {
     alignItems: 'center',
     backgroundColor: colors.dangerBackground,
     borderColor: colors.danger,
     borderRadius: radii.md,
     borderWidth: 1,
-    height: 42,
+    height: 36,
     justifyContent: 'center',
-    width: 42,
+    width: 36,
   },
-  emptyInline: {
-    ...typography.body,
+  disabledButton: {
+    opacity: 0.45,
+  },
+  kindButton: {
+    alignItems: 'center',
+    borderRadius: radii.md,
+    flex: 1,
+    height: 32,
+    justifyContent: 'center',
+  },
+  kindButtonSelected: {
+    backgroundColor: colors.accent,
+  },
+  kindControl: {
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    padding: 3,
+  },
+  kindLabel: {
     color: colors.muted,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0,
+    textTransform: 'uppercase',
+  },
+  kindLabelSelected: {
+    color: colors.textOnAccent,
   },
   list: {
     gap: spacing.md,
@@ -800,9 +1190,46 @@ const styles = StyleSheet.create({
   rowPressed: {
     opacity: 0.78,
   },
+  previewMeta: {
+    color: colors.accent,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0,
+    marginTop: 4,
+    textTransform: 'uppercase',
+  },
   section: {
     gap: spacing.md,
     marginBottom: spacing.xl,
+  },
+  segmentButton: {
+    alignItems: 'center',
+    borderRadius: radii.md,
+    flex: 1,
+    height: 38,
+    justifyContent: 'center',
+  },
+  segmentButtonSelected: {
+    backgroundColor: colors.accent,
+  },
+  segmentedControl: {
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    marginBottom: spacing.lg,
+    padding: 3,
+  },
+  segmentLabel: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0,
+    textTransform: 'uppercase',
+  },
+  segmentLabelSelected: {
+    color: colors.textOnAccent,
   },
   sharedIconFrame: {
     alignItems: 'center',
@@ -826,26 +1253,7 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.danger,
   },
-  watchlistName: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 0,
-  },
-  watchlistRow: {
-    alignItems: 'center',
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  watchlistRows: {
-    gap: spacing.sm,
-  },
-  watchlistsPanel: {
+  watchlistCreatePanel: {
     ...shadows.panel,
     backgroundColor: colors.panelElevated,
     borderColor: colors.border,
@@ -853,5 +1261,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing.md,
     padding: spacing.md,
+  },
+  watchlistName: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0,
+  },
+  watchlistRow: {
+    alignItems: 'center',
+    backgroundColor: colors.panelElevated,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    minHeight: 58,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  watchlistRows: {
+    gap: spacing.sm,
   },
 });

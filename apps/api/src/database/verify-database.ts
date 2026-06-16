@@ -34,6 +34,7 @@ async function main() {
     await prisma.sharedVotingSession.count();
     await prisma.sharedVotingCandidate.count();
     await prisma.sharedVotingVote.count();
+    await prisma.releaseAlertSubscription.count();
     await prisma.releaseNotification.count();
     await prisma.auditLog.count();
     console.log('Database connection ok');

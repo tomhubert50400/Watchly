@@ -3,24 +3,235 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
 import { PrismaClient } from '../generated/prisma/client';
+import { isPrismaConnectionError } from './prisma-retry';
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleDestroy {
-  constructor(@Inject(ConfigService) config: ConfigService) {
-    const pool = new pg.Pool({
-      connectionString: config.getOrThrow<string>('DATABASE_URL'),
-      connectionTimeoutMillis: 5000,
-      idleTimeoutMillis: 500,
-      max: 10,
-      maxLifetimeSeconds: 10,
-    });
+export class PrismaService implements OnModuleDestroy {
+  private static client: PrismaClient | null = null;
+  private static connectionGeneration = 0;
+  private static pool: pg.Pool | null = null;
+  private static resetPromise: Promise<void> | null = null;
+  private readonly connectionString: string;
 
-    super({
-      adapter: new PrismaPg(pool),
-    });
+  constructor(@Inject(ConfigService) config: ConfigService) {
+    this.connectionString = config.getOrThrow<string>('DATABASE_URL');
+
+    if (!PrismaService.client || !PrismaService.pool) {
+      const connection = this.createConnection();
+
+      PrismaService.client = connection.client;
+      PrismaService.pool = connection.pool;
+    }
+  }
+
+  get auditLog() {
+    return this.client.auditLog;
+  }
+
+  get authIdentity() {
+    return this.client.authIdentity;
+  }
+
+  get personalWatchlist() {
+    return this.client.personalWatchlist;
+  }
+
+  get personalWatchlistItem() {
+    return this.client.personalWatchlistItem;
+  }
+
+  get privacySettings() {
+    return this.client.privacySettings;
+  }
+
+  get releaseAlertSubscription() {
+    return this.client.releaseAlertSubscription;
+  }
+
+  get releaseNotification() {
+    return this.client.releaseNotification;
+  }
+
+  get sharedVotingCandidate() {
+    return this.client.sharedVotingCandidate;
+  }
+
+  get sharedVotingSession() {
+    return this.client.sharedVotingSession;
+  }
+
+  get sharedVotingVote() {
+    return this.client.sharedVotingVote;
+  }
+
+  get sharedWatchlist() {
+    return this.client.sharedWatchlist;
+  }
+
+  get sharedWatchlistItem() {
+    return this.client.sharedWatchlistItem;
+  }
+
+  get sharedWatchlistMember() {
+    return this.client.sharedWatchlistMember;
+  }
+
+  get user() {
+    return this.client.user;
+  }
+
+  get userBlock() {
+    return this.client.userBlock;
+  }
+
+  get userContentState() {
+    return this.client.userContentState;
+  }
+
+  get userEpisodeProgress() {
+    return this.client.userEpisodeProgress;
+  }
+
+  get userEpisodeRating() {
+    return this.client.userEpisodeRating;
+  }
+
+  get userEpisodeReview() {
+    return this.client.userEpisodeReview;
+  }
+
+  get userFollow() {
+    return this.client.userFollow;
+  }
+
+  get userMovieRating() {
+    return this.client.userMovieRating;
+  }
+
+  get userMovieReview() {
+    return this.client.userMovieReview;
+  }
+
+  $queryRaw: PrismaClient['$queryRaw'] = ((...args: Parameters<PrismaClient['$queryRaw']>) =>
+    (this.client.$queryRaw as (...queryArgs: Parameters<PrismaClient['$queryRaw']>) => ReturnType<PrismaClient['$queryRaw']>)(
+      ...args,
+    )) as PrismaClient['$queryRaw'];
+
+  $transaction: PrismaClient['$transaction'] = ((...args: Parameters<PrismaClient['$transaction']>) =>
+    (
+      this.client.$transaction as (
+        ...transactionArgs: Parameters<PrismaClient['$transaction']>
+      ) => ReturnType<PrismaClient['$transaction']>
+    )(...args)) as PrismaClient['$transaction'];
+
+  async $disconnect() {
+    const client = PrismaService.client;
+    const pool = PrismaService.pool;
+
+    PrismaService.client = null;
+    PrismaService.pool = null;
+
+    await client?.$disconnect().catch(() => undefined);
+    await pool?.end().catch(() => undefined);
   }
 
   async onModuleDestroy() {
     await this.$disconnect();
   }
+
+  async resetConnection(failedGeneration = this.connectionGeneration) {
+    if (PrismaService.resetPromise) {
+      await PrismaService.resetPromise;
+      return;
+    }
+
+    if (failedGeneration !== this.connectionGeneration) {
+      return;
+    }
+
+    PrismaService.resetPromise ??= this.replaceConnection().finally(() => {
+      PrismaService.resetPromise = null;
+    });
+
+    await PrismaService.resetPromise;
+  }
+
+  async withConnectionRetry<T>(operation: () => Promise<T>) {
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const failedGeneration = this.connectionGeneration;
+
+      try {
+        return await operation();
+      } catch (error) {
+        if (!isPrismaConnectionError(error)) {
+          throw error;
+        }
+
+        lastError = error;
+
+        await this.resetConnection(failedGeneration);
+        await delay((attempt + 1) * 300);
+      }
+    }
+
+    throw lastError;
+  }
+
+  private createConnection() {
+    const pool = new pg.Pool({
+      connectionString: this.connectionString,
+      connectionTimeoutMillis: 5000,
+      idleTimeoutMillis: 30000,
+      max: 10,
+      maxLifetimeSeconds: 300,
+    });
+
+    return {
+      client: new PrismaClient({
+        adapter: new PrismaPg(pool),
+      }),
+      pool,
+    };
+  }
+
+  private async replaceConnection() {
+    const previousClient = this.client;
+    const previousPool = this.pool;
+    const connection = this.createConnection();
+
+    PrismaService.client = connection.client;
+    PrismaService.pool = connection.pool;
+    PrismaService.connectionGeneration += 1;
+
+    await previousClient.$disconnect().catch(() => undefined);
+    await previousPool.end().catch(() => undefined);
+  }
+
+  private get client() {
+    if (!PrismaService.client) {
+      throw new Error('Prisma client is not initialized.');
+    }
+
+    return PrismaService.client;
+  }
+
+  private get connectionGeneration() {
+    return PrismaService.connectionGeneration;
+  }
+
+  private get pool() {
+    if (!PrismaService.pool) {
+      throw new Error('Prisma pool is not initialized.');
+    }
+
+    return PrismaService.pool;
+  }
+}
+
+function delay(durationMs: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, durationMs);
+  });
 }

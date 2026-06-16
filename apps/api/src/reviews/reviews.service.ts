@@ -1,7 +1,6 @@
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
-import { withPrismaConnectionRetry } from '../database/prisma-retry';
 import { PrismaService } from '../database/prisma.service';
 
 @Injectable()
@@ -13,7 +12,7 @@ export class ReviewsService {
 
   async getMovieReview(identity: AuthenticatedIdentity, tmdbId: number) {
     const userId = await this.getUserId(identity);
-    const review = await withPrismaConnectionRetry(
+    const review = await this.prisma.withConnectionRetry(
       () =>
         this.prisma.userMovieReview.findUnique({
           where: {
@@ -31,7 +30,7 @@ export class ReviewsService {
   async upsertMovieReview(identity: AuthenticatedIdentity, tmdbId: number, body: string) {
     const userId = await this.getUserId(identity);
     const reviewBody = normalizeBody(body);
-    const review = await withPrismaConnectionRetry(
+    const review = await this.prisma.withConnectionRetry(
       () =>
         this.prisma.userMovieReview.upsert({
           create: {
@@ -57,7 +56,7 @@ export class ReviewsService {
   async deleteMovieReview(identity: AuthenticatedIdentity, tmdbId: number) {
     const userId = await this.getUserId(identity);
 
-    await withPrismaConnectionRetry(
+    await this.prisma.withConnectionRetry(
       () =>
         this.prisma.userMovieReview.deleteMany({
           where: {
@@ -75,7 +74,7 @@ export class ReviewsService {
     episodeNumber: number,
   ) {
     const userId = await this.getUserId(identity);
-    const review = await withPrismaConnectionRetry(
+    const review = await this.prisma.withConnectionRetry(
       () =>
         this.prisma.userEpisodeReview.findUnique({
           where: {
@@ -101,7 +100,7 @@ export class ReviewsService {
   ) {
     const userId = await this.getUserId(identity);
     const reviewBody = normalizeBody(body);
-    const review = await withPrismaConnectionRetry(
+    const review = await this.prisma.withConnectionRetry(
       () =>
         this.prisma.userEpisodeReview.upsert({
           create: {
@@ -136,7 +135,7 @@ export class ReviewsService {
   ) {
     const userId = await this.getUserId(identity);
 
-    await withPrismaConnectionRetry(
+    await this.prisma.withConnectionRetry(
       () =>
         this.prisma.userEpisodeReview.deleteMany({
           where: {

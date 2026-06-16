@@ -58,6 +58,16 @@ export function subscribeToFirebaseAuthState(callback: NextOrObserver<User>) {
   return onAuthStateChanged(getAuthInstance(), callback);
 }
 
+export async function getFreshFirebaseIdToken(): Promise<string | null> {
+  const user = getAuthInstance().currentUser;
+
+  if (!user) {
+    return null;
+  }
+
+  return user.getIdToken(true);
+}
+
 export async function getFirebaseSessionFromUser(user: User): Promise<FirebaseSession> {
   const firebaseIdToken = await user.getIdToken();
 

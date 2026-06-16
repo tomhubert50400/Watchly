@@ -6,6 +6,7 @@ import Joi from 'joi';
 import { AuthModule } from './auth/auth.module';
 import { BlocksModule } from './blocks/blocks.module';
 import { CatalogueModule } from './catalogue/catalogue.module';
+import { DevModule } from './dev/dev.module';
 import { FeedModule } from './feed/feed.module';
 import { FollowsModule } from './follows/follows.module';
 import { HealthController } from './health.controller';
@@ -47,6 +48,7 @@ import { WatchlistsModule } from './watchlists/watchlists.module';
     AuthModule,
     BlocksModule,
     CatalogueModule,
+    DevModule,
     FeedModule,
     FollowsModule,
     NotificationsModule,

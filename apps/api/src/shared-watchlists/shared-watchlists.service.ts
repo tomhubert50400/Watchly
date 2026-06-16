@@ -1,7 +1,6 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
-import { withPrismaConnectionRetry } from '../database/prisma-retry';
 import { PrismaService } from '../database/prisma.service';
 import { TrackedContentType } from '../generated/prisma/enums';
 import {
@@ -29,7 +28,7 @@ export class SharedWatchlistsService {
             tmdbId: tmdbIdFilter,
           }
         : undefined;
-    const watchlists = await withPrismaConnectionRetry(() =>
+    const watchlists = await this.withConnectionRetry(() =>
       this.prisma.sharedWatchlist.findMany({
         include: {
           _count: {
@@ -71,7 +70,8 @@ export class SharedWatchlistsService {
     }
 
     const userId = await this.getUserId(identity);
-    const watchlist = await this.prisma.sharedWatchlist.create({
+    const watchlist = await this.withConnectionRetry(() =>
+      this.prisma.sharedWatchlist.create({
       data: {
         members: {
           create: {
@@ -89,7 +89,8 @@ export class SharedWatchlistsService {
           },
         },
       },
-    });
+      }),
+    );
 
     return toSummary(watchlist, userId);
   }
@@ -98,7 +99,8 @@ export class SharedWatchlistsService {
     const userId = await this.getUserId(identity);
     await this.assertMember(userId, watchlistId);
 
-    const watchlist = await this.prisma.sharedWatchlist.findUnique({
+    const watchlist = await this.withConnectionRetry(() =>
+      this.prisma.sharedWatchlist.findUnique({
       include: {
         items: {
           orderBy: {
@@ -137,7 +139,8 @@ export class SharedWatchlistsService {
       where: {
         id: watchlistId,
       },
-    });
+      }),
+    );
 
     if (!watchlist) {
       throw new NotFoundException('Shared watchlist not found.');
@@ -175,31 +178,36 @@ export class SharedWatchlistsService {
     const userId = await this.getUserId(identity);
     await this.assertOwner(userId, watchlistId);
 
-    await this.prisma.sharedWatchlist.delete({
+    await this.withConnectionRetry(() =>
+      this.prisma.sharedWatchlist.delete({
       where: {
         id: watchlistId,
       },
-    });
+      }),
+    );
   }
 
   async addMember(identity: AuthenticatedIdentity, watchlistId: string, memberUserId: string) {
     const userId = await this.getUserId(identity);
     await this.assertOwner(userId, watchlistId);
 
-    const member = await this.prisma.user.findUnique({
+    const member = await this.withConnectionRetry(() =>
+      this.prisma.user.findUnique({
       select: {
         id: true,
       },
       where: {
         id: memberUserId,
       },
-    });
+      }),
+    );
 
     if (!member) {
       throw new NotFoundException('User not found.');
     }
 
-    await this.prisma.sharedWatchlistMember.upsert({
+    await this.withConnectionRetry(() =>
+      this.prisma.sharedWatchlistMember.upsert({
       create: {
         userId: memberUserId,
         watchlistId,
@@ -211,7 +219,8 @@ export class SharedWatchlistsService {
           watchlistId,
         },
       },
-    });
+      }),
+    );
 
     await this.touchSharedWatchlist(watchlistId);
 
@@ -223,7 +232,8 @@ export class SharedWatchlistsService {
     await this.assertMember(userId, watchlistId);
 
     const contentType = toTrackedContentType(input.contentType);
-    const item = await this.prisma.sharedWatchlistItem.upsert({
+    const item = await this.withConnectionRetry(() =>
+      this.prisma.sharedWatchlistItem.upsert({
       create: {
         contentType,
         tmdbId: input.tmdbId,
@@ -237,7 +247,8 @@ export class SharedWatchlistsService {
           watchlistId,
         },
       },
-    });
+      }),
+    );
 
     await this.touchSharedWatchlist(watchlistId);
 
@@ -253,13 +264,15 @@ export class SharedWatchlistsService {
     const userId = await this.getUserId(identity);
     await this.assertMember(userId, watchlistId);
 
-    await this.prisma.sharedWatchlistItem.deleteMany({
+    await this.withConnectionRetry(() =>
+      this.prisma.sharedWatchlistItem.deleteMany({
       where: {
         contentType: toTrackedContentType(contentType),
         tmdbId,
         watchlistId,
       },
-    });
+      }),
+    );
 
     await this.touchSharedWatchlist(watchlistId);
   }
@@ -282,20 +295,23 @@ export class SharedWatchlistsService {
 
     const userId = await this.getUserId(identity);
     await this.assertMember(userId, watchlistId);
-    const itemCount = await this.prisma.sharedWatchlistItem.count({
+    const itemCount = await this.withConnectionRetry(() =>
+      this.prisma.sharedWatchlistItem.count({
       where: {
         id: {
           in: itemIds,
         },
         watchlistId,
       },
-    });
+      }),
+    );
 
     if (itemCount !== new Set(itemIds).size) {
       throw new BadRequestException('Voting candidates must belong to this shared watchlist.');
     }
 
-    const session = await this.prisma.sharedVotingSession.create({
+    const session = await this.withConnectionRetry(() =>
+      this.prisma.sharedVotingSession.create({
       data: {
         candidates: {
           create: Array.from(new Set(itemIds)).map((itemId) => ({
@@ -305,7 +321,8 @@ export class SharedWatchlistsService {
         title: cleanTitle,
         watchlistId,
       },
-    });
+      }),
+    );
 
     await this.touchSharedWatchlist(watchlistId);
 
@@ -320,7 +337,8 @@ export class SharedWatchlistsService {
     const userId = await this.getUserId(identity);
     await this.assertMember(userId, watchlistId);
 
-    const session = await this.prisma.sharedVotingSession.findFirst({
+    const session = await this.withConnectionRetry(() =>
+      this.prisma.sharedVotingSession.findFirst({
       include: {
         candidates: {
           include: {
@@ -340,7 +358,8 @@ export class SharedWatchlistsService {
         id: sessionId,
         watchlistId,
       },
-    });
+      }),
+    );
 
     if (!session) {
       throw new NotFoundException('Voting session not found.');
@@ -369,7 +388,8 @@ export class SharedWatchlistsService {
   ) {
     const userId = await this.getUserId(identity);
     await this.assertMember(userId, watchlistId);
-    const candidate = await this.prisma.sharedVotingCandidate.findFirst({
+    const candidate = await this.withConnectionRetry(() =>
+      this.prisma.sharedVotingCandidate.findFirst({
       select: {
         id: true,
       },
@@ -380,13 +400,15 @@ export class SharedWatchlistsService {
           watchlistId,
         },
       },
-    });
+      }),
+    );
 
     if (!candidate) {
       throw new NotFoundException('Voting candidate not found.');
     }
 
-    await this.prisma.sharedVotingVote.upsert({
+    await this.withConnectionRetry(() =>
+      this.prisma.sharedVotingVote.upsert({
       create: {
         candidateId,
         userId,
@@ -398,7 +420,8 @@ export class SharedWatchlistsService {
           userId,
         },
       },
-    });
+      }),
+    );
 
     return this.getVotingSession(identity, watchlistId, sessionId);
   }
@@ -411,7 +434,8 @@ export class SharedWatchlistsService {
   ) {
     const userId = await this.getUserId(identity);
     await this.assertMember(userId, watchlistId);
-    await this.prisma.sharedVotingVote.deleteMany({
+    await this.withConnectionRetry(() =>
+      this.prisma.sharedVotingVote.deleteMany({
       where: {
         candidateId,
         userId,
@@ -422,7 +446,8 @@ export class SharedWatchlistsService {
           },
         },
       },
-    });
+      }),
+    );
 
     return this.getVotingSession(identity, watchlistId, sessionId);
   }
@@ -433,8 +458,13 @@ export class SharedWatchlistsService {
     return user.id;
   }
 
+  private async withConnectionRetry<T>(operation: () => Promise<T>) {
+    return this.prisma.withConnectionRetry(operation);
+  }
+
   private async assertMember(userId: string, watchlistId: string) {
-    const membership = await this.prisma.sharedWatchlistMember.findUnique({
+    const membership = await this.withConnectionRetry(() =>
+      this.prisma.sharedWatchlistMember.findUnique({
       select: {
         id: true,
       },
@@ -444,7 +474,8 @@ export class SharedWatchlistsService {
           watchlistId,
         },
       },
-    });
+      }),
+    );
 
     if (!membership) {
       throw new NotFoundException('Shared watchlist not found.');
@@ -452,7 +483,8 @@ export class SharedWatchlistsService {
   }
 
   private async assertOwner(userId: string, watchlistId: string) {
-    const watchlist = await this.prisma.sharedWatchlist.findFirst({
+    const watchlist = await this.withConnectionRetry(() =>
+      this.prisma.sharedWatchlist.findFirst({
       select: {
         id: true,
       },
@@ -460,7 +492,8 @@ export class SharedWatchlistsService {
         id: watchlistId,
         ownerId: userId,
       },
-    });
+      }),
+    );
 
     if (!watchlist) {
       throw new NotFoundException('Shared watchlist not found.');
@@ -468,14 +501,16 @@ export class SharedWatchlistsService {
   }
 
   private async touchSharedWatchlist(watchlistId: string) {
-    await this.prisma.sharedWatchlist.update({
+    await this.withConnectionRetry(() =>
+      this.prisma.sharedWatchlist.update({
       data: {
         updatedAt: new Date(),
       },
       where: {
         id: watchlistId,
       },
-    });
+      }),
+    );
   }
 }
 

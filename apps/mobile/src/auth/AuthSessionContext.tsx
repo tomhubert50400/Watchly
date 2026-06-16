@@ -1,6 +1,7 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { getCurrentUser, CurrentUser } from '../api/auth';
 import {
+  getFreshFirebaseIdToken,
   getFirebaseSessionFromUser,
   signInWithGoogleIdToken,
   signOutFromFirebase,
@@ -11,6 +12,7 @@ type AuthSessionStatus = 'idle' | 'loading' | 'signedIn' | 'error';
 
 type AuthSessionContextValue = {
   currentUser: CurrentUser | null;
+  getFirebaseIdToken: () => Promise<string | null>;
   notifySocialChanged: () => void;
   firebaseIdToken: string | null;
   notifyTrackingChanged: () => void;
@@ -35,6 +37,26 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   }, []);
   const notifyTrackingChanged = useCallback(() => {
     setTrackingRevision((revision) => revision + 1);
+  }, []);
+  const getFirebaseIdToken = useCallback(async () => {
+    try {
+      const nextToken = await getFreshFirebaseIdToken();
+
+      setFirebaseIdToken(nextToken);
+
+      if (!nextToken) {
+        setCurrentUser(null);
+        setStatus('idle');
+      }
+
+      return nextToken;
+    } catch {
+      setFirebaseIdToken(null);
+      setCurrentUser(null);
+      setStatus('error');
+
+      return null;
+    }
   }, []);
 
   const applyFirebaseSession = useCallback(async (firebaseIdToken: string) => {
@@ -114,6 +136,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     () => ({
       currentUser,
       firebaseIdToken,
+      getFirebaseIdToken,
       notifySocialChanged,
       notifyTrackingChanged,
       refreshCurrentUser,
@@ -126,6 +149,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     [
       currentUser,
       firebaseIdToken,
+      getFirebaseIdToken,
       notifySocialChanged,
       notifyTrackingChanged,
       refreshCurrentUser,

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Controller,
+  Delete,
   Get,
   Inject,
   Param,
@@ -29,6 +30,45 @@ export class NotificationsController {
     return this.notifications.sync(getIdentity(request));
   }
 
+  @Get('release-alerts/:contentType/:tmdbId')
+  async getReleaseAlert(
+    @Req() request: AuthenticatedRequest,
+    @Param('contentType') contentType: string,
+    @Param('tmdbId') tmdbId: string,
+  ) {
+    return this.notifications.getReleaseAlert(
+      getIdentity(request),
+      parseContentType(contentType),
+      parseTmdbId(tmdbId),
+    );
+  }
+
+  @Put('release-alerts/:contentType/:tmdbId')
+  async enableReleaseAlert(
+    @Req() request: AuthenticatedRequest,
+    @Param('contentType') contentType: string,
+    @Param('tmdbId') tmdbId: string,
+  ) {
+    return this.notifications.enableReleaseAlert(
+      getIdentity(request),
+      parseContentType(contentType),
+      parseTmdbId(tmdbId),
+    );
+  }
+
+  @Delete('release-alerts/:contentType/:tmdbId')
+  async disableReleaseAlert(
+    @Req() request: AuthenticatedRequest,
+    @Param('contentType') contentType: string,
+    @Param('tmdbId') tmdbId: string,
+  ) {
+    return this.notifications.disableReleaseAlert(
+      getIdentity(request),
+      parseContentType(contentType),
+      parseTmdbId(tmdbId),
+    );
+  }
+
   @Put(':notificationId/read')
   async markRead(
     @Req() request: AuthenticatedRequest,
@@ -54,4 +94,22 @@ function parseUuid(value: string) {
   }
 
   return value;
+}
+
+function parseContentType(value: string) {
+  if (value === 'movie' || value === 'series') {
+    return value;
+  }
+
+  throw new BadRequestException('contentType must be movie or series.');
+}
+
+function parseTmdbId(value: string) {
+  const parsed = Number(value);
+
+  if (Number.isInteger(parsed) && parsed > 0) {
+    return parsed;
+  }
+
+  throw new BadRequestException('tmdbId must be a positive integer.');
 }

@@ -8,12 +8,14 @@ import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
+import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 import { ComputedRatingSummary } from '../tracking/ComputedRatingSummary';
 import { SeriesProgressSummary } from '../tracking/SeriesProgressSummary';
 import { TrackingControls } from '../tracking/TrackingControls';
-import { SharedWatchlistControls } from '../watchlists/SharedWatchlistControls';
-import { WatchlistControls } from '../watchlists/WatchlistControls';
+import { HeaderInfoItem, HeaderInfoPills } from './HeaderInfoPills';
 import { StreamingAvailabilityPanel } from './StreamingAvailabilityPanel';
+import { SynopsisPanel } from './SynopsisPanel';
+import { AddToWatchlistControl } from '../watchlists/AddToWatchlistControl';
 
 type SeriesDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'SeriesDetail'>;
 
@@ -44,7 +46,7 @@ export function SeriesDetailScreen({ route }: SeriesDetailScreenProps) {
   }, [loadSeries]);
 
   return (
-    <SafeAreaView edges={['top']} style={styles.safeArea}>
+    <SafeAreaView edges={[]} style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {isLoading ? (
           <View style={styles.loadingPanel}>
@@ -68,20 +70,12 @@ function SeriesDetailContent({ series }: { series: SeriesDetails }) {
   const firstYear = series.firstAirDate ? series.firstAirDate.slice(0, 4) : null;
   const seasons = series.numberOfSeasons ? `${series.numberOfSeasons} seasons` : null;
   const episodes = series.numberOfEpisodes ? `${series.numberOfEpisodes} episodes` : null;
-  const metadata = ['Series', firstYear, seasons, episodes, series.voteAverage ? series.voteAverage.toFixed(1) : null]
+  const infoItems = [firstYear, seasons, episodes, formatTmdbRating(series.voteAverage)]
     .filter(Boolean)
-    .join(' / ');
+    .map((item) => item as HeaderInfoItem);
 
   return (
     <View>
-      {series.backdropUrl ? (
-        <Image
-          accessibilityIgnoresInvertColors
-          accessibilityLabel={`${series.title} backdrop`}
-          source={{ uri: series.backdropUrl }}
-          style={styles.backdrop}
-        />
-      ) : null}
       <View style={styles.header}>
         {series.posterUrl ? (
           <Image
@@ -94,20 +88,20 @@ function SeriesDetailContent({ series }: { series: SeriesDetails }) {
           <View style={styles.posterPlaceholder} />
         )}
         <View style={styles.headerCopy}>
-          <Text style={styles.eyebrow}>TMDB series</Text>
           <Text style={styles.title}>{series.title}</Text>
-          {metadata ? <Text style={styles.metadata}>{metadata}</Text> : null}
+          <HeaderInfoPills items={infoItems} />
           {series.genres.length > 0 ? (
             <Text numberOfLines={2} style={styles.genres}>
               {series.genres.join(', ')}
             </Text>
           ) : null}
+          <AddToWatchlistControl contentType="series" tmdbId={series.tmdbId} />
         </View>
+        <ReleaseAlertControl contentType="series" tmdbId={series.tmdbId} />
       </View>
       {series.tagline ? <Text style={styles.tagline}>{series.tagline}</Text> : null}
+      <SynopsisPanel overview={series.overview} />
       <TrackingControls contentType="series" tmdbId={series.tmdbId} />
-      <WatchlistControls contentType="series" tmdbId={series.tmdbId} />
-      <SharedWatchlistControls contentType="series" tmdbId={series.tmdbId} />
       <StreamingAvailabilityPanel contentType="series" tmdbId={series.tmdbId} />
       <SeriesProgressSummary
         seasons={series.seasons}
@@ -115,17 +109,6 @@ function SeriesDetailContent({ series }: { series: SeriesDetails }) {
         seriesTmdbId={series.tmdbId}
       />
       <ComputedRatingSummary seriesTmdbId={series.tmdbId} title="My computed series rating" />
-      <View style={styles.panel}>
-        <Text style={styles.sectionTitle}>Synopsis</Text>
-        <Text style={styles.body}>{series.overview || 'No synopsis available yet.'}</Text>
-      </View>
-      <View style={styles.panel}>
-        <Text style={styles.sectionTitle}>Details</Text>
-        <DetailRow label="TMDB ID" value={String(series.tmdbId)} />
-        <DetailRow label="First air date" value={series.firstAirDate ?? 'Unknown'} />
-        <DetailRow label="Status" value={series.status ?? 'Unknown'} />
-        <DetailRow label="In production" value={series.inProduction ? 'Yes' : 'No'} />
-      </View>
       <View style={styles.panel}>
         <Text style={styles.sectionTitle}>Seasons</Text>
         {series.seasons.length > 0 ? (
@@ -147,9 +130,6 @@ function SeriesDetailContent({ series }: { series: SeriesDetails }) {
           <Text style={styles.body}>No season data available yet.</Text>
         )}
       </View>
-      <Text style={styles.tmdbNotice}>
-        This product uses the TMDB API but is not endorsed or certified by TMDB.
-      </Text>
     </View>
   );
 }
@@ -191,23 +171,18 @@ function SeasonRow({
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value}</Text>
-    </View>
-  );
+function formatTmdbRating(voteAverage: number | null) {
+  if (!voteAverage) {
+    return null;
+  }
+
+  return {
+    icon: 'star',
+    label: (voteAverage / 2).toFixed(1),
+  } satisfies HeaderInfoItem;
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    backgroundColor: colors.panelSoft,
-    borderRadius: radii.md,
-    height: 170,
-    marginBottom: spacing.lg,
-    width: '100%',
-  },
   body: {
     ...typography.body,
     color: colors.muted,
@@ -217,29 +192,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: spacing.xxxl,
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxxl,
-  },
-  detailLabel: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0,
-    textTransform: 'uppercase',
-  },
-  detailRow: {
-    borderTopColor: colors.border,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: spacing.xs,
-    paddingVertical: spacing.md,
-  },
-  detailValue: {
-    ...typography.body,
-    color: colors.text,
-  },
-  eyebrow: {
-    ...typography.eyebrow,
-    color: colors.accent,
-    marginBottom: spacing.xs,
+    paddingTop: spacing.md,
   },
   genres: {
     ...typography.body,
@@ -247,13 +200,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   header: {
+    alignItems: 'flex-start',
     flexDirection: 'row',
     gap: spacing.md,
     marginBottom: spacing.lg,
   },
   headerCopy: {
     flex: 1,
-    justifyContent: 'center',
     minWidth: 0,
   },
   loadingPanel: {
@@ -270,14 +223,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text,
     fontWeight: '700',
-  },
-  metadata: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0,
-    marginTop: spacing.sm,
-    textTransform: 'uppercase',
   },
   panel: {
     ...shadows.panel,
@@ -359,10 +304,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0,
     lineHeight: 34,
-  },
-  tmdbNotice: {
-    ...typography.body,
-    color: colors.muted,
-    marginTop: spacing.sm,
   },
 });

@@ -22,6 +22,7 @@ import { OnboardingScreen } from './src/onboarding/OnboardingScreen';
 import { PublicProfileScreen } from './src/profile/PublicProfileScreen';
 import { SettingsScreen } from './src/profile/SettingsScreen';
 import { MyTvScreen } from './src/tracking/MyTvScreen';
+import { PersonalWatchlistScreen } from './src/watchlists/PersonalWatchlistScreen';
 import { SharedWatchlistScreen } from './src/watchlists/SharedWatchlistScreen';
 
 type TabParamList = {
@@ -366,6 +367,11 @@ function AppNavigator() {
             <Stack.Screen
               component={FilmDetailScreen}
               name="FilmDetail"
+              options={{ title: '' }}
+            />
+            <Stack.Screen
+              component={PersonalWatchlistScreen}
+              name="PersonalWatchlist"
               options={({ route }) => ({ title: route.params.title })}
             />
             <Stack.Screen
@@ -381,7 +387,7 @@ function AppNavigator() {
             <Stack.Screen
               component={SeriesDetailScreen}
               name="SeriesDetail"
-              options={({ route }) => ({ title: route.params.title })}
+              options={{ title: '' }}
             />
           </>
         )}

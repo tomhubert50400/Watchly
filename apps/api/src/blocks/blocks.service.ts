@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
-import { withPrismaConnectionRetry } from '../database/prisma-retry';
 import { PrismaService } from '../database/prisma.service';
 import { AuditAction } from '../generated/prisma/enums';
 
@@ -32,7 +31,8 @@ export class BlocksService {
     assertNotSelf(blockerId, targetUserId);
     await this.assertUserExists(targetUserId);
 
-    const block = await this.prisma.$transaction(async (tx) => {
+    const block = await this.prisma.withConnectionRetry(() =>
+      this.prisma.$transaction(async (tx) => {
       const createdBlock = await tx.userBlock.upsert({
         create: {
           blockedUserId: targetUserId,
@@ -71,7 +71,8 @@ export class BlocksService {
       });
 
       return createdBlock;
-    });
+      }),
+    );
 
     return {
       blocked: true,
@@ -85,7 +86,8 @@ export class BlocksService {
 
     assertUuid(targetUserId);
 
-    await this.prisma.$transaction(async (tx) => {
+    await this.prisma.withConnectionRetry(() =>
+      this.prisma.$transaction(async (tx) => {
       await tx.userBlock.deleteMany({
         where: {
           blockedUserId: targetUserId,
@@ -100,7 +102,8 @@ export class BlocksService {
           targetUserId,
         },
       });
-    });
+      }),
+    );
 
     return {
       blocked: false,
@@ -116,7 +119,7 @@ export class BlocksService {
   }
 
   private async getBlockStateByUserIds(blockerId: string, blockedUserId: string) {
-    const block = await withPrismaConnectionRetry(
+    const block = await this.prisma.withConnectionRetry(
       () =>
         this.prisma.userBlock.findUnique({
           where: {
@@ -136,14 +139,16 @@ export class BlocksService {
   }
 
   private async assertUserExists(userId: string) {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.withConnectionRetry(() =>
+      this.prisma.user.findUnique({
       select: {
         id: true,
       },
       where: {
         id: userId,
       },
-    });
+      }),
+    );
 
     if (!user) {
       throw new NotFoundException('User not found.');

@@ -1,7 +1,6 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
-import { withPrismaConnectionRetry } from '../database/prisma-retry';
 import { PrismaService } from '../database/prisma.service';
 import { TrackedContentType } from '../generated/prisma/enums';
 import { WatchlistContentType, WatchlistItemDto } from './watchlists.dto';
@@ -26,7 +25,7 @@ export class WatchlistsService {
             tmdbId: tmdbIdFilter,
           }
         : undefined;
-    const watchlists = await withPrismaConnectionRetry(
+    const watchlists = await this.withConnectionRetry(
       () =>
         this.prisma.personalWatchlist.findMany({
           include: {
@@ -64,7 +63,8 @@ export class WatchlistsService {
     }
 
     const userId = await this.getUserId(identity);
-    const watchlist = await this.prisma.personalWatchlist.create({
+    const watchlist = await this.withConnectionRetry(() =>
+      this.prisma.personalWatchlist.create({
       data: {
         name: cleanName,
         userId,
@@ -76,14 +76,16 @@ export class WatchlistsService {
           },
         },
       },
-    });
+      }),
+    );
 
     return toSummary(watchlist);
   }
 
   async getWatchlist(identity: AuthenticatedIdentity, watchlistId: string) {
     const userId = await this.getUserId(identity);
-    const watchlist = await this.prisma.personalWatchlist.findFirst({
+    const watchlist = await this.withConnectionRetry(() =>
+      this.prisma.personalWatchlist.findFirst({
       include: {
         items: {
           orderBy: {
@@ -95,7 +97,8 @@ export class WatchlistsService {
         id: watchlistId,
         userId,
       },
-    });
+      }),
+    );
 
     if (!watchlist) {
       throw new NotFoundException('Watchlist not found.');
@@ -113,12 +116,14 @@ export class WatchlistsService {
   async deleteWatchlist(identity: AuthenticatedIdentity, watchlistId: string) {
     const userId = await this.getUserId(identity);
 
-    await this.prisma.personalWatchlist.deleteMany({
+    await this.withConnectionRetry(() =>
+      this.prisma.personalWatchlist.deleteMany({
       where: {
         id: watchlistId,
         userId,
       },
-    });
+      }),
+    );
   }
 
   async addItem(identity: AuthenticatedIdentity, watchlistId: string, input: WatchlistItemDto) {
@@ -126,7 +131,8 @@ export class WatchlistsService {
     await this.assertOwnedWatchlist(userId, watchlistId);
 
     const contentType = toTrackedContentType(input.contentType);
-    const item = await this.prisma.personalWatchlistItem.upsert({
+    const item = await this.withConnectionRetry(() =>
+      this.prisma.personalWatchlistItem.upsert({
       create: {
         contentType,
         tmdbId: input.tmdbId,
@@ -140,7 +146,8 @@ export class WatchlistsService {
           watchlistId,
         },
       },
-    });
+      }),
+    );
 
     await this.touchWatchlist(watchlistId);
 
@@ -156,13 +163,15 @@ export class WatchlistsService {
     const userId = await this.getUserId(identity);
     await this.assertOwnedWatchlist(userId, watchlistId);
 
-    await this.prisma.personalWatchlistItem.deleteMany({
+    await this.withConnectionRetry(() =>
+      this.prisma.personalWatchlistItem.deleteMany({
       where: {
         contentType: toTrackedContentType(contentType),
         tmdbId,
         watchlistId,
       },
-    });
+      }),
+    );
 
     await this.touchWatchlist(watchlistId);
   }
@@ -173,8 +182,13 @@ export class WatchlistsService {
     return user.id;
   }
 
+  private async withConnectionRetry<T>(operation: () => Promise<T>) {
+    return this.prisma.withConnectionRetry(operation);
+  }
+
   private async assertOwnedWatchlist(userId: string, watchlistId: string) {
-    const watchlist = await this.prisma.personalWatchlist.findFirst({
+    const watchlist = await this.withConnectionRetry(() =>
+      this.prisma.personalWatchlist.findFirst({
       select: {
         id: true,
       },
@@ -182,7 +196,8 @@ export class WatchlistsService {
         id: watchlistId,
         userId,
       },
-    });
+      }),
+    );
 
     if (!watchlist) {
       throw new NotFoundException('Watchlist not found.');
@@ -190,14 +205,16 @@ export class WatchlistsService {
   }
 
   private async touchWatchlist(watchlistId: string) {
-    await this.prisma.personalWatchlist.update({
+    await this.withConnectionRetry(() =>
+      this.prisma.personalWatchlist.update({
       data: {
         updatedAt: new Date(),
       },
       where: {
         id: watchlistId,
       },
-    });
+      }),
+    );
   }
 }
 

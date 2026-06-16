@@ -2,7 +2,6 @@ import { Inject, Injectable } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
-import { withPrismaConnectionRetry } from '../database/prisma-retry';
 import { PrivacyVisibility } from '../generated/prisma/enums';
 
 type FeedAuthor = {
@@ -38,7 +37,7 @@ export class FeedService {
   async listFeed(identity: AuthenticatedIdentity) {
     const viewer = await this.authService.getOrCreateUser(identity);
 
-    return withPrismaConnectionRetry(async () => {
+    return this.prisma.withConnectionRetry(async () => {
       const authorIds = await this.getVisibleFollowedAuthorIds(viewer.id);
 
       if (authorIds.length === 0) {

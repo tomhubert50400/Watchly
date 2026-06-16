@@ -4,6 +4,7 @@ import { CheckCircle2, Circle, RefreshCw } from 'lucide-react-native';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { getMovieDetails, getSeriesDetails } from '../api/catalogue';
 import {
+  addSharedWatchlistMember,
   createSharedVotingSession,
   getSharedWatchlist,
   removeSharedCandidateVote,
@@ -28,12 +29,14 @@ type HydratedSharedItem = SharedWatchlistItem & {
 };
 
 export function SharedWatchlistScreen({ route }: SharedWatchlistScreenProps) {
-  const { firebaseIdToken } = useAuthSession();
+  const { firebaseIdToken, getFirebaseIdToken } = useAuthSession();
   const { watchlistId } = route.params;
   const [error, setError] = useState<string | null>(null);
+  const [isAddingMember, setIsAddingMember] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingSession, setIsSavingSession] = useState(false);
   const [sessionTitle, setSessionTitle] = useState('Tonight');
+  const [memberUserId, setMemberUserId] = useState('');
   const [watchlist, setWatchlist] = useState<SharedWatchlist | null>(null);
   const [hydratedItems, setHydratedItems] = useState<HydratedSharedItem[]>([]);
 
@@ -58,7 +61,13 @@ export function SharedWatchlistScreen({ route }: SharedWatchlistScreenProps) {
     setIsLoading(true);
 
     try {
-      const nextWatchlist = await getSharedWatchlist(firebaseIdToken, watchlistId);
+      const token = await getFirebaseIdToken();
+
+      if (!token) {
+        throw new Error('Sign in again to load this shared list.');
+      }
+
+      const nextWatchlist = await getSharedWatchlist(token, watchlistId);
       const nextItems = await Promise.all(nextWatchlist.items.map(hydrateSharedItem));
 
       setWatchlist(nextWatchlist);
@@ -70,7 +79,7 @@ export function SharedWatchlistScreen({ route }: SharedWatchlistScreenProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [firebaseIdToken, watchlistId]);
+  }, [firebaseIdToken, getFirebaseIdToken, watchlistId]);
 
   useEffect(() => {
     void loadWatchlist();
@@ -87,7 +96,13 @@ export function SharedWatchlistScreen({ route }: SharedWatchlistScreenProps) {
     setError(null);
 
     try {
-      const session = await createSharedVotingSession(firebaseIdToken, watchlist.id, {
+      const token = await getFirebaseIdToken();
+
+      if (!token) {
+        throw new Error('Sign in again to create a voting session.');
+      }
+
+      const session = await createSharedVotingSession(token, watchlist.id, {
         itemIds: watchlist.items.map((item) => item.id),
         title,
       });
@@ -104,6 +119,33 @@ export function SharedWatchlistScreen({ route }: SharedWatchlistScreenProps) {
     }
   }
 
+  async function handleAddMember() {
+    const cleanUserId = memberUserId.trim();
+
+    if (!firebaseIdToken || !watchlist || !watchlist.isOwner || cleanUserId.length === 0 || isAddingMember) {
+      return;
+    }
+
+    setIsAddingMember(true);
+    setError(null);
+
+    try {
+      const token = await getFirebaseIdToken();
+
+      if (!token) {
+        throw new Error('Sign in again to add a member.');
+      }
+
+      await addSharedWatchlistMember(token, watchlist.id, cleanUserId);
+      setMemberUserId('');
+      await loadWatchlist();
+    } catch (memberError) {
+      setError(memberError instanceof Error ? memberError.message : 'Could not add this member.');
+    } finally {
+      setIsAddingMember(false);
+    }
+  }
+
   async function toggleVote(session: SharedVotingSession, candidate: SharedVotingCandidate) {
     if (!firebaseIdToken || !watchlist) {
       return;
@@ -112,9 +154,15 @@ export function SharedWatchlistScreen({ route }: SharedWatchlistScreenProps) {
     setError(null);
 
     try {
+      const token = await getFirebaseIdToken();
+
+      if (!token) {
+        throw new Error('Sign in again to vote.');
+      }
+
       const updatedSession = candidate.userHasVoted
-        ? await removeSharedCandidateVote(firebaseIdToken, watchlist.id, session.id, candidate.id)
-        : await voteForSharedCandidate(firebaseIdToken, watchlist.id, session.id, candidate.id);
+        ? await removeSharedCandidateVote(token, watchlist.id, session.id, candidate.id)
+        : await voteForSharedCandidate(token, watchlist.id, session.id, candidate.id);
 
       setWatchlist({
         ...watchlist,
@@ -169,6 +217,40 @@ export function SharedWatchlistScreen({ route }: SharedWatchlistScreenProps) {
               </Pressable>
             </View>
           </View>
+
+          {watchlist.isOwner ? (
+            <View style={styles.panel}>
+              <Text style={styles.sectionTitle}>Members</Text>
+              <Text style={styles.body}>
+                Invite someone by profile code, then choose what to watch together.
+              </Text>
+              <TextInput
+                label="Profile code"
+                onChangeText={setMemberUserId}
+                onSubmitEditing={memberUserId.trim().length > 0 && !isAddingMember ? handleAddMember : undefined}
+                placeholder="Paste profile code"
+                returnKeyType="done"
+                value={memberUserId}
+              />
+              <Button
+                disabled={memberUserId.trim().length === 0 || isAddingMember}
+                label={isAddingMember ? 'Adding...' : 'Add member'}
+                onPress={handleAddMember}
+              />
+              <View style={styles.memberRows}>
+                {watchlist.members.map((member) => (
+                  <View key={member.id} style={styles.memberRow}>
+                    <Text numberOfLines={1} style={styles.memberName}>
+                      {member.displayName ?? 'Unnamed user'}
+                    </Text>
+                    <Text numberOfLines={1} style={styles.memberRole}>
+                      Member
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
 
           <View style={styles.panel}>
             <Text style={styles.sectionTitle}>Titles</Text>
@@ -377,6 +459,30 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text,
     fontWeight: '700',
+  },
+  memberRole: {
+    color: colors.muted,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0,
+    marginTop: 3,
+  },
+  memberName: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0,
+  },
+  memberRow: {
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  memberRows: {
+    gap: spacing.sm,
   },
   meta: {
     color: colors.accent,

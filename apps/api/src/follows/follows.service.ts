@@ -33,7 +33,8 @@ export class FollowsService {
     assertNotSelf(followerId, targetUserId);
     await this.assertFollowAllowed(followerId, targetUserId);
 
-    const follow = await this.prisma.userFollow.upsert({
+    const follow = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userFollow.upsert({
       create: {
         followedUserId: targetUserId,
         followerId,
@@ -45,7 +46,8 @@ export class FollowsService {
           followerId,
         },
       },
-    });
+      }),
+    );
 
     return {
       followedAt: follow.createdAt.toISOString(),
@@ -59,12 +61,14 @@ export class FollowsService {
 
     assertUuid(targetUserId);
 
-    await this.prisma.userFollow.deleteMany({
+    await this.prisma.withConnectionRetry(() =>
+      this.prisma.userFollow.deleteMany({
       where: {
         followedUserId: targetUserId,
         followerId,
       },
-    });
+      }),
+    );
 
     return {
       followedAt: null,
@@ -80,14 +84,16 @@ export class FollowsService {
   }
 
   private async getFollowStateByUserIds(followerId: string, followedUserId: string) {
-    const follow = await this.prisma.userFollow.findUnique({
+    const follow = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userFollow.findUnique({
       where: {
         followerId_followedUserId: {
           followedUserId,
           followerId,
         },
       },
-    });
+      }),
+    );
 
     return {
       followedAt: follow?.createdAt.toISOString() ?? null,
@@ -97,14 +103,16 @@ export class FollowsService {
   }
 
   private async assertFollowAllowed(followerId: string, followedUserId: string) {
-    const user = await this.prisma.user.findUnique({
+    const user = await this.prisma.withConnectionRetry(() =>
+      this.prisma.user.findUnique({
       include: {
         privacySettings: true,
       },
       where: {
         id: followedUserId,
       },
-    });
+      }),
+    );
 
     if (!user) {
       throw new NotFoundException('User not found.');
@@ -114,7 +122,8 @@ export class FollowsService {
       throw new ForbiddenException('This profile is private.');
     }
 
-    const block = await this.prisma.userBlock.findFirst({
+    const block = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userBlock.findFirst({
       where: {
         OR: [
           {
@@ -127,7 +136,8 @@ export class FollowsService {
           },
         ],
       },
-    });
+      }),
+    );
 
     if (block) {
       throw new ForbiddenException('This profile is unavailable.');

@@ -6,6 +6,8 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../database/prisma.service';
+import { isPrismaConnectionError } from '../database/prisma-retry';
 
 export type CatalogueSearchType = 'all' | 'movie' | 'series';
 
@@ -115,6 +117,13 @@ type TmdbWatchProvidersResponse = {
   results?: Record<string, TmdbWatchProviderCountry>;
 };
 
+type DisplayRating = {
+  average: number;
+  count: number | null;
+  scale: 5 | 10;
+  source: 'kinora' | 'tmdb';
+};
+
 export type CatalogueSearchItem = {
   id: string;
   mediaType: 'movie' | 'series';
@@ -128,6 +137,7 @@ export type CatalogueSearchItem = {
 
 export type MovieDetails = {
   backdropUrl: string | null;
+  displayRating: DisplayRating | null;
   genres: string[];
   id: string;
   mediaType: 'movie';
@@ -226,11 +236,15 @@ export type StreamingProvider = {
 
 @Injectable()
 export class TmdbCatalogueService {
+  private readonly kinoraRatingThreshold = 100;
   private readonly imageBaseUrl = 'https://image.tmdb.org/t/p/w342';
   private readonly backdropBaseUrl = 'https://image.tmdb.org/t/p/w780';
   private readonly tmdbBaseUrl = 'https://api.themoviedb.org/3';
 
-  constructor(@Inject(ConfigService) private readonly config: ConfigService) {}
+  constructor(
+    @Inject(ConfigService) private readonly config: ConfigService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+  ) {}
 
   async search(query: string, type: CatalogueSearchType) {
     const accessToken = this.config.get<string>('TMDB_ACCESS_TOKEN');
@@ -280,7 +294,7 @@ export class TmdbCatalogueService {
     }
 
     return {
-      item: this.toMovieDetails(payload),
+      item: this.toMovieDetails(payload, await this.getMovieDisplayRating(tmdbId, payload.vote_average)),
       provider: 'tmdb',
     };
   }
@@ -435,9 +449,67 @@ export class TmdbCatalogueService {
     };
   }
 
-  private toMovieDetails(item: TmdbMovieDetailsResponse): MovieDetails {
+  private async getMovieDisplayRating(tmdbId: number, tmdbVoteAverage: number | undefined) {
+    const ratingSummary = await this.getMovieRatingSummary(tmdbId);
+    const kinoraRatingCount = ratingSummary._count._all;
+    const kinoraAverageHalfSteps = ratingSummary._avg.scoreHalfSteps;
+
+    if (kinoraRatingCount >= this.kinoraRatingThreshold && kinoraAverageHalfSteps !== null) {
+      return {
+        average: toRoundedRating(kinoraAverageHalfSteps / 2),
+        count: kinoraRatingCount,
+        scale: 5,
+        source: 'kinora',
+      } satisfies DisplayRating;
+    }
+
+    if (typeof tmdbVoteAverage === 'number') {
+      return {
+        average: toRoundedRating(tmdbVoteAverage),
+        count: null,
+        scale: 10,
+        source: 'tmdb',
+      } satisfies DisplayRating;
+    }
+
+    return null;
+  }
+
+  private async getMovieRatingSummary(tmdbId: number) {
+    try {
+      return await this.prisma.withConnectionRetry(() =>
+        this.prisma.userMovieRating.aggregate({
+          _avg: {
+            scoreHalfSteps: true,
+          },
+          _count: {
+            _all: true,
+          },
+          where: {
+            tmdbId,
+          },
+        }),
+      );
+    } catch (error) {
+      if (isPrismaConnectionError(error)) {
+        return {
+          _avg: {
+            scoreHalfSteps: null,
+          },
+          _count: {
+            _all: 0,
+          },
+        };
+      }
+
+      throw error;
+    }
+  }
+
+  private toMovieDetails(item: TmdbMovieDetailsResponse, displayRating: DisplayRating | null): MovieDetails {
     return {
       backdropUrl: item.backdrop_path ? `${this.backdropBaseUrl}${item.backdrop_path}` : null,
+      displayRating,
       genres: item.genres?.map((genre) => genre.name).filter(Boolean) ?? [],
       id: `movie:${item.id}`,
       mediaType: 'movie',
@@ -555,4 +627,8 @@ export class TmdbCatalogueService {
         name: provider.provider_name ?? `Provider ${provider.provider_id}`,
       }));
   }
+}
+
+function toRoundedRating(value: number) {
+  return Math.round(value * 10) / 10;
 }

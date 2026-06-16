@@ -10,6 +10,7 @@ const requiredTables = [
   'personal_watchlist_items',
   'personal_watchlists',
   'privacy_settings',
+  'release_alert_subscriptions',
   'release_notifications',
   'user_blocks',
   'user_content_states',
@@ -34,6 +35,7 @@ const requiredMigrations = [
   '20260613100000_add_personal_watchlists',
   '20260614100000_add_release_notifications',
   '20260614113000_add_audit_logs',
+  '20260615100000_add_release_alert_subscriptions',
 ];
 
 async function main() {

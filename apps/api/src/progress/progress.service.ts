@@ -1,7 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
-import { withPrismaConnectionRetry } from '../database/prisma-retry';
 import { PrismaService } from '../database/prisma.service';
 
 @Injectable()
@@ -18,7 +17,8 @@ export class ProgressService {
     episodeNumber: number,
   ) {
     const userId = await this.getUserId(identity);
-    const progress = await this.prisma.userEpisodeProgress.findUnique({
+    const progress = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userEpisodeProgress.findUnique({
       where: {
         userId_seriesTmdbId_seasonNumber_episodeNumber: {
           episodeNumber,
@@ -27,14 +27,16 @@ export class ProgressService {
           userId,
         },
       },
-    });
+      }),
+    );
 
     return progress ? toApiEpisodeProgress(progress) : null;
   }
 
   async listSeasonProgress(identity: AuthenticatedIdentity, seriesTmdbId: number, seasonNumber: number) {
     const userId = await this.getUserId(identity);
-    const progress = await this.prisma.userEpisodeProgress.findMany({
+    const progress = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userEpisodeProgress.findMany({
       orderBy: {
         episodeNumber: 'asc',
       },
@@ -43,7 +45,8 @@ export class ProgressService {
         seriesTmdbId,
         userId,
       },
-    });
+      }),
+    );
 
     return {
       episodes: progress.map(toApiEpisodeProgress),
@@ -55,7 +58,8 @@ export class ProgressService {
 
   async listSeriesProgress(identity: AuthenticatedIdentity, seriesTmdbId: number) {
     const userId = await this.getUserId(identity);
-    const progress = await this.prisma.userEpisodeProgress.findMany({
+    const progress = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userEpisodeProgress.findMany({
       orderBy: [
         {
           seasonNumber: 'asc',
@@ -68,7 +72,8 @@ export class ProgressService {
         seriesTmdbId,
         userId,
       },
-    });
+      }),
+    );
 
     return {
       episodes: progress.map(toApiEpisodeProgress),
@@ -79,7 +84,7 @@ export class ProgressService {
 
   async listSeriesProgressSummaries(identity: AuthenticatedIdentity) {
     const userId = await this.getUserId(identity);
-    const progress = await withPrismaConnectionRetry(
+    const progress = await this.prisma.withConnectionRetry(
       () =>
         this.prisma.userEpisodeProgress.findMany({
           orderBy: [
@@ -146,7 +151,8 @@ export class ProgressService {
     const userId = await this.getUserId(identity);
     const watchedAt = new Date();
     const episodeNumbers = Array.from({ length: episodeNumber }, (_, index) => index + 1);
-    const progress = await this.prisma.$transaction(async (transaction) => {
+    const progress = await this.prisma.withConnectionRetry(() =>
+      this.prisma.$transaction(async (transaction) => {
       for (const currentEpisodeNumber of episodeNumbers) {
         await transaction.userEpisodeProgress.upsert({
           create: {
@@ -180,7 +186,8 @@ export class ProgressService {
           },
         },
       });
-    });
+      }),
+    );
 
     return toApiEpisodeProgress(progress);
   }
@@ -193,14 +200,16 @@ export class ProgressService {
   ) {
     const userId = await this.getUserId(identity);
 
-    await this.prisma.userEpisodeProgress.deleteMany({
+    await this.prisma.withConnectionRetry(() =>
+      this.prisma.userEpisodeProgress.deleteMany({
       where: {
         episodeNumber,
         seasonNumber,
         seriesTmdbId,
         userId,
       },
-    });
+      }),
+    );
   }
 
   private async getUserId(identity: AuthenticatedIdentity) {

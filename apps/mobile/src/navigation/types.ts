@@ -12,6 +12,10 @@ export type RootStackParamList = {
   };
   MainTabs: undefined;
   Onboarding: undefined;
+  PersonalWatchlist: {
+    title: string;
+    watchlistId: string;
+  };
   PublicProfile: {
     previewOwnProfile?: boolean;
     userId: string;

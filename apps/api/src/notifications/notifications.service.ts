@@ -2,14 +2,13 @@ import { Inject, Injectable } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { SeriesDetails, TmdbCatalogueService } from '../catalogue/tmdb-catalogue.service';
-import { withPrismaConnectionRetry } from '../database/prisma-retry';
 import { PrismaService } from '../database/prisma.service';
 import { ReleaseNotificationType, TrackedContentType } from '../generated/prisma/enums';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const PAST_RELEASE_WINDOW_DAYS = 14;
-const UPCOMING_RELEASE_WINDOW_DAYS = 30;
 const MAX_SYNC_ITEMS = 12;
+
+type ReleaseAlertContentType = 'movie' | 'series';
 
 type NotificationCandidate = {
   contentType: TrackedContentType;
@@ -33,7 +32,7 @@ export class NotificationsService {
 
   async list(identity: AuthenticatedIdentity) {
     const userId = await this.getUserId(identity);
-    const notifications = await withPrismaConnectionRetry(() =>
+    const notifications = await this.prisma.withConnectionRetry(() =>
       this.prisma.releaseNotification.findMany({
         orderBy: [{ readAt: 'asc' }, { createdAt: 'desc' }],
         take: 30,
@@ -44,84 +43,96 @@ export class NotificationsService {
     );
 
     return {
-      items: notifications.map((notification) => ({
-        body: notification.body,
-        contentType: fromTrackedContentType(notification.contentType),
-        createdAt: notification.createdAt.toISOString(),
-        episodeNumber: notification.episodeNumber,
-        id: notification.id,
-        readAt: notification.readAt?.toISOString() ?? null,
-        releasedAt: notification.releasedAt?.toISOString() ?? null,
-        seasonNumber: notification.seasonNumber,
-        title: notification.title,
-        tmdbId: notification.tmdbId,
-        type: fromNotificationType(notification.type),
-      })),
+      items: notifications.map(toNotificationDto),
     };
   }
 
   async sync(identity: AuthenticatedIdentity) {
     const userId = await this.getUserId(identity);
-    const followedContent = await this.listFollowedContent(userId);
+    const alertSubscriptions = await this.listAlertSubscriptions(userId);
     const candidates: NotificationCandidate[] = [];
 
-    for (const item of followedContent.slice(0, MAX_SYNC_ITEMS)) {
-      if (item.contentType === TrackedContentType.MOVIE) {
-        const movieCandidates = await this.buildMovieCandidates(item.tmdbId);
-
-        candidates.push(...movieCandidates);
-      } else {
-        const seriesCandidates = await this.buildSeriesCandidates(item.tmdbId);
-
-        candidates.push(...seriesCandidates);
-      }
+    for (const item of alertSubscriptions.slice(0, MAX_SYNC_ITEMS)) {
+      candidates.push(...(await this.buildCandidates(item.contentType, item.tmdbId)));
     }
 
-    let createdCount = 0;
-
-    for (const candidate of candidates) {
-      const existing = await this.prisma.releaseNotification.findUnique({
-        where: {
-          userId_generatedKey: {
-            generatedKey: candidate.generatedKey,
-            userId,
-          },
-        },
-      });
-
-      if (existing) {
-        continue;
-      }
-
-      await this.prisma.releaseNotification.create({
-        data: {
-          body: candidate.body,
-          contentType: candidate.contentType,
-          episodeNumber: candidate.episodeNumber,
-          generatedKey: candidate.generatedKey,
-          releasedAt: candidate.releasedAt,
-          seasonNumber: candidate.seasonNumber,
-          title: candidate.title,
-          tmdbId: candidate.tmdbId,
-          type: candidate.type,
-          userId,
-        },
-      });
-      createdCount += 1;
-    }
+    const createdCount = await this.createNotifications(userId, candidates);
 
     const list = await this.list(identity);
 
     return {
       ...list,
       createdCount,
-      syncedContentCount: followedContent.length,
+      syncedContentCount: alertSubscriptions.length,
     };
+  }
+
+  async getReleaseAlert(
+    identity: AuthenticatedIdentity,
+    contentType: ReleaseAlertContentType,
+    tmdbId: number,
+  ) {
+    const userId = await this.getUserId(identity);
+
+    return this.getReleaseAlertForUser(userId, toTrackedContentType(contentType), tmdbId);
+  }
+
+  async enableReleaseAlert(
+    identity: AuthenticatedIdentity,
+    contentType: ReleaseAlertContentType,
+    tmdbId: number,
+  ) {
+    const userId = await this.getUserId(identity);
+    const trackedContentType = toTrackedContentType(contentType);
+
+    await this.prisma.withConnectionRetry(() =>
+      this.prisma.releaseAlertSubscription.upsert({
+      create: {
+        contentType: trackedContentType,
+        tmdbId,
+        userId,
+      },
+      update: {},
+      where: {
+        userId_contentType_tmdbId: {
+          contentType: trackedContentType,
+          tmdbId,
+          userId,
+        },
+      },
+      }),
+    );
+
+    await this.createNotifications(userId, await this.buildCandidates(trackedContentType, tmdbId));
+
+    return this.getReleaseAlertForUser(userId, trackedContentType, tmdbId);
+  }
+
+  async disableReleaseAlert(
+    identity: AuthenticatedIdentity,
+    contentType: ReleaseAlertContentType,
+    tmdbId: number,
+  ) {
+    const userId = await this.getUserId(identity);
+    const trackedContentType = toTrackedContentType(contentType);
+
+    await this.prisma.withConnectionRetry(() =>
+      this.prisma.releaseAlertSubscription.deleteMany({
+      where: {
+        contentType: trackedContentType,
+        tmdbId,
+        userId,
+      },
+      }),
+    );
+
+    return this.getReleaseAlertForUser(userId, trackedContentType, tmdbId);
   }
 
   async markRead(identity: AuthenticatedIdentity, notificationId: string) {
     const userId = await this.getUserId(identity);
-    const notification = await this.prisma.releaseNotification.updateMany({
+    const notification = await this.prisma.withConnectionRetry(() =>
+      this.prisma.releaseNotification.updateMany({
       data: {
         readAt: new Date(),
       },
@@ -129,7 +140,8 @@ export class NotificationsService {
         id: notificationId,
         userId,
       },
-    });
+      }),
+    );
 
     return {
       updated: notification.count > 0,
@@ -142,55 +154,100 @@ export class NotificationsService {
     return user.id;
   }
 
-  private async listFollowedContent(userId: string) {
-    const [states, watchlistItems] = await Promise.all([
-      this.prisma.userContentState.findMany({
-        select: {
-          contentType: true,
-          tmdbId: true,
-          updatedAt: true,
-        },
-        where: {
-          userId,
-        },
+  private async getReleaseAlertForUser(userId: string, contentType: TrackedContentType, tmdbId: number) {
+    const [subscription, notifications] = await this.prisma.withConnectionRetry(() =>
+      Promise.all([
+        this.prisma.releaseAlertSubscription.findUnique({
+          where: {
+            userId_contentType_tmdbId: {
+              contentType,
+              tmdbId,
+              userId,
+            },
+          },
+        }),
+        this.prisma.releaseNotification.findMany({
+          orderBy: [{ readAt: 'asc' }, { createdAt: 'desc' }],
+          take: 10,
+          where: {
+            contentType,
+            tmdbId,
+            userId,
+          },
+        }),
+      ]),
+    );
+
+    return {
+      enabled: Boolean(subscription),
+      items: notifications.map(toNotificationDto),
+    };
+  }
+
+  private async listAlertSubscriptions(userId: string) {
+    return this.prisma.withConnectionRetry(() =>
+      this.prisma.releaseAlertSubscription.findMany({
+      orderBy: {
+        updatedAt: 'desc',
+      },
+      select: {
+        contentType: true,
+        tmdbId: true,
+      },
+      where: {
+        userId,
+      },
       }),
-      this.prisma.personalWatchlistItem.findMany({
-        select: {
-          contentType: true,
-          createdAt: true,
-          tmdbId: true,
-        },
+    );
+  }
+
+  private async buildCandidates(contentType: TrackedContentType, tmdbId: number) {
+    if (contentType === TrackedContentType.MOVIE) {
+      return this.buildMovieCandidates(tmdbId);
+    }
+
+    return this.buildSeriesCandidates(tmdbId);
+  }
+
+  private async createNotifications(userId: string, candidates: NotificationCandidate[]) {
+    let createdCount = 0;
+
+    for (const candidate of candidates) {
+      const existing = await this.prisma.withConnectionRetry(() =>
+        this.prisma.releaseNotification.findUnique({
         where: {
-          watchlist: {
+          userId_generatedKey: {
+            generatedKey: candidate.generatedKey,
             userId,
           },
         },
-      }),
-    ]);
-    const byKey = new Map<string, { contentType: TrackedContentType; tmdbId: number; updatedAt: Date }>();
+        }),
+      );
 
-    states.forEach((state) => {
-      byKey.set(`${state.contentType}:${state.tmdbId}`, {
-        contentType: state.contentType,
-        tmdbId: state.tmdbId,
-        updatedAt: state.updatedAt,
-      });
-    });
-
-    watchlistItems.forEach((item) => {
-      const key = `${item.contentType}:${item.tmdbId}`;
-      const existing = byKey.get(key);
-
-      if (!existing || item.createdAt > existing.updatedAt) {
-        byKey.set(key, {
-          contentType: item.contentType,
-          tmdbId: item.tmdbId,
-          updatedAt: item.createdAt,
-        });
+      if (existing) {
+        continue;
       }
-    });
 
-    return Array.from(byKey.values()).sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime());
+      await this.prisma.withConnectionRetry(() =>
+        this.prisma.releaseNotification.create({
+        data: {
+          body: candidate.body,
+          contentType: candidate.contentType,
+          episodeNumber: candidate.episodeNumber,
+          generatedKey: candidate.generatedKey,
+          releasedAt: candidate.releasedAt,
+          seasonNumber: candidate.seasonNumber,
+          title: candidate.title,
+          tmdbId: candidate.tmdbId,
+          type: candidate.type,
+          userId,
+        },
+        }),
+      );
+      createdCount += 1;
+    }
+
+    return createdCount;
   }
 
   private async buildMovieCandidates(tmdbId: number): Promise<NotificationCandidate[]> {
@@ -199,21 +256,18 @@ export class NotificationsService {
       const movie = response.item;
       const releaseDate = parseReleaseDate(movie.releaseDate);
 
-      if (!releaseDate || !isInReleaseWindow(releaseDate)) {
+      if (!releaseDate) {
         return [];
       }
 
-      return [
-        {
-          body: buildReleaseBody(movie.title, releaseDate, 'film'),
-          contentType: TrackedContentType.MOVIE,
-          generatedKey: `movie:${movie.tmdbId}:release:${toDateKey(releaseDate)}`,
-          releasedAt: releaseDate,
-          title: movie.title,
-          tmdbId: movie.tmdbId,
-          type: ReleaseNotificationType.MOVIE_RELEASE,
-        },
-      ];
+      return buildMilestoneCandidates({
+        contentType: TrackedContentType.MOVIE,
+        label: 'film',
+        releaseDate,
+        title: movie.title,
+        tmdbId: movie.tmdbId,
+        type: ReleaseNotificationType.MOVIE_RELEASE,
+      });
     } catch {
       return [];
     }
@@ -226,20 +280,8 @@ export class NotificationsService {
       const seasonCandidates = series.seasons.flatMap((season) =>
         this.buildSeasonCandidate(series, season),
       );
-      const recentSeasons = series.seasons
-        .filter((season) => season.seasonNumber > 0)
-        .filter((season) => {
-          const airDate = parseReleaseDate(season.airDate);
 
-          return Boolean(airDate && isNearEpisodeWindow(airDate));
-        })
-        .sort((left, right) => right.seasonNumber - left.seasonNumber)
-        .slice(0, 2);
-      const episodeCandidateGroups = await Promise.all(
-        recentSeasons.map((season) => this.buildEpisodeCandidates(series, season.seasonNumber)),
-      );
-
-      return [...seasonCandidates, ...episodeCandidateGroups.flat()];
+      return seasonCandidates;
     } catch {
       return [];
     }
@@ -251,57 +293,19 @@ export class NotificationsService {
   ): NotificationCandidate[] {
     const releaseDate = parseReleaseDate(season.airDate);
 
-    if (season.seasonNumber <= 0 || !releaseDate || !isInReleaseWindow(releaseDate)) {
+    if (season.seasonNumber <= 0 || !releaseDate) {
       return [];
     }
 
-    return [
-      {
-        body: buildReleaseBody(`${series.title} ${season.name}`, releaseDate, 'season'),
-        contentType: TrackedContentType.SERIES,
-        generatedKey: `series:${series.tmdbId}:season:${season.seasonNumber}:release:${toDateKey(releaseDate)}`,
-        releasedAt: releaseDate,
-        seasonNumber: season.seasonNumber,
-        title: `${series.title}: ${season.name}`,
-        tmdbId: series.tmdbId,
-        type: ReleaseNotificationType.SEASON_RELEASE,
-      },
-    ];
-  }
-
-  private async buildEpisodeCandidates(series: SeriesDetails, seasonNumber: number) {
-    try {
-      const response = await this.catalogue.getSeason(series.tmdbId, seasonNumber);
-
-      return response.item.episodes.flatMap((episode) => {
-        const releaseDate = parseReleaseDate(episode.airDate);
-
-        if (!releaseDate || !isInReleaseWindow(releaseDate)) {
-          return [];
-        }
-
-        return [
-          {
-            body: buildReleaseBody(
-              `${series.title} S${episode.seasonNumber} E${episode.episodeNumber}`,
-              releaseDate,
-              'episode',
-            ),
-            contentType: TrackedContentType.SERIES,
-            episodeNumber: episode.episodeNumber,
-            generatedKey:
-              `series:${series.tmdbId}:season:${episode.seasonNumber}:episode:${episode.episodeNumber}:release:${toDateKey(releaseDate)}`,
-            releasedAt: releaseDate,
-            seasonNumber: episode.seasonNumber,
-            title: `${series.title}: ${episode.title}`,
-            tmdbId: series.tmdbId,
-            type: ReleaseNotificationType.EPISODE_RELEASE,
-          },
-        ];
-      });
-    } catch {
-      return [];
-    }
+    return buildMilestoneCandidates({
+      contentType: TrackedContentType.SERIES,
+      label: 'season',
+      releaseDate,
+      seasonNumber: season.seasonNumber,
+      title: `${series.title}: ${season.name}`,
+      tmdbId: series.tmdbId,
+      type: ReleaseNotificationType.SEASON_RELEASE,
+    });
   }
 }
 
@@ -315,31 +319,95 @@ function parseReleaseDate(value: string | null) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function isInReleaseWindow(date: Date) {
-  const now = new Date();
-  const lowerBound = new Date(now.getTime() - PAST_RELEASE_WINDOW_DAYS * DAY_MS);
-  const upperBound = new Date(now.getTime() + UPCOMING_RELEASE_WINDOW_DAYS * DAY_MS);
+function buildMilestoneCandidates({
+  contentType,
+  label,
+  releaseDate,
+  seasonNumber,
+  title,
+  tmdbId,
+  type,
+}: {
+  contentType: TrackedContentType;
+  label: 'film' | 'season';
+  releaseDate: Date;
+  seasonNumber?: number;
+  title: string;
+  tmdbId: number;
+  type: ReleaseNotificationType;
+}): NotificationCandidate[] {
+  const milestones: Array<'announcement' | 'one-week' | 'release-day'> = [];
 
-  return date >= lowerBound && date <= upperBound;
-}
-
-function isNearEpisodeWindow(date: Date) {
-  const now = new Date();
-  const lowerBound = new Date(now.getTime() - 120 * DAY_MS);
-  const upperBound = new Date(now.getTime() + UPCOMING_RELEASE_WINDOW_DAYS * DAY_MS);
-
-  return date >= lowerBound && date <= upperBound;
-}
-
-function buildReleaseBody(title: string, releaseDate: Date, label: string) {
-  const dateLabel = releaseDate.toISOString().slice(0, 10);
-  const now = new Date();
-
-  if (releaseDate > now) {
-    return `${title} has a ${label} release planned for ${dateLabel}.`;
+  if (isFutureDate(releaseDate)) {
+    milestones.push('announcement');
   }
 
-  return `${title} has a ${label} release dated ${dateLabel}.`;
+  if (isWithinOneWeekBeforeRelease(releaseDate)) {
+    milestones.push('one-week');
+  }
+
+  if (isSameUtcDate(releaseDate, new Date())) {
+    milestones.push('release-day');
+  }
+
+  return milestones.map((milestone) => ({
+    body: buildReleaseBody(title, releaseDate, label, milestone),
+    contentType,
+    generatedKey: buildGeneratedKey(contentType, tmdbId, seasonNumber, releaseDate, milestone),
+    releasedAt: releaseDate,
+    seasonNumber,
+    title,
+    tmdbId,
+    type,
+  }));
+}
+
+function isFutureDate(date: Date) {
+  return date.getTime() > new Date().getTime();
+}
+
+function isWithinOneWeekBeforeRelease(date: Date) {
+  const diff = date.getTime() - new Date().getTime();
+
+  return diff > 0 && diff <= 7 * DAY_MS;
+}
+
+function isSameUtcDate(left: Date, right: Date) {
+  return toDateKey(left) === toDateKey(right);
+}
+
+function buildReleaseBody(
+  title: string,
+  releaseDate: Date,
+  label: 'film' | 'season',
+  milestone: 'announcement' | 'one-week' | 'release-day',
+) {
+  const dateLabel = releaseDate.toISOString().slice(0, 10);
+
+  if (milestone === 'announcement') {
+    return `${title} has a new ${label} release announced for ${dateLabel}.`;
+  }
+
+  if (milestone === 'one-week') {
+    return `${title} releases in one week on ${dateLabel}.`;
+  }
+
+  return `${title} releases today.`;
+}
+
+function buildGeneratedKey(
+  contentType: TrackedContentType,
+  tmdbId: number,
+  seasonNumber: number | undefined,
+  releaseDate: Date,
+  milestone: 'announcement' | 'one-week' | 'release-day',
+) {
+  const contentKey =
+    contentType === TrackedContentType.MOVIE
+      ? `movie:${tmdbId}`
+      : `series:${tmdbId}:season:${seasonNumber}`;
+
+  return `${contentKey}:${milestone}:${toDateKey(releaseDate)}`;
 }
 
 function toDateKey(date: Date) {
@@ -360,4 +428,36 @@ function fromNotificationType(type: ReleaseNotificationType) {
   }
 
   return 'episode_release';
+}
+
+function toTrackedContentType(contentType: ReleaseAlertContentType) {
+  return contentType === 'movie' ? TrackedContentType.MOVIE : TrackedContentType.SERIES;
+}
+
+function toNotificationDto(notification: {
+  body: string;
+  contentType: TrackedContentType;
+  createdAt: Date;
+  episodeNumber: number | null;
+  id: string;
+  readAt: Date | null;
+  releasedAt: Date | null;
+  seasonNumber: number | null;
+  title: string;
+  tmdbId: number;
+  type: ReleaseNotificationType;
+}) {
+  return {
+    body: notification.body,
+    contentType: fromTrackedContentType(notification.contentType),
+    createdAt: notification.createdAt.toISOString(),
+    episodeNumber: notification.episodeNumber,
+    id: notification.id,
+    readAt: notification.readAt?.toISOString() ?? null,
+    releasedAt: notification.releasedAt?.toISOString() ?? null,
+    seasonNumber: notification.seasonNumber,
+    title: notification.title,
+    tmdbId: notification.tmdbId,
+    type: fromNotificationType(notification.type),
+  };
 }
