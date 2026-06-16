@@ -56,9 +56,10 @@ async function apiRequest<T>(method: string, path: string, options: ApiRequestOp
 
   if (!response.ok) {
     const serverMessage = await getServerMessage(response);
+    const message = sanitizeServerMessage(serverMessage, response.status);
 
     throw new ApiError(
-      serverMessage ?? `API request failed with status ${response.status}.`,
+      message,
       response.status,
       serverMessage,
     );
@@ -83,4 +84,27 @@ async function getServerMessage(response: Response) {
   }
 
   return undefined;
+}
+
+function sanitizeServerMessage(message: string | undefined, status: number) {
+  if (!message) {
+    return `API request failed with status ${status}.`;
+  }
+
+  if (isTechnicalServerMessage(message)) {
+    return 'Something went wrong on the server. Try again.';
+  }
+
+  return message;
+}
+
+function isTechnicalServerMessage(message: string) {
+  return (
+    message.includes('Invalid `') ||
+    message.includes('Prisma') ||
+    message.includes('C:\\') ||
+    message.includes('/src/') ||
+    message.includes('Server has closed the connection') ||
+    message.includes('Connection terminated unexpectedly')
+  );
 }
