@@ -1,49 +1,70 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getSeriesDetails, SeriesDetails } from '../api/catalogue';
+import { getSeasonDetails, SeasonDetails, SeriesDetails } from '../api/catalogue';
+import { listSeriesProgress, SeriesProgress } from '../api/progress';
+import { useAuthSession } from '../auth/AuthSessionContext';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
+import { SegmentedControl } from '../components/SegmentedControl';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
-import { ComputedRatingSummary } from '../tracking/ComputedRatingSummary';
+import { useToast } from '../notifications/ToastContext';
 import { SeriesProgressSummary } from '../tracking/SeriesProgressSummary';
 import { TrackingControls } from '../tracking/TrackingControls';
 import { HeaderInfoItem, HeaderInfoPills } from './HeaderInfoPills';
 import { StreamingAvailabilityPanel } from './StreamingAvailabilityPanel';
 import { SynopsisPanel } from './SynopsisPanel';
 import { AddToWatchlistControl } from '../watchlists/AddToWatchlistControl';
+import { useCatalogueCache } from './CatalogueCacheContext';
+import { isReleasedDate } from './releaseDates';
 
 type SeriesDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'SeriesDetail'>;
 
 export function SeriesDetailScreen({ route }: SeriesDetailScreenProps) {
   const { tmdbId } = route.params;
-  const [series, setSeries] = useState<SeriesDetails | null>(null);
+  const { getCachedSeries, refreshSeries } = useCatalogueCache();
+  const [series, setSeries] = useState<SeriesDetails | null>(() => getCachedSeries(tmdbId));
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => !getCachedSeries(tmdbId));
+  const hasVisibleSeriesRef = useRef(Boolean(series));
 
-  const loadSeries = useCallback(async () => {
+  const loadSeries = useCallback(async (showLoading = false) => {
     setError(null);
-    setIsLoading(true);
+    setIsLoading(showLoading || !hasVisibleSeriesRef.current);
 
     try {
-      const response = await getSeriesDetails(tmdbId);
+      const nextSeries = await refreshSeries(tmdbId);
 
-      setSeries(response.item);
+      setSeries(nextSeries);
+      hasVisibleSeriesRef.current = true;
     } catch (caughtError) {
-      setSeries(null);
+      if (!hasVisibleSeriesRef.current) {
+        setSeries(null);
+      }
       setError(caughtError instanceof Error ? caughtError.message : 'Series details failed.');
     } finally {
       setIsLoading(false);
     }
-  }, [tmdbId]);
+  }, [refreshSeries, tmdbId]);
 
   useEffect(() => {
-    void loadSeries();
-  }, [loadSeries]);
+    const cached = getCachedSeries(tmdbId);
+
+    if (cached) {
+      setSeries(cached);
+      hasVisibleSeriesRef.current = true;
+      setIsLoading(false);
+      void loadSeries(false);
+      return;
+    }
+
+    hasVisibleSeriesRef.current = false;
+    void loadSeries(true);
+  }, [loadSeries, tmdbId]);
 
   return (
     <SafeAreaView edges={[]} style={styles.safeArea}>
@@ -55,7 +76,7 @@ export function SeriesDetailScreen({ route }: SeriesDetailScreenProps) {
           </View>
         ) : error ? (
           <EmptyState body={error} title="Series detail failed">
-            <Button label="Retry" onPress={loadSeries} />
+            <Button label="Retry" onPress={() => loadSeries(true)} />
           </EmptyState>
         ) : series ? (
           <SeriesDetailContent series={series} />
@@ -66,14 +87,14 @@ export function SeriesDetailScreen({ route }: SeriesDetailScreenProps) {
 }
 
 function SeriesDetailContent({ series }: { series: SeriesDetails }) {
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [activeView, setActiveView] = useState<'details' | 'episodes'>('details');
+  const isReleased = isReleasedDate(series.firstAirDate);
   const firstYear = series.firstAirDate ? series.firstAirDate.slice(0, 4) : null;
   const seasons = series.numberOfSeasons ? `${series.numberOfSeasons} seasons` : null;
   const episodes = series.numberOfEpisodes ? `${series.numberOfEpisodes} episodes` : null;
-  const infoItems = [firstYear, seasons, episodes, formatTmdbRating(series.voteAverage)]
+  const infoItems = [firstYear, seasons, episodes, isReleased ? formatTmdbRating(series.voteAverage) : null]
     .filter(Boolean)
     .map((item) => item as HeaderInfoItem);
-
   return (
     <View>
       <View style={styles.header}>
@@ -100,75 +121,300 @@ function SeriesDetailContent({ series }: { series: SeriesDetails }) {
         <ReleaseAlertControl contentType="series" tmdbId={series.tmdbId} />
       </View>
       {series.tagline ? <Text style={styles.tagline}>{series.tagline}</Text> : null}
-      <TrackingControls contentType="series" tmdbId={series.tmdbId} />
-      <SynopsisPanel overview={series.overview} />
-      <StreamingAvailabilityPanel contentType="series" tmdbId={series.tmdbId} />
-      <SeriesProgressSummary
-        seasons={series.seasons}
-        seriesTitle={series.title}
-        seriesTmdbId={series.tmdbId}
+      <SegmentedControl
+        containerStyle={styles.viewSwitchControl}
+        onChange={setActiveView}
+        options={[
+          { accessibilityLabel: 'Show details', label: 'Details', value: 'details' },
+          { accessibilityLabel: 'Show episodes', label: 'Episodes', value: 'episodes' },
+        ]}
+        value={activeView}
       />
-      <ComputedRatingSummary seriesTmdbId={series.tmdbId} title="My computed series rating" />
-      <View style={styles.panel}>
-        <Text style={styles.sectionTitle}>Seasons</Text>
-        {series.seasons.length > 0 ? (
-          series.seasons.map((season) => (
-            <SeasonRow
-              key={season.id}
-              onPress={() =>
-                navigation.navigate('SeasonDetail', {
-                  seasonNumber: season.seasonNumber,
-                  seriesTitle: series.title,
-                  title: season.name,
-                  tmdbId: series.tmdbId,
-                })
-              }
-              season={season}
-            />
-          ))
-        ) : (
-          <Text style={styles.body}>No season data available yet.</Text>
-        )}
-      </View>
+      {activeView === 'episodes' ? (
+        <SeriesEpisodesPanel
+          seasons={series.seasons}
+          seriesTitle={series.title}
+          seriesTmdbId={series.tmdbId}
+        />
+      ) : (
+        <>
+          <TrackingControls contentType="series" tmdbId={series.tmdbId} />
+          <SynopsisPanel overview={series.overview} />
+          <SeriesProgressSummary
+            seasons={series.seasons}
+            seriesTitle={series.title}
+            seriesTmdbId={series.tmdbId}
+          />
+          <StreamingAvailabilityPanel contentType="series" tmdbId={series.tmdbId} />
+        </>
+      )}
     </View>
   );
 }
 
-function SeasonRow({
-  onPress,
-  season,
+function SeriesEpisodesPanel({
+  seasons,
+  seriesTitle,
+  seriesTmdbId,
 }: {
-  onPress: () => void;
-  season: SeriesDetails['seasons'][number];
+  seasons: SeriesDetails['seasons'];
+  seriesTitle: string;
+  seriesTmdbId: number;
 }) {
-  const episodeCount = season.episodeCount ? `${season.episodeCount} episodes` : 'Episodes unknown';
-  const airDate = season.airDate ?? 'Air date unknown';
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { firebaseIdToken, trackingRevision } = useAuthSession();
+  const { showToast } = useToast();
+  const [isPickerOpen, setIsPickerOpen] = useState(true);
+  const [selectedSeasonNumber, setSelectedSeasonNumber] = useState<number | null>(null);
+  const [progress, setProgress] = useState<SeriesProgress | null>(null);
+  const [season, setSeason] = useState<SeasonDetails | null>(null);
+  const [isLoadingSeason, setIsLoadingSeason] = useState(false);
+
+  const orderedSeasons = orderSeasonsForPicker(seasons);
+  const defaultSeasonNumber = getDefaultSeasonNumber(seasons, progress);
+  const activeSeasonNumber = selectedSeasonNumber ?? defaultSeasonNumber;
+  const activeSeason = orderedSeasons.find((item) => item.seasonNumber === activeSeasonNumber) ?? null;
+
+  useEffect(() => {
+    if (!firebaseIdToken) {
+      setProgress(null);
+      return;
+    }
+
+    const token = firebaseIdToken;
+    let isMounted = true;
+
+    async function loadProgress() {
+      try {
+        const nextProgress = await listSeriesProgress(token, seriesTmdbId);
+
+        if (isMounted) {
+          setProgress(nextProgress);
+        }
+      } catch {
+        if (isMounted) {
+          setProgress(null);
+        }
+      }
+    }
+
+    void loadProgress();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [firebaseIdToken, seriesTmdbId, trackingRevision]);
+
+  useEffect(() => {
+    if (activeSeasonNumber === null) {
+      return;
+    }
+
+    const seasonNumber = activeSeasonNumber;
+    let isMounted = true;
+
+    async function loadSeason() {
+      setIsLoadingSeason(true);
+
+      try {
+        const response = await getSeasonDetails(seriesTmdbId, seasonNumber);
+
+        if (isMounted) {
+          setSeason(response.item);
+        }
+      } catch {
+        if (isMounted) {
+          setSeason(null);
+          showToast('Could not load episodes.');
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingSeason(false);
+        }
+      }
+    }
+
+    void loadSeason();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeSeasonNumber, seriesTmdbId, showToast]);
+
+  function selectSeason(nextSeasonNumber: number) {
+    setSelectedSeasonNumber(nextSeasonNumber);
+    setIsPickerOpen(false);
+  }
+
+  function openEpisode(episode: SeasonDetails['episodes'][number]) {
+    navigation.navigate('EpisodeDetail', {
+      episodeNumber: episode.episodeNumber,
+      seasonNumber: episode.seasonNumber,
+      seriesTitle,
+      title: episode.title,
+      tmdbId: seriesTmdbId,
+    });
+  }
+
+  return (
+    <View>
+      {isPickerOpen ? (
+        <View style={styles.seasonPicker}>
+          {orderedSeasons.map((item) => (
+            <Pressable
+              accessibilityLabel={`Select ${formatSeasonName(item)}`}
+              accessibilityRole="button"
+              key={item.id}
+              onPress={() => selectSeason(item.seasonNumber)}
+              style={({ pressed }) => [
+                styles.seasonOption,
+                activeSeasonNumber === item.seasonNumber && styles.seasonOptionActive,
+                pressed && styles.seasonRowPressed,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.seasonOptionTitle,
+                  activeSeasonNumber === item.seasonNumber && styles.seasonOptionTitleActive,
+                ]}
+              >
+                {formatSeasonName(item)}
+              </Text>
+              <Text style={styles.seasonOptionMeta}>
+                {formatSeasonMeta(item)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        <Pressable
+          accessibilityLabel="Change season"
+          accessibilityRole="button"
+          onPress={() => setIsPickerOpen(true)}
+          style={({ pressed }) => [styles.selectedSeasonButton, pressed && styles.seasonRowPressed]}
+        >
+          <Text style={styles.selectedSeasonText}>
+            {activeSeason ? formatSeasonName(activeSeason) : 'Select season'}
+          </Text>
+          <Text style={styles.selectedSeasonMeta}>Change</Text>
+        </Pressable>
+      )}
+
+      {isLoadingSeason ? (
+        <View style={styles.inlineLoading}>
+          <ActivityIndicator color={colors.accent} />
+          <Text style={styles.body}>Loading episodes</Text>
+        </View>
+      ) : season && season.episodes.length > 0 ? (
+        season.episodes.map((episode) => (
+          <EpisodeRow
+            episode={episode}
+            key={episode.id}
+            onPress={() => openEpisode(episode)}
+          />
+        ))
+      ) : (
+        <Text style={styles.body}>No episode data available yet.</Text>
+      )}
+    </View>
+  );
+}
+
+function EpisodeRow({
+  episode,
+  onPress,
+}: {
+  episode: SeasonDetails['episodes'][number];
+  onPress: () => void;
+}) {
+  const runtime = episode.runtimeMinutes ? `${episode.runtimeMinutes}m` : null;
+  const metadata = [`E${episode.episodeNumber}`, episode.airDate, runtime].filter(Boolean).join(' / ');
 
   return (
     <Pressable
-      accessibilityLabel={`Open ${season.name}`}
+      accessibilityLabel={`Open ${episode.title}`}
       accessibilityRole="button"
       onPress={onPress}
       style={({ pressed }) => [styles.seasonRow, pressed && styles.seasonRowPressed]}
     >
-      {season.posterUrl ? (
+      {episode.stillUrl ? (
         <Image
           accessibilityIgnoresInvertColors
-          accessibilityLabel={`${season.name} poster`}
-          source={{ uri: season.posterUrl }}
-          style={styles.seasonPoster}
+          accessibilityLabel={`${episode.title} still`}
+          source={{ uri: episode.stillUrl }}
+          style={styles.episodeStill}
         />
       ) : (
-        <View style={styles.seasonPosterPlaceholder} />
+        <View style={styles.episodeStillPlaceholder} />
       )}
       <View style={styles.seasonCopy}>
-        <Text style={styles.seasonTitle}>{season.name}</Text>
-        <Text style={styles.seasonMeta}>
-          {episodeCount} / {airDate}
+        <Text style={styles.seasonTitle}>{episode.title}</Text>
+        <Text style={styles.seasonMeta}>{metadata}</Text>
+        <Text numberOfLines={2} style={styles.episodeOverview}>
+          {episode.overview || 'No synopsis available yet.'}
         </Text>
       </View>
     </Pressable>
   );
+}
+
+function orderSeasonsForPicker(seasons: SeriesDetails['seasons']) {
+  return [...seasons].sort((left, right) => {
+    const leftIsSpecial = left.seasonNumber === 0;
+    const rightIsSpecial = right.seasonNumber === 0;
+
+    if (leftIsSpecial !== rightIsSpecial) {
+      return leftIsSpecial ? 1 : -1;
+    }
+
+    return left.seasonNumber - right.seasonNumber;
+  });
+}
+
+function getDefaultSeasonNumber(seasons: SeriesDetails['seasons'], progress: SeriesProgress | null) {
+  const orderedRegularSeasons = seasons
+    .filter((season) => season.seasonNumber > 0 && (season.episodeCount ?? 0) > 0)
+    .sort((left, right) => left.seasonNumber - right.seasonNumber);
+
+  if (orderedRegularSeasons.length === 0) {
+    return seasons.find((season) => (season.episodeCount ?? 0) > 0)?.seasonNumber ?? null;
+  }
+
+  if (!progress || progress.episodes.length === 0) {
+    return orderedRegularSeasons[0].seasonNumber;
+  }
+
+  const latestWatched = [...progress.episodes].sort((left, right) => {
+    if (left.seasonNumber !== right.seasonNumber) {
+      return right.seasonNumber - left.seasonNumber;
+    }
+
+    return right.episodeNumber - left.episodeNumber;
+  })[0];
+  const currentSeason = orderedRegularSeasons.find(
+    (season) => season.seasonNumber === latestWatched.seasonNumber,
+  );
+  const currentSeasonEpisodeCount = currentSeason?.episodeCount ?? 0;
+
+  if (currentSeason && latestWatched.episodeNumber < currentSeasonEpisodeCount) {
+    return latestWatched.seasonNumber;
+  }
+
+  return (
+    orderedRegularSeasons.find((season) => season.seasonNumber > latestWatched.seasonNumber)
+      ?.seasonNumber ?? currentSeason?.seasonNumber ?? orderedRegularSeasons[0].seasonNumber
+  );
+}
+
+function formatSeasonName(season: SeriesDetails['seasons'][number]) {
+  return season.seasonNumber === 0 ? season.name : `Saison ${season.seasonNumber}`;
+}
+
+function formatSeasonMeta(season: SeriesDetails['seasons'][number]) {
+  const episodeCount = season.episodeCount ? `${season.episodeCount} episodes` : 'Episodes unknown';
+  const airDate = season.airDate ?? 'Air date unknown';
+
+  return `${episodeCount} / ${airDate}`;
 }
 
 function formatTmdbRating(voteAverage: number | null) {
@@ -199,6 +445,37 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: spacing.sm,
   },
+  episodeOverview: {
+    ...typography.body,
+    color: colors.muted,
+    marginTop: spacing.xs,
+  },
+  episodesButton: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  episodesButtonMeta: {
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0,
+    textTransform: 'uppercase',
+  },
+  episodeStill: {
+    backgroundColor: colors.panelSoft,
+    borderRadius: radii.md,
+    height: 78,
+    width: 112,
+  },
+  episodeStillPlaceholder: {
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    height: 78,
+    width: 112,
+  },
   header: {
     alignItems: 'flex-start',
     flexDirection: 'row',
@@ -223,6 +500,12 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text,
     fontWeight: '700',
+  },
+  inlineLoading: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md,
+    paddingTop: spacing.md,
   },
   panel: {
     ...shadows.panel,
@@ -261,19 +544,34 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: spacing.xs,
   },
-  seasonPoster: {
-    backgroundColor: colors.panelSoft,
-    borderRadius: radii.md,
-    height: 90,
-    width: 60,
-  },
-  seasonPosterPlaceholder: {
-    backgroundColor: colors.panelSoft,
+  seasonOption: {
     borderColor: colors.border,
     borderRadius: radii.md,
     borderWidth: 1,
-    height: 90,
-    width: 60,
+    padding: spacing.md,
+  },
+  seasonOptionActive: {
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.accent,
+  },
+  seasonOptionMeta: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0,
+    marginTop: spacing.xs,
+  },
+  seasonOptionTitle: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '800',
+  },
+  seasonOptionTitleActive: {
+    color: colors.accent,
+  },
+  seasonPicker: {
+    gap: spacing.sm,
+    marginTop: spacing.md,
   },
   seasonRow: {
     borderTopColor: colors.border,
@@ -293,6 +591,29 @@ const styles = StyleSheet.create({
     ...typography.title,
     color: colors.text,
   },
+  selectedSeasonButton: {
+    alignItems: 'center',
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: spacing.md,
+    padding: spacing.md,
+  },
+  selectedSeasonMeta: {
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0,
+    textTransform: 'uppercase',
+  },
+  selectedSeasonText: {
+    ...typography.body,
+    color: colors.text,
+    fontWeight: '800',
+  },
   tagline: {
     ...typography.title,
     color: colors.text,
@@ -304,5 +625,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0,
     lineHeight: 34,
+  },
+  viewSwitchControl: {
+    marginBottom: spacing.md,
   },
 });

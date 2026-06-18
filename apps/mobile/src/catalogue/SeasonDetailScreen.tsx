@@ -10,6 +10,7 @@ import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { ComputedRatingSummary } from '../tracking/ComputedRatingSummary';
 import { useSeasonProgressSummary } from '../tracking/SeasonProgressSummary';
+import { isReleasedDate } from './releaseDates';
 
 type SeasonDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'SeasonDetail'>;
 
@@ -123,9 +124,6 @@ function SeasonDetailContent({ season, seriesTitle }: { season: SeasonDetails; s
           <Text style={styles.body}>No episode data available yet.</Text>
         )}
       </View>
-      <Text style={styles.tmdbNotice}>
-        This product uses the TMDB API but is not endorsed or certified by TMDB.
-      </Text>
     </View>
   );
 }
@@ -140,7 +138,13 @@ function EpisodeRow({
   onPress: () => void;
 }) {
   const runtime = episode.runtimeMinutes ? `${episode.runtimeMinutes}m` : null;
-  const metadata = [`Episode ${episode.episodeNumber}`, episode.airDate, runtime, episode.voteAverage ? episode.voteAverage.toFixed(1) : null]
+  const isReleased = isReleasedDate(episode.airDate);
+  const metadata = [
+    `Episode ${episode.episodeNumber}`,
+    episode.airDate,
+    runtime,
+    isReleased && episode.voteAverage ? episode.voteAverage.toFixed(1) : null,
+  ]
     .filter(Boolean)
     .join(' / ');
 
@@ -306,11 +310,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0,
     lineHeight: 34,
-  },
-  tmdbNotice: {
-    ...typography.body,
-    color: colors.muted,
-    marginTop: spacing.sm,
   },
   watchedLabel: {
     color: colors.success,

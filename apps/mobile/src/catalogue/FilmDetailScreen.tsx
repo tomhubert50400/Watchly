@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { DisplayRating, getMovieDetails, MovieDetails } from '../api/catalogue';
+import { DisplayRating, MovieDetails } from '../api/catalogue';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { colors, radii, spacing, typography } from '../design/tokens';
@@ -15,34 +15,52 @@ import { HeaderInfoItem, HeaderInfoPills } from './HeaderInfoPills';
 import { StreamingAvailabilityPanel } from './StreamingAvailabilityPanel';
 import { SynopsisPanel } from './SynopsisPanel';
 import { AddToWatchlistControl } from '../watchlists/AddToWatchlistControl';
+import { useCatalogueCache } from './CatalogueCacheContext';
+import { isReleasedDate } from './releaseDates';
 
 type FilmDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'FilmDetail'>;
 
 export function FilmDetailScreen({ route }: FilmDetailScreenProps) {
   const { tmdbId } = route.params;
-  const [movie, setMovie] = useState<MovieDetails | null>(null);
+  const { getCachedMovie, refreshMovie } = useCatalogueCache();
+  const [movie, setMovie] = useState<MovieDetails | null>(() => getCachedMovie(tmdbId));
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => !getCachedMovie(tmdbId));
+  const hasVisibleMovieRef = useRef(Boolean(movie));
 
-  const loadMovie = useCallback(async () => {
+  const loadMovie = useCallback(async (showLoading = false) => {
     setError(null);
-    setIsLoading(true);
+    setIsLoading(showLoading || !hasVisibleMovieRef.current);
 
     try {
-      const response = await getMovieDetails(tmdbId);
+      const nextMovie = await refreshMovie(tmdbId);
 
-      setMovie(response.item);
+      setMovie(nextMovie);
+      hasVisibleMovieRef.current = true;
     } catch (caughtError) {
-      setMovie(null);
+      if (!hasVisibleMovieRef.current) {
+        setMovie(null);
+      }
       setError(caughtError instanceof Error ? caughtError.message : 'Movie details failed.');
     } finally {
       setIsLoading(false);
     }
-  }, [tmdbId]);
+  }, [refreshMovie, tmdbId]);
 
   useEffect(() => {
-    void loadMovie();
-  }, [loadMovie]);
+    const cached = getCachedMovie(tmdbId);
+
+    if (cached) {
+      setMovie(cached);
+      hasVisibleMovieRef.current = true;
+      setIsLoading(false);
+      void loadMovie(false);
+      return;
+    }
+
+    hasVisibleMovieRef.current = false;
+    void loadMovie(true);
+  }, [loadMovie, tmdbId]);
 
   return (
     <SafeAreaView edges={[]} style={styles.safeArea}>
@@ -54,7 +72,7 @@ export function FilmDetailScreen({ route }: FilmDetailScreenProps) {
           </View>
         ) : error ? (
           <EmptyState body={error} title="Film detail failed">
-            <Button label="Retry" onPress={loadMovie} />
+            <Button label="Retry" onPress={() => loadMovie(true)} />
           </EmptyState>
         ) : movie ? (
           <MovieDetailContent movie={movie} />
@@ -65,9 +83,10 @@ export function FilmDetailScreen({ route }: FilmDetailScreenProps) {
 }
 
 function MovieDetailContent({ movie }: { movie: MovieDetails }) {
+  const isReleased = isReleasedDate(movie.releaseDate);
   const releaseYear = movie.releaseDate ? movie.releaseDate.slice(0, 4) : null;
   const runtime = formatRuntime(movie.runtimeMinutes);
-  const infoItems = [releaseYear, runtime, formatDisplayRating(movie.displayRating)]
+  const infoItems = [releaseYear, runtime, isReleased ? formatDisplayRating(movie.displayRating) : null]
     .filter(Boolean)
     .map((item) => item as HeaderInfoItem);
 
@@ -100,8 +119,12 @@ function MovieDetailContent({ movie }: { movie: MovieDetails }) {
       <TrackingControls contentType="movie" tmdbId={movie.tmdbId} />
       <SynopsisPanel overview={movie.overview} />
       <StreamingAvailabilityPanel contentType="movie" tmdbId={movie.tmdbId} />
-      <MovieRatingControl tmdbId={movie.tmdbId} />
-      <MovieReviewEditor tmdbId={movie.tmdbId} />
+      {isReleased ? (
+        <>
+          <MovieRatingControl tmdbId={movie.tmdbId} />
+          <MovieReviewEditor tmdbId={movie.tmdbId} />
+        </>
+      ) : null}
     </View>
   );
 }

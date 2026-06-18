@@ -18,11 +18,17 @@ export type CatalogueSearchResponse = {
   provider: 'tmdb';
 };
 
+export type CatalogueMovieSectionsResponse = {
+  announced: CatalogueSearchItem[];
+  provider: 'tmdb';
+  trending: CatalogueSearchItem[];
+};
+
 export type DisplayRating = {
   average: number;
   count: number | null;
   scale: 5 | 10;
-  source: 'kinora' | 'tmdb';
+  source: 'watchly' | 'tmdb';
 };
 
 export type MovieDetails = {
@@ -153,6 +159,14 @@ export function searchCatalogue(query: string, type: CatalogueSearchType) {
   const params = new URLSearchParams({ query, type });
 
   return apiGet<CatalogueSearchResponse>(`/catalog/search?${params.toString()}`);
+}
+
+export function getTrendingCatalogue() {
+  return apiGet<CatalogueSearchResponse>('/catalog/trending');
+}
+
+export function getCatalogueMovieSections() {
+  return apiGet<CatalogueMovieSectionsResponse>('/catalog/movie-sections');
 }
 
 export function getMovieDetails(tmdbId: number) {

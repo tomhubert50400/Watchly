@@ -1,29 +1,42 @@
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput as NativeTextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Search } from 'lucide-react-native';
-import { CatalogueSearchItem, CatalogueSearchType, searchCatalogue } from '../api/catalogue';
+import { CatalogueSearchItem, getCatalogueMovieSections, searchCatalogue } from '../api/catalogue';
 import { EmptyState } from '../components/EmptyState';
-import { TextInput } from '../components/TextInput';
+import { SegmentedControl } from '../components/SegmentedControl';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
+import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 
-const catalogueFilters: { label: string; type: CatalogueSearchType }[] = [
-  { label: 'All', type: 'all' },
-  { label: 'Films', type: 'movie' },
-  { label: 'Series', type: 'series' },
-];
+type ExploreSection = 'trending' | 'announced';
 
 const CatalogueResultCard = memo(function CatalogueResultCard({
+  dateDisplay = 'year',
   item,
   onPress,
+  showReleaseAlert = false,
+  showRating = true,
 }: {
+  dateDisplay?: 'full' | 'year';
   item: CatalogueSearchItem;
   onPress?: () => void;
+  showReleaseAlert?: boolean;
+  showRating?: boolean;
 }) {
-  const year = item.releaseDate ? item.releaseDate.slice(0, 4) : null;
+  const releaseLabel =
+    dateDisplay === 'full' ? formatFullDate(item.releaseDate) : getReleaseYear(item.releaseDate);
   const mediaLabel = item.mediaType === 'movie' ? 'Film' : 'Series';
   const content = (
     <>
@@ -44,8 +57,8 @@ const CatalogueResultCard = memo(function CatalogueResultCard({
         </Text>
         <Text style={styles.catalogueMeta}>
           {mediaLabel}
-          {year ? ` / ${year}` : ''}
-          {item.voteAverage ? ` / ${item.voteAverage.toFixed(1)}` : ''}
+          {releaseLabel ? ` / ${releaseLabel}` : ''}
+          {showRating && item.voteAverage ? ` / ${item.voteAverage.toFixed(1)}` : ''}
         </Text>
         <Text numberOfLines={3} style={styles.catalogueOverview}>
           {item.overview || 'No synopsis available yet.'}
@@ -55,6 +68,23 @@ const CatalogueResultCard = memo(function CatalogueResultCard({
   );
 
   if (onPress) {
+    if (showReleaseAlert) {
+      return (
+        <View style={[styles.catalogueCard, styles.catalogueCardWithOverlay]}>
+          {content}
+          <Pressable
+            accessibilityLabel={`Open ${item.title}`}
+            accessibilityRole="button"
+            onPress={onPress}
+            style={({ pressed }) => [styles.catalogueHitArea, pressed && styles.catalogueHitAreaPressed]}
+          />
+          <View style={styles.releaseAlertSlot}>
+            <ReleaseAlertControl contentType="movie" tmdbId={item.tmdbId} />
+          </View>
+        </View>
+      );
+    }
+
     return (
       <Pressable
         accessibilityLabel={`Open ${item.title}`}
@@ -77,11 +107,50 @@ const CatalogueResultCard = memo(function CatalogueResultCard({
 export function ExploreScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [query, setQuery] = useState('');
-  const [selectedType, setSelectedType] = useState<CatalogueSearchType>('all');
   const [items, setItems] = useState<CatalogueSearchItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [activeSection, setActiveSection] = useState<ExploreSection>('trending');
+  const [isSectionLoading, setIsSectionLoading] = useState(true);
+  const [sectionError, setSectionError] = useState<string | null>(null);
+  const [sectionItems, setSectionItems] = useState<Record<ExploreSection, CatalogueSearchItem[]>>({
+    announced: [],
+    trending: [],
+  });
   const trimmedQuery = query.trim();
+  const isSearching = trimmedQuery.length >= 2;
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    setIsSectionLoading(true);
+    setSectionError(null);
+
+    getCatalogueMovieSections()
+      .then((response) => {
+        if (isCurrent) {
+          setSectionItems({
+            announced: response.announced,
+            trending: response.trending,
+          });
+        }
+      })
+      .catch((caughtError) => {
+        if (isCurrent) {
+          setSectionItems({ announced: [], trending: [] });
+          setSectionError(caughtError instanceof Error ? caughtError.message : 'Explore sections failed.');
+        }
+      })
+      .finally(() => {
+        if (isCurrent) {
+          setIsSectionLoading(false);
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (trimmedQuery.length < 2) {
@@ -96,7 +165,7 @@ export function ExploreScreen() {
       setError(null);
       setIsLoading(true);
 
-      searchCatalogue(trimmedQuery, selectedType)
+      searchCatalogue(trimmedQuery, 'all')
         .then((response) => {
           if (isCurrent) {
             setItems(response.items);
@@ -119,12 +188,15 @@ export function ExploreScreen() {
       isCurrent = false;
       clearTimeout(handle);
     };
-  }, [selectedType, trimmedQuery]);
+  }, [trimmedQuery]);
 
   const renderCatalogueItem = useCallback(
     ({ item }: { item: CatalogueSearchItem }) => (
       <CatalogueResultCard
+        dateDisplay={!isSearching && activeSection === 'announced' ? 'full' : 'year'}
         item={item}
+        showReleaseAlert={!isSearching && activeSection === 'announced'}
+        showRating={isSearching || activeSection !== 'announced'}
         onPress={() =>
           navigation.navigate(item.mediaType === 'movie' ? 'FilmDetail' : 'SeriesDetail', {
             title: item.title,
@@ -133,77 +205,77 @@ export function ExploreScreen() {
         }
       />
     ),
-    [navigation],
+    [activeSection, isSearching, navigation],
   );
+  const data = isSearching ? items : sectionItems[activeSection];
+  const showLoading = isSearching ? isLoading : isSectionLoading;
+  const visibleError = isSearching ? error : sectionError;
 
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea}>
       <FlatList
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
-            {isLoading ? (
+            {showLoading ? (
               <View style={styles.loadingPanel}>
                 <ActivityIndicator color={colors.accent} />
-                <Text style={styles.loadingText}>Searching TMDB</Text>
+                <Text style={styles.loadingText}>
+                  {isSearching
+                    ? 'Searching catalogue'
+                    : activeSection === 'trending'
+                      ? 'Loading trending'
+                      : 'Loading announced'}
+                </Text>
               </View>
-            ) : error ? (
-              <EmptyState body={error} title="Catalogue search failed" />
+            ) : visibleError ? (
+              <EmptyState
+                body={visibleError}
+                title={isSearching ? 'Catalogue search failed' : 'Explore failed'}
+              />
             ) : (
               <EmptyState
                 body={
-                  trimmedQuery.length < 2
-                    ? 'Type at least two characters to search films and series.'
-                    : 'Try another title or switch filters.'
+                  isSearching
+                    ? 'Try another title.'
+                    : activeSection === 'trending'
+                      ? 'No released trending films are available yet.'
+                      : 'No announced films are available yet.'
                 }
-                title={trimmedQuery.length < 2 ? 'Search the catalogue' : 'No results found'}
+                title={isSearching ? 'No results found' : 'No titles yet'}
               />
             )}
           </View>
         }
         ListHeaderComponent={
           <View style={styles.header}>
-            <Text style={styles.eyebrow}>TMDB catalogue</Text>
-            <Text style={styles.title}>Find films and series fast</Text>
-            <TextInput
-              autoCapitalize="none"
-              autoCorrect={false}
-              label="Search"
-              onChangeText={setQuery}
-              placeholder="Search a film or series"
-              returnKeyType="search"
-              value={query}
-            />
-            <View style={styles.filters}>
-              {catalogueFilters.map((filter) => {
-                const isSelected = selectedType === filter.type;
-
-                return (
-                  <Pressable
-                    accessibilityLabel={`Show ${filter.label}`}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isSelected }}
-                    key={filter.type}
-                    onPress={() => setSelectedType(filter.type)}
-                    style={({ pressed }) => [
-                      styles.filter,
-                      isSelected && styles.filterSelected,
-                      pressed && styles.filterPressed,
-                    ]}
-                  >
-                    <Text style={[styles.filterLabel, isSelected && styles.filterLabelSelected]}>
-                      {filter.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+            <View style={styles.searchBox}>
+              <Search color={colors.muted} size={20} strokeWidth={2.2} />
+              <NativeTextInput
+                autoCapitalize="none"
+                autoCorrect={false}
+                onChangeText={setQuery}
+                placeholder="Search a film or series"
+                placeholderTextColor={colors.muted}
+                returnKeyType="search"
+                style={styles.searchInput}
+                value={query}
+              />
             </View>
-            <Text style={styles.tmdbNotice}>
-              This product uses the TMDB API but is not endorsed or certified by TMDB.
-            </Text>
+            {!isSearching ? (
+              <SegmentedControl
+                containerStyle={styles.sectionControl}
+                onChange={setActiveSection}
+                options={[
+                  { label: 'Trending', value: 'trending' },
+                  { label: 'Announced', value: 'announced' },
+                ]}
+                value={activeSection}
+              />
+            ) : null}
           </View>
         }
         contentContainerStyle={styles.list}
-        data={isLoading ? [] : items}
+        data={showLoading ? [] : data}
         keyboardShouldPersistTaps="handled"
         keyExtractor={(item) => item.id}
         renderItem={renderCatalogueItem}
@@ -211,6 +283,28 @@ export function ExploreScreen() {
       />
     </SafeAreaView>
   );
+}
+
+function getReleaseYear(value: string | null) {
+  return value ? value.slice(0, 4) : null;
+}
+
+function formatFullDate(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
 }
 
 const styles = StyleSheet.create({
@@ -227,6 +321,18 @@ const styles = StyleSheet.create({
   },
   catalogueCardPressed: {
     opacity: 0.78,
+  },
+  catalogueCardWithOverlay: {
+    paddingRight: 64,
+    position: 'relative',
+  },
+  catalogueHitArea: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: radii.md,
+    zIndex: 1,
+  },
+  catalogueHitAreaPressed: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
   },
   catalogueCopy: {
     flex: 1,
@@ -269,51 +375,14 @@ const styles = StyleSheet.create({
   emptyWrap: {
     flexGrow: 1,
   },
-  eyebrow: {
-    ...typography.eyebrow,
-    color: colors.accent,
-    marginBottom: spacing.sm,
-  },
-  filter: {
-    alignItems: 'center',
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flex: 1,
-    justifyContent: 'center',
-    minHeight: 42,
-    paddingHorizontal: spacing.sm,
-  },
-  filterLabel: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0,
-  },
-  filterLabelSelected: {
-    color: colors.textOnAccent,
-  },
-  filterPressed: {
-    opacity: 0.76,
-  },
-  filters: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  filterSelected: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
   header: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
   list: {
     flexGrow: 1,
     paddingBottom: spacing.xxxl,
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxxl,
+    paddingTop: spacing.lg,
   },
   loadingPanel: {
     alignItems: 'center',
@@ -330,18 +399,38 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '700',
   },
+  releaseAlertSlot: {
+    elevation: 12,
+    height: 42,
+    position: 'absolute',
+    right: spacing.md,
+    top: spacing.md,
+    width: 42,
+    zIndex: 20,
+  },
   safeArea: {
     backgroundColor: colors.background,
     flex: 1,
   },
-  title: {
-    ...typography.heading,
-    color: colors.text,
-    marginBottom: spacing.xl,
+  searchBox: {
+    alignItems: 'center',
+    backgroundColor: colors.panelElevated,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    minHeight: 50,
+    paddingHorizontal: spacing.md,
   },
-  tmdbNotice: {
+  searchInput: {
     ...typography.body,
-    color: colors.muted,
+    color: colors.text,
+    flex: 1,
+    minWidth: 0,
+    paddingVertical: spacing.sm,
+  },
+  sectionControl: {
     marginTop: spacing.md,
   },
 });

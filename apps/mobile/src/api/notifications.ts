@@ -21,8 +21,18 @@ export type ReleaseAlertState = {
   items: ReleaseNotification[];
 };
 
+export type ReleaseAlertSummary = {
+  contentType: ReleaseAlertContentType;
+  tmdbId: number;
+  updatedAt: string;
+};
+
 export type NotificationsResponse = {
   items: ReleaseNotification[];
+};
+
+export type ReleaseAlertsResponse = {
+  items: ReleaseAlertSummary[];
 };
 
 export type NotificationsSyncResponse = NotificationsResponse & {
@@ -36,6 +46,10 @@ export function listNotifications(token: string) {
 
 export function syncNotifications(token: string) {
   return apiPost<NotificationsSyncResponse>('/notifications/sync', {}, { token });
+}
+
+export function listReleaseAlerts(token: string) {
+  return apiGet<ReleaseAlertsResponse>('/notifications/release-alerts', { token });
 }
 
 export function markNotificationRead(token: string, notificationId: string) {

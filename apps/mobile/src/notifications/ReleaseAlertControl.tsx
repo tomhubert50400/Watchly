@@ -10,6 +10,7 @@ import {
 } from '../api/notifications';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { colors, radii } from '../design/tokens';
+import { useToast } from './ToastContext';
 
 type ReleaseAlertControlProps = {
   contentType: ReleaseAlertContentType;
@@ -17,7 +18,8 @@ type ReleaseAlertControlProps = {
 };
 
 export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControlProps) {
-  const { firebaseIdToken, getFirebaseIdToken } = useAuthSession();
+  const { firebaseIdToken, getFirebaseIdToken, notifyTrackingChanged } = useAuthSession();
+  const { showToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [state, setState] = useState<ReleaseAlertState | null>(null);
   const toggleVersionRef = useRef(0);
@@ -59,6 +61,7 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
 
   async function toggleAlert() {
     if (!firebaseIdToken) {
+      showToast('Sign in to enable release alerts.');
       return;
     }
 
@@ -82,10 +85,12 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
 
       if (toggleVersionRef.current === toggleVersion) {
         setState(nextState);
+        notifyTrackingChanged();
       }
     } catch (toggleError) {
       if (toggleVersionRef.current === toggleVersion) {
         setState(previousState);
+        showToast(toggleError instanceof Error ? toggleError.message : 'Could not update release alerts.');
       }
     }
   }
@@ -97,8 +102,10 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
       accessibilityLabel={enabled ? 'Disable release alert' : 'Enable release alert'}
       accessibilityRole="button"
       accessibilityState={{ selected: enabled }}
-      disabled={!firebaseIdToken}
-      onPress={toggleAlert}
+      onPress={(event) => {
+        event.stopPropagation();
+        void toggleAlert();
+      }}
       style={({ pressed }) => [
         styles.iconButton,
         enabled && styles.iconButtonEnabled,

@@ -10,6 +10,7 @@ import { RootStackParamList } from '../navigation/types';
 import { EpisodeReviewEditor } from '../reviews/EpisodeReviewEditor';
 import { EpisodeProgressControl } from '../tracking/EpisodeProgressControl';
 import { EpisodeRatingControl } from '../tracking/EpisodeRatingControl';
+import { isReleasedDate } from './releaseDates';
 
 type EpisodeDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'EpisodeDetail'>;
 
@@ -67,13 +68,14 @@ function EpisodeDetailContent({
   seriesTitle: string;
 }) {
   const runtime = episode.runtimeMinutes ? `${episode.runtimeMinutes}m` : null;
+  const isReleased = isReleasedDate(episode.airDate);
   const metadata = [
     seriesTitle,
     `S${episode.seasonNumber}`,
     `E${episode.episodeNumber}`,
     episode.airDate,
     runtime,
-    episode.voteAverage ? episode.voteAverage.toFixed(1) : null,
+    isReleased && episode.voteAverage ? episode.voteAverage.toFixed(1) : null,
   ]
     .filter(Boolean)
     .join(' / ');
@@ -98,16 +100,20 @@ function EpisodeDetailContent({
         seasonNumber={episode.seasonNumber}
         seriesTmdbId={episode.seriesTmdbId}
       />
-      <EpisodeRatingControl
-        episodeNumber={episode.episodeNumber}
-        seasonNumber={episode.seasonNumber}
-        seriesTmdbId={episode.seriesTmdbId}
-      />
-      <EpisodeReviewEditor
-        episodeNumber={episode.episodeNumber}
-        seasonNumber={episode.seasonNumber}
-        seriesTmdbId={episode.seriesTmdbId}
-      />
+      {isReleased ? (
+        <>
+          <EpisodeRatingControl
+            episodeNumber={episode.episodeNumber}
+            seasonNumber={episode.seasonNumber}
+            seriesTmdbId={episode.seriesTmdbId}
+          />
+          <EpisodeReviewEditor
+            episodeNumber={episode.episodeNumber}
+            seasonNumber={episode.seasonNumber}
+            seriesTmdbId={episode.seriesTmdbId}
+          />
+        </>
+      ) : null}
       <View style={styles.panel}>
         <Text style={styles.sectionTitle}>Synopsis</Text>
         <Text style={styles.body}>{episode.overview || 'No synopsis available yet.'}</Text>
@@ -120,9 +126,6 @@ function EpisodeDetailContent({
         <DetailRow label="Air date" value={episode.airDate ?? 'Unknown'} />
         <DetailRow label="Runtime" value={runtime ?? 'Unknown'} />
       </View>
-      <Text style={styles.tmdbNotice}>
-        This product uses the TMDB API but is not endorsed or certified by TMDB.
-      </Text>
     </View>
   );
 }
@@ -232,10 +235,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0,
     lineHeight: 36,
-  },
-  tmdbNotice: {
-    ...typography.body,
-    color: colors.muted,
-    marginTop: spacing.md,
   },
 });

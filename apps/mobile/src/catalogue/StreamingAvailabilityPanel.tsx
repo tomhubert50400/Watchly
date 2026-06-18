@@ -114,7 +114,7 @@ export function StreamingAvailabilityPanel({ contentType, tmdbId }: StreamingAva
           })}
         </View>
       ) : (
-        <Text style={styles.emptyText}>No US provider data is available for this title yet.</Text>
+        <Text style={styles.emptyText}>No provider data is available for this title yet.</Text>
       )}
     </View>
   );
