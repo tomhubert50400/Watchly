@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0,
     position: 'absolute',
-    right: spacing.xl,
+    right: spacing.xl + spacing.xxl,
     textTransform: 'uppercase',
   },
   headerSeriesTitle: {
