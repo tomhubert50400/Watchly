@@ -25,6 +25,7 @@ import { Screen } from '../components/Screen';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { ProfileSummaryCard } from './ProfileSummaryCard';
 
 type PublicProfileRoute = RouteProp<RootStackParamList, 'PublicProfile'>;
 type LoadStatus = 'blocked' | 'error' | 'loading' | 'private' | 'ready' | 'unavailable';
@@ -204,7 +205,15 @@ export function PublicProfileScreen() {
       ) : null}
 
       {status === 'private' ? (
-        <EmptyState body="Only the profile owner can see private profile content." title="Private profile" />
+        <View style={styles.stack}>
+          <ProfileSummaryCard
+            displayName="Private profile"
+            followersCount={0}
+            postsCount={0}
+            reviewsCount={0}
+          />
+          <Text style={styles.body}>Only the profile owner can see private profile content.</Text>
+        </View>
       ) : null}
 
       {status === 'unavailable' ? (
@@ -235,12 +244,13 @@ export function PublicProfileScreen() {
       ) : null}
 
       {status === 'ready' && profile ? (
-        <View style={styles.card}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{getInitial(profile)}</Text>
-          </View>
-          <Text style={styles.name}>{profile.displayName ?? 'Unnamed profile'}</Text>
-          <Text style={styles.userId}>{profile.id}</Text>
+        <View style={styles.stack}>
+          <ProfileSummaryCard
+            displayName={profile.displayName}
+            followersCount={profile.stats.followersCount}
+            postsCount={profile.stats.postsCount}
+            reviewsCount={profile.stats.reviewsCount}
+          />
           <View style={styles.badge}>
             <Text style={styles.badgeText}>Public</Text>
           </View>
@@ -290,29 +300,7 @@ export function PublicProfileScreen() {
   );
 }
 
-function getInitial(profile: PublicProfile) {
-  const label = profile.displayName ?? profile.id;
-
-  return label.trim().slice(0, 1).toUpperCase();
-}
-
 const styles = StyleSheet.create({
-  avatar: {
-    alignItems: 'center',
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    height: 64,
-    justifyContent: 'center',
-    width: 64,
-  },
-  avatarText: {
-    color: colors.accent,
-    fontSize: 26,
-    fontWeight: '900',
-    letterSpacing: 0,
-  },
   badge: {
     alignSelf: 'flex-start',
     backgroundColor: colors.successBackground,
@@ -363,6 +351,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     letterSpacing: 0,
+  },
+  stack: {
+    gap: spacing.md,
   },
   userId: {
     color: colors.muted,

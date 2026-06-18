@@ -1,4 +1,4 @@
-import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getCurrentUser, CurrentUser } from '../api/auth';
 import {
   getFreshFirebaseIdToken,
@@ -32,6 +32,13 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   const [socialRevision, setSocialRevision] = useState(0);
   const [status, setStatus] = useState<AuthSessionStatus>('idle');
   const [trackingRevision, setTrackingRevision] = useState(0);
+  const explicitSignOutRef = useRef(false);
+  const latestFirebaseIdTokenRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    latestFirebaseIdTokenRef.current = firebaseIdToken;
+  }, [firebaseIdToken]);
+
   const notifySocialChanged = useCallback(() => {
     setSocialRevision((revision) => revision + 1);
   }, []);
@@ -42,6 +49,11 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     try {
       const nextToken = await getFreshFirebaseIdToken();
 
+      if (!nextToken && latestFirebaseIdTokenRef.current && !explicitSignOutRef.current) {
+        return latestFirebaseIdTokenRef.current;
+      }
+
+      latestFirebaseIdTokenRef.current = nextToken;
       setFirebaseIdToken(nextToken);
 
       if (!nextToken) {
@@ -51,6 +63,11 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
 
       return nextToken;
     } catch {
+      if (latestFirebaseIdTokenRef.current && !explicitSignOutRef.current) {
+        return latestFirebaseIdTokenRef.current;
+      }
+
+      latestFirebaseIdTokenRef.current = null;
       setFirebaseIdToken(null);
       setCurrentUser(null);
       setStatus('error');
@@ -62,6 +79,8 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   const applyFirebaseSession = useCallback(async (firebaseIdToken: string) => {
     const user = await getCurrentUser(firebaseIdToken);
 
+    explicitSignOutRef.current = false;
+    latestFirebaseIdTokenRef.current = firebaseIdToken;
     setFirebaseIdToken(firebaseIdToken);
     setCurrentUser(user);
     setStatus('signedIn');
@@ -79,6 +98,10 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
         }
 
         if (!firebaseUser) {
+          if (latestFirebaseIdTokenRef.current && !explicitSignOutRef.current) {
+            return;
+          }
+
           setFirebaseIdToken(null);
           setCurrentUser(null);
           setStatus('idle');
@@ -93,6 +116,10 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
           }
         } catch {
           if (isMounted) {
+            if (latestFirebaseIdTokenRef.current && !explicitSignOutRef.current) {
+              return;
+            }
+
             setFirebaseIdToken(null);
             setCurrentUser(null);
             setStatus('error');
@@ -124,7 +151,9 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   }, [firebaseIdToken]);
   const signOut = useCallback(async () => {
     setStatus('loading');
+    explicitSignOutRef.current = true;
     await signOutFromFirebase();
+    latestFirebaseIdTokenRef.current = null;
     setFirebaseIdToken(null);
     setCurrentUser(null);
     setSocialRevision(0);

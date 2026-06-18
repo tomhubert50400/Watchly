@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -20,6 +19,7 @@ import { useAuthSession } from '../auth/AuthSessionContext';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Screen';
+import { SegmentedControl } from '../components/SegmentedControl';
 import { TextInput } from '../components/TextInput';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 
@@ -255,29 +255,7 @@ type SegmentedValueProps<T extends string> = {
 
 function SegmentedValue<T extends string>({ onChange, options, value }: SegmentedValueProps<T>) {
   return (
-    <View style={styles.segmented}>
-      {options.map((option) => {
-        const selected = option.value === value;
-
-        return (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-            key={option.value}
-            onPress={() => onChange(option.value)}
-            style={({ pressed }) => [
-              styles.segment,
-              selected ? styles.segmentSelected : null,
-              pressed ? styles.segmentPressed : null,
-            ]}
-          >
-            <Text style={[styles.segmentLabel, selected ? styles.segmentLabelSelected : null]}>
-              {option.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
+    <SegmentedControl buttonMinHeight={40} onChange={onChange} options={options} value={value} />
   );
 }
 
@@ -333,38 +311,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...typography.title,
     color: colors.text,
-  },
-  segment: {
-    alignItems: 'center',
-    borderRadius: radii.md,
-    flex: 1,
-    justifyContent: 'center',
-    minHeight: 40,
-    paddingHorizontal: spacing.sm,
-  },
-  segmentLabel: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0,
-  },
-  segmentLabelSelected: {
-    color: colors.textOnAccent,
-  },
-  segmentPressed: {
-    opacity: 0.82,
-  },
-  segmentSelected: {
-    backgroundColor: colors.accent,
-  },
-  segmented: {
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.xs,
-    padding: spacing.xs,
   },
   success: {
     color: colors.success,

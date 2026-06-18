@@ -28,6 +28,76 @@ export type PublicProfile = {
   displayName: string | null;
   id: string;
   profileVisibility: PrivacyVisibility;
+  stats: {
+    followersCount: number;
+    postsCount: number;
+    reviewsCount: number;
+  };
+};
+
+export type ProfileMovieRatingOpinion = {
+  content: {
+    contentType: 'movie';
+    tmdbId: number;
+  };
+  id: string;
+  score: number;
+  type: 'movieRating';
+  updatedAt: string;
+};
+
+export type ProfileEpisodeRatingOpinion = {
+  content: {
+    contentType: 'episode';
+    episodeNumber: number;
+    seasonNumber: number;
+    seriesTmdbId: number;
+  };
+  id: string;
+  score: number;
+  type: 'episodeRating';
+  updatedAt: string;
+};
+
+export type ProfileMovieReviewOpinion = {
+  body: string;
+  content: {
+    contentType: 'movie';
+    tmdbId: number;
+  };
+  id: string;
+  score: number;
+  type: 'movieReview';
+  updatedAt: string;
+};
+
+export type ProfileEpisodeReviewOpinion = {
+  body: string;
+  content: {
+    contentType: 'episode';
+    episodeNumber: number;
+    seasonNumber: number;
+    seriesTmdbId: number;
+  };
+  id: string;
+  score: number;
+  type: 'episodeReview';
+  updatedAt: string;
+};
+
+export type ProfileOpinion =
+  | ProfileEpisodeRatingOpinion
+  | ProfileEpisodeReviewOpinion
+  | ProfileMovieRatingOpinion
+  | ProfileMovieReviewOpinion;
+
+export type ProfileOpinionsResponse = {
+  items: ProfileOpinion[];
+  stats: {
+    followersCount: number;
+    postsCount: number;
+    reviewsCount: number;
+  };
 };
 
 export type UpdateProfileInput = {
@@ -48,6 +118,12 @@ export function getProfile(firebaseIdToken: string): Promise<UserProfile> {
 
 export function getOwnPublicProfilePreview(firebaseIdToken: string): Promise<PublicProfile> {
   return apiGet<PublicProfile>('/profile/me/public-preview', { token: firebaseIdToken });
+}
+
+export function getOwnProfileOpinions(firebaseIdToken: string): Promise<ProfileOpinionsResponse> {
+  return apiGet<ProfileOpinionsResponse>('/profile/me/opinions', {
+    token: firebaseIdToken,
+  });
 }
 
 export function getPublicProfile(
