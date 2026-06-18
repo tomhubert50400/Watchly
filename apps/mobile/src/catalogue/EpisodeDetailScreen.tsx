@@ -42,10 +42,15 @@ export function EpisodeDetailScreen({ navigation, route }: EpisodeDetailScreenPr
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: route.params.seriesTitle,
-      headerRight: episode?.airDate
-        ? () => <Text style={styles.headerAirDate}>{episode.airDate}</Text>
-        : undefined,
+      headerRight: undefined,
+      headerTitle: () => (
+        <View style={styles.headerTitleRow}>
+          <Text numberOfLines={1} style={styles.headerSeriesTitle}>
+            {route.params.seriesTitle}
+          </Text>
+          {episode?.airDate ? <Text style={styles.headerAirDate}>{episode.airDate}</Text> : null}
+        </View>
+      ),
     });
   }, [episode?.airDate, navigation, route.params.seriesTitle]);
 
@@ -87,20 +92,18 @@ function EpisodeDetailContent({ episode }: { episode: EpisodeDetails }) {
       ) : (
         <View style={styles.stillPlaceholder} />
       )}
-      <View style={styles.titleRow}>
-        <View style={styles.titleCopy}>
+      <View style={styles.titleBlock}>
+        <View style={styles.titleRow}>
           <Text style={styles.title}>{episode.title}</Text>
-          {runtime ? <Text style={styles.runtime}>{runtime}</Text> : null}
-          {rating ? (
-            <View style={styles.ratingRow}>
-              <Star color={colors.accent} fill={colors.accent} size={14} strokeWidth={2.2} />
-              <Text style={styles.ratingText}>{rating}</Text>
-            </View>
-          ) : null}
-        </View>
-        <View style={styles.episodeMeta}>
           <Text style={styles.episodeCode}>{episodeCode}</Text>
         </View>
+        {rating ? (
+          <View style={styles.ratingRow}>
+            <Star color={colors.accent} fill={colors.accent} size={14} strokeWidth={2.2} />
+            <Text style={styles.ratingText}>{rating}</Text>
+          </View>
+        ) : null}
+        {runtime ? <Text style={styles.runtime}>{runtime}</Text> : null}
       </View>
       <EpisodeProgressControl
         episodeNumber={episode.episodeNumber}
@@ -197,16 +200,25 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     textTransform: 'uppercase',
   },
+  headerSeriesTitle: {
+    color: colors.text,
+    flexShrink: 1,
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0,
+  },
+  headerTitleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    maxWidth: 250,
+  },
   episodeCode: {
     color: colors.muted,
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: 0,
     textTransform: 'uppercase',
-  },
-  episodeMeta: {
-    alignItems: 'flex-end',
-    flexShrink: 0,
   },
   panel: {
     ...shadows.panel,
@@ -243,6 +255,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.text,
+    flex: 1,
     fontSize: 30,
     fontWeight: '800',
     letterSpacing: 0,
@@ -267,14 +280,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     marginTop: spacing.xs,
   },
-  titleCopy: {
-    flex: 1,
-    minWidth: 0,
+  titleBlock: {
+    marginBottom: spacing.sm,
   },
   titleRow: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.md,
-    marginBottom: spacing.sm,
+    justifyContent: 'space-between',
   },
 });
