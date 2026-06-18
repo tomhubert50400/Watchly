@@ -26,7 +26,7 @@ import { isReleasedDate } from './releaseDates';
 type SeriesDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'SeriesDetail'>;
 const SEASON_PICKER_VISIBLE_ROWS = 3;
 const SEASON_PICKER_ROW_HEIGHT = 72;
-const SEASON_PICKER_GAP = spacing.sm;
+const SEASON_PICKER_GAP = 0;
 const SEASON_PICKER_MAX_HEIGHT =
   SEASON_PICKER_VISIBLE_ROWS * SEASON_PICKER_ROW_HEIGHT +
   (SEASON_PICKER_VISIBLE_ROWS - 1) * SEASON_PICKER_GAP;
@@ -299,7 +299,11 @@ function SeriesEpisodesPanel({
         accessibilityRole="button"
         accessibilityState={{ expanded: isPickerOpen }}
         onPress={() => setIsPickerOpen((current) => !current)}
-        style={({ pressed }) => [styles.selectedSeasonButton, pressed && styles.seasonRowPressed]}
+        style={({ pressed }) => [
+          styles.selectedSeasonButton,
+          shouldRenderPicker && styles.selectedSeasonButtonOpen,
+          pressed && styles.seasonRowPressed,
+        ]}
       >
         <View style={styles.selectedSeasonCopy}>
           <Text style={styles.selectedSeasonLabel}>Season</Text>
@@ -323,7 +327,7 @@ function SeriesEpisodesPanel({
             style={styles.seasonPickerScroll}
           >
             <View style={styles.seasonPickerContent}>
-              {orderedSeasons.map((item) => (
+              {orderedSeasons.map((item, index) => (
                 <Pressable
                   accessibilityLabel={`Select ${formatSeasonName(item)}`}
                   accessibilityRole="button"
@@ -332,6 +336,7 @@ function SeriesEpisodesPanel({
                   onPress={() => selectSeason(item.seasonNumber)}
                   style={({ pressed }) => [
                     styles.seasonOption,
+                    index > 0 && styles.seasonOptionDivider,
                     activeSeasonNumber === item.seasonNumber && styles.seasonOptionActive,
                     pressed && styles.seasonRowPressed,
                   ]}
@@ -618,16 +623,17 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   seasonOption: {
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
     height: SEASON_PICKER_ROW_HEIGHT,
     justifyContent: 'center',
     padding: spacing.md,
   },
   seasonOptionActive: {
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.accent,
+    backgroundColor: colors.panel,
+    borderRadius: radii.sm,
+  },
+  seasonOptionDivider: {
+    borderTopColor: colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   seasonOptionMeta: {
     color: colors.muted,
@@ -645,13 +651,15 @@ const styles = StyleSheet.create({
     color: colors.accent,
   },
   seasonPicker: {
-    backgroundColor: colors.panel,
+    backgroundColor: colors.panelSoft,
     borderColor: colors.border,
-    borderRadius: radii.md,
+    borderBottomLeftRadius: radii.md,
+    borderBottomRightRadius: radii.md,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
     borderWidth: 1,
-    marginTop: spacing.md,
+    borderTopWidth: 0,
     overflow: 'hidden',
-    padding: spacing.sm,
   },
   seasonPickerContent: {
     gap: SEASON_PICKER_GAP,
@@ -686,6 +694,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     padding: spacing.md,
+  },
+  selectedSeasonButtonOpen: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
   },
   selectedSeasonCopy: {
     flex: 1,
