@@ -42,11 +42,12 @@ export function EpisodeDetailScreen({ navigation, route }: EpisodeDetailScreenPr
 
   useLayoutEffect(() => {
     navigation.setOptions({
+      title: route.params.seriesTitle,
       headerRight: episode?.airDate
         ? () => <Text style={styles.headerAirDate}>{episode.airDate}</Text>
         : undefined,
     });
-  }, [episode?.airDate, navigation]);
+  }, [episode?.airDate, navigation, route.params.seriesTitle]);
 
   return (
     <View style={styles.safeArea}>
@@ -190,9 +191,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   headerAirDate: {
-    color: colors.accent,
+    color: colors.muted,
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: 0,
     textTransform: 'uppercase',
   },
@@ -206,7 +207,6 @@ const styles = StyleSheet.create({
   episodeMeta: {
     alignItems: 'flex-end',
     flexShrink: 0,
-    paddingTop: 2,
   },
   panel: {
     ...shadows.panel,
