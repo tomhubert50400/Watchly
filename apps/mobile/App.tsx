@@ -1,29 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { NavigationContainer, useNavigation } from '@react-navigation/native';
-import { createNativeStackNavigator, NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
-import { Home, Search, Settings, Tv, UserCircle } from 'lucide-react-native';
+import { Home, Search, Tv, UserCircle } from 'lucide-react-native';
 import { Animated, Easing, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { AuthSessionProvider, useAuthSession } from './src/auth/AuthSessionContext';
-import { ProfileAuthCard } from './src/auth/ProfileAuthCard';
 import { EpisodeDetailScreen } from './src/catalogue/EpisodeDetailScreen';
 import { ExploreScreen } from './src/catalogue/ExploreScreen';
 import { FilmDetailScreen } from './src/catalogue/FilmDetailScreen';
+import { CatalogueCacheProvider } from './src/catalogue/CatalogueCacheContext';
 import { SeasonDetailScreen } from './src/catalogue/SeasonDetailScreen';
 import { SeriesDetailScreen } from './src/catalogue/SeriesDetailScreen';
-import { EmptyState } from './src/components/EmptyState';
-import { IconButton } from './src/components/IconButton';
-import { Screen } from './src/components/Screen';
 import { colors } from './src/design/tokens';
 import { FeedScreen } from './src/feed/FeedScreen';
 import { RootStackParamList } from './src/navigation/types';
+import { ToastProvider } from './src/notifications/ToastContext';
 import { OnboardingScreen } from './src/onboarding/OnboardingScreen';
+import { ProfileScreen } from './src/profile/ProfileScreen';
 import { PublicProfileScreen } from './src/profile/PublicProfileScreen';
 import { SettingsScreen } from './src/profile/SettingsScreen';
 import { MyTvScreen } from './src/tracking/MyTvScreen';
 import { PersonalWatchlistScreen } from './src/watchlists/PersonalWatchlistScreen';
 import { SharedWatchlistScreen } from './src/watchlists/SharedWatchlistScreen';
+import { WatchlistCacheProvider } from './src/watchlists/WatchlistCacheContext';
 
 type TabParamList = {
   Feed: undefined;
@@ -34,19 +34,10 @@ type TabParamList = {
 
 type TabRoute = keyof TabParamList;
 
-type AppScreenProps = {
-  body: string;
-  emptyTitle: string;
-  headline: string;
-  showSettings?: boolean;
-};
-
-type TabContent = AppScreenProps & {
+type TabContent = {
   Icon: typeof Home;
   label: string;
 };
-
-type AppNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const tabOrder: TabRoute[] = ['Feed', 'Explore', 'MyTV', 'Profile'];
@@ -54,64 +45,21 @@ const tabOrder: TabRoute[] = ['Feed', 'Explore', 'MyTV', 'Profile'];
 const tabs: Record<TabRoute, TabContent> = {
   Feed: {
     Icon: Home,
-    body: 'Follow people you trust and their public reviews will shape this feed.',
-    emptyTitle: 'No reviews from your circle yet',
-    headline: 'Track what matters next',
     label: 'Feed',
   },
   Explore: {
     Icon: Search,
-    body: 'Search will connect to the catalogue provider in the next milestone.',
-    emptyTitle: 'Search is not connected yet',
-    headline: 'Find films and series fast',
     label: 'Explore',
   },
   MyTV: {
     Icon: Tv,
-    body: 'Your films, series, progress, lists, and shared voting sessions will live here.',
-    emptyTitle: 'Your TV space is empty for now',
-    headline: 'Manage your watch life',
     label: 'My TV',
   },
   Profile: {
     Icon: UserCircle,
-    body: 'Public reviews will appear here. Viewing history stays private by default.',
-    emptyTitle: 'No public profile activity yet',
-    headline: 'Your public shelf',
     label: 'Profile',
-    showSettings: true,
   },
 };
-
-function AppScreen({ body, children, emptyTitle, headline, showSettings }: React.PropsWithChildren<AppScreenProps>) {
-  const navigation = useNavigation<AppNavigationProp>();
-
-  return (
-    <Screen
-      title={headline}
-      trailing={
-        showSettings ? (
-          <IconButton
-            accessibilityLabel="Open settings"
-            icon={<Settings color={colors.text} size={22} strokeWidth={2} />}
-            onPress={() => navigation.navigate('Settings')}
-          />
-        ) : undefined
-      }
-    >
-      <EmptyState body={body} title={emptyTitle} />
-      {children}
-    </Screen>
-  );
-}
-
-function ProfileScreen() {
-  return (
-    <AppScreen {...tabs.Profile}>
-      <ProfileAuthCard />
-    </AppScreen>
-  );
-}
 
 function tabIcon(routeName: TabRoute, color: string, size: number) {
   const Icon = tabs[routeName].Icon;
@@ -313,7 +261,13 @@ export default function App() {
     <SafeAreaProvider>
       <AuthSessionProvider>
         <NavigationContainer>
-          <AppNavigator />
+          <ToastProvider>
+            <CatalogueCacheProvider>
+              <WatchlistCacheProvider>
+                <AppNavigator />
+              </WatchlistCacheProvider>
+            </CatalogueCacheProvider>
+          </ToastProvider>
         </NavigationContainer>
       </AuthSessionProvider>
     </SafeAreaProvider>

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Kinora",
+    "name": "Watchly",
     "slug": "tv-app",
     "scheme": ["tvapp", "com.tom.tvapp.dev"],
     "version": "1.0.0",

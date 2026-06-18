@@ -21,10 +21,14 @@ export function Screen({ children, eyebrow, gestureHandlers, refreshControl, tit
         style={styles.container}
       >
         <View style={styles.header}>
-          <View style={styles.titleGroup}>
-            {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
-            <Text style={styles.heading}>{title}</Text>
-          </View>
+          {title || eyebrow ? (
+            <View style={styles.titleGroup}>
+              {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
+              {title ? <Text style={styles.heading}>{title}</Text> : null}
+            </View>
+          ) : (
+            <View style={styles.titleSpacer} />
+          )}
           {trailing}
         </View>
         {children}
@@ -65,5 +69,8 @@ const styles = StyleSheet.create({
   titleGroup: {
     flex: 1,
     paddingRight: spacing.md,
+  },
+  titleSpacer: {
+    flex: 1,
   },
 });
