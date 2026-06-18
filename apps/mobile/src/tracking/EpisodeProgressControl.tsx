@@ -113,14 +113,14 @@ export function EpisodeProgressControl({
   return (
     <View style={styles.container}>
       <SegmentedControl<EpisodeProgressStatus>
-        buttonMinHeight={58}
+        buttonMinHeight={46}
         onChange={saveStatus}
         options={statusOptions.map(({ Icon, label, value }) => ({
           accessibilityLabel: `Set ${label}`,
           label,
           render: ({ selected }) => (
             <View style={styles.statusContent}>
-              <Icon color={selected ? colors.textOnAccent : colors.text} size={20} strokeWidth={2.2} />
+              <Icon color={selected ? colors.textOnAccent : colors.text} size={16} strokeWidth={2.2} />
               <Text numberOfLines={1} style={[styles.statusLabel, selected && styles.statusLabelSelected]}>
                 {label}
               </Text>
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
   },
   statusLabel: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '800',
     letterSpacing: 0,
     textAlign: 'center',

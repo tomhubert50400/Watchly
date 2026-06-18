@@ -92,7 +92,6 @@ function EpisodeDetailContent({
       ) : (
         <View style={styles.stillPlaceholder} />
       )}
-      <Text style={styles.eyebrow}>TMDB episode</Text>
       <Text style={styles.title}>{episode.title}</Text>
       <Text style={styles.metadata}>{metadata}</Text>
       <EpisodeProgressControl
@@ -149,7 +148,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: spacing.xxxl,
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
+    paddingTop: spacing.xl,
   },
   detailLabel: {
     color: colors.muted,
@@ -167,11 +166,6 @@ const styles = StyleSheet.create({
   detailValue: {
     ...typography.body,
     color: colors.text,
-  },
-  eyebrow: {
-    ...typography.eyebrow,
-    color: colors.accent,
-    marginBottom: spacing.sm,
   },
   loadingPanel: {
     alignItems: 'center',
