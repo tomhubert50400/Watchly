@@ -623,13 +623,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   seasonOption: {
+    backgroundColor: colors.background,
     height: SEASON_PICKER_ROW_HEIGHT,
     justifyContent: 'center',
     padding: spacing.md,
   },
   seasonOptionActive: {
-    backgroundColor: colors.background,
-    borderRadius: radii.sm,
+    borderLeftColor: colors.accent,
+    borderLeftWidth: 3,
   },
   seasonOptionDivider: {
     borderTopColor: colors.border,
