@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
+import { CheckCircle2, PlayCircle } from 'lucide-react-native';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { clearEpisodeProgress, EpisodeProgress, getEpisodeProgress, markEpisodeWatched } from '../api/progress';
 import { useAuthSession } from '../auth/AuthSessionContext';
-import { Button } from '../components/Button';
-import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { SegmentedControl } from '../components/SegmentedControl';
+import { colors, spacing } from '../design/tokens';
 import { useToast } from '../notifications/ToastContext';
 
 type EpisodeProgressControlProps = {
@@ -11,6 +12,17 @@ type EpisodeProgressControlProps = {
   seasonNumber: number;
   seriesTmdbId: number;
 };
+
+type EpisodeProgressStatus = 'watching' | 'watched';
+
+const statusOptions: {
+  Icon: typeof PlayCircle;
+  label: string;
+  value: EpisodeProgressStatus;
+}[] = [
+  { Icon: PlayCircle, label: 'Watching', value: 'watching' },
+  { Icon: CheckCircle2, label: 'Watched', value: 'watched' },
+];
 
 export function EpisodeProgressControl({
   episodeNumber,
@@ -79,71 +91,83 @@ export function EpisodeProgressControl({
     }
   }
 
+  async function saveStatus(nextStatus: EpisodeProgressStatus) {
+    if (nextStatus === currentStatus) {
+      return;
+    }
+
+    if (nextStatus === 'watched') {
+      await markWatched();
+    } else {
+      await clearProgress();
+    }
+  }
+
   const isWatched = progress !== null;
+  const currentStatus: EpisodeProgressStatus = isWatched ? 'watched' : 'watching';
+
+  if (!firebaseIdToken) {
+    return null;
+  }
 
   return (
-    <View style={styles.panel}>
-      <View style={styles.headerRow}>
-        <View style={styles.copy}>
-          <Text style={styles.sectionTitle}>My progress</Text>
-          <Text style={styles.body}>
-            {firebaseIdToken
-              ? isWatched
-                ? `Watched ${formatWatchedAt(progress.watchedAt)}`
-                : 'Mark this episode and earlier episodes in this season as watched.'
-              : 'Sign in from Profile to track episode progress.'}
-          </Text>
-        </View>
-        {isLoading || isSaving ? <ActivityIndicator color={colors.accent} /> : null}
-      </View>
-
-      {firebaseIdToken ? (
-        <View style={styles.actions}>
-          {isWatched ? (
-            <Button disabled={isSaving} label="Mark unwatched" onPress={clearProgress} variant="secondary" />
-          ) : (
-            <Button disabled={isSaving} label="Mark watched" onPress={markWatched} />
-          )}
+    <View style={styles.container}>
+      <SegmentedControl<EpisodeProgressStatus>
+        buttonMinHeight={58}
+        onChange={saveStatus}
+        options={statusOptions.map(({ Icon, label, value }) => ({
+          accessibilityLabel: `Set ${label}`,
+          label,
+          render: ({ selected }) => (
+            <View style={styles.statusContent}>
+              <Icon color={selected ? colors.textOnAccent : colors.text} size={20} strokeWidth={2.2} />
+              <Text numberOfLines={1} style={[styles.statusLabel, selected && styles.statusLabelSelected]}>
+                {label}
+              </Text>
+            </View>
+          ),
+          value,
+        }))}
+        value={currentStatus}
+      />
+      {isLoading || isSaving ? (
+        <View style={styles.loadingOverlay} pointerEvents="none">
+          <ActivityIndicator color={colors.textOnAccent} />
         </View>
       ) : null}
     </View>
   );
 }
 
-function formatWatchedAt(value: string) {
-  return new Date(value).toLocaleDateString();
-}
-
 const styles = StyleSheet.create({
-  actions: {
-    alignItems: 'flex-start',
-    marginTop: spacing.lg,
+  container: {
+    marginBottom: spacing.md,
+    position: 'relative',
   },
-  body: {
-    ...typography.body,
-    color: colors.muted,
-    marginTop: spacing.xs,
+  loadingOverlay: {
+    alignItems: 'center',
+    bottom: 0,
+    justifyContent: 'center',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
   },
-  copy: {
-    flex: 1,
-  },
-  headerRow: {
+  statusContent: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: spacing.md,
-    justifyContent: 'space-between',
+    gap: spacing.xs,
+    justifyContent: 'center',
+    minWidth: 0,
   },
-  panel: {
-    ...shadows.panel,
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    marginBottom: spacing.md,
-    padding: spacing.lg,
-  },
-  sectionTitle: {
-    ...typography.title,
+  statusLabel: {
     color: colors.text,
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 0,
+    textAlign: 'center',
+  },
+  statusLabelSelected: {
+    color: colors.textOnAccent,
   },
 });

@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: spacing.xxxl,
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxxl,
+    paddingTop: spacing.lg,
   },
   detailLabel: {
     color: colors.muted,
