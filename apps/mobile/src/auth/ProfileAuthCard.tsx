@@ -180,7 +180,7 @@ export function ProfileAuthCard() {
         <View style={styles.identityCopy}>
           <Text style={styles.statusLabel}>{currentUser ? 'Signed in' : 'Mobile sign-in'}</Text>
           <Text style={styles.title}>
-            {currentUser ? currentUser.displayName ?? currentUser.id : 'Set up your Kinora profile'}
+            {currentUser ? currentUser.displayName ?? currentUser.id : 'Set up your Watchly profile'}
           </Text>
           <Text style={styles.body}>
             {currentUser

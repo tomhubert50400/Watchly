@@ -1,6 +1,6 @@
 # Local iPhone Testing Runbook
 
-Use this when you want to test Kinora on a physical iPhone from the local Windows workspace.
+Use this when you want to test Watchly on a physical iPhone from the local Windows workspace.
 
 ## What Runs Where
 
@@ -120,10 +120,10 @@ Keep this terminal open.
 ### 7. Open On iPhone
 
 - Put the iPhone on the same Wi-Fi as the PC.
-- Open the Kinora development build on the iPhone.
+- Open the Watchly development build on the iPhone.
 - Use the QR code shown by Expo, or open the LAN URL shown in the terminal.
 
-This project uses `expo-dev-client`, so prefer the installed Kinora development build over Expo Go when testing native/dev-client behavior.
+This project uses `expo-dev-client`, so prefer the installed Watchly development build over Expo Go when testing native/dev-client behavior.
 
 ## Functional Test Checklist
 
