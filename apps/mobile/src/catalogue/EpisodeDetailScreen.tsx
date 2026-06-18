@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { EpisodeDetails, getEpisodeDetails } from '../api/catalogue';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -41,7 +40,7 @@ export function EpisodeDetailScreen({ route }: EpisodeDetailScreenProps) {
   }, [loadEpisode]);
 
   return (
-    <SafeAreaView edges={['top']} style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {isLoading ? (
           <View style={styles.loadingPanel}>
@@ -56,7 +55,7 @@ export function EpisodeDetailScreen({ route }: EpisodeDetailScreenProps) {
           <EpisodeDetailContent episode={episode} seriesTitle={route.params.seriesTitle} />
         ) : null}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -148,7 +147,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingBottom: spacing.xxxl,
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl,
+    paddingTop: 0,
   },
   detailLabel: {
     color: colors.muted,
