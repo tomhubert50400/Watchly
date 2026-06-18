@@ -628,7 +628,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   seasonOptionActive: {
-    backgroundColor: colors.panel,
+    backgroundColor: colors.background,
     borderRadius: radii.sm,
   },
   seasonOptionDivider: {
