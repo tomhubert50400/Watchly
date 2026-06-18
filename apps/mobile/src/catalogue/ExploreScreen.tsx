@@ -15,7 +15,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search } from 'lucide-react-native';
+import { Search, X } from 'lucide-react-native';
 import { CatalogueSearchItem, getCatalogueMovieSections, searchCatalogue } from '../api/catalogue';
 import { EmptyState } from '../components/EmptyState';
 import { SegmentedControl } from '../components/SegmentedControl';
@@ -258,7 +258,6 @@ export function ExploreScreen() {
                 autoComplete="off"
                 autoCapitalize="none"
                 autoCorrect={false}
-                clearButtonMode="while-editing"
                 enablesReturnKeyAutomatically
                 inputMode="search"
                 inputAccessoryViewID={Platform.OS === 'ios' ? SEARCH_INPUT_ACCESSORY_ID : undefined}
@@ -272,6 +271,17 @@ export function ExploreScreen() {
                 style={styles.searchInput}
                 value={query}
               />
+              {query.length > 0 ? (
+                <Pressable
+                  accessibilityLabel="Clear search"
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  onPress={() => setQuery('')}
+                  style={({ pressed }) => [styles.searchClearButton, pressed && styles.searchClearButtonPressed]}
+                >
+                  <X color="#111111" size={14} strokeWidth={3} />
+                </Pressable>
+              ) : null}
             </View>
             {!isSearching ? (
               <SegmentedControl
@@ -481,6 +491,17 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     minHeight: 50,
     paddingHorizontal: spacing.md,
+  },
+  searchClearButton: {
+    alignItems: 'center',
+    backgroundColor: '#B7BBC4',
+    borderRadius: 10,
+    height: 20,
+    justifyContent: 'center',
+    width: 20,
+  },
+  searchClearButtonPressed: {
+    backgroundColor: '#D1D5DB',
   },
   searchInput: {
     ...typography.body,
