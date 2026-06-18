@@ -35,7 +35,7 @@ type ProviderGroupKey = 'streaming' | 'rentBuy';
 
 const defaultExpandedGroups: Record<ProviderGroupKey, boolean> = {
   rentBuy: false,
-  streaming: false,
+  streaming: true,
 };
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -95,20 +95,25 @@ export function StreamingAvailabilityPanel({ contentType, tmdbId }: StreamingAva
       ) : availability && hasProviders ? (
         <View style={styles.availabilityGroups}>
           {providerGroups.map((group) => {
-            const isExpanded = expandedGroups[group.key];
+            const isStreamingGroup = group.key === 'streaming';
+            const isExpanded = isStreamingGroup || expandedGroups[group.key];
 
             return (
               <ProviderDisclosure
                 group={group}
                 isExpanded={isExpanded}
                 key={group.key}
-                onToggle={() => {
-                  animateAvailabilityToggle();
-                  setExpandedGroups((current) => ({
-                    ...current,
-                    [group.key]: !current[group.key],
-                  }));
-                }}
+                onToggle={
+                  isStreamingGroup
+                    ? undefined
+                    : () => {
+                        animateAvailabilityToggle();
+                        setExpandedGroups((current) => ({
+                          ...current,
+                          [group.key]: !current[group.key],
+                        }));
+                      }
+                }
               />
             );
           })}
@@ -127,9 +132,10 @@ function ProviderDisclosure({
 }: {
   group: { key: ProviderGroupKey; label: string; providers: LogoProvider[] };
   isExpanded: boolean;
-  onToggle: () => void;
+  onToggle?: () => void;
 }) {
   const rotation = useRef(new Animated.Value(isExpanded ? 1 : 0)).current;
+  const canToggle = Boolean(onToggle);
 
   useEffect(() => {
     Animated.timing(rotation, {
@@ -147,19 +153,25 @@ function ProviderDisclosure({
 
   return (
     <View style={styles.availabilityGroup}>
-      <Pressable
-        accessibilityLabel={`${group.label} providers`}
-        accessibilityRole="button"
-        accessibilityState={{ expanded: isExpanded }}
-        hitSlop={8}
-        onPress={onToggle}
-        style={styles.groupButton}
-      >
-        <Animated.View style={[styles.groupIcon, { transform: [{ rotate }] }]}>
-          <Plus color={colors.accent} size={16} strokeWidth={2.4} />
-        </Animated.View>
-        <Text style={styles.groupLabel}>{group.label}</Text>
-      </Pressable>
+      {canToggle ? (
+        <Pressable
+          accessibilityLabel={`${group.label} providers`}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: isExpanded }}
+          hitSlop={8}
+          onPress={onToggle}
+          style={styles.groupButton}
+        >
+          <Animated.View style={[styles.groupIcon, { transform: [{ rotate }] }]}>
+            <Plus color={colors.accent} size={16} strokeWidth={2.4} />
+          </Animated.View>
+          <Text style={styles.groupLabel}>{group.label}</Text>
+        </Pressable>
+      ) : (
+        <View style={styles.groupButton}>
+          <Text style={styles.groupLabel}>{group.label}</Text>
+        </View>
+      )}
       {isExpanded ? (
         <View style={styles.logoRows}>
           {group.providers.map((provider) => (
