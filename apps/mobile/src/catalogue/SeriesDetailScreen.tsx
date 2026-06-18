@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
+import { ChevronDown } from 'lucide-react-native';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getSeasonDetails, SeasonDetails, SeriesDetails } from '../api/catalogue';
@@ -164,7 +165,7 @@ function SeriesEpisodesPanel({
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { firebaseIdToken, trackingRevision } = useAuthSession();
   const { showToast } = useToast();
-  const [isPickerOpen, setIsPickerOpen] = useState(true);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [selectedSeasonNumber, setSelectedSeasonNumber] = useState<number | null>(null);
   const [progress, setProgress] = useState<SeriesProgress | null>(null);
   const [season, setSeason] = useState<SeasonDetails | null>(null);
@@ -258,12 +259,34 @@ function SeriesEpisodesPanel({
 
   return (
     <View>
+      <Pressable
+        accessibilityLabel="Choose season"
+        accessibilityRole="button"
+        accessibilityState={{ expanded: isPickerOpen }}
+        onPress={() => setIsPickerOpen((current) => !current)}
+        style={({ pressed }) => [styles.selectedSeasonButton, pressed && styles.seasonRowPressed]}
+      >
+        <View style={styles.selectedSeasonCopy}>
+          <Text style={styles.selectedSeasonLabel}>Season</Text>
+          <Text style={styles.selectedSeasonText}>
+            {activeSeason ? formatSeasonName(activeSeason) : 'Select season'}
+          </Text>
+        </View>
+        <ChevronDown
+          color={colors.accent}
+          size={20}
+          strokeWidth={2.5}
+          style={isPickerOpen ? styles.dropdownIconOpen : undefined}
+        />
+      </Pressable>
+
       {isPickerOpen ? (
         <View style={styles.seasonPicker}>
           {orderedSeasons.map((item) => (
             <Pressable
               accessibilityLabel={`Select ${formatSeasonName(item)}`}
               accessibilityRole="button"
+              accessibilityState={{ selected: activeSeasonNumber === item.seasonNumber }}
               key={item.id}
               onPress={() => selectSeason(item.seasonNumber)}
               style={({ pressed }) => [
@@ -286,19 +309,7 @@ function SeriesEpisodesPanel({
             </Pressable>
           ))}
         </View>
-      ) : (
-        <Pressable
-          accessibilityLabel="Change season"
-          accessibilityRole="button"
-          onPress={() => setIsPickerOpen(true)}
-          style={({ pressed }) => [styles.selectedSeasonButton, pressed && styles.seasonRowPressed]}
-        >
-          <Text style={styles.selectedSeasonText}>
-            {activeSeason ? formatSeasonName(activeSeason) : 'Select season'}
-          </Text>
-          <Text style={styles.selectedSeasonMeta}>Change</Text>
-        </Pressable>
-      )}
+      ) : null}
 
       {isLoadingSeason ? (
         <View style={styles.inlineLoading}>
@@ -476,6 +487,9 @@ const styles = StyleSheet.create({
     height: 78,
     width: 112,
   },
+  dropdownIconOpen: {
+    transform: [{ rotate: '180deg' }],
+  },
   header: {
     alignItems: 'flex-start',
     flexDirection: 'row',
@@ -602,12 +616,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     padding: spacing.md,
   },
-  selectedSeasonMeta: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0,
-    textTransform: 'uppercase',
+  selectedSeasonCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  selectedSeasonLabel: {
+    ...typography.eyebrow,
+    color: colors.muted,
+    marginBottom: spacing.xs,
   },
   selectedSeasonText: {
     ...typography.body,
