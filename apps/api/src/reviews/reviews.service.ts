@@ -30,6 +30,8 @@ export class ReviewsService {
   async upsertMovieReview(identity: AuthenticatedIdentity, tmdbId: number, body: string) {
     const userId = await this.getUserId(identity);
     const reviewBody = normalizeBody(body);
+    await this.assertMovieRatingExists(userId, tmdbId);
+
     const review = await this.prisma.withConnectionRetry(
       () =>
         this.prisma.userMovieReview.upsert({
@@ -100,6 +102,8 @@ export class ReviewsService {
   ) {
     const userId = await this.getUserId(identity);
     const reviewBody = normalizeBody(body);
+    await this.assertEpisodeRatingExists(userId, seriesTmdbId, seasonNumber, episodeNumber);
+
     const review = await this.prisma.withConnectionRetry(
       () =>
         this.prisma.userEpisodeReview.upsert({
@@ -152,6 +156,53 @@ export class ReviewsService {
     const user = await this.authService.getOrCreateUser(identity);
 
     return user.id;
+  }
+
+  private async assertMovieRatingExists(userId: string, tmdbId: number) {
+    const rating = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userMovieRating.findUnique({
+        select: {
+          id: true,
+        },
+        where: {
+          userId_tmdbId: {
+            tmdbId,
+            userId,
+          },
+        },
+      }),
+    );
+
+    if (!rating) {
+      throw new BadRequestException('Add a rating before writing a review.');
+    }
+  }
+
+  private async assertEpisodeRatingExists(
+    userId: string,
+    seriesTmdbId: number,
+    seasonNumber: number,
+    episodeNumber: number,
+  ) {
+    const rating = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userEpisodeRating.findUnique({
+        select: {
+          id: true,
+        },
+        where: {
+          userId_seriesTmdbId_seasonNumber_episodeNumber: {
+            episodeNumber,
+            seasonNumber,
+            seriesTmdbId,
+            userId,
+          },
+        },
+      }),
+    );
+
+    if (!rating) {
+      throw new BadRequestException('Add a rating before writing a review.');
+    }
   }
 }
 

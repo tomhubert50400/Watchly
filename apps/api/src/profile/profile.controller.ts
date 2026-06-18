@@ -29,6 +29,11 @@ export class ProfileController {
     return this.profile.getOwnPublicProfilePreview(getIdentity(request));
   }
 
+  @Get('me/opinions')
+  async opinions(@Req() request: AuthenticatedRequest) {
+    return this.profile.listOwnOpinions(getIdentity(request));
+  }
+
   @Put('dev-test-user')
   async devTestUser(@Req() request: AuthenticatedRequest) {
     return this.profile.getOrCreateDevTestUser(getIdentity(request));

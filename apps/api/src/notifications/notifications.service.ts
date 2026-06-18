@@ -67,6 +67,19 @@ export class NotificationsService {
     };
   }
 
+  async listReleaseAlerts(identity: AuthenticatedIdentity) {
+    const userId = await this.getUserId(identity);
+    const alertSubscriptions = await this.listAlertSubscriptions(userId);
+
+    return {
+      items: alertSubscriptions.map((subscription) => ({
+        contentType: fromTrackedContentType(subscription.contentType),
+        tmdbId: subscription.tmdbId,
+        updatedAt: subscription.updatedAt.toISOString(),
+      })),
+    };
+  }
+
   async getReleaseAlert(
     identity: AuthenticatedIdentity,
     contentType: ReleaseAlertContentType,
@@ -193,6 +206,7 @@ export class NotificationsService {
       select: {
         contentType: true,
         tmdbId: true,
+        updatedAt: true,
       },
       where: {
         userId,

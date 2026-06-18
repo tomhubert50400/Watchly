@@ -43,6 +43,85 @@ export class ProfileService {
     return this.getPublicProfileByUserId(userId, false);
   }
 
+  async listOwnOpinions(identity: AuthenticatedIdentity) {
+    const userId = await this.getUserId(identity);
+
+    const movieRatings = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userMovieRating.findMany({
+          orderBy: {
+            updatedAt: 'desc',
+          },
+          take: PROFILE_OPINION_LIMIT,
+          where: {
+            userId,
+          },
+        }),
+    );
+    const episodeRatings = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userEpisodeRating.findMany({
+          orderBy: {
+            updatedAt: 'desc',
+          },
+          take: PROFILE_OPINION_LIMIT,
+          where: {
+            userId,
+          },
+        }),
+    );
+    const movieReviews = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userMovieReview.findMany({
+          orderBy: {
+            updatedAt: 'desc',
+          },
+          take: PROFILE_OPINION_LIMIT,
+          where: {
+            userId,
+          },
+        }),
+    );
+    const episodeReviews = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userEpisodeReview.findMany({
+          orderBy: {
+            updatedAt: 'desc',
+          },
+          take: PROFILE_OPINION_LIMIT,
+          where: {
+            userId,
+          },
+        }),
+    );
+    const movieReviewTmdbIds = new Set(movieReviews.map((review) => review.tmdbId));
+    const episodeReviewKeys = new Set(episodeReviews.map(getEpisodeOpinionKey));
+    const movieRatingByTmdbId = new Map(
+      movieRatings.map((rating) => [rating.tmdbId, rating.scoreHalfSteps / 2]),
+    );
+    const episodeRatingByKey = new Map(
+      episodeRatings.map((rating) => [getEpisodeOpinionKey(rating), rating.scoreHalfSteps / 2]),
+    );
+    const items = [
+      ...movieRatings
+        .filter((rating) => !movieReviewTmdbIds.has(rating.tmdbId))
+        .map(toMovieRatingOpinion),
+      ...episodeRatings
+        .filter((rating) => !episodeReviewKeys.has(getEpisodeOpinionKey(rating)))
+        .map(toEpisodeRatingOpinion),
+      ...movieReviews.flatMap((review) => {
+        const score = movieRatingByTmdbId.get(review.tmdbId);
+
+        return score === undefined ? [] : [toMovieReviewOpinion(review, score)];
+      }),
+      ...episodeReviews.flatMap((review) => {
+        const score = episodeRatingByKey.get(getEpisodeOpinionKey(review));
+
+        return score === undefined ? [] : [toEpisodeReviewOpinion(review, score)];
+      }),
+    ]
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .slice(0, PROFILE_OPINION_LIMIT);
+
+    return { items, stats: await this.getProfileStats(userId) };
+  }
+
   async getPublicProfile(identity: AuthenticatedIdentity, targetUserId: string) {
     assertUuid(targetUserId);
 
@@ -305,6 +384,26 @@ export class ProfileService {
       profileVisibility: fromPrivacyVisibility(
         user.privacySettings?.profileVisibility ?? PrivacyVisibility.PUBLIC,
       ),
+      stats: await this.getProfileStats(user.id),
+    };
+  }
+
+  private async getProfileStats(userId: string) {
+    const [movieReviews, episodeReviews, movieRatings, episodeRatings, followersCount] =
+      await this.prisma.withConnectionRetry(() =>
+        this.prisma.$transaction([
+          this.prisma.userMovieReview.count({ where: { userId } }),
+          this.prisma.userEpisodeReview.count({ where: { userId } }),
+          this.prisma.userMovieRating.count({ where: { userId } }),
+          this.prisma.userEpisodeRating.count({ where: { userId } }),
+          this.prisma.userFollow.count({ where: { followedUserId: userId } }),
+        ]),
+      );
+
+    return {
+      followersCount,
+      postsCount: movieRatings + episodeRatings,
+      reviewsCount: movieReviews + episodeReviews,
     };
   }
 
@@ -353,21 +452,39 @@ export class ProfileService {
 
     await this.prisma.withConnectionRetry(
       () =>
-        this.prisma.userMovieReview.upsert({
-          create: {
-            body: DEV_TEST_REVIEW_BODY,
-            tmdbId: DEV_TEST_REVIEW_TMDB_ID,
-            userId,
-          },
-          update: {
-            body: DEV_TEST_REVIEW_BODY,
-          },
-          where: {
-            userId_tmdbId: {
+        this.prisma.$transaction(async (tx) => {
+          await tx.userMovieRating.upsert({
+            create: {
+              scoreHalfSteps: 8,
               tmdbId: DEV_TEST_REVIEW_TMDB_ID,
               userId,
             },
-          },
+            update: {
+              scoreHalfSteps: 8,
+            },
+            where: {
+              userId_tmdbId: {
+                tmdbId: DEV_TEST_REVIEW_TMDB_ID,
+                userId,
+              },
+            },
+          });
+          await tx.userMovieReview.upsert({
+            create: {
+              body: DEV_TEST_REVIEW_BODY,
+              tmdbId: DEV_TEST_REVIEW_TMDB_ID,
+              userId,
+            },
+            update: {
+              body: DEV_TEST_REVIEW_BODY,
+            },
+            where: {
+              userId_tmdbId: {
+                tmdbId: DEV_TEST_REVIEW_TMDB_ID,
+                userId,
+              },
+            },
+          });
         }),
     );
   }
@@ -430,6 +547,102 @@ function fromSharedWatchlistVisibility(
   return value === SharedWatchlistVisibility.MEMBERS ? 'members' : 'private';
 }
 
+type MovieRatingOpinionRecord = {
+  id: string;
+  scoreHalfSteps: number;
+  tmdbId: number;
+  updatedAt: Date;
+};
+
+type EpisodeRatingOpinionRecord = {
+  episodeNumber: number;
+  id: string;
+  scoreHalfSteps: number;
+  seasonNumber: number;
+  seriesTmdbId: number;
+  updatedAt: Date;
+};
+
+type MovieReviewOpinionRecord = {
+  body: string;
+  id: string;
+  tmdbId: number;
+  updatedAt: Date;
+};
+
+type EpisodeReviewOpinionRecord = {
+  body: string;
+  episodeNumber: number;
+  id: string;
+  seasonNumber: number;
+  seriesTmdbId: number;
+  updatedAt: Date;
+};
+
+function toMovieRatingOpinion(rating: MovieRatingOpinionRecord) {
+  return {
+    content: {
+      contentType: 'movie' as const,
+      tmdbId: rating.tmdbId,
+    },
+    id: rating.id,
+    score: rating.scoreHalfSteps / 2,
+    type: 'movieRating' as const,
+    updatedAt: rating.updatedAt.toISOString(),
+  };
+}
+
+function toEpisodeRatingOpinion(rating: EpisodeRatingOpinionRecord) {
+  return {
+    content: {
+      contentType: 'episode' as const,
+      episodeNumber: rating.episodeNumber,
+      seasonNumber: rating.seasonNumber,
+      seriesTmdbId: rating.seriesTmdbId,
+    },
+    id: rating.id,
+    score: rating.scoreHalfSteps / 2,
+    type: 'episodeRating' as const,
+    updatedAt: rating.updatedAt.toISOString(),
+  };
+}
+
+function toMovieReviewOpinion(review: MovieReviewOpinionRecord, score: number) {
+  return {
+    body: review.body,
+    content: {
+      contentType: 'movie' as const,
+      tmdbId: review.tmdbId,
+    },
+    id: review.id,
+    score,
+    type: 'movieReview' as const,
+    updatedAt: review.updatedAt.toISOString(),
+  };
+}
+
+function toEpisodeReviewOpinion(review: EpisodeReviewOpinionRecord, score: number) {
+  return {
+    body: review.body,
+    content: {
+      contentType: 'episode' as const,
+      episodeNumber: review.episodeNumber,
+      seasonNumber: review.seasonNumber,
+      seriesTmdbId: review.seriesTmdbId,
+    },
+    id: review.id,
+    score,
+    type: 'episodeReview' as const,
+    updatedAt: review.updatedAt.toISOString(),
+  };
+}
+
+function getEpisodeOpinionKey(
+  item: Pick<EpisodeRatingOpinionRecord | EpisodeReviewOpinionRecord, 'episodeNumber' | 'seasonNumber' | 'seriesTmdbId'>,
+) {
+  return `${item.seriesTmdbId}:${item.seasonNumber}:${item.episodeNumber}`;
+}
+
 function getPrivacyAuditFields(input: UpdatePrivacySettingsDto) {
   const fields = Object.keys(input);
 
@@ -443,3 +656,4 @@ function getPrivacyAuditFields(input: UpdatePrivacySettingsDto) {
 const DEV_TEST_REVIEW_TMDB_ID = 603;
 const DEV_TEST_REVIEW_BODY =
   'Dev feed test review. This public written review should appear in Feed.';
+const PROFILE_OPINION_LIMIT = 50;

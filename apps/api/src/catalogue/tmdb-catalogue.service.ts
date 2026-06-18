@@ -121,7 +121,7 @@ type DisplayRating = {
   average: number;
   count: number | null;
   scale: 5 | 10;
-  source: 'kinora' | 'tmdb';
+  source: 'watchly' | 'tmdb';
 };
 
 export type CatalogueSearchItem = {
@@ -236,7 +236,7 @@ export type StreamingProvider = {
 
 @Injectable()
 export class TmdbCatalogueService {
-  private readonly kinoraRatingThreshold = 100;
+  private readonly watchlyRatingThreshold = 100;
   private readonly imageBaseUrl = 'https://image.tmdb.org/t/p/w342';
   private readonly backdropBaseUrl = 'https://image.tmdb.org/t/p/w780';
   private readonly tmdbBaseUrl = 'https://api.themoviedb.org/3';
@@ -280,6 +280,63 @@ export class TmdbCatalogueService {
         .filter((item): item is CatalogueSearchItem => Boolean(item))
         .filter((item) => type === 'all' || item.mediaType === type),
       provider: 'tmdb',
+    };
+  }
+
+  async trending() {
+    const accessToken = this.getAccessToken();
+    const params = new URLSearchParams({ language: 'fr-FR' });
+    const endpoint = `${this.tmdbBaseUrl}/trending/movie/day?${params.toString()}`;
+    const payload = await this.fetchTmdb<TmdbSearchResponse>(endpoint, accessToken, 'trending');
+
+    return {
+      items: (payload.results ?? [])
+        .map((item) => this.toCatalogueItem(item, 'movie'))
+        .filter((item): item is CatalogueSearchItem => Boolean(item))
+        .filter((item) => isReleasedDate(item.releaseDate))
+        .sort((left, right) => getDateSortValue(right.releaseDate) - getDateSortValue(left.releaseDate))
+        .slice(0, 10),
+      provider: 'tmdb',
+    };
+  }
+
+  async movieSections() {
+    const accessToken = this.getAccessToken();
+    const trendingParams = new URLSearchParams({ language: 'fr-FR', page: '1' });
+    const upcomingPages = [1, 2, 3, 4, 5];
+    const [trendingPayload, ...upcomingPayloads] = await Promise.all([
+      this.fetchTmdb<TmdbSearchResponse>(
+        `${this.tmdbBaseUrl}/trending/movie/day?${trendingParams.toString()}`,
+        accessToken,
+        'trending movies',
+      ),
+      ...upcomingPages.map((page) =>
+        this.fetchTmdb<TmdbSearchResponse>(
+          `${this.tmdbBaseUrl}/movie/upcoming?${new URLSearchParams({
+            language: 'fr-FR',
+            page: String(page),
+          }).toString()}`,
+          accessToken,
+          'announced movies',
+        ),
+      ),
+    ]);
+
+    return {
+      announced: upcomingPayloads
+        .flatMap((payload) => payload.results ?? [])
+        .map((item) => this.toCatalogueItem(item, 'movie'))
+        .filter((item): item is CatalogueSearchItem => Boolean(item))
+        .filter((item) => isAfterMinimumAnnouncedDate(item.releaseDate))
+        .sort((left, right) => getDateSortValue(left.releaseDate) - getDateSortValue(right.releaseDate))
+        .slice(0, 10),
+      provider: 'tmdb',
+      trending: (trendingPayload.results ?? [])
+        .map((item) => this.toCatalogueItem(item, 'movie'))
+        .filter((item): item is CatalogueSearchItem => Boolean(item))
+        .filter((item) => isReleasedDate(item.releaseDate))
+        .sort((left, right) => getDateSortValue(right.releaseDate) - getDateSortValue(left.releaseDate))
+        .slice(0, 10),
     };
   }
 
@@ -423,12 +480,17 @@ export class TmdbCatalogueService {
     return accessToken;
   }
 
-  private toCatalogueItem(item: TmdbSearchResult): CatalogueSearchItem | null {
-    if (item.media_type !== 'movie' && item.media_type !== 'tv') {
+  private toCatalogueItem(
+    item: TmdbSearchResult,
+    fallbackMediaType?: 'movie' | 'series',
+  ): CatalogueSearchItem | null {
+    const tmdbMediaType = item.media_type ?? (fallbackMediaType === 'series' ? 'tv' : fallbackMediaType);
+
+    if (tmdbMediaType !== 'movie' && tmdbMediaType !== 'tv') {
       return null;
     }
 
-    const mediaType = item.media_type === 'movie' ? 'movie' : 'series';
+    const mediaType = tmdbMediaType === 'movie' ? 'movie' : 'series';
     const title = mediaType === 'movie' ? item.title : item.name;
 
     if (!title) {
@@ -451,15 +513,15 @@ export class TmdbCatalogueService {
 
   private async getMovieDisplayRating(tmdbId: number, tmdbVoteAverage: number | undefined) {
     const ratingSummary = await this.getMovieRatingSummary(tmdbId);
-    const kinoraRatingCount = ratingSummary._count._all;
-    const kinoraAverageHalfSteps = ratingSummary._avg.scoreHalfSteps;
+    const watchlyRatingCount = ratingSummary._count._all;
+    const watchlyAverageHalfSteps = ratingSummary._avg.scoreHalfSteps;
 
-    if (kinoraRatingCount >= this.kinoraRatingThreshold && kinoraAverageHalfSteps !== null) {
+    if (watchlyRatingCount >= this.watchlyRatingThreshold && watchlyAverageHalfSteps !== null) {
       return {
-        average: toRoundedRating(kinoraAverageHalfSteps / 2),
-        count: kinoraRatingCount,
+        average: toRoundedRating(watchlyAverageHalfSteps / 2),
+        count: watchlyRatingCount,
         scale: 5,
-        source: 'kinora',
+        source: 'watchly',
       } satisfies DisplayRating;
     }
 
@@ -631,4 +693,38 @@ export class TmdbCatalogueService {
 
 function toRoundedRating(value: number) {
   return Math.round(value * 10) / 10;
+}
+
+function getDateSortValue(value: string | null) {
+  if (!value) {
+    return 0;
+  }
+
+  const timestamp = Date.parse(value);
+
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+}
+
+function isReleasedDate(value: string | null) {
+  return typeof value === 'string' && value <= getTodayDateKey();
+}
+
+function isFutureDate(value: string | null) {
+  return typeof value === 'string' && value > getTodayDateKey();
+}
+
+function isAfterMinimumAnnouncedDate(value: string | null) {
+  return typeof value === 'string' && value > getDateKeyFromNow(3);
+}
+
+function getTodayDateKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getDateKeyFromNow(days: number) {
+  const date = new Date();
+
+  date.setUTCDate(date.getUTCDate() + days);
+
+  return date.toISOString().slice(0, 10);
 }

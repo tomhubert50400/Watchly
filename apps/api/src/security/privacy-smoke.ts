@@ -50,6 +50,7 @@ async function main() {
       follows,
       feed,
       blocks,
+      ratings,
       reviews,
       actorIdentity,
       viewerIdentity,
@@ -135,11 +136,13 @@ async function assertFeedPrivacyAndBlocking(
   follows: FollowsService,
   feed: FeedService,
   blocks: BlocksService,
+  ratings: RatingsService,
   reviews: ReviewsService,
   actorIdentity: AuthenticatedIdentity,
   viewerIdentity: AuthenticatedIdentity,
   actorUserId: string,
 ) {
+  await ratings.upsertMovieRating(actorIdentity, 603, 4);
   await reviews.upsertMovieReview(actorIdentity, 603, 'Privacy smoke public review.');
   await follows.followUser(viewerIdentity, actorUserId);
   await assertFeedContainsAuthor(feed, viewerIdentity, actorUserId, true);

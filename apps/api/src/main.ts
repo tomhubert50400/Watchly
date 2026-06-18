@@ -30,7 +30,7 @@ async function bootstrap() {
     app.enableCors({ origin: corsOrigin });
   }
 
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   logger.log(`API listening on port ${port}`);
 }
 

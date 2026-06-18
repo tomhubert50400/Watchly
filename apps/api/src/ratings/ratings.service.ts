@@ -72,12 +72,20 @@ export class RatingsService {
     const userId = await this.getUserId(identity);
 
     await this.prisma.withConnectionRetry(() =>
-      this.prisma.userMovieRating.deleteMany({
-      where: {
-        tmdbId,
-        userId,
-      },
-      }),
+      this.prisma.$transaction([
+        this.prisma.userMovieReview.deleteMany({
+          where: {
+            tmdbId,
+            userId,
+          },
+        }),
+        this.prisma.userMovieRating.deleteMany({
+          where: {
+            tmdbId,
+            userId,
+          },
+        }),
+      ]),
     );
   }
 
@@ -148,14 +156,24 @@ export class RatingsService {
     const userId = await this.getUserId(identity);
 
     await this.prisma.withConnectionRetry(() =>
-      this.prisma.userEpisodeRating.deleteMany({
-      where: {
-        episodeNumber,
-        seasonNumber,
-        seriesTmdbId,
-        userId,
-      },
-      }),
+      this.prisma.$transaction([
+        this.prisma.userEpisodeReview.deleteMany({
+          where: {
+            episodeNumber,
+            seasonNumber,
+            seriesTmdbId,
+            userId,
+          },
+        }),
+        this.prisma.userEpisodeRating.deleteMany({
+          where: {
+            episodeNumber,
+            seasonNumber,
+            seriesTmdbId,
+            userId,
+          },
+        }),
+      ]),
     );
   }
 

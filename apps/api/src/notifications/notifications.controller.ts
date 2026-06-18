@@ -30,6 +30,11 @@ export class NotificationsController {
     return this.notifications.sync(getIdentity(request));
   }
 
+  @Get('release-alerts')
+  async listReleaseAlerts(@Req() request: AuthenticatedRequest) {
+    return this.notifications.listReleaseAlerts(getIdentity(request));
+  }
+
   @Get('release-alerts/:contentType/:tmdbId')
   async getReleaseAlert(
     @Req() request: AuthenticatedRequest,

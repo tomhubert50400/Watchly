@@ -23,6 +23,16 @@ export class CatalogueController {
     return this.catalogue.search(trimmedQuery, searchType);
   }
 
+  @Get('trending')
+  async trending() {
+    return this.catalogue.trending();
+  }
+
+  @Get('movie-sections')
+  async movieSections() {
+    return this.catalogue.movieSections();
+  }
+
   @Get('movies/:tmdbId')
   async movieDetails(@Param('tmdbId', ParseIntPipe) tmdbId: number) {
     return this.catalogue.getMovie(tmdbId);
