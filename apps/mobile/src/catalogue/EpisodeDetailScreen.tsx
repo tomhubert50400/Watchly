@@ -212,6 +212,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     maxWidth: 180,
     textAlign: 'center',
+    transform: [{ translateX: -spacing.xl }],
   },
   headerTitleRow: {
     alignItems: 'center',
