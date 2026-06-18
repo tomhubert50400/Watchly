@@ -159,6 +159,10 @@ function getBody({
     return watchedCount > 0 ? 'All available episodes are marked watched.' : 'No episodes available to resume.';
   }
 
+  if (resumeEpisode.seasonNumber === 1 && resumeEpisode.episodeNumber === 1) {
+    return 'Start to watch';
+  }
+
   const prefix = watchedCount === 0 ? 'Start at' : 'Continue at';
 
   return `${prefix} season ${resumeEpisode.seasonNumber}, episode ${resumeEpisode.episodeNumber}.`;
