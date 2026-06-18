@@ -11,6 +11,8 @@ apps/api/src/generated/
 
 .expo/
 .expo-shared/
+.logs/
+.codex-runlogs/
 
 .env
 .env.*
