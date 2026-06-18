@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Star } from 'lucide-react-native';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { EpisodeDetails, getEpisodeDetails } from '../api/catalogue';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -16,6 +16,7 @@ type EpisodeDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'Epis
 
 export function EpisodeDetailScreen({ navigation, route }: EpisodeDetailScreenProps) {
   const { episodeNumber, seasonNumber, tmdbId } = route.params;
+  const { width: windowWidth } = useWindowDimensions();
   const [episode, setEpisode] = useState<EpisodeDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,16 +43,19 @@ export function EpisodeDetailScreen({ navigation, route }: EpisodeDetailScreenPr
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerBackground: () => (
-        <View pointerEvents="none" style={styles.headerBackground}>
+      headerBackground: undefined,
+      headerRight: undefined,
+      headerTitle: () => (
+        <View pointerEvents="none" style={[styles.headerTitleRow, { width: windowWidth }]}>
+          <Text numberOfLines={1} style={styles.headerSeriesTitle}>
+            {route.params.seriesTitle}
+          </Text>
           {episode?.airDate ? <Text style={styles.headerAirDate}>{episode.airDate}</Text> : null}
         </View>
       ),
-      headerRight: undefined,
-      headerTitle: undefined,
-      title: route.params.seriesTitle,
+      title: undefined,
     });
-  }, [episode?.airDate, navigation, route.params.seriesTitle]);
+  }, [episode?.airDate, navigation, route.params.seriesTitle, windowWidth]);
 
   return (
     <View style={styles.safeArea}>
@@ -197,14 +201,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0,
+    position: 'absolute',
+    right: spacing.xl,
     textTransform: 'uppercase',
   },
-  headerBackground: {
-    alignItems: 'flex-end',
-    backgroundColor: colors.background,
-    flex: 1,
+  headerSeriesTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0,
+    maxWidth: 180,
+    textAlign: 'center',
+  },
+  headerTitleRow: {
+    alignItems: 'center',
+    height: 44,
     justifyContent: 'center',
-    paddingRight: spacing.xl,
   },
   episodeCode: {
     color: colors.muted,
