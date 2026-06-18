@@ -251,12 +251,18 @@ export function ExploreScreen() {
             <View style={styles.searchBox}>
               <Search color={colors.muted} size={20} strokeWidth={2.2} />
               <NativeTextInput
+                autoComplete="off"
                 autoCapitalize="none"
                 autoCorrect={false}
+                clearButtonMode="while-editing"
+                enablesReturnKeyAutomatically
+                inputMode="search"
+                keyboardAppearance="dark"
                 onChangeText={setQuery}
                 placeholder="Search a film or series"
                 placeholderTextColor={colors.muted}
                 returnKeyType="search"
+                spellCheck={false}
                 style={styles.searchInput}
                 value={query}
               />

@@ -12,6 +12,7 @@ export function TextInput({ error, helperText, label, ...inputProps }: AppTextIn
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
       <NativeTextInput
+        keyboardAppearance="dark"
         placeholderTextColor={colors.muted}
         style={[styles.input, error ? styles.inputError : null]}
         {...inputProps}
