@@ -4,6 +4,7 @@ import { clearEpisodeProgress, EpisodeProgress, getEpisodeProgress, markEpisodeW
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { Button } from '../components/Button';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { useToast } from '../notifications/ToastContext';
 
 type EpisodeProgressControlProps = {
   episodeNumber: number;
@@ -17,7 +18,7 @@ export function EpisodeProgressControl({
   seriesTmdbId,
 }: EpisodeProgressControlProps) {
   const { firebaseIdToken, notifyTrackingChanged } = useAuthSession();
-  const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [progress, setProgress] = useState<EpisodeProgress | null>(null);
@@ -25,21 +26,19 @@ export function EpisodeProgressControl({
   const loadProgress = useCallback(async () => {
     if (!firebaseIdToken) {
       setProgress(null);
-      setError(null);
       return;
     }
 
-    setError(null);
     setIsLoading(true);
 
     try {
       setProgress(await getEpisodeProgress(firebaseIdToken, seriesTmdbId, seasonNumber, episodeNumber));
     } catch {
-      setError('Could not load your episode progress.');
+      showToast('Could not load your episode progress.');
     } finally {
       setIsLoading(false);
     }
-  }, [episodeNumber, firebaseIdToken, seasonNumber, seriesTmdbId]);
+  }, [episodeNumber, firebaseIdToken, seasonNumber, seriesTmdbId, showToast]);
 
   useEffect(() => {
     void loadProgress();
@@ -50,14 +49,13 @@ export function EpisodeProgressControl({
       return;
     }
 
-    setError(null);
     setIsSaving(true);
 
     try {
       setProgress(await markEpisodeWatched(firebaseIdToken, seriesTmdbId, seasonNumber, episodeNumber));
       notifyTrackingChanged();
     } catch {
-      setError('Could not save your episode progress.');
+      showToast('Could not save your episode progress.');
     } finally {
       setIsSaving(false);
     }
@@ -68,7 +66,6 @@ export function EpisodeProgressControl({
       return;
     }
 
-    setError(null);
     setIsSaving(true);
 
     try {
@@ -76,7 +73,7 @@ export function EpisodeProgressControl({
       setProgress(null);
       notifyTrackingChanged();
     } catch {
-      setError('Could not clear your episode progress.');
+      showToast('Could not clear your episode progress.');
     } finally {
       setIsSaving(false);
     }
@@ -109,8 +106,6 @@ export function EpisodeProgressControl({
           )}
         </View>
       ) : null}
-
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
   );
 }
@@ -131,11 +126,6 @@ const styles = StyleSheet.create({
   },
   copy: {
     flex: 1,
-  },
-  errorText: {
-    ...typography.body,
-    color: colors.danger,
-    marginTop: spacing.md,
   },
   headerRow: {
     alignItems: 'center',

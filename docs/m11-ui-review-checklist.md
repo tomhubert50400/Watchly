@@ -1,6 +1,6 @@
 # M11 UI review checklist
 
-Use this checklist to review everything currently visible to a normal Kinora user before UI polish work starts.
+Use this checklist to review everything currently visible to a normal Watchly user before UI polish work starts.
 
 ## Preconditions
 

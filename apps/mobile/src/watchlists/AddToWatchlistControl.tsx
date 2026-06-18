@@ -28,7 +28,10 @@ import {
 } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { Button } from '../components/Button';
+import { SegmentedControl } from '../components/SegmentedControl';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { useToast } from '../notifications/ToastContext';
+import { useWatchlistCache } from './WatchlistCacheContext';
 
 type AddToWatchlistControlProps = {
   contentType: WatchlistContentType;
@@ -49,7 +52,8 @@ type CreateWatchlistKind = 'personal' | 'shared';
 
 export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistControlProps) {
   const { firebaseIdToken, getFirebaseIdToken } = useAuthSession();
-  const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
+  const { preloadWatchlists } = useWatchlistCache();
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
   const [initialSelectedKeys, setInitialSelectedKeys] = useState<Set<string>>(new Set());
   const [isCreating, setIsCreating] = useState(false);
@@ -74,7 +78,6 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
     const loadVersion = loadVersionRef.current + 1;
 
     loadVersionRef.current = loadVersion;
-    setError(null);
 
     if (showLoading) {
       setIsLoading(true);
@@ -113,14 +116,14 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
         setOptionsContentKey(contentKey);
         setInitialSelectedKeys(new Set());
         setSelectedKeys(new Set());
-        setError(loadError instanceof Error ? loadError.message : 'Could not load watchlists.');
+        showToast(loadError instanceof Error ? loadError.message : 'Could not load watchlists.');
       }
     } finally {
       if (loadVersionRef.current === loadVersion) {
         setIsLoading(false);
       }
     }
-  }, [contentKey, contentType, firebaseIdToken, getFirebaseIdToken, tmdbId]);
+  }, [contentKey, contentType, firebaseIdToken, getFirebaseIdToken, showToast, tmdbId]);
 
   useEffect(() => {
     if (!firebaseIdToken) {
@@ -140,7 +143,6 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
     }
 
     setIsOpen(true);
-    setError(null);
     setIsCreateFormOpen(false);
     setNewWatchlistKind('personal');
     setNewWatchlistName('');
@@ -172,7 +174,6 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
       return;
     }
 
-    setError(null);
     setIsCreating(true);
 
     try {
@@ -192,7 +193,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
       setIsCreateFormOpen(false);
       setNewWatchlistName('');
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : 'Could not create this watchlist.');
+      showToast(createError instanceof Error ? createError.message : 'Could not create this watchlist.');
     } finally {
       setIsCreating(false);
     }
@@ -225,7 +226,6 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
     const saveVersion = saveVersionRef.current + 1;
 
     saveVersionRef.current = saveVersion;
-    setError(null);
     setInitialSelectedKeys(nextSelectedKeys);
     setOptions((current) => updateOptionSelection(current, previousInitialKeys, nextSelectedKeys));
     closeModal();
@@ -258,12 +258,13 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
             : removeSharedWatchlistItem(token, option.id, contentType, tmdbId);
         }),
       );
+      void preloadWatchlists();
     } catch (saveError) {
       if (saveVersionRef.current === saveVersion) {
         setOptions(previousOptions);
         setInitialSelectedKeys(previousInitialKeys);
         setSelectedKeys(previousSelectedKeys);
-        setError(saveError instanceof Error ? saveError.message : 'Could not update watchlists.');
+        showToast(saveError instanceof Error ? saveError.message : 'Could not update watchlists.');
         setIsOpen(true);
       }
     } finally {
@@ -334,12 +335,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
               </Pressable>
             </View>
 
-            {isLoading && !hasCurrentOptions ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color={colors.accent} />
-                <Text style={styles.loadingText}>Loading watchlists</Text>
-              </View>
-            ) : options.length === 0 || !hasCurrentOptions ? (
+            {options.length === 0 || !hasCurrentOptions ? (
               <Text style={styles.emptyText}>No watchlists yet.</Text>
             ) : (
               <ScrollView contentContainerStyle={styles.optionList} showsVerticalScrollIndicator={false}>
@@ -354,22 +350,17 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
               </ScrollView>
             )}
 
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
             {isCreateFormOpen ? (
               <View style={styles.createPanel}>
-                <View style={styles.createKindRow}>
-                  <CreateKindButton
-                    isSelected={newWatchlistKind === 'personal'}
-                    label="Personal"
-                    onPress={() => setNewWatchlistKind('personal')}
-                  />
-                  <CreateKindButton
-                    isSelected={newWatchlistKind === 'shared'}
-                    label="Shared"
-                    onPress={() => setNewWatchlistKind('shared')}
-                  />
-                </View>
+                <SegmentedControl
+                  buttonMinHeight={34}
+                  onChange={setNewWatchlistKind}
+                  options={[
+                    { label: 'Personal', value: 'personal' },
+                    { label: 'Shared', value: 'shared' },
+                  ]}
+                  value={newWatchlistKind}
+                />
                 <View style={styles.createRow}>
                   <TextInput
                     accessibilityLabel="New watchlist name"
@@ -426,33 +417,6 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
         </View>
       </Modal>
     </>
-  );
-}
-
-function CreateKindButton({
-  isSelected,
-  label,
-  onPress,
-}: {
-  isSelected: boolean;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: isSelected }}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.createKindButton,
-        isSelected ? styles.createKindButtonSelected : null,
-        pressed ? styles.triggerPressed : null,
-      ]}
-    >
-      <Text style={[styles.createKindLabel, isSelected ? styles.createKindLabelSelected : null]}>
-        {label}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -594,33 +558,6 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: spacing.md,
   },
-  createKindButton: {
-    alignItems: 'center',
-    borderRadius: radii.sm,
-    flex: 1,
-    justifyContent: 'center',
-    minHeight: 34,
-  },
-  createKindButtonSelected: {
-    backgroundColor: colors.accent,
-  },
-  createKindLabel: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0,
-  },
-  createKindLabelSelected: {
-    color: colors.textOnAccent,
-  },
-  createKindRow: {
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    padding: 3,
-  },
   createPanel: {
     gap: spacing.sm,
     marginTop: spacing.lg,
@@ -634,27 +571,12 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: spacing.lg,
   },
-  errorText: {
-    ...typography.body,
-    color: colors.danger,
-    marginTop: spacing.md,
-  },
   footer: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: spacing.md,
     marginTop: spacing.lg,
-  },
-  loadingRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-  },
-  loadingText: {
-    ...typography.body,
-    color: colors.text,
   },
   optionCopy: {
     flex: 1,

@@ -1,17 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { CheckCircle2, Circle, RefreshCw } from 'lucide-react-native';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { getMovieDetails, getSeriesDetails } from '../api/catalogue';
 import {
   addSharedWatchlistMember,
   createSharedVotingSession,
-  getSharedWatchlist,
   removeSharedCandidateVote,
   SharedVotingCandidate,
   SharedVotingSession,
   SharedWatchlist,
-  SharedWatchlistItem,
   voteForSharedCandidate,
 } from '../api/sharedWatchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
@@ -20,35 +17,37 @@ import { EmptyState } from '../components/EmptyState';
 import { TextInput } from '../components/TextInput';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
+import { HydratedSharedWatchlistItem, useWatchlistCache } from './WatchlistCacheContext';
 
 type SharedWatchlistScreenProps = NativeStackScreenProps<RootStackParamList, 'SharedWatchlist'>;
 
-type HydratedSharedItem = SharedWatchlistItem & {
-  posterUrl: string | null;
-  title: string;
-};
-
 export function SharedWatchlistScreen({ route }: SharedWatchlistScreenProps) {
   const { firebaseIdToken, getFirebaseIdToken } = useAuthSession();
+  const { getCachedSharedWatchlist, refreshSharedWatchlist } = useWatchlistCache();
   const { watchlistId } = route.params;
   const [error, setError] = useState<string | null>(null);
   const [isAddingMember, setIsAddingMember] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => !getCachedSharedWatchlist(watchlistId));
   const [isSavingSession, setIsSavingSession] = useState(false);
   const [sessionTitle, setSessionTitle] = useState('Tonight');
   const [memberUserId, setMemberUserId] = useState('');
-  const [watchlist, setWatchlist] = useState<SharedWatchlist | null>(null);
-  const [hydratedItems, setHydratedItems] = useState<HydratedSharedItem[]>([]);
+  const [watchlist, setWatchlist] = useState<SharedWatchlist | null>(
+    () => getCachedSharedWatchlist(watchlistId)?.watchlist ?? null,
+  );
+  const [hydratedItems, setHydratedItems] = useState<HydratedSharedWatchlistItem[]>(
+    () => getCachedSharedWatchlist(watchlistId)?.hydratedItems ?? [],
+  );
+  const hasVisibleWatchlistRef = useRef(Boolean(watchlist));
 
   const itemTitleById = useMemo(() => {
-    const titles = new Map<string, HydratedSharedItem>();
+    const titles = new Map<string, HydratedSharedWatchlistItem>();
 
     hydratedItems.forEach((item) => titles.set(item.id, item));
 
     return titles;
   }, [hydratedItems]);
 
-  const loadWatchlist = useCallback(async () => {
+  const loadWatchlist = useCallback(async (showLoading = false) => {
     if (!firebaseIdToken) {
       setWatchlist(null);
       setHydratedItems([]);
@@ -58,7 +57,7 @@ export function SharedWatchlistScreen({ route }: SharedWatchlistScreenProps) {
     }
 
     setError(null);
-    setIsLoading(true);
+    setIsLoading(showLoading || !hasVisibleWatchlistRef.current);
 
     try {
       const token = await getFirebaseIdToken();
@@ -67,23 +66,37 @@ export function SharedWatchlistScreen({ route }: SharedWatchlistScreenProps) {
         throw new Error('Sign in again to load this shared list.');
       }
 
-      const nextWatchlist = await getSharedWatchlist(token, watchlistId);
-      const nextItems = await Promise.all(nextWatchlist.items.map(hydrateSharedItem));
+      const cached = await refreshSharedWatchlist(watchlistId);
 
-      setWatchlist(nextWatchlist);
-      setHydratedItems(nextItems);
+      setWatchlist(cached.watchlist);
+      setHydratedItems(cached.hydratedItems);
+      hasVisibleWatchlistRef.current = true;
     } catch (loadError) {
-      setWatchlist(null);
-      setHydratedItems([]);
+      if (!hasVisibleWatchlistRef.current) {
+        setWatchlist(null);
+        setHydratedItems([]);
+      }
       setError(loadError instanceof Error ? loadError.message : 'Could not load the shared list.');
     } finally {
       setIsLoading(false);
     }
-  }, [firebaseIdToken, getFirebaseIdToken, watchlistId]);
+  }, [firebaseIdToken, getFirebaseIdToken, refreshSharedWatchlist, watchlistId]);
 
   useEffect(() => {
-    void loadWatchlist();
-  }, [loadWatchlist]);
+    const cached = getCachedSharedWatchlist(watchlistId);
+
+    if (cached) {
+      setWatchlist(cached.watchlist);
+      setHydratedItems(cached.hydratedItems);
+      hasVisibleWatchlistRef.current = true;
+      setIsLoading(false);
+      void loadWatchlist(false);
+      return;
+    }
+
+    hasVisibleWatchlistRef.current = false;
+    void loadWatchlist(true);
+  }, [loadWatchlist, watchlistId]);
 
   async function handleCreateSession() {
     const title = sessionTitle.trim();
@@ -138,7 +151,7 @@ export function SharedWatchlistScreen({ route }: SharedWatchlistScreenProps) {
 
       await addSharedWatchlistMember(token, watchlist.id, cleanUserId);
       setMemberUserId('');
-      await loadWatchlist();
+      await loadWatchlist(false);
     } catch (memberError) {
       setError(memberError instanceof Error ? memberError.message : 'Could not add this member.');
     } finally {
@@ -192,7 +205,7 @@ export function SharedWatchlistScreen({ route }: SharedWatchlistScreenProps) {
         </View>
       ) : error && !watchlist ? (
         <EmptyState body={error} title="Shared list failed">
-          <Button label="Retry" onPress={loadWatchlist} />
+          <Button label="Retry" onPress={() => loadWatchlist(true)} />
         </EmptyState>
       ) : watchlist ? (
         <>
@@ -210,7 +223,7 @@ export function SharedWatchlistScreen({ route }: SharedWatchlistScreenProps) {
               <Pressable
                 accessibilityLabel="Refresh shared list"
                 accessibilityRole="button"
-                onPress={loadWatchlist}
+                onPress={() => loadWatchlist(true)}
                 style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
               >
                 <RefreshCw color={colors.text} size={18} strokeWidth={2} />
@@ -331,7 +344,7 @@ function VoteCandidateRow({
   onPress,
 }: {
   candidate: SharedVotingCandidate;
-  item: HydratedSharedItem | undefined;
+  item: HydratedSharedWatchlistItem | undefined;
   onPress: () => void;
 }) {
   const Icon = candidate.userHasVoted ? CheckCircle2 : Circle;
@@ -363,34 +376,6 @@ function VoteCandidateRow({
       </View>
     </Pressable>
   );
-}
-
-async function hydrateSharedItem(item: SharedWatchlistItem): Promise<HydratedSharedItem> {
-  try {
-    if (item.contentType === 'movie') {
-      const response = await getMovieDetails(item.tmdbId);
-
-      return {
-        ...item,
-        posterUrl: response.item.posterUrl,
-        title: response.item.title,
-      };
-    }
-
-    const response = await getSeriesDetails(item.tmdbId);
-
-    return {
-      ...item,
-      posterUrl: response.item.posterUrl,
-      title: response.item.title,
-    };
-  } catch {
-    return {
-      ...item,
-      posterUrl: null,
-      title: `TMDB ${item.tmdbId}`,
-    };
-  }
 }
 
 const styles = StyleSheet.create({

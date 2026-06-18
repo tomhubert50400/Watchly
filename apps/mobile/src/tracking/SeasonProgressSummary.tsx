@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { listSeasonProgress, SeasonProgress } from '../api/progress';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { useToast } from '../notifications/ToastContext';
 
 type SeasonProgressSummaryProps = {
   episodeCount: number;
@@ -17,28 +18,26 @@ export function useSeasonProgressSummary({
   seriesTmdbId,
 }: SeasonProgressSummaryProps) {
   const { firebaseIdToken, trackingRevision } = useAuthSession();
-  const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState<SeasonProgress | null>(null);
 
   const loadProgress = useCallback(async () => {
     if (!firebaseIdToken) {
       setProgress(null);
-      setError(null);
       return;
     }
 
-    setError(null);
     setIsLoading(true);
 
     try {
       setProgress(await listSeasonProgress(firebaseIdToken, seriesTmdbId, seasonNumber));
     } catch {
-      setError('Could not load your season progress.');
+      showToast('Could not load your season progress.');
     } finally {
       setIsLoading(false);
     }
-  }, [firebaseIdToken, seasonNumber, seriesTmdbId]);
+  }, [firebaseIdToken, seasonNumber, seriesTmdbId, showToast]);
 
   useFocusEffect(
     useCallback(() => {
@@ -65,7 +64,6 @@ export function useSeasonProgressSummary({
           </View>
           {isLoading ? <ActivityIndicator color={colors.accent} /> : null}
         </View>
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
       </View>
     ),
     watchedEpisodeNumbers,
@@ -80,11 +78,6 @@ const styles = StyleSheet.create({
   },
   copy: {
     flex: 1,
-  },
-  errorText: {
-    ...typography.body,
-    color: colors.danger,
-    marginTop: spacing.md,
   },
   headerRow: {
     alignItems: 'center',

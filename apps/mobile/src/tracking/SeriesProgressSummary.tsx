@@ -1,13 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { listSeriesProgress, SeriesProgress } from '../api/progress';
 import { useAuthSession } from '../auth/AuthSessionContext';
-import { Button } from '../components/Button';
 import { SeriesDetails } from '../api/catalogue';
-import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { colors, radii, shadows, spacing } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
+import { useToast } from '../notifications/ToastContext';
 
 type SeriesProgressSummaryProps = {
   seasons: SeriesDetails['seasons'];
@@ -27,28 +27,22 @@ export function SeriesProgressSummary({
 }: SeriesProgressSummaryProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { firebaseIdToken, trackingRevision } = useAuthSession();
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const { showToast } = useToast();
   const [progress, setProgress] = useState<SeriesProgress | null>(null);
 
   const loadProgress = useCallback(async () => {
     if (!firebaseIdToken) {
       setProgress(null);
-      setError(null);
       return;
     }
-
-    setError(null);
-    setIsLoading(true);
 
     try {
       setProgress(await listSeriesProgress(firebaseIdToken, seriesTmdbId));
     } catch {
-      setError('Could not load your series progress.');
-    } finally {
-      setIsLoading(false);
+      showToast('Could not load your series progress.');
+      return;
     }
-  }, [firebaseIdToken, seriesTmdbId]);
+  }, [firebaseIdToken, seriesTmdbId, showToast]);
 
   useFocusEffect(
     useCallback(() => {
@@ -88,16 +82,17 @@ export function SeriesProgressSummary({
           <Text style={styles.sectionTitle}>Continue watching</Text>
           <Text style={styles.body}>{body}</Text>
         </View>
-        {isLoading ? <ActivityIndicator color={colors.accent} /> : null}
+        {firebaseIdToken && resumeEpisode ? (
+          <Pressable
+            accessibilityLabel="Open next episode"
+            accessibilityRole="button"
+            onPress={openResumeEpisode}
+            style={({ pressed }) => [styles.compactButton, pressed && styles.compactButtonPressed]}
+          >
+            <Text style={styles.compactButtonText}>Open</Text>
+          </Pressable>
+        ) : null}
       </View>
-
-      {firebaseIdToken && resumeEpisode ? (
-        <View style={styles.actions}>
-          <Button label="Open episode" onPress={openResumeEpisode} />
-        </View>
-      ) : null}
-
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
   );
 }
@@ -170,27 +165,40 @@ function getBody({
 }
 
 const styles = StyleSheet.create({
-  actions: {
-    alignItems: 'flex-start',
-    marginTop: spacing.lg,
-  },
   body: {
-    ...typography.body,
     color: colors.muted,
+    fontSize: 13,
+    letterSpacing: 0,
+    lineHeight: 18,
     marginTop: spacing.xs,
+  },
+  compactButton: {
+    alignItems: 'center',
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 34,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+  },
+  compactButtonPressed: {
+    opacity: 0.84,
+  },
+  compactButtonText: {
+    color: colors.textOnAccent,
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0,
   },
   copy: {
     flex: 1,
   },
-  errorText: {
-    ...typography.body,
-    color: colors.danger,
-    marginTop: spacing.md,
-  },
   headerRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.sm,
     justifyContent: 'space-between',
   },
   panel: {
@@ -200,10 +208,14 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     marginBottom: spacing.md,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
   sectionTitle: {
-    ...typography.title,
     color: colors.text,
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 20,
   },
 });

@@ -3,6 +3,8 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   Bell,
+  BellOff,
+  BellRing,
   CheckCircle2,
   Clapperboard,
   MessageSquareText,
@@ -15,6 +17,13 @@ import {
 } from 'lucide-react-native';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getMovieDetails, getSeriesDetails, SeriesDetails } from '../api/catalogue';
+import {
+  disableReleaseAlert,
+  enableReleaseAlert,
+  listReleaseAlerts,
+  ReleaseAlertSummary,
+  ReleaseAlertsResponse,
+} from '../api/notifications';
 import {
   listSeriesProgressSummaries,
   SeriesProgressSummariesResponse,
@@ -38,13 +47,17 @@ import { useAuthSession } from '../auth/AuthSessionContext';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Screen';
+import { SegmentedControl } from '../components/SegmentedControl';
 import { TextInput } from '../components/TextInput';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
+import { useWatchlistCache } from '../watchlists/WatchlistCacheContext';
 
 type LibraryItem = {
   contentType: TrackingState['contentType'];
   favorite: boolean;
+  hasReleaseAlert: boolean;
+  inferredWatchingFromProgress: boolean;
   key: string;
   posterUrl: string | null;
   ratingScore: number | null;
@@ -60,6 +73,8 @@ type LibraryItem = {
 type LibraryItemBase = Omit<LibraryItem, 'posterUrl' | 'title'>;
 
 type HydratedLibraryItem = LibraryItemBase & {
+  numberOfEpisodes: number | null;
+  numberOfSeasons: number | null;
   posterUrl: string | null;
   title: string;
 };
@@ -77,26 +92,28 @@ type WatchlistItem = {
   updatedAt: string;
 };
 
-const statusLabels: Record<NonNullable<TrackingState['status']>, string> = {
-  dropped: 'Dropped',
-  watched: 'Watched',
-  watching: 'Watching',
-  watchlisted: 'Watchlist',
-};
-
 export function MyTvScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { firebaseIdToken, getFirebaseIdToken, trackingRevision } = useAuthSession();
+  const { firebaseIdToken, getFirebaseIdToken, notifyTrackingChanged, trackingRevision } = useAuthSession();
+  const {
+    personalWatchlists: cachedWatchlists,
+    removePersonalWatchlist,
+    removeSharedWatchlist,
+    setPersonalWatchlists: setCachedWatchlists,
+    setSharedWatchlists: setCachedSharedWatchlists,
+    sharedWatchlists: cachedSharedWatchlists,
+  } = useWatchlistCache();
   const [activeTab, setActiveTab] = useState<MyTvTab>('overview');
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<HydratedLibraryItem[]>([]);
+  const [releaseAlertActionKey, setReleaseAlertActionKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSavingWatchlist, setIsSavingWatchlist] = useState(false);
   const [newWatchlistKind, setNewWatchlistKind] = useState<WatchlistItem['kind']>('personal');
   const [newWatchlistName, setNewWatchlistName] = useState('');
-  const [sharedWatchlists, setSharedWatchlists] = useState<SharedWatchlistSummary[]>([]);
+  const [sharedWatchlists, setSharedWatchlists] = useState<SharedWatchlistSummary[]>(cachedSharedWatchlists);
   const [watchlistActionError, setWatchlistActionError] = useState<string | null>(null);
-  const [watchlists, setWatchlists] = useState<PersonalWatchlistSummary[]>([]);
+  const [watchlists, setWatchlists] = useState<PersonalWatchlistSummary[]>(cachedWatchlists);
 
   const loadItems = useCallback(async () => {
     if (!firebaseIdToken) {
@@ -117,13 +134,21 @@ export function MyTvScreen() {
         throw new Error('Sign in again to load My TV.');
       }
 
-      const [statesResult, ratingsResult, progressResult, watchlistsResult, sharedWatchlistsResult] =
+      const [
+        statesResult,
+        ratingsResult,
+        progressResult,
+        watchlistsResult,
+        sharedWatchlistsResult,
+        releaseAlertsResult,
+      ] =
         await Promise.allSettled([
         listTrackingStates(token),
         listMovieRatings(token),
         listSeriesProgressSummaries(token),
         listWatchlists(token),
         listSharedWatchlists(token),
+        listReleaseAlerts(token),
       ]);
 
       if (
@@ -131,7 +156,8 @@ export function MyTvScreen() {
         ratingsResult.status === 'rejected' &&
         progressResult.status === 'rejected' &&
         watchlistsResult.status === 'rejected' &&
-        sharedWatchlistsResult.status === 'rejected'
+        sharedWatchlistsResult.status === 'rejected' &&
+        releaseAlertsResult.status === 'rejected'
       ) {
         throw new Error(
           buildPartialErrorMessage(
@@ -140,6 +166,7 @@ export function MyTvScreen() {
             progressResult,
             watchlistsResult,
             sharedWatchlistsResult,
+            releaseAlertsResult,
           ),
         );
       }
@@ -147,6 +174,7 @@ export function MyTvScreen() {
       const states = statesResult.status === 'fulfilled' ? statesResult.value : [];
       const ratings = ratingsResult.status === 'fulfilled' ? ratingsResult.value : [];
       const progress = progressResult.status === 'fulfilled' ? progressResult.value.items : [];
+      const releaseAlerts = releaseAlertsResult.status === 'fulfilled' ? releaseAlertsResult.value.items : [];
       const nextWatchlists = watchlistsResult.status === 'fulfilled' ? watchlistsResult.value.items : [];
       const nextSharedWatchlists =
         sharedWatchlistsResult.status === 'fulfilled' ? sharedWatchlistsResult.value.items : [];
@@ -155,13 +183,16 @@ export function MyTvScreen() {
         ratingsResult.status === 'rejected' ||
         progressResult.status === 'rejected' ||
         watchlistsResult.status === 'rejected' ||
-        sharedWatchlistsResult.status === 'rejected';
-      const libraryItems = mergeLibraryItems(states, ratings, progress);
-      const hydratedItems = await Promise.all(libraryItems.map(hydrateLibraryItem));
+        sharedWatchlistsResult.status === 'rejected' ||
+        releaseAlertsResult.status === 'rejected';
+      const libraryItems = mergeLibraryItems(states, ratings, progress, releaseAlerts);
+      const hydratedItems = (await Promise.all(libraryItems.map(hydrateLibraryItem))).filter(shouldShowTrackedTitle);
 
       setItems(hydratedItems);
       setSharedWatchlists(nextSharedWatchlists);
       setWatchlists(nextWatchlists);
+      setCachedSharedWatchlists(nextSharedWatchlists);
+      setCachedWatchlists(nextWatchlists);
       setError(
         hasPartialFailure
           ? buildPartialErrorMessage(
@@ -170,6 +201,7 @@ export function MyTvScreen() {
               progressResult,
               watchlistsResult,
               sharedWatchlistsResult,
+              releaseAlertsResult,
             )
           : null,
       );
@@ -181,11 +213,19 @@ export function MyTvScreen() {
     } finally {
       setIsLoading(false);
     }
-  }, [firebaseIdToken, getFirebaseIdToken]);
+  }, [firebaseIdToken, getFirebaseIdToken, setCachedSharedWatchlists, setCachedWatchlists]);
 
   useEffect(() => {
     void loadItems();
   }, [loadItems, trackingRevision]);
+
+  useEffect(() => {
+    setSharedWatchlists(cachedSharedWatchlists);
+  }, [cachedSharedWatchlists]);
+
+  useEffect(() => {
+    setWatchlists(cachedWatchlists);
+  }, [cachedWatchlists]);
 
   function openItem(item: HydratedLibraryItem) {
     if (item.contentType === 'movie') {
@@ -200,6 +240,44 @@ export function MyTvScreen() {
       title: item.title,
       tmdbId: item.tmdbId,
     });
+  }
+
+  async function handleToggleReleaseAlert(item: HydratedLibraryItem) {
+    if (!firebaseIdToken || releaseAlertActionKey) {
+      return;
+    }
+
+    setReleaseAlertActionKey(item.key);
+    setError(null);
+
+    try {
+      const token = await getFirebaseIdToken();
+
+      if (!token) {
+        throw new Error('Sign in again to update this alert.');
+      }
+
+      if (item.hasReleaseAlert) {
+        await disableReleaseAlert(token, item.contentType, item.tmdbId);
+      } else {
+        await enableReleaseAlert(token, item.contentType, item.tmdbId);
+      }
+
+      setItems((current) =>
+        current
+          .map((currentItem) =>
+            currentItem.key === item.key
+              ? { ...currentItem, hasReleaseAlert: !item.hasReleaseAlert }
+              : currentItem,
+          )
+          .filter(shouldShowTrackedTitle),
+      );
+      notifyTrackingChanged();
+    } catch (alertError) {
+      setError(alertError instanceof Error ? alertError.message : 'Could not update this alert.');
+    } finally {
+      setReleaseAlertActionKey(null);
+    }
   }
 
   async function handleCreateWatchlist() {
@@ -223,10 +301,12 @@ export function MyTvScreen() {
         const watchlist = await createWatchlist(token, name);
 
         setWatchlists((current) => [watchlist, ...current]);
+        setCachedWatchlists([watchlist, ...watchlists]);
       } else {
         const watchlist = await createSharedWatchlist(token, name);
 
         setSharedWatchlists((current) => [watchlist, ...current]);
+        setCachedSharedWatchlists([watchlist, ...sharedWatchlists]);
       }
 
       setNewWatchlistName('');
@@ -256,9 +336,11 @@ export function MyTvScreen() {
       if (watchlist.kind === 'personal') {
         await deleteWatchlist(token, watchlist.id);
         setWatchlists((current) => current.filter((item) => item.id !== watchlist.id));
+        removePersonalWatchlist(watchlist.id);
       } else {
         await deleteSharedWatchlist(token, watchlist.id);
         setSharedWatchlists((current) => current.filter((item) => item.id !== watchlist.id));
+        removeSharedWatchlist(watchlist.id);
       }
     } catch (deleteError) {
       setWatchlistActionError(
@@ -324,7 +406,12 @@ export function MyTvScreen() {
               watchlists={watchlists}
             />
           ) : (
-            <TrackedTitlesTab items={items} onOpenItem={openItem} />
+            <TrackedTitlesTab
+              alertActionKey={releaseAlertActionKey}
+              items={items}
+              onToggleReleaseAlert={handleToggleReleaseAlert}
+              onOpenItem={openItem}
+            />
           )}
         </>
       )}
@@ -355,7 +442,7 @@ function OverviewTab({
       <View style={styles.overviewPanel}>
         <View style={styles.overviewHeader}>
           <View style={styles.rowCopy}>
-            <Text style={styles.overviewEyebrow}>Kinora overview</Text>
+            <Text style={styles.overviewEyebrow}>Watchly overview</Text>
             <Text style={styles.overviewTitle}>Everything in one user surface</Text>
             <Text style={styles.overviewBody}>
               Tracking, ratings, reviews, personal lists, shared lists, voting, alerts, profile safety, and feed states.
@@ -385,7 +472,7 @@ function OverviewTab({
           {firstTrackedTitle ? (
             <OverviewQuickRow
               label="Tracked title"
-              meta={buildMeta(firstTrackedTitle)}
+              meta={buildOverviewMeta(firstTrackedTitle)}
               onPress={() => onOpenItem(firstTrackedTitle)}
               title={firstTrackedTitle.title}
             />
@@ -476,45 +563,16 @@ function MyTvTabs({
   onChangeTab: (tab: MyTvTab) => void;
 }) {
   return (
-    <View style={styles.segmentedControl}>
-      <MyTvTabButton
-        isSelected={activeTab === 'overview'}
-        label="Overview"
-        onPress={() => onChangeTab('overview')}
-      />
-      <MyTvTabButton
-        isSelected={activeTab === 'watchlists'}
-        label="Watchlists"
-        onPress={() => onChangeTab('watchlists')}
-      />
-      <MyTvTabButton
-        isSelected={activeTab === 'trackedTitles'}
-        label="Tracked titles"
-        onPress={() => onChangeTab('trackedTitles')}
-      />
-    </View>
-  );
-}
-
-function MyTvTabButton({
-  isSelected,
-  label,
-  onPress,
-}: {
-  isSelected: boolean;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      accessibilityState={{ selected: isSelected }}
-      onPress={onPress}
-      style={[styles.segmentButton, isSelected && styles.segmentButtonSelected]}
-    >
-      <Text style={[styles.segmentLabel, isSelected && styles.segmentLabelSelected]}>{label}</Text>
-    </Pressable>
+    <SegmentedControl
+      containerStyle={styles.segmentedControl}
+      onChange={onChangeTab}
+      options={[
+        { label: 'Overview', value: 'overview' },
+        { label: 'Watchlists', value: 'watchlists' },
+        { label: 'Tracked titles', value: 'trackedTitles' },
+      ]}
+      value={activeTab}
+    />
   );
 }
 
@@ -549,18 +607,15 @@ function WatchlistsTab({
   return (
     <View style={styles.section}>
       <View style={styles.watchlistCreatePanel}>
-        <View style={styles.kindControl}>
-          <WatchlistKindButton
-            isSelected={selectedKind === 'personal'}
-            label="Personal"
-            onPress={() => onChangeKind('personal')}
-          />
-          <WatchlistKindButton
-            isSelected={selectedKind === 'shared'}
-            label="Shared"
-            onPress={() => onChangeKind('shared')}
-          />
-        </View>
+        <SegmentedControl
+          buttonMinHeight={32}
+          onChange={onChangeKind}
+          options={[
+            { label: 'Personal', value: 'personal' },
+            { label: 'Shared', value: 'shared' },
+          ]}
+          value={selectedKind}
+        />
         <View style={styles.createRow}>
           <View style={styles.createInput}>
             <TextInput
@@ -637,39 +692,21 @@ function WatchlistsTab({
   );
 }
 
-function WatchlistKindButton({
-  isSelected,
-  label,
-  onPress,
-}: {
-  isSelected: boolean;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      accessibilityLabel={`Create ${label.toLowerCase()} watchlist`}
-      accessibilityRole="button"
-      accessibilityState={{ selected: isSelected }}
-      onPress={onPress}
-      style={[styles.kindButton, isSelected && styles.kindButtonSelected]}
-    >
-      <Text style={[styles.kindLabel, isSelected && styles.kindLabelSelected]}>{label}</Text>
-    </Pressable>
-  );
-}
-
 function TrackedTitlesTab({
+  alertActionKey,
   items,
+  onToggleReleaseAlert,
   onOpenItem,
 }: {
+  alertActionKey: string | null;
   items: HydratedLibraryItem[];
+  onToggleReleaseAlert: (item: HydratedLibraryItem) => void;
   onOpenItem: (item: HydratedLibraryItem) => void;
 }) {
   if (items.length === 0) {
     return (
       <EmptyState
-        body="Open a film or series from Explore, then track it, rate it, or mark an episode watched."
+        body="Mark a title as watching or enable a release bell from a detail page."
         title="No tracked titles yet"
       />
     );
@@ -697,11 +734,39 @@ function TrackedTitlesTab({
               <View style={styles.posterPlaceholder} />
             )}
             <View style={styles.rowCopy}>
+              <Text style={styles.rowEyebrow}>{getTypeLabel(item)}</Text>
               <Text numberOfLines={2} style={styles.title}>
                 {item.title}
               </Text>
-              <Text style={styles.meta}>{buildMeta(item)}</Text>
+              {getSeasonLabel(item) ? <Text style={styles.meta}>{getSeasonLabel(item)}</Text> : null}
+              {getCurrentLabel(item) ? <Text style={styles.meta}>{getCurrentLabel(item)}</Text> : null}
             </View>
+            <Pressable
+              accessibilityLabel={
+                item.hasReleaseAlert
+                  ? `Disable ${item.title} release alerts`
+                  : `Enable ${item.title} release alerts`
+              }
+              accessibilityRole="button"
+              accessibilityState={{ selected: item.hasReleaseAlert }}
+              disabled={alertActionKey === item.key}
+              onPress={(event) => {
+                event.stopPropagation();
+                onToggleReleaseAlert(item);
+              }}
+              style={({ pressed }) => [
+                styles.alertButton,
+                item.hasReleaseAlert && styles.alertButtonEnabled,
+                pressed && styles.rowPressed,
+                alertActionKey === item.key && styles.disabledButton,
+              ]}
+            >
+              {item.hasReleaseAlert ? (
+                <BellRing color={colors.textOnAccent} size={19} strokeWidth={2.2} />
+              ) : (
+                <BellOff color={colors.muted} size={19} strokeWidth={2.2} />
+              )}
+            </Pressable>
           </Pressable>
         ))}
       </View>
@@ -773,6 +838,7 @@ function mergeLibraryItems(
   states: TrackingState[],
   ratings: MovieRating[],
   progress: SeriesProgressSummary[],
+  releaseAlerts: ReleaseAlertSummary[],
 ): LibraryItemBase[] {
   const byContent = new Map<string, LibraryItemBase>();
 
@@ -782,6 +848,8 @@ function mergeLibraryItems(
     byContent.set(key, {
       contentType: state.contentType,
       favorite: state.favorite,
+      hasReleaseAlert: false,
+      inferredWatchingFromProgress: false,
       key,
       ratingScore: null,
       resumeEpisodeNumber: null,
@@ -797,9 +865,15 @@ function mergeLibraryItems(
     const key = `movie:${rating.tmdbId}`;
     const existing = byContent.get(key);
 
+    if (!existing) {
+      return;
+    }
+
     byContent.set(key, {
       contentType: 'movie',
       favorite: existing?.favorite ?? false,
+      hasReleaseAlert: existing?.hasReleaseAlert ?? false,
+      inferredWatchingFromProgress: existing?.inferredWatchingFromProgress ?? false,
       key,
       ratingScore: rating.score,
       resumeEpisodeNumber: existing?.resumeEpisodeNumber ?? null,
@@ -818,14 +892,36 @@ function mergeLibraryItems(
     byContent.set(key, {
       contentType: 'series',
       favorite: existing?.favorite ?? false,
+      hasReleaseAlert: existing?.hasReleaseAlert ?? false,
+      inferredWatchingFromProgress: existing ? existing.inferredWatchingFromProgress : true,
       key,
       ratingScore: existing?.ratingScore ?? null,
       resumeEpisodeNumber: summary.latestEpisodeNumber,
       resumeSeasonNumber: summary.latestSeasonNumber,
-      status: existing?.status ?? null,
+      status: existing?.status ?? 'watching',
       tmdbId: summary.seriesTmdbId,
       updatedAt: maxDateString(existing?.updatedAt, summary.updatedAt),
       watchedEpisodeCount: summary.watchedEpisodeCount,
+    });
+  });
+
+  releaseAlerts.forEach((alert) => {
+    const key = `${alert.contentType}:${alert.tmdbId}`;
+    const existing = byContent.get(key);
+
+    byContent.set(key, {
+      contentType: alert.contentType,
+      favorite: existing?.favorite ?? false,
+      hasReleaseAlert: true,
+      inferredWatchingFromProgress: existing?.inferredWatchingFromProgress ?? false,
+      key,
+      ratingScore: existing?.ratingScore ?? null,
+      resumeEpisodeNumber: existing?.resumeEpisodeNumber ?? null,
+      resumeSeasonNumber: existing?.resumeSeasonNumber ?? null,
+      status: existing?.status ?? null,
+      tmdbId: alert.tmdbId,
+      updatedAt: maxDateString(existing?.updatedAt, alert.updatedAt),
+      watchedEpisodeCount: existing?.watchedEpisodeCount ?? 0,
     });
   });
 
@@ -834,12 +930,29 @@ function mergeLibraryItems(
   );
 }
 
+function shouldShowTrackedTitle(item: HydratedLibraryItem) {
+  if (item.hasReleaseAlert) {
+    return true;
+  }
+
+  if (item.status !== 'watching') {
+    return false;
+  }
+
+  if (!item.inferredWatchingFromProgress) {
+    return true;
+  }
+
+  return item.resumeSeasonNumber !== null && item.resumeEpisodeNumber !== null;
+}
+
 function buildPartialErrorMessage(
   statesResult: PromiseSettledResult<TrackingState[]>,
   ratingsResult: PromiseSettledResult<MovieRating[]>,
   progressResult: PromiseSettledResult<SeriesProgressSummariesResponse>,
   watchlistsResult: PromiseSettledResult<{ items: PersonalWatchlistSummary[] }>,
   sharedWatchlistsResult: PromiseSettledResult<{ items: SharedWatchlistSummary[] }>,
+  releaseAlertsResult: PromiseSettledResult<ReleaseAlertsResponse>,
 ) {
   const failedLabels = [
     statesResult.status === 'rejected' ? `tracking (${getErrorLabel(statesResult.reason)})` : null,
@@ -850,6 +963,9 @@ function buildPartialErrorMessage(
       : null,
     sharedWatchlistsResult.status === 'rejected'
       ? `shared lists (${getErrorLabel(sharedWatchlistsResult.reason)})`
+      : null,
+    releaseAlertsResult.status === 'rejected'
+      ? `release alerts (${getErrorLabel(releaseAlertsResult.reason)})`
       : null,
   ].filter(Boolean);
 
@@ -871,6 +987,8 @@ async function hydrateLibraryItem(item: LibraryItemBase): Promise<HydratedLibrar
 
       return {
         ...item,
+        numberOfEpisodes: null,
+        numberOfSeasons: null,
         posterUrl: response.item.posterUrl,
         title: response.item.title,
       };
@@ -881,6 +999,8 @@ async function hydrateLibraryItem(item: LibraryItemBase): Promise<HydratedLibrar
 
     return {
       ...item,
+      numberOfEpisodes: response.item.numberOfEpisodes,
+      numberOfSeasons: response.item.numberOfSeasons,
       posterUrl: response.item.posterUrl,
       resumeEpisodeNumber: resumeEpisode?.episodeNumber ?? null,
       resumeSeasonNumber: resumeEpisode?.seasonNumber ?? null,
@@ -889,6 +1009,8 @@ async function hydrateLibraryItem(item: LibraryItemBase): Promise<HydratedLibrar
   } catch {
     return {
       ...item,
+      numberOfEpisodes: null,
+      numberOfSeasons: null,
       posterUrl: null,
       title: `TMDB ${item.tmdbId}`,
     };
@@ -903,32 +1025,36 @@ function maxDateString(left: string | undefined, right: string) {
   return left.localeCompare(right) > 0 ? left : right;
 }
 
-function buildMeta(item: HydratedLibraryItem) {
-  const typeLabel = item.contentType === 'movie' ? 'Film' : 'Series';
-  const labels = [typeLabel];
+function getTypeLabel(item: HydratedLibraryItem) {
+  return item.contentType === 'movie' ? 'Film' : 'Series';
+}
 
-  if (item.status) {
-    labels.push(statusLabels[item.status]);
+function getSeasonLabel(item: HydratedLibraryItem) {
+  if (item.contentType !== 'series') {
+    return null;
   }
 
-  if (item.favorite) {
-    labels.push('Favorite');
+  if (item.numberOfSeasons !== null) {
+    return item.numberOfSeasons === 1 ? '1 season' : `${item.numberOfSeasons} seasons`;
   }
 
-  if (item.ratingScore !== null) {
-    labels.push(`Rating ${item.ratingScore}/5`);
+  if (item.numberOfEpisodes !== null) {
+    return item.numberOfEpisodes === 1 ? '1 episode' : `${item.numberOfEpisodes} episodes`;
   }
 
-  if (item.contentType === 'series' && item.watchedEpisodeCount > 0) {
-    labels.push(
-      item.resumeSeasonNumber && item.resumeEpisodeNumber
-        ? `Current S${item.resumeSeasonNumber} E${item.resumeEpisodeNumber}`
-        : 'All caught up',
-    );
-    labels.push(`${item.watchedEpisodeCount} watched`);
+  return null;
+}
+
+function getCurrentLabel(item: HydratedLibraryItem) {
+  if (item.contentType !== 'series' || !item.resumeSeasonNumber || !item.resumeEpisodeNumber) {
+    return null;
   }
 
-  return labels.join(' / ');
+  return `Current S${item.resumeSeasonNumber} E${item.resumeEpisodeNumber}`;
+}
+
+function buildOverviewMeta(item: HydratedLibraryItem) {
+  return [getTypeLabel(item), getSeasonLabel(item), getCurrentLabel(item)].filter(Boolean).join(' / ');
 }
 
 function getResumeEpisode(
@@ -967,6 +1093,21 @@ function getResumeEpisode(
 }
 
 const styles = StyleSheet.create({
+  alertButton: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
+  },
+  alertButtonEnabled: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
   emptyInline: {
     ...typography.body,
     color: colors.muted,
@@ -1104,34 +1245,6 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.45,
   },
-  kindButton: {
-    alignItems: 'center',
-    borderRadius: radii.md,
-    flex: 1,
-    height: 32,
-    justifyContent: 'center',
-  },
-  kindButtonSelected: {
-    backgroundColor: colors.accent,
-  },
-  kindControl: {
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    padding: 3,
-  },
-  kindLabel: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0,
-    textTransform: 'uppercase',
-  },
-  kindLabelSelected: {
-    color: colors.textOnAccent,
-  },
   list: {
     gap: spacing.md,
   },
@@ -1151,11 +1264,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   meta: {
-    color: colors.accent,
+    color: colors.muted,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0,
-    marginTop: spacing.sm,
+    marginTop: 2,
     textTransform: 'uppercase',
   },
   poster: {
@@ -1174,6 +1287,7 @@ const styles = StyleSheet.create({
   },
   row: {
     ...shadows.panel,
+    alignItems: 'center',
     backgroundColor: colors.panelElevated,
     borderColor: colors.border,
     borderRadius: radii.md,
@@ -1183,9 +1297,18 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   rowCopy: {
+    alignSelf: 'stretch',
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     minWidth: 0,
+  },
+  rowEyebrow: {
+    color: colors.accent,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0,
+    marginBottom: spacing.sm,
+    textTransform: 'uppercase',
   },
   rowPressed: {
     opacity: 0.78,
@@ -1202,34 +1325,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginBottom: spacing.xl,
   },
-  segmentButton: {
-    alignItems: 'center',
-    borderRadius: radii.md,
-    flex: 1,
-    height: 38,
-    justifyContent: 'center',
-  },
-  segmentButtonSelected: {
-    backgroundColor: colors.accent,
-  },
   segmentedControl: {
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
     marginBottom: spacing.lg,
-    padding: 3,
-  },
-  segmentLabel: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0,
-    textTransform: 'uppercase',
-  },
-  segmentLabelSelected: {
-    color: colors.textOnAccent,
   },
   sharedIconFrame: {
     alignItems: 'center',

@@ -14,7 +14,7 @@ export function EpisodeRatingControl({
   seasonNumber,
   seriesTmdbId,
 }: EpisodeRatingControlProps) {
-  const { firebaseIdToken } = useAuthSession();
+  const { firebaseIdToken, notifyTrackingChanged } = useAuthSession();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -62,6 +62,7 @@ export function EpisodeRatingControl({
       );
 
       setScore(rating.score);
+      notifyTrackingChanged();
     } catch {
       setError('Could not save your episode rating.');
     } finally {
@@ -80,6 +81,7 @@ export function EpisodeRatingControl({
     try {
       await deleteEpisodeRating(firebaseIdToken, seriesTmdbId, seasonNumber, episodeNumber);
       setScore(null);
+      notifyTrackingChanged();
     } catch {
       setError('Could not clear your episode rating.');
     } finally {

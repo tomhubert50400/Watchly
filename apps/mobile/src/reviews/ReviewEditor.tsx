@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Button } from '../components/Button';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { useToast } from '../notifications/ToastContext';
 
 type ReviewEditorProps = {
   body: string;
@@ -12,6 +13,7 @@ type ReviewEditorProps = {
   onBodyChange: (body: string) => void;
   onDelete: () => void;
   onSave: () => void;
+  ratingScore: number | null;
   savedBody: string | null;
   signedOutBody: string;
   title: string;
@@ -28,13 +30,30 @@ export function ReviewEditor({
   onBodyChange,
   onDelete,
   onSave,
+  ratingScore,
   savedBody,
   signedOutBody,
   title,
 }: ReviewEditorProps) {
+  const { showToast } = useToast();
+  const lastErrorRef = useRef<string | null>(null);
   const trimmedBody = body.trim();
-  const canSave = isSignedIn && !isDisabled && trimmedBody.length > 0 && body.length <= MAX_REVIEW_LENGTH;
+  const hasRating = ratingScore !== null;
+  const canSave =
+    isSignedIn &&
+    hasRating &&
+    !isDisabled &&
+    trimmedBody.length > 0 &&
+    body.length <= MAX_REVIEW_LENGTH;
   const canDelete = isSignedIn && !isDisabled && savedBody !== null;
+
+  useEffect(() => {
+    if (error && lastErrorRef.current !== error) {
+      showToast(error);
+    }
+
+    lastErrorRef.current = error;
+  }, [error, showToast]);
 
   return (
     <View style={styles.panel}>
@@ -43,7 +62,9 @@ export function ReviewEditor({
           <Text style={styles.sectionTitle}>{title}</Text>
           <Text style={styles.body}>
             {isSignedIn
-              ? 'Reviews follow your profile visibility. There is no per-review privacy toggle.'
+              ? hasRating
+                ? `Review attached to your ${ratingScore}/5 rating.`
+                : 'Add a rating before writing a review.'
               : signedOutBody}
           </Text>
         </View>
@@ -54,7 +75,7 @@ export function ReviewEditor({
         <>
           <TextInput
             accessibilityLabel={title}
-            editable={!isDisabled}
+            editable={!isDisabled && hasRating}
             maxLength={MAX_REVIEW_LENGTH}
             multiline
             onChangeText={onBodyChange}
@@ -77,7 +98,6 @@ export function ReviewEditor({
       ) : null}
 
       {savedBody !== null && !isSignedIn ? <Text style={styles.savedText}>{savedBody}</Text> : null}
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
   );
 }
@@ -138,11 +158,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0,
-  },
-  errorText: {
-    ...typography.body,
-    color: colors.danger,
-    marginTop: spacing.md,
   },
   footerRow: {
     alignItems: 'center',

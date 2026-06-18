@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, PlayCircle, XCircle } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import {
   getTrackingState,
   TrackingState,
@@ -9,7 +9,9 @@ import {
   upsertTrackingState,
 } from '../api/tracking';
 import { useAuthSession } from '../auth/AuthSessionContext';
-import { colors, radii, spacing, typography } from '../design/tokens';
+import { SegmentedControl } from '../components/SegmentedControl';
+import { colors, spacing } from '../design/tokens';
+import { useToast } from '../notifications/ToastContext';
 
 type TrackingControlsProps = {
   contentType: TrackedContentType;
@@ -26,10 +28,21 @@ const statusOptions: {
   { Icon: XCircle, label: 'Dropped', value: 'dropped' },
 ];
 
+const trackingStateCache = new Map<string, TrackingState | null>();
+
+function getTrackingStateCacheKey(userId: string, contentType: TrackedContentType, tmdbId: number) {
+  return `${userId}:${contentType}:${tmdbId}`;
+}
+
 export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps) {
-  const { firebaseIdToken, getFirebaseIdToken } = useAuthSession();
-  const [error, setError] = useState<string | null>(null);
-  const [state, setState] = useState<TrackingState | null>(null);
+  const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
+  const { showToast } = useToast();
+  const trackingStateCacheKey = currentUser
+    ? getTrackingStateCacheKey(currentUser.id, contentType, tmdbId)
+    : null;
+  const [state, setState] = useState<TrackingState | null>(() =>
+    trackingStateCacheKey ? trackingStateCache.get(trackingStateCacheKey) ?? null : null,
+  );
   const saveVersionRef = useRef(0);
 
   const loadState = useCallback(async () => {
@@ -39,8 +52,6 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
     }
 
     const loadVersion = saveVersionRef.current;
-
-    setError(null);
 
     try {
       const token = await getFirebaseIdToken();
@@ -52,12 +63,19 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
       const loadedState = await getTrackingState(token, contentType, tmdbId);
 
       if (saveVersionRef.current === loadVersion) {
+        if (currentUser) {
+          trackingStateCache.set(getTrackingStateCacheKey(currentUser.id, contentType, tmdbId), loadedState);
+        }
         setState(loadedState);
       }
     } catch {
-      setError('Could not load your tracking state.');
+      return;
     }
-  }, [contentType, firebaseIdToken, getFirebaseIdToken, tmdbId]);
+  }, [contentType, currentUser, firebaseIdToken, getFirebaseIdToken, tmdbId]);
+
+  useEffect(() => {
+    setState(trackingStateCacheKey ? trackingStateCache.get(trackingStateCacheKey) ?? null : null);
+  }, [trackingStateCacheKey]);
 
   useEffect(() => {
     void loadState();
@@ -83,7 +101,9 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
           };
 
     saveVersionRef.current = saveVersion;
-    setError(null);
+    if (trackingStateCacheKey) {
+      trackingStateCache.set(trackingStateCacheKey, optimisticState);
+    }
     setState(optimisticState);
 
     try {
@@ -101,12 +121,18 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
       });
 
       if (saveVersionRef.current === saveVersion) {
+        if (currentUser) {
+          trackingStateCache.set(getTrackingStateCacheKey(currentUser.id, contentType, tmdbId), savedState);
+        }
         setState(savedState);
       }
     } catch (saveError) {
       if (saveVersionRef.current === saveVersion) {
+        if (trackingStateCacheKey) {
+          trackingStateCache.set(trackingStateCacheKey, previousState);
+        }
         setState(previousState);
-        setError(saveError instanceof Error ? saveError.message : 'Could not save your tracking state.');
+        showToast(saveError instanceof Error ? saveError.message : 'Could not save your tracking state.');
       }
     }
   }
@@ -120,40 +146,31 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
 
   return (
     <View style={styles.container}>
-      <View style={styles.statusControl}>
-        {statusOptions.map(({ Icon, label, value }) => {
-          const isSelected = currentStatus === value;
-
-          return (
-            <Pressable
-              accessibilityLabel={`${isSelected ? 'Clear' : 'Set'} ${label}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isSelected }}
-              key={value}
-              onPress={() => save(isSelected ? null : value, isFavorite)}
-              style={({ pressed }) => [
-                styles.statusButton,
-                isSelected && styles.statusButtonSelected,
-                pressed ? styles.pressed : null,
-              ]}
-            >
+      <SegmentedControl<TrackingStatus>
+        onChange={(nextStatus) => save(currentStatus === nextStatus ? null : nextStatus, isFavorite)}
+        options={statusOptions.map(({ Icon, label, value }) => ({
+          accessibilityLabel: `${currentStatus === value ? 'Clear' : 'Set'} ${label}`,
+          label,
+          render: ({ selected }) => (
+            <View style={styles.statusContent}>
               <Icon
-                color={isSelected ? colors.textOnAccent : colors.text}
+                color={selected ? colors.textOnAccent : colors.text}
                 size={16}
                 strokeWidth={2}
               />
               <Text
                 numberOfLines={1}
-                style={[styles.statusLabel, isSelected && styles.statusLabelSelected]}
+                style={[styles.statusLabel, selected && styles.statusLabelSelected]}
               >
                 {label}
               </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            </View>
+          ),
+          value,
+        }))}
+        selectedLabelStyle={styles.statusLabelSelected}
+        value={currentStatus}
+      />
     </View>
   );
 }
@@ -162,36 +179,12 @@ const styles = StyleSheet.create({
   container: {
     marginBottom: spacing.lg,
   },
-  errorText: {
-    ...typography.body,
-    color: colors.danger,
-    marginTop: spacing.sm,
-  },
-  pressed: {
-    opacity: 0.78,
-  },
-  statusButton: {
+  statusContent: {
     alignItems: 'center',
-    borderRadius: radii.sm,
-    flex: 1,
     flexDirection: 'row',
     gap: spacing.xs,
     justifyContent: 'center',
-    minHeight: 40,
     minWidth: 0,
-    paddingHorizontal: spacing.sm,
-  },
-  statusButtonSelected: {
-    backgroundColor: colors.accent,
-  },
-  statusControl: {
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 3,
-    padding: 3,
   },
   statusLabel: {
     color: colors.text,

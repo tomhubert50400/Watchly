@@ -1,31 +1,32 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RefreshCw } from 'lucide-react-native';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { getMovieDetails, getSeriesDetails } from '../api/catalogue';
-import { getWatchlist, PersonalWatchlist, PersonalWatchlistItem } from '../api/watchlists';
+import { PersonalWatchlist } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
+import { HydratedPersonalWatchlistItem, useWatchlistCache } from './WatchlistCacheContext';
 
 type PersonalWatchlistScreenProps = NativeStackScreenProps<RootStackParamList, 'PersonalWatchlist'>;
 
-type HydratedPersonalItem = PersonalWatchlistItem & {
-  posterUrl: string | null;
-  title: string;
-};
-
 export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlistScreenProps) {
   const { firebaseIdToken, getFirebaseIdToken } = useAuthSession();
+  const { getCachedPersonalWatchlist, refreshPersonalWatchlist } = useWatchlistCache();
   const { watchlistId } = route.params;
   const [error, setError] = useState<string | null>(null);
-  const [hydratedItems, setHydratedItems] = useState<HydratedPersonalItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [watchlist, setWatchlist] = useState<PersonalWatchlist | null>(null);
+  const [hydratedItems, setHydratedItems] = useState<HydratedPersonalWatchlistItem[]>(
+    () => getCachedPersonalWatchlist(watchlistId)?.hydratedItems ?? [],
+  );
+  const [isLoading, setIsLoading] = useState(() => !getCachedPersonalWatchlist(watchlistId));
+  const [watchlist, setWatchlist] = useState<PersonalWatchlist | null>(
+    () => getCachedPersonalWatchlist(watchlistId)?.watchlist ?? null,
+  );
+  const hasVisibleWatchlistRef = useRef(Boolean(watchlist));
 
-  const loadWatchlist = useCallback(async () => {
+  const loadWatchlist = useCallback(async (showLoading = false) => {
     if (!firebaseIdToken) {
       setError(null);
       setHydratedItems([]);
@@ -35,7 +36,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     }
 
     setError(null);
-    setIsLoading(true);
+    setIsLoading(showLoading || !hasVisibleWatchlistRef.current);
 
     try {
       const token = await getFirebaseIdToken();
@@ -44,25 +45,39 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
         throw new Error('Sign in again to load this list.');
       }
 
-      const nextWatchlist = await getWatchlist(token, watchlistId);
-      const nextItems = await Promise.all(nextWatchlist.items.map(hydratePersonalItem));
+      const cached = await refreshPersonalWatchlist(watchlistId);
 
-      setHydratedItems(nextItems);
-      setWatchlist(nextWatchlist);
+      setHydratedItems(cached.hydratedItems);
+      setWatchlist(cached.watchlist);
+      hasVisibleWatchlistRef.current = true;
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : 'Could not load the list.');
-      setHydratedItems([]);
-      setWatchlist(null);
+      if (!hasVisibleWatchlistRef.current) {
+        setHydratedItems([]);
+        setWatchlist(null);
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [firebaseIdToken, getFirebaseIdToken, watchlistId]);
+  }, [firebaseIdToken, getFirebaseIdToken, refreshPersonalWatchlist, watchlistId]);
 
   useEffect(() => {
-    void loadWatchlist();
-  }, [loadWatchlist]);
+    const cached = getCachedPersonalWatchlist(watchlistId);
 
-  function openItem(item: HydratedPersonalItem) {
+    if (cached) {
+      setHydratedItems(cached.hydratedItems);
+      setWatchlist(cached.watchlist);
+      hasVisibleWatchlistRef.current = true;
+      setIsLoading(false);
+      void loadWatchlist(false);
+      return;
+    }
+
+    hasVisibleWatchlistRef.current = false;
+    void loadWatchlist(true);
+  }, [loadWatchlist, watchlistId]);
+
+  function openItem(item: HydratedPersonalWatchlistItem) {
     if (item.contentType === 'movie') {
       navigation.navigate('FilmDetail', {
         title: item.title,
@@ -94,7 +109,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
         </View>
       ) : error && !watchlist ? (
         <EmptyState body={error} title="List failed">
-          <Button label="Retry" onPress={loadWatchlist} />
+          <Button label="Retry" onPress={() => loadWatchlist(true)} />
         </EmptyState>
       ) : watchlist ? (
         <>
@@ -110,7 +125,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
               <Pressable
                 accessibilityLabel="Refresh list"
                 accessibilityRole="button"
-                onPress={loadWatchlist}
+                onPress={() => loadWatchlist(true)}
                 style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
               >
                 <RefreshCw color={colors.text} size={18} strokeWidth={2} />
@@ -157,34 +172,6 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
       ) : null}
     </ScrollView>
   );
-}
-
-async function hydratePersonalItem(item: PersonalWatchlistItem): Promise<HydratedPersonalItem> {
-  try {
-    if (item.contentType === 'movie') {
-      const response = await getMovieDetails(item.tmdbId);
-
-      return {
-        ...item,
-        posterUrl: response.item.posterUrl,
-        title: response.item.title,
-      };
-    }
-
-    const response = await getSeriesDetails(item.tmdbId);
-
-    return {
-      ...item,
-      posterUrl: response.item.posterUrl,
-      title: response.item.title,
-    };
-  } catch {
-    return {
-      ...item,
-      posterUrl: null,
-      title: `TMDB ${item.tmdbId}`,
-    };
-  }
 }
 
 const styles = StyleSheet.create({

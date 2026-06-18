@@ -1,7 +1,9 @@
+import { useEffect, useRef } from 'react';
 import { Star } from 'lucide-react-native';
 import { ActivityIndicator, GestureResponderEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button } from '../components/Button';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { useToast } from '../notifications/ToastContext';
 
 type StarRatingPanelProps = {
   body: string;
@@ -32,6 +34,17 @@ export function StarRatingPanel({
   score,
   title,
 }: StarRatingPanelProps) {
+  const { showToast } = useToast();
+  const lastErrorRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (error && lastErrorRef.current !== error) {
+      showToast(error);
+    }
+
+    lastErrorRef.current = error;
+  }, [error, showToast]);
+
   function selectFromStarTap(starValue: number, event: GestureResponderEvent) {
     const nextScore = event.nativeEvent.locationX <= STAR_BUTTON_SIZE / 2 ? starValue - 0.5 : starValue;
 
@@ -91,8 +104,6 @@ export function StarRatingPanel({
           <Button disabled={isDisabled} label={clearLabel} onPress={onClear} variant="secondary" />
         </View>
       ) : null}
-
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
   );
 }
@@ -120,11 +131,6 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.52,
-  },
-  errorText: {
-    ...typography.body,
-    color: colors.danger,
-    marginTop: spacing.md,
   },
   headerRow: {
     alignItems: 'center',

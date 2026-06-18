@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { getSeriesRatingSummary, SeriesRatingSummary } from '../api/ratings';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { useToast } from '../notifications/ToastContext';
 
 type ComputedRatingSummaryProps = {
   seasonNumber?: number;
@@ -17,28 +18,26 @@ export function ComputedRatingSummary({
   title,
 }: ComputedRatingSummaryProps) {
   const { firebaseIdToken } = useAuthSession();
-  const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [summary, setSummary] = useState<SeriesRatingSummary | null>(null);
 
   const loadSummary = useCallback(async () => {
     if (!firebaseIdToken) {
       setSummary(null);
-      setError(null);
       return;
     }
 
-    setError(null);
     setIsLoading(true);
 
     try {
       setSummary(await getSeriesRatingSummary(firebaseIdToken, seriesTmdbId));
     } catch {
-      setError('Could not load your computed rating.');
+      showToast('Could not load your computed rating.');
     } finally {
       setIsLoading(false);
     }
-  }, [firebaseIdToken, seriesTmdbId]);
+  }, [firebaseIdToken, seriesTmdbId, showToast]);
 
   useFocusEffect(
     useCallback(() => {
@@ -66,7 +65,6 @@ export function ComputedRatingSummary({
       {computed.averageScore !== null ? (
         <Text style={styles.score}>{formatScore(computed.averageScore)}/5</Text>
       ) : null}
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
   );
 }
@@ -130,11 +128,6 @@ const styles = StyleSheet.create({
   },
   copy: {
     flex: 1,
-  },
-  errorText: {
-    ...typography.body,
-    color: colors.danger,
-    marginTop: spacing.md,
   },
   headerRow: {
     alignItems: 'center',
