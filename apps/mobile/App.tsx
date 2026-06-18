@@ -70,13 +70,13 @@ function tabIcon(routeName: TabRoute, color: string, size: number) {
   );
 }
 
-function renderTabScreen(routeName: TabRoute) {
+function renderTabScreen(routeName: TabRoute, isActive: boolean) {
   if (routeName === 'Feed') {
     return <FeedScreen />;
   }
 
   if (routeName === 'Explore') {
-    return <ExploreScreen />;
+    return <ExploreScreen isActive={isActive} />;
   }
 
   if (routeName === 'MyTV') {
@@ -222,7 +222,7 @@ function MainTabs() {
               key={routeName}
               style={[styles.page, { width }]}
             >
-              {renderTabScreen(routeName)}
+              {renderTabScreen(routeName, index === activeIndex)}
             </View>
           ))}
         </Animated.View>

@@ -26,6 +26,10 @@ import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 type ExploreSection = 'trending' | 'announced';
 const SEARCH_INPUT_ACCESSORY_ID = 'explore-search-keyboard-accessory';
 
+type ExploreScreenProps = {
+  isActive?: boolean;
+};
+
 const CatalogueResultCard = memo(function CatalogueResultCard({
   dateDisplay = 'year',
   item,
@@ -108,7 +112,7 @@ const CatalogueResultCard = memo(function CatalogueResultCard({
   );
 });
 
-export function ExploreScreen() {
+export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [query, setQuery] = useState('');
   const [items, setItems] = useState<CatalogueSearchItem[]>([]);
@@ -123,6 +127,15 @@ export function ExploreScreen() {
   });
   const trimmedQuery = query.trim();
   const isSearching = trimmedQuery.length >= 2;
+
+  useEffect(() => {
+    if (isActive) {
+      return;
+    }
+
+    setQuery('');
+    Keyboard.dismiss();
+  }, [isActive]);
 
   useEffect(() => {
     let isCurrent = true;
