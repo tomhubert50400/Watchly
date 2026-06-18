@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Star } from 'lucide-react-native';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { EpisodeDetails, getEpisodeDetails } from '../api/catalogue';
 import { Button } from '../components/Button';
@@ -52,32 +53,18 @@ export function EpisodeDetailScreen({ route }: EpisodeDetailScreenProps) {
             <Button label="Retry" onPress={loadEpisode} />
           </EmptyState>
         ) : episode ? (
-          <EpisodeDetailContent episode={episode} seriesTitle={route.params.seriesTitle} />
+          <EpisodeDetailContent episode={episode} />
         ) : null}
       </ScrollView>
     </View>
   );
 }
 
-function EpisodeDetailContent({
-  episode,
-  seriesTitle,
-}: {
-  episode: EpisodeDetails;
-  seriesTitle: string;
-}) {
+function EpisodeDetailContent({ episode }: { episode: EpisodeDetails }) {
   const runtime = episode.runtimeMinutes ? `${episode.runtimeMinutes}m` : null;
   const isReleased = isReleasedDate(episode.airDate);
-  const metadata = [
-    seriesTitle,
-    `S${episode.seasonNumber}`,
-    `E${episode.episodeNumber}`,
-    episode.airDate,
-    runtime,
-    isReleased && episode.voteAverage ? episode.voteAverage.toFixed(1) : null,
-  ]
-    .filter(Boolean)
-    .join(' / ');
+  const episodeCode = `S${episode.seasonNumber} E${episode.episodeNumber}`;
+  const rating = isReleased && episode.voteAverage ? `${(episode.voteAverage / 2).toFixed(1)}/5` : null;
 
   return (
     <View>
@@ -91,8 +78,22 @@ function EpisodeDetailContent({
       ) : (
         <View style={styles.stillPlaceholder} />
       )}
-      <Text style={styles.title}>{episode.title}</Text>
-      <Text style={styles.metadata}>{metadata}</Text>
+      <View style={styles.titleRow}>
+        <View style={styles.titleCopy}>
+          <Text style={styles.title}>{episode.title}</Text>
+          {runtime ? <Text style={styles.runtime}>{runtime}</Text> : null}
+          {rating ? (
+            <View style={styles.ratingRow}>
+              <Text style={styles.ratingText}>{rating}</Text>
+              <Star color={colors.accent} fill={colors.accent} size={14} strokeWidth={2.2} />
+            </View>
+          ) : null}
+        </View>
+        <View style={styles.episodeMeta}>
+          {episode.airDate ? <Text style={styles.airDate}>{episode.airDate}</Text> : null}
+          <Text style={styles.episodeCode}>{episodeCode}</Text>
+        </View>
+      </View>
       <EpisodeProgressControl
         episodeNumber={episode.episodeNumber}
         seasonNumber={episode.seasonNumber}
@@ -181,13 +182,25 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '700',
   },
-  metadata: {
+  airDate: {
     color: colors.accent,
-    fontSize: 12,
+    fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0,
-    marginTop: spacing.sm,
     textTransform: 'uppercase',
+  },
+  episodeCode: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 0,
+    marginTop: spacing.xs,
+    textTransform: 'uppercase',
+  },
+  episodeMeta: {
+    alignItems: 'flex-end',
+    flexShrink: 0,
+    paddingTop: 2,
   },
   panel: {
     ...shadows.panel,
@@ -228,5 +241,34 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0,
     lineHeight: 36,
+  },
+  ratingRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  ratingText: {
+    color: colors.muted,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0,
+  },
+  runtime: {
+    color: colors.muted,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0,
+    marginTop: spacing.xs,
+  },
+  titleCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  titleRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.sm,
   },
 });
