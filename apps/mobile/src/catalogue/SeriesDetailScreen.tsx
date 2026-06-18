@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ChevronDown } from 'lucide-react-native';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getSeasonDetails, SeasonDetails, SeriesDetails } from '../api/catalogue';
 import { listSeriesProgress, SeriesProgress } from '../api/progress';
@@ -24,6 +24,12 @@ import { useCatalogueCache } from './CatalogueCacheContext';
 import { isReleasedDate } from './releaseDates';
 
 type SeriesDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'SeriesDetail'>;
+const SEASON_PICKER_VISIBLE_ROWS = 3;
+const SEASON_PICKER_ROW_HEIGHT = 72;
+const SEASON_PICKER_GAP = spacing.sm;
+const SEASON_PICKER_MAX_HEIGHT =
+  SEASON_PICKER_VISIBLE_ROWS * SEASON_PICKER_ROW_HEIGHT +
+  (SEASON_PICKER_VISIBLE_ROWS - 1) * SEASON_PICKER_GAP;
 
 export function SeriesDetailScreen({ route }: SeriesDetailScreenProps) {
   const { tmdbId } = route.params;
@@ -166,15 +172,28 @@ function SeriesEpisodesPanel({
   const { firebaseIdToken, trackingRevision } = useAuthSession();
   const { showToast } = useToast();
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [shouldRenderPicker, setShouldRenderPicker] = useState(false);
   const [selectedSeasonNumber, setSelectedSeasonNumber] = useState<number | null>(null);
   const [progress, setProgress] = useState<SeriesProgress | null>(null);
   const [season, setSeason] = useState<SeasonDetails | null>(null);
   const [isLoadingSeason, setIsLoadingSeason] = useState(false);
+  const pickerAnimation = useRef(new Animated.Value(0)).current;
 
   const orderedSeasons = orderSeasonsForPicker(seasons);
   const defaultSeasonNumber = getDefaultSeasonNumber(seasons, progress);
   const activeSeasonNumber = selectedSeasonNumber ?? defaultSeasonNumber;
   const activeSeason = orderedSeasons.find((item) => item.seasonNumber === activeSeasonNumber) ?? null;
+  const pickerAnimatedStyle = {
+    opacity: pickerAnimation,
+    transform: [
+      {
+        translateY: pickerAnimation.interpolate({
+          inputRange: [0, 1],
+          outputRange: [-8, 0],
+        }),
+      },
+    ],
+  };
 
   useEffect(() => {
     if (!firebaseIdToken) {
@@ -205,6 +224,22 @@ function SeriesEpisodesPanel({
       isMounted = false;
     };
   }, [firebaseIdToken, seriesTmdbId, trackingRevision]);
+
+  useEffect(() => {
+    if (isPickerOpen) {
+      setShouldRenderPicker(true);
+    }
+
+    Animated.timing(pickerAnimation, {
+      duration: 180,
+      toValue: isPickerOpen ? 1 : 0,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished && !isPickerOpen) {
+        setShouldRenderPicker(false);
+      }
+    });
+  }, [isPickerOpen, pickerAnimation]);
 
   useEffect(() => {
     if (activeSeasonNumber === null) {
@@ -258,7 +293,7 @@ function SeriesEpisodesPanel({
   }
 
   return (
-    <View>
+    <View style={styles.episodesPanel}>
       <Pressable
         accessibilityLabel="Choose season"
         accessibilityRole="button"
@@ -280,53 +315,63 @@ function SeriesEpisodesPanel({
         />
       </Pressable>
 
-      {isPickerOpen ? (
-        <View style={styles.seasonPicker}>
-          {orderedSeasons.map((item) => (
-            <Pressable
-              accessibilityLabel={`Select ${formatSeasonName(item)}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected: activeSeasonNumber === item.seasonNumber }}
-              key={item.id}
-              onPress={() => selectSeason(item.seasonNumber)}
-              style={({ pressed }) => [
-                styles.seasonOption,
-                activeSeasonNumber === item.seasonNumber && styles.seasonOptionActive,
-                pressed && styles.seasonRowPressed,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.seasonOptionTitle,
-                  activeSeasonNumber === item.seasonNumber && styles.seasonOptionTitleActive,
-                ]}
-              >
-                {formatSeasonName(item)}
-              </Text>
-              <Text style={styles.seasonOptionMeta}>
-                {formatSeasonMeta(item)}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+      {shouldRenderPicker ? (
+        <Animated.View style={[styles.seasonPicker, pickerAnimatedStyle]}>
+          <ScrollView
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={orderedSeasons.length > SEASON_PICKER_VISIBLE_ROWS}
+            style={styles.seasonPickerScroll}
+          >
+            <View style={styles.seasonPickerContent}>
+              {orderedSeasons.map((item) => (
+                <Pressable
+                  accessibilityLabel={`Select ${formatSeasonName(item)}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: activeSeasonNumber === item.seasonNumber }}
+                  key={item.id}
+                  onPress={() => selectSeason(item.seasonNumber)}
+                  style={({ pressed }) => [
+                    styles.seasonOption,
+                    activeSeasonNumber === item.seasonNumber && styles.seasonOptionActive,
+                    pressed && styles.seasonRowPressed,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.seasonOptionTitle,
+                      activeSeasonNumber === item.seasonNumber && styles.seasonOptionTitleActive,
+                    ]}
+                  >
+                    {formatSeasonName(item)}
+                  </Text>
+                  <Text style={styles.seasonOptionMeta}>
+                    {formatSeasonMeta(item)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </ScrollView>
+        </Animated.View>
       ) : null}
 
-      {isLoadingSeason ? (
-        <View style={styles.inlineLoading}>
-          <ActivityIndicator color={colors.accent} />
-          <Text style={styles.body}>Loading episodes</Text>
-        </View>
-      ) : season && season.episodes.length > 0 ? (
-        season.episodes.map((episode) => (
-          <EpisodeRow
-            episode={episode}
-            key={episode.id}
-            onPress={() => openEpisode(episode)}
-          />
-        ))
-      ) : (
-        <Text style={styles.body}>No episode data available yet.</Text>
-      )}
+      <View style={styles.episodeList}>
+        {isLoadingSeason ? (
+          <View style={styles.inlineLoading}>
+            <ActivityIndicator color={colors.accent} />
+            <Text style={styles.body}>Loading episodes</Text>
+          </View>
+        ) : season && season.episodes.length > 0 ? (
+          season.episodes.map((episode) => (
+            <EpisodeRow
+              episode={episode}
+              key={episode.id}
+              onPress={() => openEpisode(episode)}
+            />
+          ))
+        ) : (
+          <Text style={styles.body}>No episode data available yet.</Text>
+        )}
+      </View>
     </View>
   );
 }
@@ -461,6 +506,20 @@ const styles = StyleSheet.create({
     color: colors.muted,
     marginTop: spacing.xs,
   },
+  episodeList: {
+    borderTopColor: colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: spacing.md,
+  },
+  episodesPanel: {
+    ...shadows.panel,
+    backgroundColor: colors.panelElevated,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    marginTop: spacing.md,
+    padding: spacing.md,
+  },
   episodesButton: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -519,7 +578,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.md,
-    paddingTop: spacing.md,
+    paddingVertical: spacing.md,
   },
   panel: {
     ...shadows.panel,
@@ -562,6 +621,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radii.md,
     borderWidth: 1,
+    height: SEASON_PICKER_ROW_HEIGHT,
+    justifyContent: 'center',
     padding: spacing.md,
   },
   seasonOptionActive: {
@@ -584,8 +645,19 @@ const styles = StyleSheet.create({
     color: colors.accent,
   },
   seasonPicker: {
-    gap: spacing.sm,
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
     marginTop: spacing.md,
+    overflow: 'hidden',
+    padding: spacing.sm,
+  },
+  seasonPickerContent: {
+    gap: SEASON_PICKER_GAP,
+  },
+  seasonPickerScroll: {
+    maxHeight: SEASON_PICKER_MAX_HEIGHT,
   },
   seasonRow: {
     borderTopColor: colors.border,
@@ -613,7 +685,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: spacing.md,
     padding: spacing.md,
   },
   selectedSeasonCopy: {
