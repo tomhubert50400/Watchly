@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Star } from 'lucide-react-native';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -14,7 +14,7 @@ import { isReleasedDate } from './releaseDates';
 
 type EpisodeDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'EpisodeDetail'>;
 
-export function EpisodeDetailScreen({ route }: EpisodeDetailScreenProps) {
+export function EpisodeDetailScreen({ navigation, route }: EpisodeDetailScreenProps) {
   const { episodeNumber, seasonNumber, tmdbId } = route.params;
   const [episode, setEpisode] = useState<EpisodeDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +39,14 @@ export function EpisodeDetailScreen({ route }: EpisodeDetailScreenProps) {
   useEffect(() => {
     void loadEpisode();
   }, [loadEpisode]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: episode?.airDate
+        ? () => <Text style={styles.headerAirDate}>{episode.airDate}</Text>
+        : undefined,
+    });
+  }, [episode?.airDate, navigation]);
 
   return (
     <View style={styles.safeArea}>
@@ -84,13 +92,12 @@ function EpisodeDetailContent({ episode }: { episode: EpisodeDetails }) {
           {runtime ? <Text style={styles.runtime}>{runtime}</Text> : null}
           {rating ? (
             <View style={styles.ratingRow}>
-              <Text style={styles.ratingText}>{rating}</Text>
               <Star color={colors.accent} fill={colors.accent} size={14} strokeWidth={2.2} />
+              <Text style={styles.ratingText}>{rating}</Text>
             </View>
           ) : null}
         </View>
         <View style={styles.episodeMeta}>
-          {episode.airDate ? <Text style={styles.airDate}>{episode.airDate}</Text> : null}
           <Text style={styles.episodeCode}>{episodeCode}</Text>
         </View>
       </View>
@@ -182,19 +189,18 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '700',
   },
-  airDate: {
+  headerAirDate: {
     color: colors.accent,
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0,
     textTransform: 'uppercase',
   },
   episodeCode: {
-    color: colors.text,
+    color: colors.muted,
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: 0,
-    marginTop: spacing.xs,
     textTransform: 'uppercase',
   },
   episodeMeta: {
