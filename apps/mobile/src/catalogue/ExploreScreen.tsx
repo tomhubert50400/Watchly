@@ -5,6 +5,9 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
+  InputAccessoryView,
+  Keyboard,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -21,6 +24,7 @@ import { RootStackParamList } from '../navigation/types';
 import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 
 type ExploreSection = 'trending' | 'announced';
+const SEARCH_INPUT_ACCESSORY_ID = 'explore-search-keyboard-accessory';
 
 const CatalogueResultCard = memo(function CatalogueResultCard({
   dateDisplay = 'year',
@@ -257,8 +261,10 @@ export function ExploreScreen() {
                 clearButtonMode="while-editing"
                 enablesReturnKeyAutomatically
                 inputMode="search"
+                inputAccessoryViewID={Platform.OS === 'ios' ? SEARCH_INPUT_ACCESSORY_ID : undefined}
                 keyboardAppearance="dark"
                 onChangeText={setQuery}
+                onSubmitEditing={Keyboard.dismiss}
                 placeholder="Search a film or series"
                 placeholderTextColor={colors.muted}
                 returnKeyType="search"
@@ -287,6 +293,24 @@ export function ExploreScreen() {
         renderItem={renderCatalogueItem}
         showsVerticalScrollIndicator={false}
       />
+      {Platform.OS === 'ios' ? (
+        <InputAccessoryView nativeID={SEARCH_INPUT_ACCESSORY_ID}>
+          <View style={styles.keyboardAccessory}>
+            <Pressable
+              accessibilityLabel="Dismiss keyboard"
+              accessibilityRole="button"
+              hitSlop={8}
+              onPress={Keyboard.dismiss}
+              style={({ pressed }) => [
+                styles.keyboardDismissButton,
+                pressed && styles.keyboardDismissButtonPressed,
+              ]}
+            >
+              <Text style={styles.keyboardDismissText}>Done</Text>
+            </Pressable>
+          </View>
+        </InputAccessoryView>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -383,6 +407,30 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: spacing.lg,
+  },
+  keyboardAccessory: {
+    alignItems: 'flex-end',
+    backgroundColor: colors.panelElevated,
+    borderTopColor: colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  keyboardDismissButton: {
+    alignItems: 'center',
+    borderRadius: radii.sm,
+    justifyContent: 'center',
+    minHeight: 32,
+    paddingHorizontal: spacing.md,
+  },
+  keyboardDismissButtonPressed: {
+    backgroundColor: colors.panelSoft,
+  },
+  keyboardDismissText: {
+    color: colors.accent,
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0,
   },
   list: {
     flexGrow: 1,
