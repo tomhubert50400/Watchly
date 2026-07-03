@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
-import { colors, radii, spacing } from '../design/tokens';
+import { Animated, Easing, Pressable, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
+import { colors, radii, spacing, touchTargets } from '../design/tokens';
 
 type SegmentedControlOption<T extends string> = {
   accessibilityLabel?: string;
@@ -32,6 +32,7 @@ export function SegmentedControl<T extends string>({
   value,
 }: SegmentedControlProps<T>) {
   const [controlWidth, setControlWidth] = useState(0);
+  const buttonHeight = Math.max(buttonMinHeight, touchTargets.min);
   const initialIndex = options.findIndex((option) => option.value === value);
   const selectionProgress = useRef(new Animated.Value(Math.max(initialIndex, 0))).current;
   const selectedIndex = options.findIndex((option) => option.value === value);
@@ -47,7 +48,8 @@ export function SegmentedControl<T extends string>({
   useEffect(() => {
     if (selectedIndex >= 0) {
       Animated.timing(selectionProgress, {
-        duration: 220,
+        duration: 210,
+        easing: Easing.out(Easing.cubic),
         toValue: selectedIndex,
         useNativeDriver: true,
       }).start();
@@ -83,7 +85,7 @@ export function SegmentedControl<T extends string>({
             onPress={() => onChange(option.value)}
             style={({ pressed }) => [
               styles.button,
-              { minHeight: buttonMinHeight },
+              { minHeight: buttonHeight },
               pressed && styles.pressed,
             ]}
           >
@@ -115,7 +117,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   control: {
-    backgroundColor: colors.panel,
+    backgroundColor: colors.panelSoft,
     borderColor: colors.border,
     borderRadius: radii.md,
     borderWidth: 1,
@@ -124,23 +126,25 @@ const styles = StyleSheet.create({
     padding: controlPadding,
   },
   indicator: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.panelElevated,
+    borderColor: colors.accentBorder,
     borderRadius: radii.sm,
+    borderWidth: 1,
     bottom: controlPadding,
     left: controlPadding,
     position: 'absolute',
     top: controlPadding,
   },
   label: {
-    color: colors.muted,
+    color: colors.textSubtle,
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: 0,
     textAlign: 'center',
     textTransform: 'uppercase',
   },
   labelSelected: {
-    color: colors.textOnAccent,
+    color: colors.accentText,
   },
   pressed: {
     opacity: 0.78,

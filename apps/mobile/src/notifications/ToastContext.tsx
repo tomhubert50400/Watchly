@@ -1,7 +1,7 @@
 import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radii, shadows, spacing } from '../design/tokens';
+import { colors, radii, shadows, spacing, touchTargets } from '../design/tokens';
 
 type ToastTone = 'error' | 'success';
 
@@ -124,21 +124,21 @@ export function useToast() {
 
 const styles = StyleSheet.create({
   errorToast: {
-    borderLeftColor: colors.danger,
+    backgroundColor: colors.dangerBackground,
+    borderColor: colors.dangerBorder,
   },
   host: {
     flex: 1,
   },
   successToast: {
-    borderLeftColor: colors.success,
+    backgroundColor: colors.successBackground,
+    borderColor: colors.successBorder,
   },
   toast: {
     ...shadows.panel,
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderLeftWidth: 4,
-    borderRadius: radii.md,
+    borderRadius: radii.lg,
     borderWidth: 1,
+    minHeight: touchTargets.min,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   toastText: {
     color: colors.text,
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: 0,
     lineHeight: 18,
   },

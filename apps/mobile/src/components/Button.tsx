@@ -1,5 +1,5 @@
 import { Pressable, PressableProps, StyleSheet, Text } from 'react-native';
-import { colors, radii, spacing } from '../design/tokens';
+import { colors, radii, spacing, touchTargets } from '../design/tokens';
 
 type ButtonVariant = 'danger' | 'primary' | 'secondary';
 
@@ -23,7 +23,14 @@ export function Button({ disabled, label, variant = 'primary', ...pressableProps
       ]}
       {...pressableProps}
     >
-      <Text style={[styles.label, variant === 'primary' || variant === 'danger' ? styles.primaryLabel : styles.secondaryLabel]}>
+      <Text
+        style={[
+          styles.label,
+          variant === 'danger' ? styles.dangerLabel : null,
+          variant === 'primary' ? styles.primaryLabel : null,
+          variant === 'secondary' ? styles.secondaryLabel : null,
+        ]}
+      >
         {label}
       </Text>
     </Pressable>
@@ -36,7 +43,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     justifyContent: 'center',
-    minHeight: 46,
+    minHeight: touchTargets.min,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
   },
@@ -45,11 +52,14 @@ const styles = StyleSheet.create({
   },
   danger: {
     backgroundColor: colors.dangerBackground,
-    borderColor: colors.danger,
+    borderColor: colors.dangerBorder,
+  },
+  dangerLabel: {
+    color: colors.danger,
   },
   label: {
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: 0,
   },
   pressed: {
@@ -57,11 +67,11 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   primary: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
   },
   primaryLabel: {
-    color: colors.textOnAccent,
+    color: colors.accentText,
   },
   secondary: {
     backgroundColor: colors.panelElevated,

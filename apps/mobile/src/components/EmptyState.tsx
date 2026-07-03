@@ -10,7 +10,9 @@ type EmptyStateProps = PropsWithChildren<{
 export function EmptyState({ body, children, title }: EmptyStateProps) {
   return (
     <View style={styles.container}>
-      <View style={styles.marker} />
+      <View style={styles.marker}>
+        <View style={styles.markerCore} />
+      </View>
       <View style={styles.copy}>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.body}>{body}</Text>
@@ -27,14 +29,14 @@ const styles = StyleSheet.create({
   },
   body: {
     ...typography.body,
-    color: colors.muted,
+    color: colors.textMuted,
     marginTop: spacing.sm,
   },
   container: {
     ...shadows.panel,
-    backgroundColor: colors.panelElevated,
+    backgroundColor: colors.panel,
     borderColor: colors.border,
-    borderRadius: radii.md,
+    borderRadius: radii.lg,
     borderWidth: 1,
     flexDirection: 'row',
     padding: spacing.lg,
@@ -43,12 +45,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   marker: {
-    backgroundColor: colors.accent,
-    borderRadius: radii.sm,
-    height: 42,
+    alignItems: 'center',
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: 'center',
     marginRight: spacing.md,
-    opacity: 0.92,
-    width: 6,
+    width: 8,
+  },
+  markerCore: {
+    backgroundColor: colors.accentText,
+    borderRadius: radii.xs,
+    height: 28,
+    width: 2,
   },
   title: {
     ...typography.title,
