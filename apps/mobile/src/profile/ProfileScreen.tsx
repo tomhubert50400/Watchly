@@ -1,15 +1,18 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ActivityIndicator, Image, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Star, Settings } from 'lucide-react-native';
 import { getEpisodeDetails, getMovieDetails } from '../api/catalogue';
 import { getOwnProfileOpinions, ProfileOpinion } from '../api/profile';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { ProfileAuthCard } from '../auth/ProfileAuthCard';
 import { Button } from '../components/Button';
+import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
 import { IconButton } from '../components/IconButton';
+import { LoadingState } from '../components/LoadingState';
+import { MediaPoster } from '../components/MediaPoster';
 import { Screen } from '../components/Screen';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
@@ -140,7 +143,8 @@ export function ProfileScreen() {
           />
         ) : undefined
       }
-      title=""
+      eyebrow={firebaseIdToken ? 'Your profile' : undefined}
+      title={firebaseIdToken ? 'Film log' : ''}
       trailing={
         firebaseIdToken ? (
           <IconButton
@@ -162,10 +166,7 @@ export function ProfileScreen() {
             reviewsCount={profileStats?.reviewsCount ?? getReviewCount(items)}
           />
           {isLoading ? (
-            <View style={styles.loadingPanel}>
-              <ActivityIndicator color={colors.accent} />
-              <Text style={styles.loadingText}>Loading your opinions</Text>
-            </View>
+            <LoadingState label="Loading your opinions" />
           ) : error ? (
             <EmptyState body={error} title="Opinions failed">
               <Button
@@ -199,6 +200,7 @@ const ProfileOpinionCard = memo(function ProfileOpinionCard({
   onPress: (item: HydratedProfileOpinion) => void;
 }) {
   const isRating = item.type === 'movieRating' || item.type === 'episodeRating';
+  const opinionLabel = isRating ? 'Rating' : 'Review';
   const contentTitle = item.content.contentType === 'episode'
     ? item.seriesTitle ?? `Series ${item.content.seriesTmdbId}`
     : item.contentTitle;
@@ -213,31 +215,31 @@ const ProfileOpinionCard = memo(function ProfileOpinionCard({
       onPress={() => onPress(item)}
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
     >
-      <View style={styles.contentRow}>
-        {item.contentImageUrl ? (
-          <Image
-            accessibilityIgnoresInvertColors
-            accessibilityLabel={`${item.contentTitle} artwork`}
-            source={{ uri: item.contentImageUrl }}
-            style={styles.contentImage}
-          />
-        ) : (
-          <View style={styles.contentImagePlaceholder} />
-        )}
+      <View style={styles.opinionTopRow}>
+        <MediaPoster
+          accessibilityLabel={`${item.contentTitle} artwork`}
+          posterUrl={item.contentImageUrl}
+          style={styles.contentImage}
+        />
         <View style={styles.contentCopy}>
+          <View style={styles.opinionMetaRow}>
+            <Chip label={opinionLabel} tone={isRating ? 'rating' : 'accent'} />
+            <Text style={styles.date}>{formatDate(item.updatedAt)}</Text>
+          </View>
           <Text numberOfLines={2} style={styles.contentTitle}>
             {contentTitle}
           </Text>
           <Text style={styles.contentSubtitle}>{contentSubtitle}</Text>
+          <StarRating score={item.score} />
         </View>
       </View>
-      <StarRating score={item.score} />
       {!isRating ? (
-        <Text numberOfLines={4} style={styles.body}>
-          {item.body}
-        </Text>
+        <View style={styles.reviewBody}>
+          <Text numberOfLines={4} style={styles.body}>
+            {item.body}
+          </Text>
+        </View>
       ) : null}
-      <Text style={styles.date}>{formatDate(item.updatedAt)}</Text>
     </Pressable>
   );
 });
@@ -250,10 +252,10 @@ function StarRating({ score }: { score: number }) {
 
         return (
           <View key={index} style={styles.starBox}>
-            <Star color={colors.accent} fill="transparent" size={22} strokeWidth={2.2} />
+            <Star color={colors.rating} fill="transparent" size={22} strokeWidth={2.2} />
             {fillRatio > 0 ? (
               <View style={[styles.starFillClip, { width: `${fillRatio * 100}%` }]}>
-                <Star color={colors.accent} fill={colors.accent} size={22} strokeWidth={2.2} />
+                <Star color={colors.rating} fill={colors.rating} size={22} strokeWidth={2.2} />
               </View>
             ) : null}
           </View>
@@ -363,7 +365,7 @@ function getReviewCount(items: HydratedProfileOpinion[]) {
 const styles = StyleSheet.create({
   body: {
     ...typography.body,
-    color: colors.text,
+    color: colors.textMuted,
   },
   card: {
     ...shadows.panel,
@@ -376,6 +378,7 @@ const styles = StyleSheet.create({
   },
   cardPressed: {
     opacity: 0.78,
+    transform: [{ scale: 0.99 }],
   },
   contentCopy: {
     flex: 1,
@@ -383,28 +386,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   contentImage: {
-    backgroundColor: colors.panelSoft,
-    borderRadius: radii.md,
-    height: 74,
-    width: 50,
-  },
-  contentImagePlaceholder: {
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    height: 74,
-    width: 50,
-  },
-  contentRow: {
-    alignItems: 'center',
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.sm,
+    height: 116,
+    width: 78,
   },
   contentSubtitle: {
     color: colors.muted,
@@ -422,7 +405,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   date: {
-    alignSelf: 'flex-end',
     color: colors.muted,
     fontSize: 12,
     fontWeight: '700',
@@ -431,25 +413,26 @@ const styles = StyleSheet.create({
   list: {
     gap: spacing.md,
   },
-  loadingPanel: {
+  opinionMetaRow: {
     alignItems: 'center',
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'space-between',
+  },
+  opinionTopRow: {
     flexDirection: 'row',
     gap: spacing.md,
-    padding: spacing.lg,
   },
-  loadingText: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '700',
+  reviewBody: {
+    borderLeftColor: colors.borderStrong,
+    borderLeftWidth: 2,
+    paddingLeft: spacing.md,
   },
   starRow: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.xs,
+    marginTop: spacing.md,
   },
   starBox: {
     height: 22,

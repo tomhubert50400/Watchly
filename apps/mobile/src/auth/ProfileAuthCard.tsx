@@ -525,17 +525,17 @@ const styles = StyleSheet.create({
   },
   avatarFrame: {
     alignItems: 'center',
-    backgroundColor: colors.accent,
-    borderColor: colors.accentPressed,
-    borderRadius: radii.md,
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
+    borderRadius: radii.lg,
     borderWidth: 1,
-    height: 58,
+    height: 64,
     justifyContent: 'center',
     marginRight: spacing.md,
-    width: 58,
+    width: 64,
   },
   avatarInitial: {
-    color: colors.textOnAccent,
+    color: colors.accentText,
     fontSize: 24,
     fontWeight: '900',
     letterSpacing: 0,
@@ -555,9 +555,9 @@ const styles = StyleSheet.create({
   },
   card: {
     ...shadows.panel,
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.borderStrong,
+    borderRadius: radii.lg,
     borderWidth: 1,
     marginTop: spacing.lg,
     padding: spacing.lg,
@@ -599,8 +599,8 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   providerButtonDark: {
-    backgroundColor: '#050509',
-    borderColor: '#050509',
+    backgroundColor: colors.panel,
+    borderColor: colors.borderStrong,
   },
   providerButtonLabel: {
     color: colors.textOnAccent,
@@ -649,7 +649,7 @@ const styles = StyleSheet.create({
   },
   statusLabel: {
     ...typography.eyebrow,
-    color: colors.accent,
+    color: colors.accentText,
     marginBottom: spacing.xs,
   },
   title: {
