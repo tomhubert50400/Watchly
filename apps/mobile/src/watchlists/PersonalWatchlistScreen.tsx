@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RefreshCw } from 'lucide-react-native';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PersonalWatchlist } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { Button } from '../components/Button';
+import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
+import { LoadingState } from '../components/LoadingState';
+import { MediaPoster } from '../components/MediaPoster';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { HydratedPersonalWatchlistItem, useWatchlistCache } from './WatchlistCacheContext';
@@ -103,10 +106,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   return (
     <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
       {isLoading ? (
-        <View style={styles.loadingPanel}>
-          <ActivityIndicator color={colors.accent} />
-          <Text style={styles.loadingText}>Loading list</Text>
-        </View>
+        <LoadingState label="Loading list" />
       ) : error && !watchlist ? (
         <EmptyState body={error} title="List failed">
           <Button label="Retry" onPress={() => loadWatchlist(true)} />
@@ -116,7 +116,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
           <View style={styles.panel}>
             <View style={styles.headerRow}>
               <View style={styles.headerCopy}>
-                <Text style={styles.eyebrow}>Private personal list</Text>
+                <Text style={styles.eyebrow}>Personal watchlist</Text>
                 <Text style={styles.title}>{watchlist.name}</Text>
                 <Text style={styles.body}>
                   {watchlist.items.length === 1 ? '1 title' : `${watchlist.items.length} titles`}
@@ -136,7 +136,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
           <View style={styles.panel}>
             <Text style={styles.sectionTitle}>Titles</Text>
             {hydratedItems.length === 0 ? (
-              <Text style={styles.body}>Add films or series from detail pages.</Text>
+              <Text style={styles.body}>Add films or series from detail pages to start shaping this list.</Text>
             ) : (
               <View style={styles.itemRows}>
                 {hydratedItems.map((item) => (
@@ -147,21 +147,16 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
                     onPress={() => openItem(item)}
                     style={({ pressed }) => [styles.itemRow, pressed && styles.pressed]}
                   >
-                    {item.posterUrl ? (
-                      <Image
-                        accessibilityIgnoresInvertColors
-                        accessibilityLabel={`${item.title} poster`}
-                        source={{ uri: item.posterUrl }}
-                        style={styles.poster}
-                      />
-                    ) : (
-                      <View style={styles.posterPlaceholder} />
-                    )}
+                    <MediaPoster
+                      accessibilityLabel={`${item.title} poster`}
+                      posterUrl={item.posterUrl}
+                      style={styles.poster}
+                    />
                     <View style={styles.rowCopy}>
+                      <Chip label={item.contentType === 'movie' ? 'Film' : 'Series'} />
                       <Text numberOfLines={2} style={styles.itemTitle}>
                         {item.title}
                       </Text>
-                      <Text style={styles.meta}>{item.contentType === 'movie' ? 'Film' : 'Series'}</Text>
                     </View>
                   </Pressable>
                 ))}
@@ -200,19 +195,22 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radii.md,
     borderWidth: 1,
-    height: 42,
+    height: 44,
     justifyContent: 'center',
-    width: 42,
+    width: 44,
   },
   itemRow: {
     alignItems: 'center',
-    borderTopColor: colors.border,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
     flexDirection: 'row',
     gap: spacing.md,
-    paddingVertical: spacing.md,
+    padding: spacing.md,
   },
   itemRows: {
+    gap: spacing.sm,
     marginTop: spacing.sm,
   },
   itemTitle: {
@@ -220,29 +218,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 0,
-  },
-  loadingPanel: {
-    alignItems: 'center',
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  loadingText: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  meta: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0,
-    marginTop: spacing.xs,
-    textTransform: 'uppercase',
+    marginTop: spacing.sm,
   },
   page: {
     backgroundColor: colors.background,
@@ -269,22 +245,15 @@ const styles = StyleSheet.create({
   poster: {
     backgroundColor: colors.panelSoft,
     borderRadius: radii.md,
-    height: 78,
-    width: 52,
-  },
-  posterPlaceholder: {
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    height: 78,
-    width: 52,
+    height: 96,
+    width: 64,
   },
   pressed: {
     opacity: 0.78,
   },
   rowCopy: {
     flex: 1,
+    justifyContent: 'center',
     minWidth: 0,
   },
   sectionTitle: {

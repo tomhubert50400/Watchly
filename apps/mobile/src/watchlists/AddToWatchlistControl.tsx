@@ -313,7 +313,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
           !firebaseIdToken ? styles.disabled : null,
         ]}
       >
-        <BookmarkPlus color={colors.textOnAccent} size={15} strokeWidth={2.4} />
+        <BookmarkPlus color={colors.accentText} size={15} strokeWidth={2.4} />
         <Text style={styles.triggerLabel}>Add to watchlist</Text>
       </Pressable>
 
@@ -385,7 +385,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
                     ]}
                   >
                     {isCreating ? (
-                      <ActivityIndicator color={colors.textOnAccent} />
+                      <ActivityIndicator color={colors.accentText} />
                     ) : (
                       <Text style={styles.createButtonLabel}>Create</Text>
                     )}
@@ -410,7 +410,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
                   isCreating && styles.disabled,
                 ]}
               >
-                <Plus color={colors.textOnAccent} size={20} strokeWidth={2.8} />
+                <Plus color={colors.accentText} size={20} strokeWidth={2.8} />
               </Pressable>
             </View>
           </Animated.View>
@@ -437,9 +437,13 @@ function WatchlistOptionRow({
       accessibilityRole="checkbox"
       accessibilityState={{ checked: isSelected }}
       onPress={onPress}
-      style={({ pressed }) => [styles.optionRow, pressed && styles.triggerPressed]}
+      style={({ pressed }) => [
+        styles.optionRow,
+        isSelected && styles.optionRowSelected,
+        pressed && styles.triggerPressed,
+      ]}
     >
-      <Icon color={isSelected ? colors.accent : colors.muted} size={19} strokeWidth={2.4} />
+      <Icon color={isSelected ? colors.accentText : colors.muted} size={19} strokeWidth={2.4} />
       <View style={styles.optionCopy}>
         <Text numberOfLines={1} style={styles.optionName}>
           {option.name}
@@ -513,17 +517,17 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radii.md,
     borderWidth: 1,
-    height: 38,
+    height: 44,
     justifyContent: 'center',
-    width: 38,
+    width: 44,
   },
   disabled: {
     opacity: 0.48,
   },
   createButton: {
     alignItems: 'center',
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
     borderRadius: radii.md,
     borderWidth: 1,
     justifyContent: 'center',
@@ -532,15 +536,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   createButtonLabel: {
-    color: colors.textOnAccent,
+    color: colors.accentText,
     fontSize: 13,
     fontWeight: '800',
     letterSpacing: 0,
   },
   createFab: {
     alignItems: 'center',
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
     borderRadius: 22,
     borderWidth: 1,
     height: 44,
@@ -608,8 +612,12 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.md,
   },
+  optionRowSelected: {
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
+  },
   overlay: {
-    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    backgroundColor: colors.overlay,
     flex: 1,
     justifyContent: 'flex-end',
     padding: spacing.md,
@@ -618,7 +626,7 @@ const styles = StyleSheet.create({
     ...shadows.panel,
     backgroundColor: colors.panelElevated,
     borderColor: colors.border,
-    borderRadius: radii.md,
+    borderRadius: radii.lg,
     borderWidth: 1,
     maxHeight: '82%',
     padding: spacing.lg,
@@ -641,8 +649,8 @@ const styles = StyleSheet.create({
   trigger: {
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
     borderRadius: radii.md,
     borderWidth: 1,
     flexDirection: 'row',
@@ -653,7 +661,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   triggerLabel: {
-    color: colors.textOnAccent,
+    color: colors.accentText,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0,

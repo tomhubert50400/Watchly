@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { CheckCircle2, Circle, RefreshCw } from 'lucide-react-native';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   addSharedWatchlistMember,
   createSharedVotingSession,
@@ -13,7 +13,10 @@ import {
 } from '../api/sharedWatchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { Button } from '../components/Button';
+import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
+import { LoadingState } from '../components/LoadingState';
+import { MediaPoster } from '../components/MediaPoster';
 import { TextInput } from '../components/TextInput';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
@@ -199,10 +202,7 @@ export function SharedWatchlistScreen({ route }: SharedWatchlistScreenProps) {
   return (
     <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
       {isLoading ? (
-        <View style={styles.loadingPanel}>
-          <ActivityIndicator color={colors.accent} />
-          <Text style={styles.loadingText}>Loading shared list</Text>
-        </View>
+        <LoadingState label="Loading shared list" />
       ) : error && !watchlist ? (
         <EmptyState body={error} title="Shared list failed">
           <Button label="Retry" onPress={() => loadWatchlist(true)} />
@@ -273,21 +273,16 @@ export function SharedWatchlistScreen({ route }: SharedWatchlistScreenProps) {
               <View style={styles.itemRows}>
                 {hydratedItems.map((item) => (
                   <View key={item.id} style={styles.itemRow}>
-                    {item.posterUrl ? (
-                      <Image
-                        accessibilityIgnoresInvertColors
-                        accessibilityLabel={`${item.title} poster`}
-                        source={{ uri: item.posterUrl }}
-                        style={styles.poster}
-                      />
-                    ) : (
-                      <View style={styles.posterPlaceholder} />
-                    )}
+                    <MediaPoster
+                      accessibilityLabel={`${item.title} poster`}
+                      posterUrl={item.posterUrl}
+                      style={styles.poster}
+                    />
                     <View style={styles.rowCopy}>
+                      <Chip label={item.contentType === 'movie' ? 'Film' : 'Series'} />
                       <Text numberOfLines={2} style={styles.itemTitle}>
                         {item.title}
                       </Text>
-                      <Text style={styles.meta}>{item.contentType === 'movie' ? 'Film' : 'Series'}</Text>
                     </View>
                   </View>
                 ))}
@@ -362,7 +357,7 @@ function VoteCandidateRow({
       ]}
     >
       <Icon
-        color={candidate.userHasVoted ? colors.textOnAccent : colors.accent}
+        color={candidate.userHasVoted ? colors.accentText : colors.accent}
         size={20}
         strokeWidth={2}
       />
@@ -409,19 +404,22 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radii.md,
     borderWidth: 1,
-    height: 42,
+    height: 44,
     justifyContent: 'center',
-    width: 42,
+    width: 44,
   },
   itemRow: {
     alignItems: 'center',
-    borderTopColor: colors.border,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
     flexDirection: 'row',
     gap: spacing.md,
-    paddingVertical: spacing.md,
+    padding: spacing.md,
   },
   itemRows: {
+    gap: spacing.sm,
     marginTop: spacing.sm,
   },
   itemTitle: {
@@ -429,21 +427,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     letterSpacing: 0,
-  },
-  loadingPanel: {
-    alignItems: 'center',
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  loadingText: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '700',
+    marginTop: spacing.sm,
   },
   memberRole: {
     color: colors.muted,
@@ -469,14 +453,6 @@ const styles = StyleSheet.create({
   memberRows: {
     gap: spacing.sm,
   },
-  meta: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0,
-    marginTop: spacing.xs,
-    textTransform: 'uppercase',
-  },
   page: {
     backgroundColor: colors.background,
     flexGrow: 1,
@@ -497,22 +473,15 @@ const styles = StyleSheet.create({
   poster: {
     backgroundColor: colors.panelSoft,
     borderRadius: radii.md,
-    height: 78,
-    width: 52,
-  },
-  posterPlaceholder: {
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    height: 78,
-    width: 52,
+    height: 96,
+    width: 64,
   },
   pressed: {
     opacity: 0.78,
   },
   rowCopy: {
     flex: 1,
+    justifyContent: 'center',
     minWidth: 0,
   },
   sectionTitle: {
@@ -551,7 +520,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   voteMetaSelected: {
-    color: colors.textOnAccent,
+    color: colors.accentText,
   },
   voteRow: {
     alignItems: 'center',
@@ -566,8 +535,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   voteRowSelected: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
   },
   voteTitle: {
     color: colors.text,
@@ -576,7 +545,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   voteTitleSelected: {
-    color: colors.textOnAccent,
+    color: colors.text,
   },
   warning: {
     ...typography.body,

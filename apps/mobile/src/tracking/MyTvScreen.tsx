@@ -1,21 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   Bell,
   BellOff,
   BellRing,
-  CheckCircle2,
   Clapperboard,
-  MessageSquareText,
   PlusCircle,
-  Shield,
   Star,
   Trash2,
   Users,
-  Vote,
 } from 'lucide-react-native';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getMovieDetails, getSeriesDetails, SeriesDetails } from '../api/catalogue';
 import {
   disableReleaseAlert,
@@ -45,7 +41,10 @@ import {
 } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { Button } from '../components/Button';
+import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
+import { LoadingState } from '../components/LoadingState';
+import { MediaPoster } from '../components/MediaPoster';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { TextInput } from '../components/TextInput';
@@ -365,17 +364,14 @@ export function MyTvScreen() {
   }
 
   return (
-    <Screen title="Manage your watch life">
+    <Screen eyebrow="My TV" title="Library">
       {!firebaseIdToken ? (
         <EmptyState
           body="Sign in from Profile, then track a film or series from its detail page."
           title="Sign in to build My TV"
         />
       ) : isLoading ? (
-        <View style={styles.loadingPanel}>
-          <ActivityIndicator color={colors.accent} />
-          <Text style={styles.loadingText}>Loading My TV</Text>
-        </View>
+        <LoadingState label="Loading library" />
       ) : error && items.length === 0 && watchlists.length === 0 && sharedWatchlists.length === 0 ? (
         <EmptyState body={error} title="My TV failed">
           <Button label="Retry" onPress={loadItems} />
@@ -433,126 +429,276 @@ function OverviewTab({
   watchlists: PersonalWatchlistSummary[];
 }) {
   const listItems = getWatchlistItems(watchlists, sharedWatchlists);
-  const firstPersonalList = listItems.find((item) => item.kind === 'personal');
-  const firstSharedList = listItems.find((item) => item.kind === 'shared');
-  const firstTrackedTitle = items[0] ?? null;
+  const continueItems = items.filter((item) => item.status === 'watching' || getCurrentLabel(item)).slice(0, 3);
+  const previewItems = continueItems.length > 0 ? continueItems : items.slice(0, 3);
+  const previewWatchlists = listItems.slice(0, 3);
 
   return (
     <View style={styles.section}>
-      <View style={styles.overviewPanel}>
-        <View style={styles.overviewHeader}>
-          <View style={styles.rowCopy}>
-            <Text style={styles.overviewEyebrow}>Watchly overview</Text>
-            <Text style={styles.overviewTitle}>Everything in one user surface</Text>
-            <Text style={styles.overviewBody}>
-              Tracking, ratings, reviews, personal lists, shared lists, voting, alerts, profile safety, and feed states.
-            </Text>
+      <View style={styles.libraryHero}>
+        <Text style={styles.overviewEyebrow}>Personal library</Text>
+        <Text style={styles.libraryHeroTitle}>Your saved cinema, ready to resume.</Text>
+        <Text style={styles.overviewBody}>
+          {buildLibrarySummary(items, listItems)}
+        </Text>
+        <View style={styles.signalRow}>
+          <LibrarySignal icon={Clapperboard} label="Tracked" value={items.length.toString()} />
+          <LibrarySignal icon={Star} label="Rated" value={getRatedCount(items).toString()} tone="rating" />
+          <LibrarySignal icon={Bell} label="Alerts" value={getAlertCount(items).toString()} />
+        </View>
+      </View>
+
+      <LibrarySection title="Continue and tracked">
+        {previewItems.length === 0 ? (
+          <Text style={styles.emptyInline}>Track a film or series from a detail page to build this shelf.</Text>
+        ) : (
+          <View style={styles.list}>
+            {previewItems.map((item) => (
+              <LibraryMediaRow
+                item={item}
+                key={item.key}
+                onPress={() => onOpenItem(item)}
+                showAlertState={false}
+              />
+            ))}
           </View>
-        </View>
-      </View>
+        )}
+      </LibrarySection>
 
-      <View style={styles.featureGrid}>
-        <FeatureCard
-          icon={Clapperboard}
-          label="Tracking"
-          value={items.length === 1 ? '1 title' : `${items.length} titles`}
-        />
-        <FeatureCard icon={Star} label="Ratings" value={getRatingSummary(items)} />
-        <FeatureCard icon={MessageSquareText} label="Reviews" value="Film and episode review states" />
-        <FeatureCard icon={Users} label="Shared lists" value={`${sharedWatchlists.length} active`} />
-        <FeatureCard icon={Vote} label="Voting" value="Shared decision sessions" />
-        <FeatureCard icon={Bell} label="Alerts" value="Release bell states" />
-        <FeatureCard icon={Shield} label="Privacy" value="Profile, reviews, blocks" />
-        <FeatureCard icon={CheckCircle2} label="Progress" value={getProgressSummary(items)} />
-      </View>
-
-      <View style={styles.overviewPanel}>
-        <Text style={styles.sectionTitle}>Open key surfaces</Text>
-        <View style={styles.quickRows}>
-          {firstTrackedTitle ? (
-            <OverviewQuickRow
-              label="Tracked title"
-              meta={buildOverviewMeta(firstTrackedTitle)}
-              onPress={() => onOpenItem(firstTrackedTitle)}
-              title={firstTrackedTitle.title}
-            />
-          ) : null}
-          {firstPersonalList ? (
-            <OverviewQuickRow
-              label="Personal watchlist"
-              meta={buildWatchlistMeta(firstPersonalList)}
-              onPress={() => onOpenWatchlist(firstPersonalList)}
-              title={firstPersonalList.name}
-            />
-          ) : null}
-          {firstSharedList ? (
-            <OverviewQuickRow
-              label="Shared watchlist"
-              meta={`${buildWatchlistMeta(firstSharedList)} / Members and votes`}
-              onPress={() => onOpenWatchlist(firstSharedList)}
-              title={firstSharedList.name}
-            />
-          ) : null}
-          {!firstTrackedTitle && !firstPersonalList && !firstSharedList ? (
-            <Text style={styles.emptyInline}>Add sample activity or start from Explore.</Text>
-          ) : null}
-        </View>
-      </View>
+      <LibrarySection title="Watchlists">
+        {previewWatchlists.length === 0 ? (
+          <Text style={styles.emptyInline}>Create a personal or shared list to collect what to watch next.</Text>
+        ) : (
+          <View style={styles.watchlistRows}>
+            {previewWatchlists.map((watchlist) => (
+              <WatchlistPreviewRow
+                key={watchlist.key}
+                onPress={() => onOpenWatchlist(watchlist)}
+                watchlist={watchlist}
+              />
+            ))}
+          </View>
+        )}
+      </LibrarySection>
     </View>
   );
 }
 
-function FeatureCard({
+function LibrarySignal({
   icon: Icon,
   label,
+  tone = 'neutral',
   value,
 }: {
   icon: typeof Clapperboard;
   label: string;
+  tone?: 'neutral' | 'rating';
   value: string;
 }) {
   return (
-    <View style={styles.featureCard}>
-      <View style={styles.featureIconFrame}>
-        <Icon color={colors.accent} size={17} strokeWidth={2.2} />
+    <View style={styles.signalPill}>
+      <View style={[styles.signalIconFrame, tone === 'rating' && styles.signalIconFrameRating]}>
+        <Icon color={tone === 'rating' ? colors.rating : colors.accentText} size={15} strokeWidth={2.2} />
       </View>
-      <Text style={styles.featureLabel}>{label}</Text>
-      <Text numberOfLines={2} style={styles.featureValue}>
-        {value}
-      </Text>
+      <View>
+        <Text style={styles.signalValue}>{value}</Text>
+        <Text style={styles.signalLabel}>{label}</Text>
+      </View>
     </View>
   );
 }
 
-function OverviewQuickRow({
-  label,
-  meta,
+function LibrarySection({ children, title }: { children: ReactNode; title: string }) {
+  return (
+    <View style={styles.librarySection}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+function LibraryMediaRow({
+  item,
   onPress,
-  title,
+  reserveTrailingSpace = false,
+  showAlertState = true,
 }: {
-  label: string;
-  meta: string;
+  item: HydratedLibraryItem;
   onPress: () => void;
-  title: string;
+  reserveTrailingSpace?: boolean;
+  showAlertState?: boolean;
 }) {
+  const currentLabel = getCurrentLabel(item);
+  const seasonLabel = getSeasonLabel(item);
+
   return (
     <Pressable
-      accessibilityLabel={`Open ${title}`}
+      accessibilityLabel={`Open ${item.title}`}
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => [styles.quickRow, pressed && styles.rowPressed]}
+      style={({ pressed }) => [styles.row, reserveTrailingSpace && styles.rowWithTrailing, pressed && styles.rowPressed]}
     >
+      <MediaPoster
+        accessibilityLabel={`${item.title} poster`}
+        posterUrl={item.posterUrl}
+        style={styles.poster}
+      />
       <View style={styles.rowCopy}>
-        <Text style={styles.quickLabel}>{label}</Text>
-        <Text numberOfLines={1} style={styles.watchlistName}>
-          {title}
+        <View style={styles.chipRow}>
+          <Chip label={getTypeLabel(item)} />
+          {item.ratingScore !== null ? (
+            <Chip
+              icon={<Star color={colors.rating} fill={colors.rating} size={11} strokeWidth={2} />}
+              label={item.ratingScore.toFixed(1)}
+              tone="rating"
+            />
+          ) : null}
+          {showAlertState && item.hasReleaseAlert ? <Chip label="Alert" tone="accent" /> : null}
+        </View>
+        <Text numberOfLines={2} style={styles.title}>
+          {item.title}
         </Text>
-        <Text numberOfLines={2} style={styles.previewMeta}>
-          {meta}
-        </Text>
+        {currentLabel || seasonLabel ? (
+          <Text numberOfLines={1} style={styles.meta}>
+            {[currentLabel, seasonLabel].filter(Boolean).join(' / ')}
+          </Text>
+        ) : null}
       </View>
     </Pressable>
   );
+}
+
+function WatchlistPreviewRow({
+  onPress,
+  watchlist,
+}: {
+  onPress: () => void;
+  watchlist: WatchlistItem;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={`Open ${watchlist.name}`}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.watchlistRow, pressed && styles.rowPressed]}
+    >
+      <View style={styles.watchlistGlyph}>
+        {watchlist.kind === 'shared' ? (
+          <Users color={colors.accentText} size={17} strokeWidth={2.1} />
+        ) : (
+          <Clapperboard color={colors.accentText} size={17} strokeWidth={2.1} />
+        )}
+      </View>
+      <View style={styles.rowCopy}>
+        <Text numberOfLines={1} style={styles.watchlistName}>
+          {watchlist.name}
+        </Text>
+        <Text style={styles.previewMeta}>{buildWatchlistMeta(watchlist)}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+function WatchlistManagementRow({
+  onDelete,
+  onOpen,
+  watchlist,
+}: {
+  onDelete: (watchlist: WatchlistItem) => void;
+  onOpen: (watchlist: WatchlistItem) => void;
+  watchlist: WatchlistItem;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={`Open ${watchlist.name}`}
+      accessibilityRole="button"
+      key={watchlist.key}
+      onPress={() => onOpen(watchlist)}
+      style={({ pressed }) => [styles.watchlistRow, pressed && styles.rowPressed]}
+    >
+      <View style={styles.watchlistGlyph}>
+        {watchlist.kind === 'shared' ? (
+          <Users color={colors.accentText} size={17} strokeWidth={2.1} />
+        ) : (
+          <Clapperboard color={colors.accentText} size={17} strokeWidth={2.1} />
+        )}
+      </View>
+      <View style={styles.rowCopy}>
+        <Text numberOfLines={1} style={styles.watchlistName}>
+          {watchlist.name}
+        </Text>
+        <Text style={styles.previewMeta}>{buildWatchlistMeta(watchlist)}</Text>
+      </View>
+      {watchlist.isOwner ? (
+        <Pressable
+          accessibilityLabel={`Delete ${watchlist.name}`}
+          accessibilityRole="button"
+          onPress={(event) => {
+            event.stopPropagation();
+            void onDelete(watchlist);
+          }}
+          style={({ pressed }) => [styles.deleteButton, pressed && styles.rowPressed]}
+        >
+          <Trash2 color={colors.danger} size={17} strokeWidth={2} />
+        </Pressable>
+      ) : null}
+    </Pressable>
+  );
+}
+
+function AlertButton({
+  alertActionKey,
+  item,
+  onToggleReleaseAlert,
+}: {
+  alertActionKey: string | null;
+  item: HydratedLibraryItem;
+  onToggleReleaseAlert: (item: HydratedLibraryItem) => void;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={
+        item.hasReleaseAlert
+          ? `Disable ${item.title} release alerts`
+          : `Enable ${item.title} release alerts`
+      }
+      accessibilityRole="button"
+      accessibilityState={{ selected: item.hasReleaseAlert }}
+      disabled={alertActionKey === item.key}
+      onPress={(event) => {
+        event.stopPropagation();
+        onToggleReleaseAlert(item);
+      }}
+      style={({ pressed }) => [
+        styles.alertButton,
+        item.hasReleaseAlert && styles.alertButtonEnabled,
+        pressed && styles.rowPressed,
+        alertActionKey === item.key && styles.disabledButton,
+      ]}
+    >
+      {item.hasReleaseAlert ? (
+        <BellRing color={colors.accentText} size={19} strokeWidth={2.2} />
+      ) : (
+        <BellOff color={colors.muted} size={19} strokeWidth={2.2} />
+      )}
+    </Pressable>
+  );
+}
+
+function buildLibrarySummary(items: HydratedLibraryItem[], watchlists: WatchlistItem[]) {
+  const titleLabel = items.length === 1 ? '1 tracked title' : `${items.length} tracked titles`;
+  const listLabel = watchlists.length === 1 ? '1 watchlist' : `${watchlists.length} watchlists`;
+  const progress = getProgressSummary(items);
+
+  return `${titleLabel}, ${listLabel}, ${progress.toLowerCase()}.`;
+}
+
+function getRatedCount(items: HydratedLibraryItem[]) {
+  return items.filter((item) => item.ratingScore !== null).length;
+}
+
+function getAlertCount(items: HydratedLibraryItem[]) {
+  return items.filter((item) => item.hasReleaseAlert).length;
 }
 
 function MyTvTabs({
@@ -653,38 +799,12 @@ function WatchlistsTab({
       ) : (
         <View style={styles.watchlistRows}>
           {listItems.map((watchlist) => (
-            <Pressable
-              accessibilityLabel={`Open ${watchlist.name}`}
-              accessibilityRole="button"
+            <WatchlistManagementRow
               key={watchlist.key}
-              onPress={() => onOpen(watchlist)}
-              style={({ pressed }) => [styles.watchlistRow, pressed && styles.rowPressed]}
-            >
-              {watchlist.kind === 'shared' ? (
-                <View style={styles.sharedIconFrame}>
-                  <Users color={colors.accent} size={16} strokeWidth={2} />
-                </View>
-              ) : null}
-              <View style={styles.rowCopy}>
-                <Text numberOfLines={1} style={styles.watchlistName}>
-                  {watchlist.name}
-                </Text>
-                <Text style={styles.previewMeta}>{buildWatchlistMeta(watchlist)}</Text>
-              </View>
-              {watchlist.isOwner ? (
-                <Pressable
-                  accessibilityLabel={`Delete ${watchlist.name}`}
-                  accessibilityRole="button"
-                  onPress={(event) => {
-                    event.stopPropagation();
-                    void onDelete(watchlist);
-                  }}
-                  style={({ pressed }) => [styles.deleteButton, pressed && styles.rowPressed]}
-                >
-                  <Trash2 color={colors.danger} size={17} strokeWidth={2} />
-                </Pressable>
-              ) : null}
-            </Pressable>
+              onDelete={onDelete}
+              onOpen={onOpen}
+              watchlist={watchlist}
+            />
           ))}
         </View>
       )}
@@ -716,58 +836,14 @@ function TrackedTitlesTab({
     <View style={styles.section}>
       <View style={styles.list}>
         {items.map((item) => (
-          <Pressable
-            accessibilityLabel={`Open ${item.title}`}
-            accessibilityRole="button"
-            key={item.key}
-            onPress={() => onOpenItem(item)}
-            style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-          >
-            {item.posterUrl ? (
-              <Image
-                accessibilityIgnoresInvertColors
-                accessibilityLabel={`${item.title} poster`}
-                source={{ uri: item.posterUrl }}
-                style={styles.poster}
-              />
-            ) : (
-              <View style={styles.posterPlaceholder} />
-            )}
-            <View style={styles.rowCopy}>
-              <Text style={styles.rowEyebrow}>{getTypeLabel(item)}</Text>
-              <Text numberOfLines={2} style={styles.title}>
-                {item.title}
-              </Text>
-              {getSeasonLabel(item) ? <Text style={styles.meta}>{getSeasonLabel(item)}</Text> : null}
-              {getCurrentLabel(item) ? <Text style={styles.meta}>{getCurrentLabel(item)}</Text> : null}
-            </View>
-            <Pressable
-              accessibilityLabel={
-                item.hasReleaseAlert
-                  ? `Disable ${item.title} release alerts`
-                  : `Enable ${item.title} release alerts`
-              }
-              accessibilityRole="button"
-              accessibilityState={{ selected: item.hasReleaseAlert }}
-              disabled={alertActionKey === item.key}
-              onPress={(event) => {
-                event.stopPropagation();
-                onToggleReleaseAlert(item);
-              }}
-              style={({ pressed }) => [
-                styles.alertButton,
-                item.hasReleaseAlert && styles.alertButtonEnabled,
-                pressed && styles.rowPressed,
-                alertActionKey === item.key && styles.disabledButton,
-              ]}
-            >
-              {item.hasReleaseAlert ? (
-                <BellRing color={colors.textOnAccent} size={19} strokeWidth={2.2} />
-              ) : (
-                <BellOff color={colors.muted} size={19} strokeWidth={2.2} />
-              )}
-            </Pressable>
-          </Pressable>
+          <View key={item.key} style={styles.trackedRowFrame}>
+            <LibraryMediaRow item={item} onPress={() => onOpenItem(item)} reserveTrailingSpace />
+            <AlertButton
+              alertActionKey={alertActionKey}
+              item={item}
+              onToggleReleaseAlert={onToggleReleaseAlert}
+            />
+          </View>
         ))}
       </View>
     </View>
@@ -812,16 +888,6 @@ function buildWatchlistMeta(list: WatchlistItem) {
   const memberLabel = list.memberCount === 1 ? '1 member' : `${list.memberCount ?? 0} members`;
 
   return `Shared / ${memberLabel} / ${titleLabel}`;
-}
-
-function getRatingSummary(items: HydratedLibraryItem[]) {
-  const ratedCount = items.filter((item) => item.ratingScore !== null).length;
-
-  if (ratedCount === 0) {
-    return 'Half-star ratings';
-  }
-
-  return ratedCount === 1 ? '1 rated title' : `${ratedCount} rated titles`;
 }
 
 function getProgressSummary(items: HydratedLibraryItem[]) {
@@ -1053,10 +1119,6 @@ function getCurrentLabel(item: HydratedLibraryItem) {
   return `Current S${item.resumeSeasonNumber} E${item.resumeEpisodeNumber}`;
 }
 
-function buildOverviewMeta(item: HydratedLibraryItem) {
-  return [getTypeLabel(item), getSeasonLabel(item), getCurrentLabel(item)].filter(Boolean).join(' / ');
-}
-
 function getResumeEpisode(
   seasons: SeriesDetails['seasons'],
   item: LibraryItemBase,
@@ -1095,18 +1157,26 @@ function getResumeEpisode(
 const styles = StyleSheet.create({
   alertButton: {
     alignItems: 'center',
-    alignSelf: 'flex-start',
     backgroundColor: colors.panelSoft,
     borderColor: colors.border,
     borderRadius: radii.md,
     borderWidth: 1,
-    height: 42,
+    height: 44,
     justifyContent: 'center',
-    width: 42,
+    position: 'absolute',
+    right: spacing.md,
+    top: spacing.md,
+    width: 44,
   },
   alertButtonEnabled: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
   },
   emptyInline: {
     ...typography.body,
@@ -1121,107 +1191,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 48,
   },
-  featureCard: {
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexBasis: '48%',
-    flexGrow: 1,
-    gap: spacing.xs,
-    minHeight: 118,
-    padding: spacing.md,
-  },
-  featureGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  featureIconFrame: {
-    alignItems: 'center',
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    height: 32,
-    justifyContent: 'center',
-    width: 32,
-  },
-  featureLabel: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0,
-  },
-  featureValue: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0,
-    lineHeight: 17,
-  },
-  overviewActionText: {
-    ...typography.body,
-    color: colors.muted,
-    marginTop: spacing.xs,
-  },
-  overviewBody: {
-    ...typography.body,
-    color: colors.muted,
-    marginTop: spacing.xs,
-  },
-  overviewButton: {
-    alignItems: 'center',
-    backgroundColor: colors.accent,
-    borderRadius: radii.md,
-    height: 48,
-    justifyContent: 'center',
-    width: 48,
-  },
-  overviewEyebrow: {
-    ...typography.eyebrow,
-    color: colors.accent,
-  },
-  overviewHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  overviewPanel: {
+  libraryHero: {
     ...shadows.panel,
     backgroundColor: colors.panelElevated,
     borderColor: colors.border,
-    borderRadius: radii.md,
+    borderRadius: radii.lg,
     borderWidth: 1,
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  overviewTitle: {
-    color: colors.text,
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 22,
-  },
-  quickLabel: {
-    color: colors.muted,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0,
-    marginBottom: 3,
-    textTransform: 'uppercase',
-  },
-  quickRow: {
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    minHeight: 72,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  quickRows: {
     gap: spacing.sm,
+    padding: spacing.lg,
+  },
+  libraryHeroTitle: {
+    color: colors.text,
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: 0,
+    lineHeight: 30,
   },
   createInput: {
     flex: 1,
@@ -1245,23 +1229,11 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.45,
   },
+  librarySection: {
+    gap: spacing.md,
+  },
   list: {
     gap: spacing.md,
-  },
-  loadingPanel: {
-    alignItems: 'center',
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  loadingText: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '700',
   },
   meta: {
     color: colors.muted,
@@ -1271,17 +1243,17 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textTransform: 'uppercase',
   },
+  overviewBody: {
+    ...typography.body,
+    color: colors.textMuted,
+  },
+  overviewEyebrow: {
+    ...typography.eyebrow,
+    color: colors.accentText,
+  },
   poster: {
     backgroundColor: colors.panelSoft,
     borderRadius: radii.md,
-    height: 108,
-    width: 72,
-  },
-  posterPlaceholder: {
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
     height: 108,
     width: 72,
   },
@@ -1302,19 +1274,14 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     minWidth: 0,
   },
-  rowEyebrow: {
-    color: colors.accent,
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0,
-    marginBottom: spacing.sm,
-    textTransform: 'uppercase',
-  },
   rowPressed: {
     opacity: 0.78,
   },
+  rowWithTrailing: {
+    paddingRight: 68,
+  },
   previewMeta: {
-    color: colors.accent,
+    color: colors.textMuted,
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0,
@@ -1328,15 +1295,51 @@ const styles = StyleSheet.create({
   segmentedControl: {
     marginBottom: spacing.lg,
   },
-  sharedIconFrame: {
+  signalIconFrame: {
     alignItems: 'center',
-    height: 24,
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    height: 32,
     justifyContent: 'center',
-    width: 24,
+    width: 32,
   },
-  sectionBody: {
-    ...typography.body,
+  signalIconFrameRating: {
+    backgroundColor: colors.ratingSoft,
+    borderColor: colors.ratingBorder,
+  },
+  signalLabel: {
     color: colors.muted,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0,
+    textTransform: 'uppercase',
+  },
+  signalPill: {
+    alignItems: 'center',
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    flexGrow: 1,
+    gap: spacing.sm,
+    minHeight: 54,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+  },
+  signalRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  signalValue: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0,
   },
   sectionTitle: {
     ...typography.title,
@@ -1345,6 +1348,9 @@ const styles = StyleSheet.create({
   title: {
     ...typography.title,
     color: colors.text,
+  },
+  trackedRowFrame: {
+    position: 'relative',
   },
   warning: {
     ...typography.body,
@@ -1358,6 +1364,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing.md,
     padding: spacing.md,
+  },
+  watchlistGlyph: {
+    alignItems: 'center',
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
   },
   watchlistName: {
     color: colors.text,
