@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DisplayRating, MovieDetails } from '../api/catalogue';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
-import { colors, radii, spacing, typography } from '../design/tokens';
+import { LoadingState } from '../components/LoadingState';
+import { MediaHero } from '../components/MediaHero';
+import { colors, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 import { MovieReviewEditor } from '../reviews/MovieReviewEditor';
@@ -66,9 +68,8 @@ export function FilmDetailScreen({ route }: FilmDetailScreenProps) {
     <SafeAreaView edges={[]} style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {isLoading ? (
-          <View style={styles.loadingPanel}>
-            <ActivityIndicator color={colors.accent} />
-            <Text style={styles.loadingText}>Loading film details</Text>
+          <View style={styles.loadingFrame}>
+            <LoadingState label="Loading film details" />
           </View>
         ) : error ? (
           <EmptyState body={error} title="Film detail failed">
@@ -92,39 +93,34 @@ function MovieDetailContent({ movie }: { movie: MovieDetails }) {
 
   return (
     <View>
-      <View style={styles.header}>
-        {movie.posterUrl ? (
-          <Image
-            accessibilityIgnoresInvertColors
-            accessibilityLabel={`${movie.title} poster`}
-            source={{ uri: movie.posterUrl }}
-            style={styles.poster}
-          />
-        ) : (
-          <View style={styles.posterPlaceholder} />
-        )}
-        <View style={styles.headerCopy}>
-          <Text style={styles.title}>{movie.title}</Text>
-          <HeaderInfoPills items={infoItems} />
-          {movie.genres.length > 0 ? (
-            <Text numberOfLines={2} style={styles.genres}>
-              {movie.genres.join(', ')}
-            </Text>
-          ) : null}
-          <AddToWatchlistControl contentType="movie" tmdbId={movie.tmdbId} />
-        </View>
-        <ReleaseAlertControl contentType="movie" tmdbId={movie.tmdbId} />
+      <MediaHero
+        actionAccessory={<ReleaseAlertControl contentType="movie" tmdbId={movie.tmdbId} />}
+        actions={<AddToWatchlistControl contentType="movie" tmdbId={movie.tmdbId} />}
+        backdropUrl={movie.backdropUrl}
+        eyebrow="Film"
+        posterAccessibilityLabel={`${movie.title} poster`}
+        posterUrl={movie.posterUrl}
+        title={movie.title}
+      >
+        <HeaderInfoPills items={infoItems} />
+        {movie.genres.length > 0 ? (
+          <Text numberOfLines={2} style={styles.genres}>
+            {movie.genres.join(', ')}
+          </Text>
+        ) : null}
+        {movie.tagline ? (
+          <Text numberOfLines={2} style={styles.tagline}>
+            {movie.tagline}
+          </Text>
+        ) : null}
+      </MediaHero>
+      <View style={styles.bodyStack}>
+        <TrackingControls contentType="movie" tmdbId={movie.tmdbId} />
+        {isReleased ? <MovieRatingControl tmdbId={movie.tmdbId} /> : null}
+        <SynopsisPanel overview={movie.overview} />
+        <StreamingAvailabilityPanel contentType="movie" tmdbId={movie.tmdbId} />
+        {isReleased ? <MovieReviewEditor tmdbId={movie.tmdbId} /> : null}
       </View>
-      {movie.tagline ? <Text style={styles.tagline}>{movie.tagline}</Text> : null}
-      <TrackingControls contentType="movie" tmdbId={movie.tmdbId} />
-      <SynopsisPanel overview={movie.overview} />
-      <StreamingAvailabilityPanel contentType="movie" tmdbId={movie.tmdbId} />
-      {isReleased ? (
-        <>
-          <MovieRatingControl tmdbId={movie.tmdbId} />
-          <MovieReviewEditor tmdbId={movie.tmdbId} />
-        </>
-      ) : null}
     </View>
   );
 }
@@ -163,67 +159,27 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     paddingBottom: spacing.xxxl,
+    paddingTop: 0,
+  },
+  bodyStack: {
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
   },
   genres: {
     ...typography.body,
-    color: colors.muted,
+    color: colors.textMuted,
     marginTop: spacing.sm,
   },
-  header: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  headerCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  loadingPanel: {
-    alignItems: 'center',
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  loadingText: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  poster: {
-    backgroundColor: colors.panelSoft,
-    borderRadius: radii.md,
-    height: 174,
-    width: 116,
-  },
-  posterPlaceholder: {
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    height: 174,
-    width: 116,
+  loadingFrame: {
+    padding: spacing.xl,
   },
   safeArea: {
     backgroundColor: colors.background,
     flex: 1,
   },
   tagline: {
-    ...typography.title,
+    ...typography.body,
     color: colors.text,
-    marginBottom: spacing.md,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 28,
     fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 34,
+    marginTop: spacing.sm,
   },
 });

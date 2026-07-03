@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Star } from 'lucide-react-native';
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { EpisodeDetails, getEpisodeDetails } from '../api/catalogue';
 import { Button } from '../components/Button';
+import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
+import { LoadingState } from '../components/LoadingState';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { EpisodeReviewEditor } from '../reviews/EpisodeReviewEditor';
@@ -61,9 +63,8 @@ export function EpisodeDetailScreen({ navigation, route }: EpisodeDetailScreenPr
     <View style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {isLoading ? (
-          <View style={styles.loadingPanel}>
-            <ActivityIndicator color={colors.accent} />
-            <Text style={styles.loadingText}>Loading episode details</Text>
+          <View style={styles.loadingFrame}>
+            <LoadingState label="Loading episode details" />
           </View>
         ) : error ? (
           <EmptyState body={error} title="Episode detail failed">
@@ -85,59 +86,66 @@ function EpisodeDetailContent({ episode }: { episode: EpisodeDetails }) {
 
   return (
     <View>
-      {episode.stillUrl ? (
-        <Image
-          accessibilityIgnoresInvertColors
-          accessibilityLabel={`${episode.title} still`}
-          source={{ uri: episode.stillUrl }}
-          style={styles.still}
-        />
-      ) : (
-        <View style={styles.stillPlaceholder} />
-      )}
-      <View style={styles.titleBlock}>
-        <View style={styles.titleRow}>
+      <View style={styles.hero}>
+        {episode.stillUrl ? (
+          <Image
+            accessibilityIgnoresInvertColors
+            accessibilityLabel={`${episode.title} still`}
+            source={{ uri: episode.stillUrl }}
+            style={styles.still}
+          />
+        ) : (
+          <View style={styles.stillPlaceholder} />
+        )}
+        <View style={styles.heroScrim} />
+        <View style={styles.heroCopy}>
+          <Text style={styles.eyebrow}>Episode</Text>
           <Text style={styles.title}>{episode.title}</Text>
-          <Text style={styles.episodeCode}>{episodeCode}</Text>
-        </View>
-        {rating ? (
-          <View style={styles.ratingRow}>
-            <Star color={colors.accent} fill={colors.accent} size={14} strokeWidth={2.2} />
-            <Text style={styles.ratingText}>{rating}</Text>
+          <View style={styles.metaRow}>
+            <Chip label={episodeCode} tone="accent" />
+            {episode.airDate ? <Chip label={episode.airDate} /> : null}
+            {runtime ? <Chip label={runtime} /> : null}
+            {rating ? (
+              <Chip
+                icon={<Star color={colors.rating} fill={colors.rating} size={11} strokeWidth={2} />}
+                label={rating}
+                tone="rating"
+              />
+            ) : null}
           </View>
-        ) : null}
-        {runtime ? <Text style={styles.runtime}>{runtime}</Text> : null}
+        </View>
       </View>
-      <EpisodeProgressControl
-        episodeNumber={episode.episodeNumber}
-        seasonNumber={episode.seasonNumber}
-        seriesTmdbId={episode.seriesTmdbId}
-      />
-      {isReleased ? (
-        <>
+      <View style={styles.bodyStack}>
+        <EpisodeProgressControl
+          episodeNumber={episode.episodeNumber}
+          seasonNumber={episode.seasonNumber}
+          seriesTmdbId={episode.seriesTmdbId}
+        />
+        {isReleased ? (
           <EpisodeRatingControl
             episodeNumber={episode.episodeNumber}
             seasonNumber={episode.seasonNumber}
             seriesTmdbId={episode.seriesTmdbId}
           />
+        ) : null}
+        <View style={styles.panel}>
+          <Text style={styles.sectionTitle}>Synopsis</Text>
+          <Text style={styles.body}>{episode.overview || 'No synopsis available yet.'}</Text>
+        </View>
+        {isReleased ? (
           <EpisodeReviewEditor
             episodeNumber={episode.episodeNumber}
             seasonNumber={episode.seasonNumber}
             seriesTmdbId={episode.seriesTmdbId}
           />
-        </>
-      ) : null}
-      <View style={styles.panel}>
-        <Text style={styles.sectionTitle}>Synopsis</Text>
-        <Text style={styles.body}>{episode.overview || 'No synopsis available yet.'}</Text>
-      </View>
-      <View style={styles.panel}>
-        <Text style={styles.sectionTitle}>Details</Text>
-        <DetailRow label="TMDB ID" value={String(episode.tmdbId)} />
-        <DetailRow label="Season" value={String(episode.seasonNumber)} />
-        <DetailRow label="Episode" value={String(episode.episodeNumber)} />
-        <DetailRow label="Air date" value={episode.airDate ?? 'Unknown'} />
-        <DetailRow label="Runtime" value={runtime ?? 'Unknown'} />
+        ) : null}
+        <View style={styles.panel}>
+          <Text style={styles.sectionTitle}>Details</Text>
+          <DetailRow label="Season" value={String(episode.seasonNumber)} />
+          <DetailRow label="Episode" value={String(episode.episodeNumber)} />
+          <DetailRow label="Air date" value={episode.airDate ?? 'Unknown'} />
+          <DetailRow label="Runtime" value={runtime ?? 'Unknown'} />
+        </View>
       </View>
     </View>
   );
@@ -161,8 +169,11 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     paddingBottom: spacing.xxxl,
-    paddingHorizontal: spacing.xl,
     paddingTop: 0,
+  },
+  bodyStack: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
   },
   detailLabel: {
     color: colors.muted,
@@ -181,20 +192,10 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.text,
   },
-  loadingPanel: {
-    alignItems: 'center',
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  loadingText: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '700',
+  eyebrow: {
+    ...typography.eyebrow,
+    color: colors.accentText,
+    marginBottom: spacing.xs,
   },
   headerAirDate: {
     color: colors.muted,
@@ -219,12 +220,30 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
   },
-  episodeCode: {
-    color: colors.muted,
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: 0,
-    textTransform: 'uppercase',
+  hero: {
+    backgroundColor: colors.panelSoft,
+    minHeight: 282,
+    overflow: 'hidden',
+  },
+  heroCopy: {
+    bottom: spacing.xl,
+    left: spacing.xl,
+    position: 'absolute',
+    right: spacing.xl,
+  },
+  heroScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.overlay,
+  },
+  loadingFrame: {
+    padding: spacing.xl,
+  },
+  metaRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.md,
   },
   panel: {
     ...shadows.panel,
@@ -245,54 +264,19 @@ const styles = StyleSheet.create({
   },
   still: {
     backgroundColor: colors.panelSoft,
-    borderRadius: radii.md,
-    height: 190,
-    marginBottom: spacing.lg,
+    height: 282,
     width: '100%',
   },
   stillPlaceholder: {
     backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    height: 190,
-    marginBottom: spacing.lg,
+    height: 282,
     width: '100%',
   },
   title: {
     color: colors.text,
-    flex: 1,
-    fontSize: 30,
+    fontSize: 32,
     fontWeight: '800',
     letterSpacing: 0,
-    lineHeight: 36,
-  },
-  ratingRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  ratingText: {
-    color: colors.muted,
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0,
-  },
-  runtime: {
-    color: colors.muted,
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0,
-    marginTop: spacing.xs,
-  },
-  titleBlock: {
-    marginBottom: spacing.sm,
-  },
-  titleRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.md,
-    justifyContent: 'space-between',
+    lineHeight: 38,
   },
 });

@@ -9,6 +9,8 @@ import { listSeriesProgress, SeriesProgress } from '../api/progress';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
+import { LoadingState } from '../components/LoadingState';
+import { MediaHero } from '../components/MediaHero';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
@@ -77,9 +79,8 @@ export function SeriesDetailScreen({ route }: SeriesDetailScreenProps) {
     <SafeAreaView edges={[]} style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {isLoading ? (
-          <View style={styles.loadingPanel}>
-            <ActivityIndicator color={colors.accent} />
-            <Text style={styles.loadingText}>Loading series details</Text>
+          <View style={styles.loadingFrame}>
+            <LoadingState label="Loading series details" />
           </View>
         ) : error ? (
           <EmptyState body={error} title="Series detail failed">
@@ -104,57 +105,56 @@ function SeriesDetailContent({ series }: { series: SeriesDetails }) {
     .map((item) => item as HeaderInfoItem);
   return (
     <View>
-      <View style={styles.header}>
-        {series.posterUrl ? (
-          <Image
-            accessibilityIgnoresInvertColors
-            accessibilityLabel={`${series.title} poster`}
-            source={{ uri: series.posterUrl }}
-            style={styles.poster}
-          />
-        ) : (
-          <View style={styles.posterPlaceholder} />
-        )}
-        <View style={styles.headerCopy}>
-          <Text style={styles.title}>{series.title}</Text>
-          <HeaderInfoPills items={infoItems} />
-          {series.genres.length > 0 ? (
-            <Text numberOfLines={2} style={styles.genres}>
-              {series.genres.join(', ')}
-            </Text>
-          ) : null}
-          <AddToWatchlistControl contentType="series" tmdbId={series.tmdbId} />
-        </View>
-        <ReleaseAlertControl contentType="series" tmdbId={series.tmdbId} />
-      </View>
-      {series.tagline ? <Text style={styles.tagline}>{series.tagline}</Text> : null}
-      <SegmentedControl
-        containerStyle={styles.viewSwitchControl}
-        onChange={setActiveView}
-        options={[
-          { accessibilityLabel: 'Show details', label: 'Details', value: 'details' },
-          { accessibilityLabel: 'Show episodes', label: 'Episodes', value: 'episodes' },
-        ]}
-        value={activeView}
-      />
-      {activeView === 'episodes' ? (
-        <SeriesEpisodesPanel
-          seasons={series.seasons}
-          seriesTitle={series.title}
-          seriesTmdbId={series.tmdbId}
+      <MediaHero
+        actionAccessory={<ReleaseAlertControl contentType="series" tmdbId={series.tmdbId} />}
+        actions={<AddToWatchlistControl contentType="series" tmdbId={series.tmdbId} />}
+        backdropUrl={series.backdropUrl}
+        eyebrow="Series"
+        posterAccessibilityLabel={`${series.title} poster`}
+        posterUrl={series.posterUrl}
+        title={series.title}
+      >
+        <HeaderInfoPills items={infoItems} />
+        {series.genres.length > 0 ? (
+          <Text numberOfLines={2} style={styles.genres}>
+            {series.genres.join(', ')}
+          </Text>
+        ) : null}
+        {series.tagline ? (
+          <Text numberOfLines={2} style={styles.tagline}>
+            {series.tagline}
+          </Text>
+        ) : null}
+      </MediaHero>
+      <View style={styles.bodyStack}>
+        <SegmentedControl
+          containerStyle={styles.viewSwitchControl}
+          onChange={setActiveView}
+          options={[
+            { accessibilityLabel: 'Show details', label: 'Details', value: 'details' },
+            { accessibilityLabel: 'Show episodes', label: 'Episodes', value: 'episodes' },
+          ]}
+          value={activeView}
         />
-      ) : (
-        <>
-          <TrackingControls contentType="series" tmdbId={series.tmdbId} />
-          <SynopsisPanel overview={series.overview} />
-          <SeriesProgressSummary
+        {activeView === 'episodes' ? (
+          <SeriesEpisodesPanel
             seasons={series.seasons}
             seriesTitle={series.title}
             seriesTmdbId={series.tmdbId}
           />
-          <StreamingAvailabilityPanel contentType="series" tmdbId={series.tmdbId} />
-        </>
-      )}
+        ) : (
+          <>
+            <TrackingControls contentType="series" tmdbId={series.tmdbId} />
+            <SeriesProgressSummary
+              seasons={series.seasons}
+              seriesTitle={series.title}
+              seriesTmdbId={series.tmdbId}
+            />
+            <SynopsisPanel overview={series.overview} />
+            <StreamingAvailabilityPanel contentType="series" tmdbId={series.tmdbId} />
+          </>
+        )}
+      </View>
     </View>
   );
 }
@@ -498,12 +498,14 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     paddingBottom: spacing.xxxl,
+    paddingTop: 0,
+  },
+  bodyStack: {
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
   },
   genres: {
     ...typography.body,
-    color: colors.muted,
+    color: colors.textMuted,
     marginTop: spacing.sm,
   },
   episodeOverview: {
@@ -554,30 +556,8 @@ const styles = StyleSheet.create({
   dropdownIconOpen: {
     transform: [{ rotate: '180deg' }],
   },
-  header: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  headerCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  loadingPanel: {
-    alignItems: 'center',
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  loadingText: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '700',
+  loadingFrame: {
+    padding: spacing.xl,
   },
   inlineLoading: {
     alignItems: 'center',
@@ -593,20 +573,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: spacing.md,
     padding: spacing.lg,
-  },
-  poster: {
-    backgroundColor: colors.panelSoft,
-    borderRadius: radii.md,
-    height: 174,
-    width: 116,
-  },
-  posterPlaceholder: {
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    height: 174,
-    width: 116,
   },
   safeArea: {
     backgroundColor: colors.background,
@@ -715,16 +681,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   tagline: {
-    ...typography.title,
+    ...typography.body,
     color: colors.text,
-    marginBottom: spacing.md,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 28,
     fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 34,
+    marginTop: spacing.sm,
   },
   viewSwitchControl: {
     marginBottom: spacing.md,
