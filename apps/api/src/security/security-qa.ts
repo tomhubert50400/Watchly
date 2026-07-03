@@ -3,7 +3,6 @@ import { Type } from '@nestjs/common';
 import { GUARDS_METADATA, MODULE_METADATA } from '@nestjs/common/constants';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
-import { AppModule } from '../app.module';
 import { AuthGuard } from '../auth/auth.guard';
 import { AuthController } from '../auth/auth.controller';
 import { BlocksController } from '../blocks/blocks.controller';
@@ -48,12 +47,17 @@ const protectedControllers = [
 
 const publicControllers = [CatalogueController];
 
-function main() {
+async function main() {
+  process.env.DATABASE_URL ??= 'postgresql://postgres:postgres@localhost:5432/tv_app?schema=public';
+  process.env.FIREBASE_PROJECT_ID ??= 'security-qa';
+
+  const { AppModule } = await import('../app.module.js');
+
   const failures = [
     ...assertProtectedControllersUseAuthGuard(),
     ...assertAuthMeUsesAuthGuard(),
     ...assertPublicControllersStayPublic(),
-    ...assertGlobalThrottlerGuard(),
+    ...assertGlobalThrottlerGuard(AppModule),
   ];
 
   if (failures.length > 0) {
@@ -81,8 +85,8 @@ function assertPublicControllersStayPublic() {
   );
 }
 
-function assertGlobalThrottlerGuard() {
-  const providers = Reflect.getMetadata(MODULE_METADATA.PROVIDERS, AppModule) ?? [];
+function assertGlobalThrottlerGuard(appModule: Type<unknown>) {
+  const providers = Reflect.getMetadata(MODULE_METADATA.PROVIDERS, appModule) ?? [];
   const hasThrottler = providers.some(
     (provider: unknown) =>
       isProviderObject(provider) &&

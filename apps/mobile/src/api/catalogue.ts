@@ -161,10 +161,6 @@ export function searchCatalogue(query: string, type: CatalogueSearchType) {
   return apiGet<CatalogueSearchResponse>(`/catalog/search?${params.toString()}`);
 }
 
-export function getTrendingCatalogue() {
-  return apiGet<CatalogueSearchResponse>('/catalog/trending');
-}
-
 export function getCatalogueMovieSections() {
   return apiGet<CatalogueMovieSectionsResponse>('/catalog/movie-sections');
 }

@@ -1,30 +1,3 @@
-export async function withPrismaConnectionRetry<T>(
-  operation: () => Promise<T>,
-  resetConnection?: () => Promise<void>,
-): Promise<T> {
-  let lastError: unknown;
-
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    try {
-      return await operation();
-    } catch (error) {
-      if (!isPrismaConnectionError(error)) {
-        throw error;
-      }
-
-      lastError = error;
-
-      if (resetConnection) {
-        await resetConnection();
-      }
-
-      await delay((attempt + 1) * 300);
-    }
-  }
-
-  throw lastError;
-}
-
 export function isPrismaConnectionError(error: unknown) {
   if (!error || typeof error !== 'object') {
     return false;
@@ -54,10 +27,4 @@ export function isPrismaConnectionError(error: unknown) {
     message.includes('ECONNREFUSED') ||
     message.includes('ECONNRESET')
   );
-}
-
-function delay(durationMs: number) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, durationMs);
-  });
 }

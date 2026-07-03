@@ -36,12 +36,12 @@ export function SynopsisPanel({ overview }: SynopsisPanelProps) {
       </Text>
       {canExpand ? (
         <Pressable
-          accessibilityLabel={isExpanded ? 'Masquer le synopsis complet' : 'Afficher le synopsis complet'}
+          accessibilityLabel={isExpanded ? 'Collapse full synopsis' : 'Show full synopsis'}
           accessibilityRole="button"
           onPress={() => setIsExpanded((current) => !current)}
           style={({ pressed }) => [styles.expandButton, pressed && styles.expandButtonPressed]}
         >
-          <Text style={styles.expandLabel}>{isExpanded ? 'Afficher moins' : 'Afficher plus'}</Text>
+          <Text style={styles.expandLabel}>{isExpanded ? 'Show less' : 'Show more'}</Text>
         </Pressable>
       ) : null}
     </View>
