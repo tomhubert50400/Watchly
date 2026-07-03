@@ -2,9 +2,7 @@ import { memo, useCallback, useEffect, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
-  ActivityIndicator,
   FlatList,
-  Image,
   InputAccessoryView,
   Keyboard,
   Platform,
@@ -15,9 +13,12 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search, X } from 'lucide-react-native';
+import { Search, Star, X } from 'lucide-react-native';
 import { CatalogueSearchItem, getCatalogueMovieSections, searchCatalogue } from '../api/catalogue';
+import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
+import { LoadingState } from '../components/LoadingState';
+import { MediaPoster } from '../components/MediaPoster';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
@@ -48,26 +49,26 @@ const CatalogueResultCard = memo(function CatalogueResultCard({
   const mediaLabel = item.mediaType === 'movie' ? 'Film' : 'Series';
   const content = (
     <>
-      {item.posterUrl ? (
-        <Image
-          accessibilityIgnoresInvertColors
-          source={{ uri: item.posterUrl }}
-          style={styles.cataloguePoster}
-        />
-      ) : (
-        <View style={styles.cataloguePosterPlaceholder}>
-          <Search color={colors.muted} size={22} strokeWidth={2} />
-        </View>
-      )}
+      <MediaPoster
+        accessibilityLabel={`${item.title} poster`}
+        posterUrl={item.posterUrl}
+        style={styles.cataloguePoster}
+      />
       <View style={styles.catalogueCopy}>
         <Text numberOfLines={2} style={styles.catalogueTitle}>
           {item.title}
         </Text>
-        <Text style={styles.catalogueMeta}>
-          {mediaLabel}
-          {releaseLabel ? ` / ${releaseLabel}` : ''}
-          {showRating && item.voteAverage ? ` / ${item.voteAverage.toFixed(1)}` : ''}
-        </Text>
+        <View style={styles.catalogueMetaRow}>
+          <Chip label={mediaLabel} />
+          {releaseLabel ? <Chip label={releaseLabel} tone={dateDisplay === 'full' ? 'accent' : 'neutral'} /> : null}
+          {showRating && item.voteAverage ? (
+            <Chip
+              icon={<Star color={colors.rating} fill={colors.rating} size={11} strokeWidth={2} />}
+              label={item.voteAverage.toFixed(1)}
+              tone="rating"
+            />
+          ) : null}
+        </View>
         <Text numberOfLines={3} style={styles.catalogueOverview}>
           {item.overview || 'No synopsis available yet.'}
         </Text>
@@ -87,6 +88,7 @@ const CatalogueResultCard = memo(function CatalogueResultCard({
             style={({ pressed }) => [styles.catalogueHitArea, pressed && styles.catalogueHitAreaPressed]}
           />
           <View style={styles.releaseAlertSlot}>
+            <Text style={styles.releaseAlertLabel}>Notify</Text>
             <ReleaseAlertControl contentType="movie" tmdbId={item.tmdbId} />
           </View>
         </View>
@@ -234,16 +236,15 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
             {showLoading ? (
-              <View style={styles.loadingPanel}>
-                <ActivityIndicator color={colors.accent} />
-                <Text style={styles.loadingText}>
-                  {isSearching
+              <LoadingState
+                label={
+                  isSearching
                     ? 'Searching catalogue'
                     : activeSection === 'trending'
                       ? 'Loading trending'
-                      : 'Loading announced'}
-                </Text>
-              </View>
+                      : 'Loading announced'
+                }
+              />
             ) : visibleError ? (
               <EmptyState
                 body={visibleError}
@@ -292,7 +293,7 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
                   onPress={() => setQuery('')}
                   style={({ pressed }) => [styles.searchClearButton, pressed && styles.searchClearButtonPressed]}
                 >
-                  <X color="#111111" size={14} strokeWidth={3} />
+                  <X color={colors.background} size={14} strokeWidth={3} />
                 </Pressable>
               ) : null}
             </View>
@@ -376,7 +377,7 @@ const styles = StyleSheet.create({
     opacity: 0.78,
   },
   catalogueCardWithOverlay: {
-    paddingRight: 64,
+    paddingRight: 78,
     position: 'relative',
   },
   catalogueHitArea: {
@@ -392,13 +393,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 0,
   },
-  catalogueMeta: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0,
-    marginTop: spacing.xs,
-    textTransform: 'uppercase',
+  catalogueMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
   },
   catalogueOverview: {
     ...typography.body,
@@ -406,19 +405,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   cataloguePoster: {
-    backgroundColor: colors.panelSoft,
-    borderRadius: radii.md,
     height: 132,
-    width: 88,
-  },
-  cataloguePosterPlaceholder: {
-    alignItems: 'center',
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    height: 132,
-    justifyContent: 'center',
     width: 88,
   },
   catalogueTitle: {
@@ -466,28 +453,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.lg,
   },
-  loadingPanel: {
-    alignItems: 'center',
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  loadingText: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '700',
+  releaseAlertLabel: {
+    ...typography.meta,
+    color: colors.textSubtle,
+    textAlign: 'center',
+    textTransform: 'uppercase',
   },
   releaseAlertSlot: {
+    alignItems: 'center',
     elevation: 12,
-    height: 42,
+    gap: 4,
     position: 'absolute',
-    right: spacing.md,
+    right: spacing.sm,
     top: spacing.md,
-    width: 42,
+    width: 58,
     zIndex: 20,
   },
   safeArea: {
@@ -507,14 +486,14 @@ const styles = StyleSheet.create({
   },
   searchClearButton: {
     alignItems: 'center',
-    backgroundColor: '#B7BBC4',
+    backgroundColor: colors.textMuted,
     borderRadius: 10,
     height: 20,
     justifyContent: 'center',
     width: 20,
   },
   searchClearButtonPressed: {
-    backgroundColor: '#D1D5DB',
+    backgroundColor: colors.text,
   },
   searchInput: {
     ...typography.body,

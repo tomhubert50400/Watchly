@@ -16,6 +16,8 @@ export const colors = {
   panelElevated: '#151A25',
   panelSoft: '#111822',
   rating: '#F2C96D',
+  ratingBorder: 'rgba(242, 201, 109, 0.34)',
+  ratingSoft: 'rgba(242, 201, 109, 0.13)',
   secondary: '#7672F0',
   success: '#4CDB99',
   successBorder: 'rgba(76, 219, 153, 0.34)',

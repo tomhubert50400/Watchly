@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus } from 'lucide-react-native';
 import {
-  ActivityIndicator,
   Animated,
   Easing,
   Image,
@@ -20,6 +19,7 @@ import {
   StreamingProvider,
 } from '../api/catalogue';
 import { Button } from '../components/Button';
+import { LoadingState } from '../components/LoadingState';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 
 type StreamingAvailabilityPanelProps = {
@@ -83,10 +83,7 @@ export function StreamingAvailabilityPanel({ contentType, tmdbId }: StreamingAva
         <Text style={styles.sectionTitle}>Where to watch</Text>
       </View>
       {isLoading ? (
-        <View style={styles.loadingRow}>
-          <ActivityIndicator color={colors.accent} />
-          <Text style={styles.sectionBody}>Checking providers</Text>
-        </View>
+        <LoadingState label="Checking providers" />
       ) : error ? (
         <View style={styles.errorBlock}>
           <Text style={styles.warning}>{error}</Text>
@@ -163,25 +160,35 @@ function ProviderDisclosure({
           style={styles.groupButton}
         >
           <Animated.View style={[styles.groupIcon, { transform: [{ rotate }] }]}>
-            <Plus color={colors.accent} size={16} strokeWidth={2.4} />
+            <Plus color={colors.textMuted} size={16} strokeWidth={2.4} />
           </Animated.View>
-          <Text style={styles.groupLabel}>{group.label}</Text>
+          <View style={styles.groupCopy}>
+            <Text style={styles.groupLabel}>{group.label}</Text>
+            <Text style={styles.groupMeta}>{formatProviderCount(group.providers.length)}</Text>
+          </View>
         </Pressable>
       ) : (
         <View style={styles.groupButton}>
-          <Text style={styles.groupLabel}>{group.label}</Text>
+          <View style={styles.groupCopy}>
+            <Text style={styles.groupLabel}>{group.label}</Text>
+            <Text style={styles.groupMeta}>{formatProviderCount(group.providers.length)}</Text>
+          </View>
         </View>
       )}
       {isExpanded ? (
         <View style={styles.logoRows}>
           {group.providers.map((provider) => (
-            <Image
-              accessibilityIgnoresInvertColors
-              accessibilityLabel={`${provider.name} logo, ${group.label}`}
-              key={provider.id}
-              source={{ uri: provider.logoUrl }}
-              style={styles.providerLogo}
-            />
+            <View key={provider.id} style={styles.providerTile}>
+              <Image
+                accessibilityIgnoresInvertColors
+                accessibilityLabel={`${provider.name} logo, ${group.label}`}
+                source={{ uri: provider.logoUrl }}
+                style={styles.providerLogo}
+              />
+              <Text numberOfLines={1} style={styles.providerName}>
+                {provider.name}
+              </Text>
+            </View>
           ))}
         </View>
       ) : null}
@@ -204,6 +211,10 @@ function animateAvailabilityToggle() {
       type: LayoutAnimation.Types.easeInEaseOut,
     },
   });
+}
+
+function formatProviderCount(count: number) {
+  return `${count} ${count === 1 ? 'option' : 'options'}`;
 }
 
 function getProviderGroups(availability: StreamingAvailability) {
@@ -238,43 +249,54 @@ function getLogoProviders(providers: StreamingProvider[]): LogoProvider[] {
 const styles = StyleSheet.create({
   emptyText: {
     ...typography.body,
-    color: colors.muted,
+    color: colors.textMuted,
   },
   errorBlock: {
     gap: spacing.sm,
   },
   availabilityGroup: {
-    gap: spacing.xs,
+    borderTopColor: colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
   },
   availabilityGroups: {
-    gap: spacing.xs,
+    gap: spacing.md,
   },
   groupButton: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.sm,
-    minHeight: 34,
+    minHeight: 44,
+  },
+  groupCopy: {
+    flex: 1,
+    minWidth: 0,
   },
   groupIcon: {
     alignItems: 'center',
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.border,
+    borderRadius: radii.sm,
+    borderWidth: 1,
     height: 18,
     justifyContent: 'center',
     width: 18,
   },
   groupLabel: {
     ...typography.eyebrow,
-    color: colors.accent,
+    color: colors.text,
     fontWeight: '800',
     textTransform: 'uppercase',
   },
-  loadingRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.md,
+  groupMeta: {
+    ...typography.meta,
+    color: colors.textSubtle,
+    marginTop: 2,
   },
   panel: {
     ...shadows.panel,
-    backgroundColor: colors.panelElevated,
+    backgroundColor: colors.panel,
     borderColor: colors.border,
     borderRadius: radii.md,
     borderWidth: 1,
@@ -283,19 +305,27 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   providerLogo: {
-    backgroundColor: colors.panelSoft,
-    borderRadius: radii.sm,
-    height: 38,
-    width: 38,
+    backgroundColor: colors.text,
+    borderRadius: radii.xs,
+    height: 34,
+    width: 34,
   },
   logoRows: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
-  sectionBody: {
-    ...typography.body,
-    color: colors.muted,
+  providerName: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0,
+    marginTop: spacing.xs,
+    textAlign: 'center',
+  },
+  providerTile: {
+    alignItems: 'center',
+    width: 68,
   },
   sectionTitle: {
     ...typography.title,
