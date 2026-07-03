@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPut } from './client';
+import { apiGet, apiPut } from './client';
 
 export type TrackedContentType = 'movie' | 'series';
 export type TrackingStatus = 'watchlisted' | 'watching' | 'watched' | 'dropped';
@@ -39,10 +39,4 @@ export function listTrackingStates(token: string, contentType?: TrackedContentTy
 
 export function upsertTrackingState(token: string, input: UpsertTrackingStateInput) {
   return apiPut<TrackingState | null>('/tracking/states', input, { token });
-}
-
-export function deleteTrackingState(token: string, contentType: TrackedContentType, tmdbId: number) {
-  const params = new URLSearchParams({ contentType, tmdbId: String(tmdbId) });
-
-  return apiDelete<{ deleted: true }>(`/tracking/states?${params.toString()}`, { token });
 }

@@ -5,7 +5,7 @@ type FeedAuthor = {
   id: string;
 };
 
-export type FeedMovieReviewItem = {
+type FeedMovieReviewItem = {
   author: FeedAuthor;
   body: string;
   content: {
@@ -17,7 +17,7 @@ export type FeedMovieReviewItem = {
   updatedAt: string;
 };
 
-export type FeedEpisodeReviewItem = {
+type FeedEpisodeReviewItem = {
   author: FeedAuthor;
   body: string;
   content: {

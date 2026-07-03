@@ -35,7 +35,7 @@ export type PublicProfile = {
   };
 };
 
-export type ProfileMovieRatingOpinion = {
+type ProfileMovieRatingOpinion = {
   content: {
     contentType: 'movie';
     tmdbId: number;
@@ -46,7 +46,7 @@ export type ProfileMovieRatingOpinion = {
   updatedAt: string;
 };
 
-export type ProfileEpisodeRatingOpinion = {
+type ProfileEpisodeRatingOpinion = {
   content: {
     contentType: 'episode';
     episodeNumber: number;
@@ -59,7 +59,7 @@ export type ProfileEpisodeRatingOpinion = {
   updatedAt: string;
 };
 
-export type ProfileMovieReviewOpinion = {
+type ProfileMovieReviewOpinion = {
   body: string;
   content: {
     contentType: 'movie';
@@ -71,7 +71,7 @@ export type ProfileMovieReviewOpinion = {
   updatedAt: string;
 };
 
-export type ProfileEpisodeReviewOpinion = {
+type ProfileEpisodeReviewOpinion = {
   body: string;
   content: {
     contentType: 'episode';

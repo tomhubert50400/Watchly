@@ -1,7 +1,7 @@
 import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 
-export const privacyVisibilities = ['public', 'private'] as const;
-export const sharedWatchlistVisibilities = ['members', 'private'] as const;
+const privacyVisibilities = ['public', 'private'] as const;
+const sharedWatchlistVisibilities = ['members', 'private'] as const;
 
 export type PrivacyVisibilityValue = (typeof privacyVisibilities)[number];
 export type SharedWatchlistVisibilityValue = (typeof sharedWatchlistVisibilities)[number];

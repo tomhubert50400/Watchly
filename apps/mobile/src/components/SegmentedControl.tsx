@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
 import { colors, radii, spacing } from '../design/tokens';
 
-export type SegmentedControlOption<T extends string> = {
+type SegmentedControlOption<T extends string> = {
   accessibilityLabel?: string;
   label: string;
   render?: (state: { selected: boolean }) => ReactNode;
