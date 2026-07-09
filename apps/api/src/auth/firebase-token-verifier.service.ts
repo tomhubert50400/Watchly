@@ -16,29 +16,36 @@ export class FirebaseTokenVerifier {
   }
 
   async verifyBearerToken(token: string): Promise<AuthenticatedIdentity> {
-    let decodedToken: DecodedIdToken;
-
-    try {
-      decodedToken = await verifyFirebaseIdToken(getAuth(), token);
-    } catch {
-      throw new UnauthorizedException('Invalid auth token.');
-    }
-
-    const provider = mapFirebaseProvider(decodedToken.firebase.sign_in_provider);
-
-    if (!provider) {
-      throw new UnauthorizedException('Auth provider is not allowed.');
-    }
-
-    return {
-      displayName: typeof decodedToken.name === 'string' ? decodedToken.name : null,
-      provider,
-      providerUserId: decodedToken.uid,
-    };
+    return verifyBearerTokenWithAuth(getAuth(), token);
   }
 }
 
 type FirebaseAuthVerifier = Pick<ReturnType<typeof getAuth>, 'verifyIdToken'>;
+
+export async function verifyBearerTokenWithAuth(
+  auth: FirebaseAuthVerifier,
+  token: string,
+): Promise<AuthenticatedIdentity> {
+  let decodedToken: DecodedIdToken;
+
+  try {
+    decodedToken = await verifyFirebaseIdToken(auth, token);
+  } catch {
+    throw new UnauthorizedException('Invalid auth token.');
+  }
+
+  const provider = mapFirebaseProvider(decodedToken.firebase.sign_in_provider);
+
+  if (!provider) {
+    throw new UnauthorizedException('Auth provider is not allowed.');
+  }
+
+  return {
+    displayName: typeof decodedToken.name === 'string' ? decodedToken.name : null,
+    provider,
+    providerUserId: decodedToken.uid,
+  };
+}
 
 export function verifyFirebaseIdToken(auth: FirebaseAuthVerifier, token: string) {
   return auth.verifyIdToken(token, true);
