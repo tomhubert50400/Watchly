@@ -48,12 +48,11 @@ async function apiRequest<T>(method: string, path: string, options: ApiRequestOp
     throw new ApiError('API request timeout must be a positive finite number.');
   }
 
-  let response: Response;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    response = await fetch(`${apiUrl}${path}`, {
+    const response = await fetch(`${apiUrl}${path}`, {
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
       headers: {
         ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
@@ -62,7 +61,33 @@ async function apiRequest<T>(method: string, path: string, options: ApiRequestOp
       method,
       signal: controller.signal,
     });
-  } catch {
+
+    if (!response.ok) {
+      const serverMessage = await getServerMessage(response);
+
+      if (controller.signal.aborted) {
+        throw new ApiError('API request timed out.');
+      }
+
+      const message = sanitizeServerMessage(serverMessage, response.status);
+
+      throw new ApiError(
+        message,
+        response.status,
+        serverMessage,
+      );
+    }
+
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
+    return (await response.json()) as T;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
     if (controller.signal.aborted) {
       throw new ApiError('API request timed out.');
     }
@@ -71,23 +96,6 @@ async function apiRequest<T>(method: string, path: string, options: ApiRequestOp
   } finally {
     clearTimeout(timeout);
   }
-
-  if (!response.ok) {
-    const serverMessage = await getServerMessage(response);
-    const message = sanitizeServerMessage(serverMessage, response.status);
-
-    throw new ApiError(
-      message,
-      response.status,
-      serverMessage,
-    );
-  }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
-
-  return response.json() as Promise<T>;
 }
 
 async function getServerMessage(response: Response) {

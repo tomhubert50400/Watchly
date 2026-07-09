@@ -44,6 +44,33 @@ async function main() {
     await delay(20);
     assert(!completedSignal?.aborted, 'A completed request timer must be cleared.');
 
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) =>
+      ({
+        json: () =>
+          new Promise<never>((_resolve, reject) => {
+            init?.signal?.addEventListener(
+              'abort',
+              () => reject(new DOMException('The operation was aborted.', 'AbortError')),
+              { once: true },
+            );
+          }),
+        ok: true,
+        status: 200,
+      }) as unknown as Response) as typeof fetch;
+
+    const stalledBodyError = await withDeadline(
+      apiGet('/qa-stalled-body', { timeoutMs: 5 }).then(
+        () => null,
+        (caught: unknown) => caught,
+      ),
+      100,
+    );
+    assert(stalledBodyError instanceof ApiError, 'Expected a typed stalled-body ApiError.');
+    assert(
+      stalledBodyError.message === 'API request timed out.',
+      'Expected the timeout to cover response body parsing.',
+    );
+
     let invalidTimeoutFetchCalled = false;
     globalThis.fetch = (async () => {
       invalidTimeoutFetchCalled = true;

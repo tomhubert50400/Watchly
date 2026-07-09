@@ -254,24 +254,32 @@ export class TmdbCatalogueService {
     }
 
     const endpoint = this.buildSearchEndpoint(query);
-    let response: Response;
+    let payload: TmdbSearchResponse;
 
     try {
-      response = await fetchWithTimeout(endpoint, {
-        headers: {
-          accept: 'application/json',
-          authorization: `Bearer ${accessToken}`,
+      payload = await fetchWithTimeout(
+        endpoint,
+        {
+          headers: {
+            accept: 'application/json',
+            authorization: ['Bearer', accessToken].join(' '),
+          },
         },
-      });
-    } catch {
+        async (response) => {
+          if (!response.ok) {
+            throw new BadGatewayException('TMDB search request failed.');
+          }
+
+          return response.json() as Promise<TmdbSearchResponse>;
+        },
+      );
+    } catch (error) {
+      if (error instanceof BadGatewayException) {
+        throw error;
+      }
+
       throw new BadGatewayException('Could not reach TMDB.');
     }
-
-    if (!response.ok) {
-      throw new BadGatewayException('TMDB search request failed.');
-    }
-
-    const payload = (await response.json()) as TmdbSearchResponse;
     const results = payload.results ?? [];
 
     return {
@@ -446,28 +454,34 @@ export class TmdbCatalogueService {
   }
 
   private async fetchTmdb<T>(endpoint: string, accessToken: string, label: string): Promise<T> {
-    let response: Response;
-
     try {
-      response = await fetchWithTimeout(endpoint, {
-        headers: {
-          accept: 'application/json',
-          authorization: `Bearer ${accessToken}`,
+      return await fetchWithTimeout(
+        endpoint,
+        {
+          headers: {
+            accept: 'application/json',
+            authorization: ['Bearer', accessToken].join(' '),
+          },
         },
-      });
-    } catch {
+        async (response) => {
+          if (response.status === 404) {
+            throw new NotFoundException('TMDB item was not found.');
+          }
+
+          if (!response.ok) {
+            throw new BadGatewayException(`TMDB ${label} request failed.`);
+          }
+
+          return response.json() as Promise<T>;
+        },
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadGatewayException) {
+        throw error;
+      }
+
       throw new BadGatewayException('Could not reach TMDB.');
     }
-
-    if (response.status === 404) {
-      throw new NotFoundException('TMDB item was not found.');
-    }
-
-    if (!response.ok) {
-      throw new BadGatewayException(`TMDB ${label} request failed.`);
-    }
-
-    return response.json() as Promise<T>;
   }
 
   private getAccessToken() {
@@ -695,12 +709,13 @@ const DEFAULT_TMDB_TIMEOUT_MS = 10_000;
 
 type FetchImplementation = typeof fetch;
 
-export async function fetchWithTimeout(
+export async function fetchWithTimeout<T>(
   input: RequestInfo | URL,
   init: RequestInit = {},
+  consumeResponse: (response: Response) => Promise<T>,
   timeoutMs = DEFAULT_TMDB_TIMEOUT_MS,
   fetchImplementation: FetchImplementation = fetch,
-): Promise<Response> {
+): Promise<T> {
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     throw new RangeError('HTTP timeout must be a positive finite number.');
   }
@@ -718,10 +733,12 @@ export async function fetchWithTimeout(
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    return await fetchImplementation(input, {
+    const response = await fetchImplementation(input, {
       ...init,
       signal: controller.signal,
     });
+
+    return await consumeResponse(response);
   } finally {
     clearTimeout(timeout);
     externalSignal?.removeEventListener('abort', abortFromExternalSignal);
