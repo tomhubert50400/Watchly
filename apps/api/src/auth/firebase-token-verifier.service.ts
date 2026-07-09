@@ -19,7 +19,7 @@ export class FirebaseTokenVerifier {
     let decodedToken: DecodedIdToken;
 
     try {
-      decodedToken = await getAuth().verifyIdToken(token);
+      decodedToken = await verifyFirebaseIdToken(getAuth(), token);
     } catch {
       throw new UnauthorizedException('Invalid auth token.');
     }
@@ -36,6 +36,12 @@ export class FirebaseTokenVerifier {
       providerUserId: decodedToken.uid,
     };
   }
+}
+
+type FirebaseAuthVerifier = Pick<ReturnType<typeof getAuth>, 'verifyIdToken'>;
+
+export function verifyFirebaseIdToken(auth: FirebaseAuthVerifier, token: string) {
+  return auth.verifyIdToken(token, true);
 }
 
 function mapFirebaseProvider(signInProvider: string): AuthProvider | null {
