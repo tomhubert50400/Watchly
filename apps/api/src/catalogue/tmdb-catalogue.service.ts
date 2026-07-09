@@ -257,7 +257,7 @@ export class TmdbCatalogueService {
     let response: Response;
 
     try {
-      response = await fetch(endpoint, {
+      response = await fetchWithTimeout(endpoint, {
         headers: {
           accept: 'application/json',
           authorization: `Bearer ${accessToken}`,
@@ -449,7 +449,7 @@ export class TmdbCatalogueService {
     let response: Response;
 
     try {
-      response = await fetch(endpoint, {
+      response = await fetchWithTimeout(endpoint, {
         headers: {
           accept: 'application/json',
           authorization: `Bearer ${accessToken}`,
@@ -688,6 +688,43 @@ export class TmdbCatalogueService {
         logoUrl: provider.logo_path ? `${this.imageBaseUrl}${provider.logo_path}` : null,
         name: provider.provider_name ?? `Provider ${provider.provider_id}`,
       }));
+  }
+}
+
+const DEFAULT_TMDB_TIMEOUT_MS = 10_000;
+
+type FetchImplementation = typeof fetch;
+
+export async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs = DEFAULT_TMDB_TIMEOUT_MS,
+  fetchImplementation: FetchImplementation = fetch,
+): Promise<Response> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new RangeError('HTTP timeout must be a positive finite number.');
+  }
+
+  const controller = new AbortController();
+  const externalSignal = init.signal;
+  const abortFromExternalSignal = () => controller.abort(externalSignal?.reason);
+
+  if (externalSignal?.aborted) {
+    abortFromExternalSignal();
+  } else {
+    externalSignal?.addEventListener('abort', abortFromExternalSignal, { once: true });
+  }
+
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetchImplementation(input, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+    externalSignal?.removeEventListener('abort', abortFromExternalSignal);
   }
 }
 

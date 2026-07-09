@@ -19,7 +19,7 @@
     "security:prisma-reset-smoke": "tsx src/security/prisma-connection-reset-smoke.ts",
     "start": "node dist/main.js",
     "start:dev": "tsx watch src/main.ts",
-    "test": "tsx src/security/security-qa.ts && tsx src/security/auth-token-verifier-qa.ts",
+    "test": "tsx src/security/security-qa.ts && tsx src/security/auth-token-verifier-qa.ts && tsx src/security/external-http-qa.ts",
     "typecheck": "pnpm run prisma:generate && tsc --noEmit"
   },
   "dependencies": {

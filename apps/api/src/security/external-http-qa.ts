@@ -1,0 +1,112 @@
+import assert from 'node:assert/strict';
+import { fetchWithTimeout } from '../catalogue/tmdb-catalogue.service';
+
+async function main() {
+  let timeoutSignal: AbortSignal | null = null;
+  const neverFetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+    timeoutSignal = init?.signal ?? null;
+
+    return new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener(
+        'abort',
+        () => reject(new DOMException('The operation was aborted.', 'AbortError')),
+        { once: true },
+      );
+    });
+  }) as typeof fetch;
+
+  const timeoutError = await withDeadline(
+    fetchWithTimeout('https://example.invalid/qa-timeout', {}, 5, neverFetch).then(
+      () => null,
+      (caught: unknown) => caught,
+    ),
+    100,
+  );
+
+  assert(timeoutError instanceof DOMException && timeoutError.name === 'AbortError');
+  assert((timeoutSignal as AbortSignal | null)?.aborted, 'External fetch must receive an aborted timeout signal.');
+
+  let completedSignal: AbortSignal | null | undefined;
+  const immediateFetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    completedSignal = init?.signal;
+    return new Response('{}', { status: 200 });
+  }) as typeof fetch;
+
+  await fetchWithTimeout('https://example.invalid/qa-success', {}, 10, immediateFetch);
+  await delay(20);
+  assert(
+    !(completedSignal as AbortSignal | null | undefined)?.aborted,
+    'A completed external request timer must be cleared.',
+  );
+
+  const callerController = new AbortController();
+  let forwardedSignal: AbortSignal | null = null;
+  const callerAbortFetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+    forwardedSignal = init?.signal ?? null;
+    return new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener(
+        'abort',
+        () => reject(new DOMException('The operation was aborted.', 'AbortError')),
+        { once: true },
+      );
+    });
+  }) as typeof fetch;
+  const callerAbortResult = fetchWithTimeout(
+    'https://example.invalid/qa-caller-abort',
+    { signal: callerController.signal },
+    100,
+    callerAbortFetch,
+  ).then(
+    () => null,
+    (caught: unknown) => caught,
+  );
+  callerController.abort(new Error('caller cancelled'));
+  const callerAbortError = await withDeadline(callerAbortResult, 100);
+  assert(callerAbortError instanceof DOMException && callerAbortError.name === 'AbortError');
+  assert((forwardedSignal as AbortSignal | null)?.aborted, 'Caller abort must reach the owned fetch signal.');
+
+  let invalidTimeoutFetchCalled = false;
+  const invalidTimeoutFetch = (async () => {
+    invalidTimeoutFetchCalled = true;
+    return new Response('{}');
+  }) as typeof fetch;
+
+  for (const timeoutMs of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    const invalidError = await fetchWithTimeout(
+      'https://example.invalid/qa-invalid-timeout',
+      {},
+      timeoutMs,
+      invalidTimeoutFetch,
+    ).then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+    assert(invalidError instanceof RangeError);
+  }
+  assert(!invalidTimeoutFetchCalled, 'Invalid timeouts must fail before starting fetch.');
+
+  console.log('External HTTP QA passed.');
+}
+
+function delay(milliseconds: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function withDeadline<T>(promise: Promise<T>, milliseconds: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error('External HTTP QA did not settle.')), milliseconds);
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+void main();
