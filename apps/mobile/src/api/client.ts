@@ -4,8 +4,11 @@ const apiUrl = publicEnv.EXPO_PUBLIC_API_URL;
 
 type ApiRequestOptions = {
   body?: unknown;
+  timeoutMs?: number;
   token?: string;
 };
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 
 export class ApiError extends Error {
   constructor(
@@ -39,19 +42,34 @@ async function apiRequest<T>(method: string, path: string, options: ApiRequestOp
     throw new ApiError('EXPO_PUBLIC_API_URL is not configured.');
   }
 
+  const timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new ApiError('API request timeout must be a positive finite number.');
+  }
+
   let response: Response;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     response = await fetch(`${apiUrl}${path}`, {
-      body: options.body ? JSON.stringify(options.body) : undefined,
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
       headers: {
-        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-        ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+        ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(options.token ? { Authorization: ['Bearer', options.token].join(' ') } : {}),
       },
       method,
+      signal: controller.signal,
     });
   } catch {
+    if (controller.signal.aborted) {
+      throw new ApiError('API request timed out.');
+    }
+
     throw new ApiError('Could not reach the API.');
+  } finally {
+    clearTimeout(timeout);
   }
 
   if (!response.ok) {
@@ -63,6 +81,10 @@ async function apiRequest<T>(method: string, path: string, options: ApiRequestOp
       response.status,
       serverMessage,
     );
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
   }
 
   return response.json() as Promise<T>;

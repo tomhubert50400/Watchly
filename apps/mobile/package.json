@@ -24,10 +24,12 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.17",
+    "tsx": "^4.22.4",
     "typescript": "~5.9.3"
   },
   "scripts": {
     "start": "expo start",
+    "test": "tsx src/api/client.qa.ts",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "typecheck": "tsc --noEmit",
