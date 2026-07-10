@@ -3,6 +3,7 @@ import { getCurrentUser, CurrentUser } from '../api/auth';
 import {
   getFreshFirebaseIdToken,
   getFirebaseSessionFromUser,
+  signInWithConfiguredDevAccount,
   signInWithGoogleIdToken,
   signOutFromFirebase,
   subscribeToFirebaseAuthState,
@@ -33,6 +34,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   const [status, setStatus] = useState<AuthSessionStatus>('idle');
   const [trackingRevision, setTrackingRevision] = useState(0);
   const explicitSignOutRef = useRef(false);
+  const devSignInAttemptedRef = useRef(false);
   const latestFirebaseIdTokenRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -98,6 +100,21 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
         }
 
         if (!firebaseUser) {
+          if (!explicitSignOutRef.current && !devSignInAttemptedRef.current) {
+            devSignInAttemptedRef.current = true;
+
+            try {
+              const devSession = await signInWithConfiguredDevAccount();
+
+              if (devSession) {
+                await applyFirebaseSession(devSession.firebaseIdToken);
+                return;
+              }
+            } catch {
+              // Fall through to the normal signed-out state when the local emulator is unavailable.
+            }
+          }
+
           if (latestFirebaseIdTokenRef.current && !explicitSignOutRef.current) {
             return;
           }

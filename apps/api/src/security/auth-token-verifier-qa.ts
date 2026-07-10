@@ -52,6 +52,28 @@ async function main() {
   assert.equal(rejected.getStatus(), 401);
   assert.equal(rejected.message, 'Invalid auth token.');
 
+  const passwordAuth = {
+    verifyIdToken: async () => ({
+      aud: 'security-qa', auth_time: 0, exp: 1,
+      firebase: { identities: {}, sign_in_provider: 'password' },
+      iat: 0, iss: 'https://securetoken.google.com/security-qa',
+      name: 'Watchly UI Review', sub: 'ui-review-user', uid: 'ui-review-user',
+    }),
+  };
+  const productionPasswordError = await verifyBearerTokenWithAuth(passwordAuth, 'password-token').then(
+    () => null,
+    (caught: unknown) => caught,
+  );
+  assert(
+    productionPasswordError instanceof UnauthorizedException,
+    'Password tokens must remain rejected by default.',
+  );
+  const emulatorIdentity = await verifyBearerTokenWithAuth(passwordAuth, 'password-token', {
+    allowPasswordProvider: true,
+  });
+  assert.equal(emulatorIdentity.provider, 'GOOGLE');
+  assert.equal(emulatorIdentity.providerUserId, 'ui-review-user');
+
   console.log('Auth token verifier QA passed.');
 }
 

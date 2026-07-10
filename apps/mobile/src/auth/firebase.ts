@@ -2,17 +2,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FirebaseOptions, getApp, getApps, initializeApp } from 'firebase/app';
 import {
   Auth,
+  connectAuthEmulator,
   getAuth,
   GoogleAuthProvider,
   initializeAuth,
   NextOrObserver,
   onAuthStateChanged,
   signInWithCredential,
+  signInWithEmailAndPassword,
   signOut,
   User,
 } from '@firebase/auth';
 import * as FirebaseAuth from '@firebase/auth';
 import { publicEnv } from '../config/publicEnv';
+import { resolveDevAuthConfig } from './devAuthConfig';
 
 const firebaseConfigKeys = [
   'EXPO_PUBLIC_FIREBASE_API_KEY',
@@ -35,6 +38,15 @@ export type FirebaseSession = {
 };
 
 let authInstance: Auth | null = null;
+let authEmulatorConnected = false;
+const devAuthConfig = resolveDevAuthConfig(
+  typeof __DEV__ !== 'undefined' && __DEV__,
+  {
+    emulatorHost: publicEnv.EXPO_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST,
+    email: publicEnv.EXPO_PUBLIC_UI_REVIEW_EMAIL,
+    password: publicEnv.EXPO_PUBLIC_UI_REVIEW_PASSWORD,
+  },
+);
 const reactNativeAuth = FirebaseAuth as typeof FirebaseAuth & {
   getReactNativePersistence: (storage: typeof AsyncStorage) => never;
 };
@@ -46,6 +58,20 @@ export function getMissingFirebaseConfig(): string[] {
 export async function signInWithGoogleIdToken(googleIdToken: string): Promise<FirebaseSession> {
   const credential = GoogleAuthProvider.credential(googleIdToken);
   const userCredential = await signInWithCredential(getAuthInstance(), credential);
+
+  return getFirebaseSessionFromUser(userCredential.user);
+}
+
+export async function signInWithConfiguredDevAccount(): Promise<FirebaseSession | null> {
+  if (!devAuthConfig) {
+    return null;
+  }
+
+  const userCredential = await signInWithEmailAndPassword(
+    getAuthInstance(),
+    devAuthConfig.email,
+    devAuthConfig.password,
+  );
 
   return getFirebaseSessionFromUser(userCredential.user);
 }
@@ -97,6 +123,11 @@ function getAuthInstance() {
     });
   } catch {
     authInstance = getAuth(app);
+  }
+
+  if (devAuthConfig && !authEmulatorConnected) {
+    connectAuthEmulator(authInstance, devAuthConfig.emulatorUrl, { disableWarnings: true });
+    authEmulatorConnected = true;
   }
 
   return authInstance;
