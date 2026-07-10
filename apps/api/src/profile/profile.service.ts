@@ -389,7 +389,14 @@ export class ProfileService {
   }
 
   private async getProfileStats(userId: string) {
-    const [movieReviews, episodeReviews, movieRatings, episodeRatings, followersCount] =
+    const [
+      movieReviews,
+      episodeReviews,
+      movieRatings,
+      episodeRatings,
+      followersCount,
+      followingCount,
+    ] =
       await this.prisma.withConnectionRetry(() =>
         this.prisma.$transaction([
           this.prisma.userMovieReview.count({ where: { userId } }),
@@ -397,11 +404,13 @@ export class ProfileService {
           this.prisma.userMovieRating.count({ where: { userId } }),
           this.prisma.userEpisodeRating.count({ where: { userId } }),
           this.prisma.userFollow.count({ where: { followedUserId: userId } }),
+          this.prisma.userFollow.count({ where: { followerId: userId } }),
         ]),
       );
 
     return {
       followersCount,
+      followingCount,
       postsCount: movieRatings + episodeRatings,
       reviewsCount: movieReviews + episodeReviews,
     };
