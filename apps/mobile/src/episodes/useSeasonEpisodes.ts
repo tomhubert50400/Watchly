@@ -154,6 +154,9 @@ export function useSeasonEpisodes({
           intent.seasonNumber,
           intent.episodeNumber,
         );
+        if (!isMountedRef.current || watchedStateOwnerRef.current !== privateCacheKey) {
+          return;
+        }
         const confirmed = {
           ...restoredState,
           [createEpisodeKey(intent.seasonNumber, intent.episodeNumber)]: restoredProgress,
@@ -168,15 +171,23 @@ export function useSeasonEpisodes({
           intent.seasonNumber,
           intent.episodeNumber,
         );
+        if (!isMountedRef.current || watchedStateOwnerRef.current !== privateCacheKey) {
+          return;
+        }
         await persistState(restoredState);
+      }
+      if (!isMountedRef.current || watchedStateOwnerRef.current !== privateCacheKey) {
+        return;
       }
       notifyTrackingChanged();
       showToast('Episode progress restored.', 'success');
     } catch {
-      setWatchedState(stateBeforeUndo);
-      watchedStateRef.current = stateBeforeUndo;
-      void persistState(stateBeforeUndo).catch(() => undefined);
-      showToast('Could not undo episode progress.');
+      if (isMountedRef.current && watchedStateOwnerRef.current === privateCacheKey) {
+        setWatchedState(stateBeforeUndo);
+        watchedStateRef.current = stateBeforeUndo;
+        void persistState(stateBeforeUndo).catch(() => undefined);
+        showToast('Could not undo episode progress.');
+      }
     } finally {
       mutationLockRef.current = false;
       setIsSaving(false);
@@ -223,6 +234,9 @@ export function useSeasonEpisodes({
         await clearEpisodeProgress(firebaseIdToken, seriesTmdbId, seasonNumber, episodeNumber);
       }
 
+      if (!isMountedRef.current || watchedStateOwnerRef.current !== privateCacheKey) {
+        return;
+      }
       setWatchedState(confirmedState);
       watchedStateRef.current = confirmedState;
       await persistState(confirmedState);
@@ -232,11 +246,13 @@ export function useSeasonEpisodes({
         onPress: () => void performUndo(optimistic.intent),
       });
     } catch {
-      const rolledBack = rollbackEpisodeMutation(optimistic.state, optimistic.intent);
-      setWatchedState(rolledBack);
-      watchedStateRef.current = rolledBack;
-      void persistState(rolledBack).catch(() => undefined);
-      showToast('Could not save your episode progress.');
+      if (isMountedRef.current && watchedStateOwnerRef.current === privateCacheKey) {
+        const rolledBack = rollbackEpisodeMutation(optimistic.state, optimistic.intent);
+        setWatchedState(rolledBack);
+        watchedStateRef.current = rolledBack;
+        void persistState(rolledBack).catch(() => undefined);
+        showToast('Could not save your episode progress.');
+      }
     } finally {
       mutationLockRef.current = false;
       setIsSaving(false);

@@ -158,9 +158,23 @@ export function SeasonEpisodeList({
                     </Text>
                   </Pressable>
                 ) : null}
-                <View style={styles.miniButton}>
+                <Pressable
+                  accessibilityLabel={`Open episode ${episode.episodeNumber} to ${rating ? 'edit opinion' : 'rate'}`}
+                  accessibilityRole="button"
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    navigation.navigate('EpisodeDetail', {
+                      episodeNumber: episode.episodeNumber,
+                      seasonNumber: episode.seasonNumber,
+                      seriesTitle,
+                      title: episode.title,
+                      tmdbId: seriesTmdbId,
+                    });
+                  }}
+                  style={({ pressed }) => [styles.miniButton, pressed && styles.pressed]}
+                >
                   <Text style={styles.miniLabel}>{rating ? 'Edit opinion' : 'Rate'}</Text>
-                </View>
+                </Pressable>
               </View>
             </View>
           </Pressable>
