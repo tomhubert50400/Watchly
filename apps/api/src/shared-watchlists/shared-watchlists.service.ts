@@ -2,7 +2,7 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
-import { TrackedContentType } from '../generated/prisma/enums';
+import { NotificationKind, TrackedContentType } from '../generated/prisma/enums';
 import {
   SharedWatchlistContentType,
   SharedWatchlistItemDto,
@@ -223,6 +223,7 @@ export class SharedWatchlistsService {
     );
 
     await this.touchSharedWatchlist(watchlistId);
+    await this.upsertInviteNotification(userId, memberUserId, watchlistId);
 
     return { added: true };
   }
@@ -422,6 +423,7 @@ export class SharedWatchlistsService {
       },
       }),
     );
+    await this.upsertVoteLeaderNotifications(userId, watchlistId, sessionId);
 
     return this.getVotingSession(identity, watchlistId, sessionId);
   }
@@ -448,8 +450,159 @@ export class SharedWatchlistsService {
       },
       }),
     );
+    await this.upsertVoteLeaderNotifications(userId, watchlistId, sessionId);
 
     return this.getVotingSession(identity, watchlistId, sessionId);
+  }
+
+  private async upsertInviteNotification(
+    actorUserId: string,
+    recipientUserId: string,
+    watchlistId: string,
+  ) {
+    if (actorUserId === recipientUserId) {
+      return;
+    }
+
+    const watchlist = await this.withConnectionRetry(() =>
+      this.prisma.sharedWatchlist.findUniqueOrThrow({
+        select: { name: true },
+        where: { id: watchlistId },
+      }),
+    );
+    const dedupeKey = `shared-list-invite:${watchlistId}`;
+    const data = {
+      actorUserId,
+      body: `You were added to the shared list “${watchlist.name}”.`,
+      kind: NotificationKind.SHARED_LIST_INVITE,
+      readAt: null,
+      routeMetadata: { route: 'SharedWatchlist', watchlistId },
+      sharedWatchlistId: watchlistId,
+      title: 'Shared list invitation',
+    };
+
+    await this.withConnectionRetry(() =>
+      this.prisma.notification.upsert({
+        create: {
+          ...data,
+          dedupeKey,
+          userId: recipientUserId,
+        },
+        update: data,
+        where: {
+          userId_dedupeKey: {
+            dedupeKey,
+            userId: recipientUserId,
+          },
+        },
+      }),
+    );
+  }
+
+  private async upsertVoteLeaderNotifications(
+    actorUserId: string,
+    watchlistId: string,
+    sessionId: string,
+  ) {
+    const session = await this.withConnectionRetry(() =>
+      this.prisma.sharedVotingSession.findFirst({
+        include: {
+          candidates: {
+            include: {
+              item: true,
+              votes: { select: { id: true } },
+            },
+          },
+          watchlist: {
+            include: {
+              members: { select: { userId: true } },
+            },
+          },
+        },
+        where: { id: sessionId, watchlistId },
+      }),
+    );
+
+    if (!session) {
+      return;
+    }
+
+    const maxVotes = Math.max(0, ...session.candidates.map((candidate) => candidate.votes.length));
+    const leaders =
+      maxVotes === 0
+        ? []
+        : session.candidates
+            .filter((candidate) => candidate.votes.length === maxVotes)
+            .map((candidate) => ({
+              contentType: fromTrackedContentType(candidate.item.contentType),
+              tmdbId: candidate.item.tmdbId,
+            }));
+    const body =
+      leaders.length === 0
+        ? `“${session.title}” does not have a voting leader yet.`
+        : leaders.length === 1
+          ? `The voting leader changed in “${session.title}”.`
+          : `The voting leaders changed in “${session.title}”.`;
+    const dedupeKey = `shared-vote-update:${sessionId}`;
+    const leaderKey = leaders
+      .map((leader) => `${leader.contentType}:${leader.tmdbId}`)
+      .sort()
+      .join('|');
+    const routeMetadata = {
+      leaderKey,
+      leaders,
+      route: 'SharedVote',
+      votingSessionId: sessionId,
+      watchlistId,
+    };
+    const recipients = session.watchlist.members.filter((member) => member.userId !== actorUserId);
+
+    await this.withConnectionRetry(() =>
+      Promise.all(
+        recipients.map(async (recipient) => {
+          const existing = await this.prisma.notification.findUnique({
+            select: { routeMetadata: true },
+            where: {
+              userId_dedupeKey: {
+                dedupeKey,
+                userId: recipient.userId,
+              },
+            },
+          });
+
+          if (getNotificationLeaderKey(existing?.routeMetadata) === leaderKey) {
+            return;
+          }
+
+          await this.prisma.notification.upsert({
+            create: {
+              actorUserId,
+              body,
+              dedupeKey,
+              kind: NotificationKind.SHARED_VOTE_UPDATE,
+              routeMetadata,
+              sharedWatchlistId: watchlistId,
+              title: 'Shared vote update',
+              userId: recipient.userId,
+              votingSessionId: sessionId,
+            },
+            update: {
+              actorUserId,
+              body,
+              readAt: null,
+              routeMetadata,
+              title: 'Shared vote update',
+            },
+            where: {
+              userId_dedupeKey: {
+                dedupeKey,
+                userId: recipient.userId,
+              },
+            },
+          });
+        }),
+      ),
+    );
   }
 
   private async getUserId(identity: AuthenticatedIdentity) {
@@ -512,6 +665,15 @@ export class SharedWatchlistsService {
       }),
     );
   }
+}
+
+function getNotificationLeaderKey(metadata: unknown) {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const leaderKey = (metadata as Record<string, unknown>).leaderKey;
+  return typeof leaderKey === 'string' ? leaderKey : null;
 }
 
 type SharedWatchlistSummaryRecord = {

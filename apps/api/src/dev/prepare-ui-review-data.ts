@@ -3,6 +3,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client';
 import {
   AuthProvider,
+  NotificationKind,
   PrivacyVisibility,
   ReleaseNotificationType,
   SharedWatchlistVisibility,
@@ -410,9 +411,9 @@ async function seedReleaseAlerts(userId: string) {
     });
   }
 
-  await prisma.releaseNotification.deleteMany({
+  await prisma.notification.deleteMany({
     where: {
-      generatedKey: {
+      dedupeKey: {
         in: ['m11:series:got:s1e6'],
       },
       userId,
@@ -423,33 +424,35 @@ async function seedReleaseAlerts(userId: string) {
     {
       body: 'The Matrix is ready for a release-alert card check.',
       contentType: TrackedContentType.MOVIE,
-      generatedKey: 'm11:movie:matrix',
+      dedupeKey: 'm11:movie:matrix',
+      kind: NotificationKind.RELEASE,
       readAt: null,
       releasedAt: new Date('1999-03-31T00:00:00.000Z'),
+      releaseType: ReleaseNotificationType.MOVIE_RELEASE,
       title: 'The Matrix release check',
       tmdbId: 603,
-      type: ReleaseNotificationType.MOVIE_RELEASE,
     },
     {
       body: 'A new-season alert is ready for the bell flow.',
       contentType: TrackedContentType.SERIES,
-      generatedKey: 'm11:series:got:s1',
+      dedupeKey: 'm11:series:got:s1',
+      kind: NotificationKind.RELEASE,
       readAt: null,
       releasedAt: new Date('2011-04-17T00:00:00.000Z'),
+      releaseType: ReleaseNotificationType.SEASON_RELEASE,
       seasonNumber: 1,
       title: 'Game of Thrones: Season 1',
       tmdbId: 1399,
-      type: ReleaseNotificationType.SEASON_RELEASE,
     },
   ];
 
   for (const notification of notifications) {
-    await prisma.releaseNotification.upsert({
+    await prisma.notification.upsert({
       create: { ...notification, userId },
       update: notification,
       where: {
-        userId_generatedKey: {
-          generatedKey: notification.generatedKey,
+        userId_dedupeKey: {
+          dedupeKey: notification.dedupeKey,
           userId,
         },
       },

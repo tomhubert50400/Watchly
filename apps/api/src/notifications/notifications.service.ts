@@ -3,7 +3,11 @@ import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { SeriesDetails, TmdbCatalogueService } from '../catalogue/tmdb-catalogue.service';
 import { PrismaService } from '../database/prisma.service';
-import { ReleaseNotificationType, TrackedContentType } from '../generated/prisma/enums';
+import {
+  NotificationKind,
+  ReleaseNotificationType,
+  TrackedContentType,
+} from '../generated/prisma/enums';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_SYNC_ITEMS = 12;
@@ -33,7 +37,7 @@ export class NotificationsService {
   async list(identity: AuthenticatedIdentity) {
     const userId = await this.getUserId(identity);
     const notifications = await this.prisma.withConnectionRetry(() =>
-      this.prisma.releaseNotification.findMany({
+      this.prisma.notification.findMany({
         orderBy: [{ readAt: 'asc' }, { createdAt: 'desc' }],
         take: 30,
         where: {
@@ -145,7 +149,7 @@ export class NotificationsService {
   async markRead(identity: AuthenticatedIdentity, notificationId: string) {
     const userId = await this.getUserId(identity);
     const notification = await this.prisma.withConnectionRetry(() =>
-      this.prisma.releaseNotification.updateMany({
+      this.prisma.notification.updateMany({
       data: {
         readAt: new Date(),
       },
@@ -158,6 +162,25 @@ export class NotificationsService {
 
     return {
       updated: notification.count > 0,
+    };
+  }
+
+  async markAllRead(identity: AuthenticatedIdentity) {
+    const userId = await this.getUserId(identity);
+    const notifications = await this.prisma.withConnectionRetry(() =>
+      this.prisma.notification.updateMany({
+        data: {
+          readAt: new Date(),
+        },
+        where: {
+          readAt: null,
+          userId,
+        },
+      }),
+    );
+
+    return {
+      updatedCount: notifications.count,
     };
   }
 
@@ -179,7 +202,7 @@ export class NotificationsService {
             },
           },
         }),
-        this.prisma.releaseNotification.findMany({
+        this.prisma.notification.findMany({
           orderBy: [{ readAt: 'asc' }, { createdAt: 'desc' }],
           take: 10,
           where: {
@@ -228,10 +251,10 @@ export class NotificationsService {
 
     for (const candidate of candidates) {
       const existing = await this.prisma.withConnectionRetry(() =>
-        this.prisma.releaseNotification.findUnique({
+        this.prisma.notification.findUnique({
         where: {
-          userId_generatedKey: {
-            generatedKey: candidate.generatedKey,
+          userId_dedupeKey: {
+            dedupeKey: candidate.generatedKey,
             userId,
           },
         },
@@ -243,17 +266,18 @@ export class NotificationsService {
       }
 
       await this.prisma.withConnectionRetry(() =>
-        this.prisma.releaseNotification.create({
+        this.prisma.notification.create({
         data: {
           body: candidate.body,
           contentType: candidate.contentType,
           episodeNumber: candidate.episodeNumber,
-          generatedKey: candidate.generatedKey,
+          dedupeKey: candidate.generatedKey,
+          kind: NotificationKind.RELEASE,
           releasedAt: candidate.releasedAt,
+          releaseType: candidate.type,
           seasonNumber: candidate.seasonNumber,
           title: candidate.title,
           tmdbId: candidate.tmdbId,
-          type: candidate.type,
           userId,
         },
         }),
@@ -428,7 +452,11 @@ function toDateKey(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
-function fromTrackedContentType(contentType: TrackedContentType) {
+function fromTrackedContentType(contentType: TrackedContentType | null) {
+  if (contentType === null) {
+    return null;
+  }
+
   return contentType === TrackedContentType.MOVIE ? 'movie' : 'series';
 }
 
@@ -444,34 +472,56 @@ function fromNotificationType(type: ReleaseNotificationType) {
   return 'episode_release';
 }
 
+function fromNotificationKind(kind: NotificationKind) {
+  if (kind === NotificationKind.RELEASE) {
+    return 'release';
+  }
+
+  return kind === NotificationKind.SHARED_LIST_INVITE
+    ? 'shared_list_invite'
+    : 'shared_vote_update';
+}
+
 function toTrackedContentType(contentType: ReleaseAlertContentType) {
   return contentType === 'movie' ? TrackedContentType.MOVIE : TrackedContentType.SERIES;
 }
 
 function toNotificationDto(notification: {
+  actorUserId: string | null;
   body: string;
-  contentType: TrackedContentType;
+  contentType: TrackedContentType | null;
   createdAt: Date;
   episodeNumber: number | null;
   id: string;
+  kind: NotificationKind;
   readAt: Date | null;
   releasedAt: Date | null;
+  releaseType: ReleaseNotificationType | null;
+  routeMetadata: unknown;
   seasonNumber: number | null;
+  sharedWatchlistId: string | null;
   title: string;
-  tmdbId: number;
-  type: ReleaseNotificationType;
+  tmdbId: number | null;
+  votingSessionId: string | null;
 }) {
+  const kind = fromNotificationKind(notification.kind);
+
   return {
+    actorUserId: notification.actorUserId,
     body: notification.body,
     contentType: fromTrackedContentType(notification.contentType),
     createdAt: notification.createdAt.toISOString(),
     episodeNumber: notification.episodeNumber,
     id: notification.id,
+    kind,
     readAt: notification.readAt?.toISOString() ?? null,
     releasedAt: notification.releasedAt?.toISOString() ?? null,
+    routeMetadata: notification.routeMetadata,
     seasonNumber: notification.seasonNumber,
+    sharedWatchlistId: notification.sharedWatchlistId,
     title: notification.title,
     tmdbId: notification.tmdbId,
-    type: fromNotificationType(notification.type),
+    type: notification.releaseType ? fromNotificationType(notification.releaseType) : kind,
+    votingSessionId: notification.votingSessionId,
   };
 }

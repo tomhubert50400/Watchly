@@ -74,6 +74,11 @@ export class NotificationsController {
     );
   }
 
+  @Put('read-all')
+  async markAllRead(@Req() request: AuthenticatedRequest) {
+    return this.notifications.markAllRead(getIdentity(request));
+  }
+
   @Put(':notificationId/read')
   async markRead(
     @Req() request: AuthenticatedRequest,

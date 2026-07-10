@@ -42,6 +42,12 @@ enum ReleaseNotificationType {
   EPISODE_RELEASE
 }
 
+enum NotificationKind {
+  RELEASE
+  SHARED_LIST_INVITE
+  SHARED_VOTE_UPDATE
+}
+
 enum AuditAction {
   PRIVACY_UPDATED
   USER_BLOCKED
@@ -49,29 +55,30 @@ enum AuditAction {
 }
 
 model User {
-  id              String           @id @default(uuid()) @db.Uuid
-  displayName     String?
-  onboardingCompleted Boolean      @default(false)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  authIdentities  AuthIdentity[]
-  contentStates   UserContentState[]
-  episodeProgress UserEpisodeProgress[]
-  episodeRatings  UserEpisodeRating[]
-  episodeReviews  UserEpisodeReview[]
-  movieRatings    UserMovieRating[]
-  movieReviews    UserMovieReview[]
-  releaseAlertSubscriptions ReleaseAlertSubscription[]
-  releaseNotifications ReleaseNotification[]
-  privacySettings PrivacySettings?
-  blockedUsers       UserBlock[]          @relation("UserBlocksMade")
-  blockedBy          UserBlock[]          @relation("UserBlocksReceived")
-  following          UserFollow[]         @relation("UserFollowsMade")
-  followers          UserFollow[]         @relation("UserFollowsReceived")
-  personalWatchlists PersonalWatchlist[]
-  ownedSharedWatchlists SharedWatchlist[]       @relation("SharedWatchlistOwner")
+  id                         String                     @id @default(uuid()) @db.Uuid
+  displayName                String?
+  onboardingCompleted        Boolean                    @default(false)
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
+  authIdentities             AuthIdentity[]
+  contentStates              UserContentState[]
+  episodeProgress            UserEpisodeProgress[]
+  episodeRatings             UserEpisodeRating[]
+  episodeReviews             UserEpisodeReview[]
+  movieRatings               UserMovieRating[]
+  movieReviews               UserMovieReview[]
+  releaseAlertSubscriptions  ReleaseAlertSubscription[]
+  notifications              Notification[]             @relation("NotificationRecipient")
+  actedNotifications         Notification[]             @relation("NotificationActor")
+  privacySettings            PrivacySettings?
+  blockedUsers               UserBlock[]                @relation("UserBlocksMade")
+  blockedBy                  UserBlock[]                @relation("UserBlocksReceived")
+  following                  UserFollow[]               @relation("UserFollowsMade")
+  followers                  UserFollow[]               @relation("UserFollowsReceived")
+  personalWatchlists         PersonalWatchlist[]
+  ownedSharedWatchlists      SharedWatchlist[]          @relation("SharedWatchlistOwner")
   sharedWatchlistMemberships SharedWatchlistMember[]
-  sharedVotingVotes SharedVotingVote[]
+  sharedVotingVotes          SharedVotingVote[]
 
   @@map("users")
 }
@@ -216,12 +223,12 @@ model UserBlock {
 }
 
 model UserFollow {
-  id              String   @id @default(uuid()) @db.Uuid
-  followerId      String   @db.Uuid
-  followedUserId  String   @db.Uuid
-  createdAt       DateTime @default(now())
-  followedUser    User     @relation("UserFollowsReceived", fields: [followedUserId], references: [id], onDelete: Cascade)
-  follower        User     @relation("UserFollowsMade", fields: [followerId], references: [id], onDelete: Cascade)
+  id             String   @id @default(uuid()) @db.Uuid
+  followerId     String   @db.Uuid
+  followedUserId String   @db.Uuid
+  createdAt      DateTime @default(now())
+  followedUser   User     @relation("UserFollowsReceived", fields: [followedUserId], references: [id], onDelete: Cascade)
+  follower       User     @relation("UserFollowsMade", fields: [followerId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followedUserId])
   @@index([followedUserId])
@@ -255,15 +262,16 @@ model PersonalWatchlistItem {
 }
 
 model SharedWatchlist {
-  id        String                  @id @default(uuid()) @db.Uuid
-  ownerId   String                  @db.Uuid
-  name      String                  @db.VarChar(80)
-  createdAt DateTime                @default(now())
-  updatedAt DateTime                @updatedAt
-  items     SharedWatchlistItem[]
-  members   SharedWatchlistMember[]
-  owner     User                    @relation("SharedWatchlistOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  id             String                  @id @default(uuid()) @db.Uuid
+  ownerId        String                  @db.Uuid
+  name           String                  @db.VarChar(80)
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  items          SharedWatchlistItem[]
+  members        SharedWatchlistMember[]
+  owner          User                    @relation("SharedWatchlistOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   votingSessions SharedVotingSession[]
+  notifications  Notification[]
 
   @@index([ownerId])
   @@map("shared_watchlists")
@@ -283,13 +291,13 @@ model SharedWatchlistMember {
 }
 
 model SharedWatchlistItem {
-  id          String             @id @default(uuid()) @db.Uuid
-  watchlistId String             @db.Uuid
+  id          String                  @id @default(uuid()) @db.Uuid
+  watchlistId String                  @db.Uuid
   contentType TrackedContentType
   tmdbId      Int
-  createdAt   DateTime           @default(now())
+  createdAt   DateTime                @default(now())
   candidates  SharedVotingCandidate[]
-  watchlist   SharedWatchlist    @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+  watchlist   SharedWatchlist         @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
 
   @@unique([watchlistId, contentType, tmdbId])
   @@index([contentType, tmdbId])
@@ -297,13 +305,14 @@ model SharedWatchlistItem {
 }
 
 model SharedVotingSession {
-  id          String                  @id @default(uuid()) @db.Uuid
-  watchlistId String                  @db.Uuid
-  title       String                  @db.VarChar(80)
-  createdAt   DateTime                @default(now())
-  updatedAt   DateTime                @updatedAt
-  candidates  SharedVotingCandidate[]
-  watchlist   SharedWatchlist         @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+  id            String                  @id @default(uuid()) @db.Uuid
+  watchlistId   String                  @db.Uuid
+  title         String                  @db.VarChar(80)
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  candidates    SharedVotingCandidate[]
+  watchlist     SharedWatchlist         @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+  notifications Notification[]
 
   @@index([watchlistId])
   @@map("shared_voting_sessions")
@@ -336,27 +345,38 @@ model SharedVotingVote {
   @@map("shared_voting_votes")
 }
 
-model ReleaseNotification {
-  id            String                  @id @default(uuid()) @db.Uuid
-  userId        String                  @db.Uuid
-  type          ReleaseNotificationType
-  contentType   TrackedContentType
-  tmdbId        Int
-  seasonNumber  Int?
-  episodeNumber Int?
-  title         String                  @db.VarChar(160)
-  body          String                  @db.VarChar(500)
-  releasedAt    DateTime?
-  readAt        DateTime?
-  generatedKey  String                  @db.VarChar(160)
-  createdAt     DateTime                @default(now())
-  updatedAt     DateTime                @updatedAt
-  user          User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+model Notification {
+  id                String                   @id @default(uuid()) @db.Uuid
+  userId            String                   @db.Uuid
+  kind              NotificationKind        @default(RELEASE)
+  releaseType       ReleaseNotificationType?
+  contentType       TrackedContentType?
+  tmdbId            Int?
+  seasonNumber      Int?
+  episodeNumber     Int?
+  title             String                   @db.VarChar(160)
+  body              String                   @db.VarChar(500)
+  releasedAt        DateTime?
+  readAt            DateTime?
+  dedupeKey         String                   @db.VarChar(160)
+  sharedWatchlistId String?                  @db.Uuid
+  votingSessionId   String?                  @db.Uuid
+  actorUserId       String?                  @db.Uuid
+  routeMetadata     Json?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  user              User                     @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor             User?                    @relation("NotificationActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  sharedWatchlist   SharedWatchlist?         @relation(fields: [sharedWatchlistId], references: [id], onDelete: Cascade)
+  votingSession     SharedVotingSession?     @relation(fields: [votingSessionId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, generatedKey])
+  @@unique([userId, dedupeKey])
   @@index([userId, readAt, createdAt])
   @@index([contentType, tmdbId])
-  @@map("release_notifications")
+  @@index([sharedWatchlistId])
+  @@index([votingSessionId])
+  @@index([actorUserId])
+  @@map("notifications")
 }
 
 model ReleaseAlertSubscription {
@@ -374,12 +394,12 @@ model ReleaseAlertSubscription {
 }
 
 model AuditLog {
-  id          String      @id @default(uuid()) @db.Uuid
-  actorUserId String      @db.Uuid
-  action      AuditAction
-  targetUserId String?    @db.Uuid
-  metadata    Json?
-  createdAt   DateTime    @default(now())
+  id           String      @id @default(uuid()) @db.Uuid
+  actorUserId  String      @db.Uuid
+  action       AuditAction
+  targetUserId String?     @db.Uuid
+  metadata     Json?
+  createdAt    DateTime    @default(now())
 
   @@index([actorUserId, createdAt])
   @@index([action, createdAt])

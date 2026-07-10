@@ -48,8 +48,8 @@ export class PrismaService implements OnModuleDestroy {
     return this.client.releaseAlertSubscription;
   }
 
-  get releaseNotification() {
-    return this.client.releaseNotification;
+  get notification() {
+    return this.client.notification;
   }
 
   get sharedVotingCandidate() {
