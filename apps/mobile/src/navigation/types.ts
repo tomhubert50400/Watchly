@@ -1,3 +1,5 @@
+import type { NavigatorScreenParams } from '@react-navigation/native';
+
 export type RootTabParamList = {
   Explore: undefined;
   Home: undefined;
@@ -17,7 +19,8 @@ export type RootStackParamList = {
     title: string;
     tmdbId: number;
   };
-  MainTabs: undefined;
+  Journal: undefined;
+  MainTabs: NavigatorScreenParams<RootTabParamList> | undefined;
   Onboarding: undefined;
   PersonalWatchlist: {
     title: string;

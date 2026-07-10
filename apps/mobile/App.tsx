@@ -14,6 +14,8 @@ import { SeasonDetailScreen } from './src/catalogue/SeasonDetailScreen';
 import { SeriesDetailScreen } from './src/catalogue/SeriesDetailScreen';
 import { colors } from './src/design/tokens';
 import { HomeScreen } from './src/home/HomeScreen';
+import { JournalScreen } from './src/journal/JournalScreen';
+import { LibraryScreen } from './src/library/LibraryScreen';
 import { mainTabs, MainTabName } from './src/navigation/tabConfig';
 import { RootStackParamList, RootTabParamList } from './src/navigation/types';
 import { ToastProvider } from './src/notifications/ToastContext';
@@ -21,7 +23,7 @@ import { OnboardingScreen } from './src/onboarding/OnboardingScreen';
 import { ProfileScreen } from './src/profile/ProfileScreen';
 import { PublicProfileScreen } from './src/profile/PublicProfileScreen';
 import { SettingsScreen } from './src/profile/SettingsScreen';
-import { MyTvScreen } from './src/tracking/MyTvScreen';
+
 import { PersonalWatchlistScreen } from './src/watchlists/PersonalWatchlistScreen';
 import { SharedWatchlistScreen } from './src/watchlists/SharedWatchlistScreen';
 import { WatchlistCacheProvider } from './src/watchlists/WatchlistCacheContext';
@@ -65,7 +67,7 @@ function MainTabs() {
     >
       <Tabs.Screen component={HomeScreen} name="Home" />
       <Tabs.Screen component={ExploreTabScreen} name="Explore" />
-      <Tabs.Screen component={MyTvScreen} name="Library" />
+      <Tabs.Screen component={LibraryScreen} name="Library" />
       <Tabs.Screen component={ProfileScreen} name="Profile" />
     </Tabs.Navigator>
   );
@@ -114,6 +116,7 @@ function AppNavigator() {
         ) : (
           <>
             <Stack.Screen component={MainTabs} name="MainTabs" options={{ headerShown: false }} />
+            <Stack.Screen component={JournalScreen} name="Journal" options={{ title: 'Journal' }} />
             <Stack.Screen component={SettingsScreen} name="Settings" options={{ title: 'Settings' }} />
             <Stack.Screen
               component={SharedWatchlistScreen}
