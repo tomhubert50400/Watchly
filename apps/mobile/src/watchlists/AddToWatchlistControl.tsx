@@ -1,16 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  Animated,
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
-import { BookmarkPlus, CheckCircle2, Circle, Plus, X } from 'lucide-react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { BookmarkPlus, Plus, Sparkles } from 'lucide-react-native';
 import {
   addSharedWatchlistItem,
   createSharedWatchlist,
@@ -27,25 +17,23 @@ import {
   WatchlistContentType,
 } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { BottomActionSheet } from '../components/BottomActionSheet';
 import { Button } from '../components/Button';
 import { SegmentedControl } from '../components/SegmentedControl';
-import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { colors, radii, spacing, typography } from '../design/tokens';
 import { useToast } from '../notifications/ToastContext';
 import { useWatchlistCache } from './WatchlistCacheContext';
+import { WatchlistOption, WatchlistOptionRow } from './WatchlistOptionRow';
+import {
+  autoSelectCreatedWatchlist,
+  buildSelectionDiff,
+  buildSelectionLabel,
+  rollbackSelection,
+} from './watchlistSelection';
 
 type AddToWatchlistControlProps = {
   contentType: WatchlistContentType;
   tmdbId: number;
-};
-
-type WatchlistOption = {
-  containsTitle: boolean;
-  id: string;
-  itemCount: number;
-  key: string;
-  kind: 'personal' | 'shared';
-  memberCount: number | null;
-  name: string;
 };
 
 type CreateWatchlistKind = 'personal' | 'shared';
@@ -67,28 +55,18 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const loadVersionRef = useRef(0);
   const saveVersionRef = useRef(0);
-  const sheetProgress = useRef(new Animated.Value(0)).current;
   const contentKey = `${contentType}:${tmdbId}`;
 
   const loadOptions = useCallback(async (showLoading: boolean) => {
-    if (!firebaseIdToken) {
-      return;
-    }
+    if (!firebaseIdToken) return;
 
     const loadVersion = loadVersionRef.current + 1;
-
     loadVersionRef.current = loadVersion;
-
-    if (showLoading) {
-      setIsLoading(true);
-    }
+    if (showLoading) setIsLoading(true);
 
     try {
       const token = await getFirebaseIdToken();
-
-      if (!token) {
-        throw new Error('Sign in again to load watchlists.');
-      }
+      if (!token) throw new Error('Sign in again to load watchlists.');
 
       const [personalResponse, sharedResponse] = await Promise.all([
         listWatchlists(token, { contentType, tmdbId }),
@@ -102,14 +80,11 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
         nextOptions.filter((option) => option.containsTitle).map((option) => option.key),
       );
 
-      if (loadVersionRef.current !== loadVersion) {
-        return;
-      }
-
+      if (loadVersionRef.current !== loadVersion) return;
       setOptions(nextOptions);
       setOptionsContentKey(contentKey);
       setInitialSelectedKeys(nextSelectedKeys);
-      setSelectedKeys(new Set(nextSelectedKeys));
+      setSelectedKeys(rollbackSelection(nextSelectedKeys));
     } catch (loadError) {
       if (loadVersionRef.current === loadVersion) {
         setOptions([]);
@@ -119,9 +94,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
         showToast(loadError instanceof Error ? loadError.message : 'Could not load watchlists.');
       }
     } finally {
-      if (loadVersionRef.current === loadVersion) {
-        setIsLoading(false);
-      }
+      if (loadVersionRef.current === loadVersion) setIsLoading(false);
     }
   }, [contentKey, contentType, firebaseIdToken, getFirebaseIdToken, showToast, tmdbId]);
 
@@ -137,15 +110,14 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
     void loadOptions(false);
   }, [firebaseIdToken, loadOptions]);
 
-  async function openModal() {
-    if (!firebaseIdToken) {
-      return;
-    }
+  function openSheet() {
+    if (!firebaseIdToken || isSaving) return;
 
-    setIsOpen(true);
+    setSelectedKeys(rollbackSelection(initialSelectedKeys));
     setIsCreateFormOpen(false);
     setNewWatchlistKind('personal');
     setNewWatchlistName('');
+    setIsOpen(true);
 
     if (optionsContentKey !== contentKey) {
       setOptions([]);
@@ -155,41 +127,28 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
     }
   }
 
-  function closeModal() {
-    Animated.timing(sheetProgress, {
-      duration: 180,
-      toValue: 0,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (finished) {
-        setIsOpen(false);
-      }
-    });
+  function dismissSheet() {
+    setSelectedKeys(rollbackSelection(initialSelectedKeys));
+    setIsCreateFormOpen(false);
+    setNewWatchlistName('');
+    setIsOpen(false);
   }
 
-  async function createWatchlistFromModal() {
+  async function createWatchlistFromSheet() {
     const name = newWatchlistName.trim();
-
-    if (!firebaseIdToken || name.length === 0 || isCreating) {
-      return;
-    }
+    if (!firebaseIdToken || name.length === 0 || isCreating) return;
 
     setIsCreating(true);
-
     try {
       const token = await getFirebaseIdToken();
+      if (!token) throw new Error('Sign in again to create a watchlist.');
 
-      if (!token) {
-        throw new Error('Sign in again to create a watchlist.');
-      }
-
-      const option =
-        newWatchlistKind === 'personal'
-          ? toPersonalOption({ ...(await createWatchlist(token, name)), containsTitle: false })
-          : toSharedOption({ ...(await createSharedWatchlist(token, name)), containsTitle: false });
+      const option = newWatchlistKind === 'personal'
+        ? toPersonalOption({ ...(await createWatchlist(token, name)), containsTitle: false })
+        : toSharedOption({ ...(await createSharedWatchlist(token, name)), containsTitle: false });
 
       setOptions((current) => [option, ...current.filter((item) => item.key !== option.key)]);
-      setSelectedKeys((current) => new Set(current).add(option.key));
+      setSelectedKeys((current) => autoSelectCreatedWatchlist(current, option.key));
       setIsCreateFormOpen(false);
       setNewWatchlistName('');
     } catch (createError) {
@@ -202,255 +161,187 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   function toggleOption(key: string) {
     setSelectedKeys((current) => {
       const next = new Set(current);
-
-      if (next.has(key)) {
-        next.delete(key);
-      } else {
-        next.add(key);
-      }
-
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
 
   async function saveSelection() {
-    if (!firebaseIdToken || isSaving) {
-      return;
-    }
+    if (!firebaseIdToken || isSaving) return;
 
-    const previousInitialKeys = new Set(initialSelectedKeys);
-    const previousSelectedKeys = new Set(selectedKeys);
+    const previousInitialKeys = rollbackSelection(initialSelectedKeys);
     const previousOptions = options;
-    const nextSelectedKeys = new Set(selectedKeys);
+    const nextSelectedKeys = rollbackSelection(selectedKeys);
     const saveOptions = options;
-    const saveVersion = saveVersionRef.current + 1;
+    const diff = buildSelectionDiff(previousInitialKeys, nextSelectedKeys);
+    if (diff.addedKeys.length === 0 && diff.removedKeys.length === 0) return;
 
+    const addedKeys = new Set(diff.addedKeys);
+    const removedKeys = new Set(diff.removedKeys);
+    const saveVersion = saveVersionRef.current + 1;
     saveVersionRef.current = saveVersion;
+
     setInitialSelectedKeys(nextSelectedKeys);
     setOptions((current) => updateOptionSelection(current, previousInitialKeys, nextSelectedKeys));
-    closeModal();
     setIsSaving(true);
+    setIsOpen(false);
 
     try {
       const token = await getFirebaseIdToken();
+      if (!token) throw new Error('Sign in again to update watchlists.');
 
-      if (!token) {
-        throw new Error('Sign in again to update watchlists.');
-      }
+      const operations: Promise<unknown>[] = [];
 
-      await Promise.all(
-        saveOptions.map((option) => {
-          const wasSelected = previousInitialKeys.has(option.key);
-          const isSelected = nextSelectedKeys.has(option.key);
+      saveOptions.forEach((option) => {
+        if (addedKeys.has(option.key)) {
+          operations.push(option.kind === 'personal'
+            ? addWatchlistItem(token, option.id, { contentType, tmdbId })
+            : addSharedWatchlistItem(token, option.id, { contentType, tmdbId }));
+        }
+        if (removedKeys.has(option.key)) {
+          operations.push(option.kind === 'personal'
+            ? removeWatchlistItem(token, option.id, contentType, tmdbId)
+            : removeSharedWatchlistItem(token, option.id, contentType, tmdbId));
+        }
+      });
 
-          if (wasSelected === isSelected) {
-            return Promise.resolve();
-          }
+      await Promise.all(operations);
 
-          if (option.kind === 'personal') {
-            return isSelected
-              ? addWatchlistItem(token, option.id, { contentType, tmdbId })
-              : removeWatchlistItem(token, option.id, contentType, tmdbId);
-          }
-
-          return isSelected
-            ? addSharedWatchlistItem(token, option.id, { contentType, tmdbId })
-            : removeSharedWatchlistItem(token, option.id, contentType, tmdbId);
-        }),
-      );
       void preloadWatchlists();
+      showToast('Watchlists updated.');
     } catch (saveError) {
       if (saveVersionRef.current === saveVersion) {
         setOptions(previousOptions);
         setInitialSelectedKeys(previousInitialKeys);
-        setSelectedKeys(previousSelectedKeys);
-        showToast(saveError instanceof Error ? saveError.message : 'Could not update watchlists.');
+        setSelectedKeys(rollbackSelection(previousInitialKeys));
         setIsOpen(true);
+        showToast(saveError instanceof Error ? saveError.message : 'Could not update watchlists.');
       }
     } finally {
-      if (saveVersionRef.current === saveVersion) {
-        setIsSaving(false);
-      }
+      if (saveVersionRef.current === saveVersion) setIsSaving(false);
     }
   }
 
   const hasCurrentOptions = optionsContentKey === contentKey;
-  const sheetStyle = {
-    opacity: sheetProgress,
-    transform: [
-      {
-        translateY: sheetProgress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [48, 0],
-        }),
-      },
-    ],
-  };
+  const diff = buildSelectionDiff(initialSelectedKeys, selectedKeys);
+  const hasChanges = diff.addedKeys.length > 0 || diff.removedKeys.length > 0;
+  const hasSharedOptions = options.some((option) => option.kind === 'shared');
+  const saveLabel = buildSelectionLabel(initialSelectedKeys, selectedKeys);
 
-  useEffect(() => {
-    if (!isOpen) {
-      sheetProgress.setValue(0);
-      return;
-    }
+  const footer = (
+    <View style={styles.footer}>
+      {isCreateFormOpen ? (
+        <View style={styles.createPanel}>
+          <SegmentedControl
+            buttonMinHeight={44}
+            onChange={setNewWatchlistKind}
+            options={[
+              { label: 'Personal', value: 'personal' },
+              { label: 'Shared', value: 'shared' },
+            ]}
+            value={newWatchlistKind}
+          />
+          <View style={styles.createRow}>
+            <TextInput
+              accessibilityLabel="New watchlist name"
+              editable={!isCreating && !isSaving}
+              onChangeText={setNewWatchlistName}
+              onSubmitEditing={createWatchlistFromSheet}
+              placeholder={newWatchlistKind === 'personal' ? 'New personal list' : 'New shared list'}
+              placeholderTextColor={colors.textSubtle}
+              returnKeyType="done"
+              style={styles.createInput}
+              value={newWatchlistName}
+            />
+            <Button
+              disabled={newWatchlistName.trim().length === 0}
+              label="Create"
+              loading={isCreating}
+              onPress={createWatchlistFromSheet}
+              variant="secondary"
+            />
+          </View>
+        </View>
+      ) : (
+        <Pressable
+          accessibilityLabel="Create a new watchlist"
+          accessibilityRole="button"
+          onPress={() => setIsCreateFormOpen(true)}
+          style={({ pressed }) => [styles.newList, pressed ? styles.pressed : null]}
+        >
+          <Plus color={colors.textMuted} size={18} strokeWidth={2.4} />
+          <Text style={styles.newListLabel}>Create a new list</Text>
+        </Pressable>
+      )}
 
-    Animated.timing(sheetProgress, {
-      duration: 220,
-      toValue: 1,
-      useNativeDriver: true,
-    }).start();
-  }, [isOpen, sheetProgress]);
+      <Button
+        disabled={isLoading || isCreating || !hasCurrentOptions || !hasChanges}
+        fullWidth
+        label={saveLabel}
+        loading={isSaving}
+        onPress={saveSelection}
+      />
+    </View>
+  );
 
   return (
     <>
       <Pressable
         accessibilityLabel="Add to watchlist"
         accessibilityRole="button"
-        disabled={!firebaseIdToken}
-        onPress={openModal}
+        disabled={!firebaseIdToken || isSaving}
+        onPress={openSheet}
         style={({ pressed }) => [
           styles.trigger,
-          pressed && firebaseIdToken ? styles.triggerPressed : null,
-          !firebaseIdToken ? styles.disabled : null,
+          pressed && firebaseIdToken ? styles.pressed : null,
+          (!firebaseIdToken || isSaving) ? styles.disabled : null,
         ]}
       >
-        <BookmarkPlus color={colors.accentText} size={15} strokeWidth={2.4} />
+        {isSaving ? (
+          <ActivityIndicator color={colors.accentText} size="small" />
+        ) : (
+          <BookmarkPlus color={colors.accentText} size={16} strokeWidth={2.4} />
+        )}
         <Text style={styles.triggerLabel}>Add to watchlist</Text>
       </Pressable>
 
-      <Modal animationType="fade" onRequestClose={closeModal} transparent visible={isOpen}>
-        <View style={styles.overlay}>
-          <Animated.View style={[styles.sheet, sheetStyle]}>
-            <View style={styles.sheetHeader}>
-              <View>
-                <Text style={styles.sheetTitle}>Add to watchlist</Text>
-                <Text style={styles.sheetSubtitle}>Select one or more lists.</Text>
-              </View>
-              <Pressable
-                accessibilityLabel="Close watchlist picker"
-                accessibilityRole="button"
-                onPress={closeModal}
-                style={({ pressed }) => [styles.closeButton, pressed && styles.triggerPressed]}
-              >
-                <X color={colors.text} size={18} strokeWidth={2.4} />
-              </Pressable>
-            </View>
+      <BottomActionSheet footer={footer} onClose={dismissSheet} title="Add to a list" visible={isOpen}>
+        <Text style={styles.sheetSubtitle}>Select one or more lists.</Text>
 
-            {options.length === 0 || !hasCurrentOptions ? (
-              <Text style={styles.emptyText}>No watchlists yet.</Text>
-            ) : (
-              <ScrollView contentContainerStyle={styles.optionList} showsVerticalScrollIndicator={false}>
-                {options.map((option) => (
-                  <WatchlistOptionRow
-                    isSelected={selectedKeys.has(option.key)}
-                    key={option.key}
-                    onPress={() => toggleOption(option.key)}
-                    option={option}
-                  />
-                ))}
-              </ScrollView>
-            )}
-
-            {isCreateFormOpen ? (
-              <View style={styles.createPanel}>
-                <SegmentedControl
-                  buttonMinHeight={34}
-                  onChange={setNewWatchlistKind}
-                  options={[
-                    { label: 'Personal', value: 'personal' },
-                    { label: 'Shared', value: 'shared' },
-                  ]}
-                  value={newWatchlistKind}
-                />
-                <View style={styles.createRow}>
-                  <TextInput
-                    accessibilityLabel="New watchlist name"
-                    editable={!isCreating && !isSaving}
-                    onChangeText={setNewWatchlistName}
-                    onSubmitEditing={createWatchlistFromModal}
-                    placeholder={newWatchlistKind === 'personal' ? 'New personal list' : 'New shared list'}
-                    placeholderTextColor={colors.muted}
-                    returnKeyType="done"
-                    style={styles.createInput}
-                    value={newWatchlistName}
-                  />
-                  <Pressable
-                    accessibilityLabel="Create watchlist"
-                    accessibilityRole="button"
-                    disabled={isCreating || newWatchlistName.trim().length === 0}
-                    onPress={createWatchlistFromModal}
-                    style={({ pressed }) => [
-                      styles.createButton,
-                      pressed && !isCreating ? styles.triggerPressed : null,
-                      (isCreating || newWatchlistName.trim().length === 0) && styles.disabled,
-                    ]}
-                  >
-                    {isCreating ? (
-                      <ActivityIndicator color={colors.accentText} />
-                    ) : (
-                      <Text style={styles.createButtonLabel}>Create</Text>
-                    )}
-                  </Pressable>
-                </View>
+        {isLoading || !hasCurrentOptions ? (
+          <View style={styles.centerState}>
+            <ActivityIndicator color={colors.accent} />
+            <Text style={styles.stateText}>Loading your lists…</Text>
+          </View>
+        ) : options.length === 0 ? (
+          <View style={styles.centerState}>
+            <Text style={styles.emptyTitle}>No lists yet</Text>
+            <Text style={styles.stateText}>Create your first personal or shared list below.</Text>
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={styles.optionList} showsVerticalScrollIndicator={false}>
+            {options.map((option) => (
+              <WatchlistOptionRow
+                isSelected={selectedKeys.has(option.key)}
+                key={option.key}
+                onPress={() => toggleOption(option.key)}
+                option={option}
+              />
+            ))}
+            {hasSharedOptions ? (
+              <View style={styles.voteNote}>
+                <Sparkles color={colors.accentText} size={18} strokeWidth={2} />
+                <Text style={styles.voteNoteText}>
+                  <Text style={styles.voteNoteStrong}>Shared lists: </Text>
+                  voting becomes available after this title is added.
+                </Text>
               </View>
             ) : null}
-
-            <View style={styles.footer}>
-              <View style={styles.actions}>
-                <Button label="Cancel" onPress={closeModal} variant="secondary" />
-                <Button disabled={isLoading || isCreating || options.length === 0 || !hasCurrentOptions} label="Save" onPress={saveSelection} />
-              </View>
-              <Pressable
-                accessibilityLabel="Show create watchlist field"
-                accessibilityRole="button"
-                disabled={isCreating}
-                onPress={() => setIsCreateFormOpen(true)}
-                style={({ pressed }) => [
-                  styles.createFab,
-                  pressed && !isCreating ? styles.triggerPressed : null,
-                  isCreating && styles.disabled,
-                ]}
-              >
-                <Plus color={colors.accentText} size={20} strokeWidth={2.8} />
-              </Pressable>
-            </View>
-          </Animated.View>
-        </View>
-      </Modal>
+          </ScrollView>
+        )}
+      </BottomActionSheet>
     </>
-  );
-}
-
-function WatchlistOptionRow({
-  isSelected,
-  onPress,
-  option,
-}: {
-  isSelected: boolean;
-  onPress: () => void;
-  option: WatchlistOption;
-}) {
-  const Icon = isSelected ? CheckCircle2 : Circle;
-
-  return (
-    <Pressable
-      accessibilityLabel={`${isSelected ? 'Remove from' : 'Add to'} ${option.name}`}
-      accessibilityRole="checkbox"
-      accessibilityState={{ checked: isSelected }}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.optionRow,
-        isSelected && styles.optionRowSelected,
-        pressed && styles.triggerPressed,
-      ]}
-    >
-      <Icon color={isSelected ? colors.accentText : colors.muted} size={19} strokeWidth={2.4} />
-      <View style={styles.optionCopy}>
-        <Text numberOfLines={1} style={styles.optionName}>
-          {option.name}
-        </Text>
-        <Text style={styles.optionMeta}>{buildOptionMeta(option)}</Text>
-      </View>
-    </Pressable>
   );
 }
 
@@ -478,20 +369,10 @@ function toSharedOption(watchlist: SharedWatchlistSummary): WatchlistOption {
   };
 }
 
-function buildOptionMeta(option: WatchlistOption) {
-  const titleCount = `${option.itemCount} ${option.itemCount === 1 ? 'title' : 'titles'}`;
-
-  if (option.kind === 'personal') {
-    return `Personal / ${titleCount}`;
-  }
-
-  return `Shared / ${titleCount} / ${option.memberCount ?? 0} members`;
-}
-
 function updateOptionSelection(
   options: WatchlistOption[],
-  previousSelectedKeys: Set<string>,
-  nextSelectedKeys: Set<string>,
+  previousSelectedKeys: ReadonlySet<string>,
+  nextSelectedKeys: ReadonlySet<string>,
 ) {
   return options.map((option) => {
     const wasSelected = previousSelectedKeys.has(option.key);
@@ -507,53 +388,15 @@ function updateOptionSelection(
 }
 
 const styles = StyleSheet.create({
-  actions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  closeButton: {
+  centerState: {
     alignItems: 'center',
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    height: 44,
+    flex: 1,
     justifyContent: 'center',
-    width: 44,
-  },
-  disabled: {
-    opacity: 0.48,
-  },
-  createButton: {
-    alignItems: 'center',
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accentBorder,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minHeight: 44,
-    minWidth: 92,
-    paddingHorizontal: spacing.md,
-  },
-  createButtonLabel: {
-    color: colors.accentText,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0,
-  },
-  createFab: {
-    alignItems: 'center',
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accentBorder,
-    borderRadius: 22,
-    borderWidth: 1,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
+    paddingHorizontal: spacing.xl,
   },
   createInput: {
     ...typography.body,
-    backgroundColor: colors.panel,
+    backgroundColor: colors.background,
     borderColor: colors.border,
     borderRadius: radii.md,
     borderWidth: 1,
@@ -564,87 +407,56 @@ const styles = StyleSheet.create({
   },
   createPanel: {
     gap: spacing.sm,
-    marginTop: spacing.lg,
   },
   createRow: {
     flexDirection: 'row',
     gap: spacing.sm,
   },
-  emptyText: {
-    ...typography.body,
-    color: colors.muted,
-    marginTop: spacing.lg,
+  disabled: {
+    opacity: 0.48,
+  },
+  emptyTitle: {
+    ...typography.title,
+    color: colors.text,
+    marginBottom: spacing.xs,
   },
   footer: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    marginTop: spacing.lg,
+    gap: spacing.sm,
   },
-  optionCopy: {
-    flex: 1,
-    minWidth: 0,
+  newList: {
+    alignItems: 'center',
+    borderColor: colors.borderStrong,
+    borderRadius: radii.md,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    justifyContent: 'center',
+    minHeight: 47,
+  },
+  newListLabel: {
+    color: colors.textMuted,
+    fontSize: 14,
+    fontWeight: '700',
   },
   optionList: {
     gap: spacing.sm,
-    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
+    paddingTop: spacing.md,
   },
-  optionMeta: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0,
-    marginTop: 2,
-  },
-  optionName: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '800',
-  },
-  optionRow: {
-    alignItems: 'center',
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    padding: spacing.md,
-  },
-  optionRowSelected: {
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accentBorder,
-  },
-  overlay: {
-    backgroundColor: colors.overlay,
-    flex: 1,
-    justifyContent: 'flex-end',
-    padding: spacing.md,
-  },
-  sheet: {
-    ...shadows.panel,
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    maxHeight: '82%',
-    padding: spacing.lg,
-  },
-  sheetHeader: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: spacing.md,
+  pressed: {
+    opacity: 0.76,
   },
   sheetSubtitle: {
     ...typography.body,
-    color: colors.muted,
-    marginTop: spacing.xs,
+    color: colors.textMuted,
+    paddingBottom: spacing.xs,
   },
-  sheetTitle: {
-    ...typography.title,
-    color: colors.text,
+  stateText: {
+    ...typography.body,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
+    textAlign: 'center',
   },
   trigger: {
     alignItems: 'center',
@@ -656,17 +468,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.xs,
     marginTop: spacing.md,
-    minHeight: 34,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
   },
   triggerLabel: {
     color: colors.accentText,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '800',
-    letterSpacing: 0,
   },
-  triggerPressed: {
-    opacity: 0.78,
+  voteNote: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.panelElevated,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+    padding: spacing.md,
+  },
+  voteNoteStrong: {
+    color: colors.accentText,
+    fontWeight: '800',
+  },
+  voteNoteText: {
+    color: colors.textMuted,
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
   },
 });
