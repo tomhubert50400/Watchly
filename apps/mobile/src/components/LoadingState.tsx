@@ -7,8 +7,10 @@ type LoadingStateProps = {
 
 export function LoadingState({ label }: LoadingStateProps) {
   return (
-    <View style={styles.container}>
-      <ActivityIndicator color={colors.accentText} />
+    <View accessibilityLabel={label} accessibilityLiveRegion="polite" accessibilityRole="progressbar" style={styles.container}>
+      <View style={styles.spinnerShell}>
+        <ActivityIndicator color={colors.accent} />
+      </View>
       <Text style={styles.label}>{label}</Text>
     </View>
   );
@@ -17,20 +19,26 @@ export function LoadingState({ label }: LoadingStateProps) {
 const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    minHeight: 48,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    alignSelf: 'center',
+    justifyContent: 'center',
+    minHeight: 180,
+    padding: spacing.xl,
   },
   label: {
     ...typography.body,
     color: colors.textMuted,
-    fontWeight: '700',
+    fontWeight: '600',
+    marginTop: spacing.md,
+    textAlign: 'center',
+  },
+  spinnerShell: {
+    alignItems: 'center',
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    height: 52,
+    justifyContent: 'center',
+    width: 52,
   },
 });

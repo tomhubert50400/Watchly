@@ -1,32 +1,43 @@
-import { Pressable, PressableProps, StyleSheet, Text } from 'react-native';
+import { ReactNode } from 'react';
+import { ActivityIndicator, Pressable, PressableProps, StyleSheet, Text, View } from 'react-native';
 import { colors, radii, spacing, touchTargets } from '../design/tokens';
 
-type ButtonVariant = 'danger' | 'primary' | 'secondary';
+type ButtonVariant = 'danger' | 'ghost' | 'primary' | 'secondary';
 
 type ButtonProps = Omit<PressableProps, 'children' | 'style'> & {
+  fullWidth?: boolean;
+  icon?: ReactNode;
   label: string;
+  loading?: boolean;
   variant?: ButtonVariant;
 };
 
-export function Button({ disabled, label, variant = 'primary', ...pressableProps }: ButtonProps) {
+export function Button({ disabled, fullWidth = false, icon, label, loading = false, variant = 'primary', ...pressableProps }: ButtonProps) {
+  const isDisabled = disabled || loading;
+
   return (
     <Pressable
       accessibilityRole="button"
-      disabled={disabled}
+      accessibilityState={{ busy: loading, disabled: isDisabled }}
+      disabled={isDisabled}
       style={({ pressed }) => [
         styles.base,
+        fullWidth ? styles.fullWidth : null,
         variant === 'danger' ? styles.danger : null,
+        variant === 'ghost' ? styles.ghost : null,
         variant === 'primary' ? styles.primary : null,
         variant === 'secondary' ? styles.secondary : null,
-        pressed && !disabled ? styles.pressed : null,
-        disabled ? styles.disabled : null,
+        pressed && !isDisabled ? styles.pressed : null,
+        isDisabled ? styles.disabled : null,
       ]}
       {...pressableProps}
     >
+      {loading ? <ActivityIndicator color={variant === 'primary' ? colors.textOnAccent : colors.textMuted} size="small" /> : icon}
       <Text
         style={[
           styles.label,
           variant === 'danger' ? styles.dangerLabel : null,
+          variant === 'ghost' ? styles.ghostLabel : null,
           variant === 'primary' ? styles.primaryLabel : null,
           variant === 'secondary' ? styles.secondaryLabel : null,
         ]}
@@ -42,13 +53,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radii.md,
     borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
     justifyContent: 'center',
     minHeight: touchTargets.min,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-  },
-  disabled: {
-    opacity: 0.48,
   },
   danger: {
     backgroundColor: colors.dangerBackground,
@@ -56,6 +66,19 @@ const styles = StyleSheet.create({
   },
   dangerLabel: {
     color: colors.danger,
+  },
+  disabled: {
+    opacity: 0.48,
+  },
+  fullWidth: {
+    alignSelf: 'stretch',
+  },
+  ghost: {
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
+  },
+  ghostLabel: {
+    color: colors.textMuted,
   },
   label: {
     fontSize: 15,
@@ -67,11 +90,11 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
   primary: {
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accentBorder,
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   primaryLabel: {
-    color: colors.accentText,
+    color: colors.textOnAccent,
   },
   secondary: {
     backgroundColor: colors.panelElevated,
