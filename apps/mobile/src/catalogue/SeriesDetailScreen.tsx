@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ChevronDown } from 'lucide-react-native';
@@ -7,8 +7,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { getSeasonDetails, SeasonDetails, SeriesDetails } from '../api/catalogue';
 import { listSeriesProgress, SeriesProgress } from '../api/progress';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
+import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { LoadingState } from '../components/LoadingState';
 import { MediaHero } from '../components/MediaHero';
 import { SegmentedControl } from '../components/SegmentedControl';
@@ -23,6 +25,7 @@ import { StreamingAvailabilityPanel } from './StreamingAvailabilityPanel';
 import { SynopsisPanel } from './SynopsisPanel';
 import { AddToWatchlistControl } from '../watchlists/AddToWatchlistControl';
 import { useCatalogueCache } from './CatalogueCacheContext';
+import { formatFivePointRating, getDetailRenderMode } from './detailModel';
 import { isReleasedDate } from './releaseDates';
 
 type SeriesDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'SeriesDetail'>;
@@ -33,68 +36,71 @@ const SEASON_PICKER_MAX_HEIGHT =
   SEASON_PICKER_VISIBLE_ROWS * SEASON_PICKER_ROW_HEIGHT +
   (SEASON_PICKER_VISIBLE_ROWS - 1) * SEASON_PICKER_GAP;
 
-export function SeriesDetailScreen({ route }: SeriesDetailScreenProps) {
+export function SeriesDetailScreen({ navigation, route }: SeriesDetailScreenProps) {
   const { tmdbId } = route.params;
   const { getCachedSeries, refreshSeries } = useCatalogueCache();
-  const [series, setSeries] = useState<SeriesDetails | null>(() => getCachedSeries(tmdbId));
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(() => !getCachedSeries(tmdbId));
-  const hasVisibleSeriesRef = useRef(Boolean(series));
+  const load = useCallback(() => refreshSeries(tmdbId), [refreshSeries, tmdbId]);
+  const resource = useCachedResource<SeriesDetails>({
+    key: `watchly:public:catalogue:series:${tmdbId}`,
+    load,
+  });
+  const series = resource.data ?? getCachedSeries(tmdbId);
+  const renderMode = getDetailRenderMode({
+    hasData: Boolean(series),
+    hasError: Boolean(resource.error),
+    isInitialLoading: resource.isInitialLoading,
+  });
 
-  const loadSeries = useCallback(async (showLoading = false) => {
-    setError(null);
-    setIsLoading(showLoading || !hasVisibleSeriesRef.current);
-
-    try {
-      const nextSeries = await refreshSeries(tmdbId);
-
-      setSeries(nextSeries);
-      hasVisibleSeriesRef.current = true;
-    } catch (caughtError) {
-      if (!hasVisibleSeriesRef.current) {
-        setSeries(null);
-      }
-      setError(caughtError instanceof Error ? caughtError.message : 'Series details failed.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [refreshSeries, tmdbId]);
-
-  useEffect(() => {
-    const cached = getCachedSeries(tmdbId);
-
-    if (cached) {
-      setSeries(cached);
-      hasVisibleSeriesRef.current = true;
-      setIsLoading(false);
-      void loadSeries(false);
-      return;
-    }
-
-    hasVisibleSeriesRef.current = false;
-    void loadSeries(true);
-  }, [loadSeries, tmdbId]);
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerStyle: { backgroundColor: 'transparent' },
+      headerTintColor: colors.text,
+      headerTitle: '',
+      headerTransparent: true,
+    });
+  }, [navigation]);
 
   return (
     <SafeAreaView edges={[]} style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {isLoading ? (
-          <View style={styles.loadingFrame}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        contentInsetAdjustmentBehavior="never"
+        showsVerticalScrollIndicator={false}
+      >
+        {renderMode === 'loading' ? (
+          <View style={styles.stateFrame}>
             <LoadingState label="Loading series details" />
           </View>
-        ) : error ? (
-          <EmptyState body={error} title="Series detail failed">
-            <Button label="Retry" onPress={() => loadSeries(true)} />
-          </EmptyState>
+        ) : renderMode === 'fullError' ? (
+          <View style={styles.stateFrame}>
+            <EmptyState body={resource.error ?? 'Series details failed.'} title="Series detail failed">
+              <Button label="Retry" onPress={resource.retry} />
+            </EmptyState>
+          </View>
         ) : series ? (
-          <SeriesDetailContent series={series} />
+          <SeriesDetailContent
+            error={resource.error}
+            isRefreshing={resource.isRefreshing || resource.isInitialLoading}
+            onRetry={resource.retry}
+            series={series}
+          />
         ) : null}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function SeriesDetailContent({ series }: { series: SeriesDetails }) {
+function SeriesDetailContent({
+  error,
+  isRefreshing,
+  onRetry,
+  series,
+}: {
+  error: string | null;
+  isRefreshing: boolean;
+  onRetry: () => void;
+  series: SeriesDetails;
+}) {
   const [activeView, setActiveView] = useState<'details' | 'episodes'>('details');
   const isReleased = isReleasedDate(series.firstAirDate);
   const firstYear = series.firstAirDate ? series.firstAirDate.slice(0, 4) : null;
@@ -116,8 +122,8 @@ function SeriesDetailContent({ series }: { series: SeriesDetails }) {
       >
         <HeaderInfoPills items={infoItems} />
         {series.genres.length > 0 ? (
-          <Text numberOfLines={2} style={styles.genres}>
-            {series.genres.join(', ')}
+          <Text numberOfLines={1} style={styles.genres}>
+            {series.genres.join(' · ')}
           </Text>
         ) : null}
         {series.tagline ? (
@@ -127,6 +133,11 @@ function SeriesDetailContent({ series }: { series: SeriesDetails }) {
         ) : null}
       </MediaHero>
       <View style={styles.bodyStack}>
+        {isRefreshing ? (
+          <InlineStatusBanner detail="Refreshing series details" tone="updating" />
+        ) : error ? (
+          <InlineStatusBanner detail={error} onRetry={onRetry} title="Series update failed" tone="error" />
+        ) : null}
         <SegmentedControl
           containerStyle={styles.viewSwitchControl}
           onChange={setActiveView}
@@ -485,7 +496,7 @@ function formatTmdbRating(voteAverage: number | null) {
 
   return {
     icon: 'star',
-    label: (voteAverage / 2).toFixed(1),
+    label: formatFivePointRating(voteAverage, 10),
   } satisfies HeaderInfoItem;
 }
 
@@ -498,7 +509,6 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     paddingBottom: spacing.xxxl,
-    paddingTop: 0,
   },
   bodyStack: {
     paddingHorizontal: spacing.xl,
@@ -556,8 +566,10 @@ const styles = StyleSheet.create({
   dropdownIconOpen: {
     transform: [{ rotate: '180deg' }],
   },
-  loadingFrame: {
-    padding: spacing.xl,
+  stateFrame: {
+    flex: 1,
+    paddingHorizontal: spacing.xl,
+    paddingTop: 120,
   },
   inlineLoading: {
     alignItems: 'center',
@@ -681,12 +693,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   tagline: {
-    ...typography.body,
+    ...typography.meta,
     color: colors.text,
-    fontWeight: '800',
-    marginTop: spacing.sm,
+    fontStyle: 'italic',
+    marginTop: spacing.xs,
   },
   viewSwitchControl: {
     marginBottom: spacing.md,
+    marginTop: spacing.md,
   },
 });

@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
-import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { colors, shadows, spacing, typography } from '../design/tokens';
 import { MediaPoster } from './MediaPoster';
 
 type MediaHeroProps = {
@@ -50,23 +50,36 @@ export function MediaHero({
           {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
           <Text style={styles.title}>{title}</Text>
           {children}
-          {actions ? <View style={styles.actions}>{actions}</View> : null}
         </View>
-        {actionAccessory ? <View style={styles.accessory}>{actionAccessory}</View> : null}
       </View>
+      {actions || actionAccessory ? (
+        <View style={styles.actionBar}>
+          <View style={styles.actions}>{actions}</View>
+          {actionAccessory ? <View style={styles.accessory}>{actionAccessory}</View> : null}
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   accessory: {
-    marginBottom: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionBar: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    minHeight: 54,
+    paddingHorizontal: spacing.xl,
   },
   actions: {
     alignItems: 'center',
+    flex: 1,
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.sm,
+    minWidth: 0,
   },
   backdrop: {
     height: '100%',
@@ -74,7 +87,7 @@ const styles = StyleSheet.create({
   },
   backdropFrame: {
     backgroundColor: colors.panelSoft,
-    height: 236,
+    height: 238,
     overflow: 'hidden',
   },
   backdropPlaceholder: {
@@ -84,20 +97,20 @@ const styles = StyleSheet.create({
   bottomShade: {
     backgroundColor: colors.background,
     bottom: 0,
-    height: 82,
+    height: 132,
     left: 0,
-    opacity: 0.78,
+    opacity: 0.82,
     position: 'absolute',
     right: 0,
   },
   container: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.sm,
   },
   copy: {
     flex: 1,
     justifyContent: 'flex-end',
     minWidth: 0,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.sm,
   },
   eyebrow: {
     ...typography.eyebrow,
@@ -108,13 +121,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     flexDirection: 'row',
     gap: spacing.md,
-    marginTop: -82,
+    marginTop: -55,
     paddingHorizontal: spacing.xl,
   },
   poster: {
     ...shadows.raised,
-    height: 198,
-    width: 132,
+    height: 156,
+    width: 104,
   },
   scrim: {
     ...StyleSheet.absoluteFillObject,
@@ -122,9 +135,9 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.text,
-    fontSize: 30,
+    fontSize: 29,
     fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 35,
+    letterSpacing: -0.6,
+    lineHeight: 33,
   },
 });

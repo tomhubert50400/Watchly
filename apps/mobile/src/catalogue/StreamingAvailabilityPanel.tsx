@@ -20,7 +20,7 @@ import {
 } from '../api/catalogue';
 import { Button } from '../components/Button';
 import { LoadingState } from '../components/LoadingState';
-import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { colors, radii, spacing, typography } from '../design/tokens';
 
 type StreamingAvailabilityPanelProps = {
   contentType: 'movie' | 'series';
@@ -295,20 +295,16 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   panel: {
-    ...shadows.panel,
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     gap: spacing.md,
-    marginBottom: spacing.md,
-    padding: spacing.lg,
+    paddingVertical: spacing.xl,
   },
   providerLogo: {
     backgroundColor: colors.text,
     borderRadius: radii.xs,
-    height: 34,
-    width: 34,
+    height: 42,
+    width: 42,
   },
   logoRows: {
     flexDirection: 'row',

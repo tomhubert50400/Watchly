@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DisplayRating, MovieDetails } from '../api/catalogue';
+import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
+import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { LoadingState } from '../components/LoadingState';
 import { MediaHero } from '../components/MediaHero';
 import { colors, spacing, typography } from '../design/tokens';
@@ -13,77 +15,81 @@ import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 import { MovieReviewEditor } from '../reviews/MovieReviewEditor';
 import { MovieRatingControl } from '../tracking/MovieRatingControl';
 import { TrackingControls } from '../tracking/TrackingControls';
-import { HeaderInfoItem, HeaderInfoPills } from './HeaderInfoPills';
-import { StreamingAvailabilityPanel } from './StreamingAvailabilityPanel';
-import { SynopsisPanel } from './SynopsisPanel';
 import { AddToWatchlistControl } from '../watchlists/AddToWatchlistControl';
 import { useCatalogueCache } from './CatalogueCacheContext';
+import { formatFivePointRating, formatRuntime, getDetailRenderMode } from './detailModel';
+import { HeaderInfoItem, HeaderInfoPills } from './HeaderInfoPills';
 import { isReleasedDate } from './releaseDates';
+import { StreamingAvailabilityPanel } from './StreamingAvailabilityPanel';
+import { SynopsisPanel } from './SynopsisPanel';
 
 type FilmDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'FilmDetail'>;
 
-export function FilmDetailScreen({ route }: FilmDetailScreenProps) {
+export function FilmDetailScreen({ navigation, route }: FilmDetailScreenProps) {
   const { tmdbId } = route.params;
   const { getCachedMovie, refreshMovie } = useCatalogueCache();
-  const [movie, setMovie] = useState<MovieDetails | null>(() => getCachedMovie(tmdbId));
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(() => !getCachedMovie(tmdbId));
-  const hasVisibleMovieRef = useRef(Boolean(movie));
+  const load = useCallback(() => refreshMovie(tmdbId), [refreshMovie, tmdbId]);
+  const resource = useCachedResource<MovieDetails>({
+    key: `watchly:public:catalogue:movie:${tmdbId}`,
+    load,
+  });
+  const movie = resource.data ?? getCachedMovie(tmdbId);
+  const renderMode = getDetailRenderMode({
+    hasData: Boolean(movie),
+    hasError: Boolean(resource.error),
+    isInitialLoading: resource.isInitialLoading,
+  });
 
-  const loadMovie = useCallback(async (showLoading = false) => {
-    setError(null);
-    setIsLoading(showLoading || !hasVisibleMovieRef.current);
-
-    try {
-      const nextMovie = await refreshMovie(tmdbId);
-
-      setMovie(nextMovie);
-      hasVisibleMovieRef.current = true;
-    } catch (caughtError) {
-      if (!hasVisibleMovieRef.current) {
-        setMovie(null);
-      }
-      setError(caughtError instanceof Error ? caughtError.message : 'Movie details failed.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [refreshMovie, tmdbId]);
-
-  useEffect(() => {
-    const cached = getCachedMovie(tmdbId);
-
-    if (cached) {
-      setMovie(cached);
-      hasVisibleMovieRef.current = true;
-      setIsLoading(false);
-      void loadMovie(false);
-      return;
-    }
-
-    hasVisibleMovieRef.current = false;
-    void loadMovie(true);
-  }, [loadMovie, tmdbId]);
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerStyle: { backgroundColor: 'transparent' },
+      headerTintColor: colors.text,
+      headerTitle: '',
+      headerTransparent: true,
+    });
+  }, [navigation]);
 
   return (
     <SafeAreaView edges={[]} style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {isLoading ? (
-          <View style={styles.loadingFrame}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        contentInsetAdjustmentBehavior="never"
+        showsVerticalScrollIndicator={false}
+      >
+        {renderMode === 'loading' ? (
+          <View style={styles.stateFrame}>
             <LoadingState label="Loading film details" />
           </View>
-        ) : error ? (
-          <EmptyState body={error} title="Film detail failed">
-            <Button label="Retry" onPress={() => loadMovie(true)} />
-          </EmptyState>
+        ) : renderMode === 'fullError' ? (
+          <View style={styles.stateFrame}>
+            <EmptyState body={resource.error ?? 'Movie details failed.'} title="Film detail failed">
+              <Button label="Retry" onPress={resource.retry} />
+            </EmptyState>
+          </View>
         ) : movie ? (
-          <MovieDetailContent movie={movie} />
+          <MovieDetailContent
+            error={resource.error}
+            isRefreshing={resource.isRefreshing || resource.isInitialLoading}
+            movie={movie}
+            onRetry={resource.retry}
+          />
         ) : null}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function MovieDetailContent({ movie }: { movie: MovieDetails }) {
+function MovieDetailContent({
+  error,
+  isRefreshing,
+  movie,
+  onRetry,
+}: {
+  error: string | null;
+  isRefreshing: boolean;
+  movie: MovieDetails;
+  onRetry: () => void;
+}) {
   const isReleased = isReleasedDate(movie.releaseDate);
   const releaseYear = movie.releaseDate ? movie.releaseDate.slice(0, 4) : null;
   const runtime = formatRuntime(movie.runtimeMinutes);
@@ -104,8 +110,8 @@ function MovieDetailContent({ movie }: { movie: MovieDetails }) {
       >
         <HeaderInfoPills items={infoItems} />
         {movie.genres.length > 0 ? (
-          <Text numberOfLines={2} style={styles.genres}>
-            {movie.genres.join(', ')}
+          <Text numberOfLines={1} style={styles.genres}>
+            {movie.genres.join(' · ')}
           </Text>
         ) : null}
         {movie.tagline ? (
@@ -115,29 +121,27 @@ function MovieDetailContent({ movie }: { movie: MovieDetails }) {
         ) : null}
       </MediaHero>
       <View style={styles.bodyStack}>
-        <TrackingControls contentType="movie" tmdbId={movie.tmdbId} />
-        {isReleased ? <MovieRatingControl tmdbId={movie.tmdbId} /> : null}
+        {isRefreshing ? (
+          <InlineStatusBanner detail="Refreshing film details" tone="updating" />
+        ) : error ? (
+          <InlineStatusBanner detail={error} onRetry={onRetry} title="Film update failed" tone="error" />
+        ) : null}
+        <View style={styles.personalSection}>
+          <Text style={styles.personalEyebrow}>Your activity</Text>
+          <TrackingControls contentType="movie" tmdbId={movie.tmdbId} />
+          {isReleased ? <MovieRatingControl tmdbId={movie.tmdbId} /> : null}
+        </View>
         <SynopsisPanel overview={movie.overview} />
         <StreamingAvailabilityPanel contentType="movie" tmdbId={movie.tmdbId} />
-        {isReleased ? <MovieReviewEditor tmdbId={movie.tmdbId} /> : null}
+        {isReleased ? (
+          <View style={styles.communitySection}>
+            <Text style={styles.sectionTitle}>Your review</Text>
+            <MovieReviewEditor tmdbId={movie.tmdbId} />
+          </View>
+        ) : null}
       </View>
     </View>
   );
-}
-
-function formatRuntime(minutes: number | null) {
-  if (!minutes) {
-    return null;
-  }
-
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-
-  if (hours === 0) {
-    return `${remainingMinutes}m`;
-  }
-
-  return `${hours}h ${remainingMinutes}m`;
 }
 
 function formatDisplayRating(rating: DisplayRating | null) {
@@ -147,39 +151,54 @@ function formatDisplayRating(rating: DisplayRating | null) {
 
   return {
     icon: 'star',
-    label: toFivePointRating(rating).toFixed(1),
+    label: formatFivePointRating(rating.average, rating.scale),
   } satisfies HeaderInfoItem;
 }
 
-function toFivePointRating(rating: DisplayRating) {
-  return rating.scale === 10 ? rating.average / 2 : rating.average;
-}
-
 const styles = StyleSheet.create({
-  content: {
-    flexGrow: 1,
-    paddingBottom: spacing.xxxl,
-    paddingTop: 0,
-  },
   bodyStack: {
     paddingHorizontal: spacing.xl,
   },
-  genres: {
-    ...typography.body,
-    color: colors.textMuted,
-    marginTop: spacing.sm,
+  communitySection: {
+    paddingVertical: spacing.xl,
   },
-  loadingFrame: {
-    padding: spacing.xl,
+  content: {
+    flexGrow: 1,
+    paddingBottom: spacing.xxxl,
+  },
+  genres: {
+    ...typography.meta,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+  },
+  personalEyebrow: {
+    ...typography.eyebrow,
+    color: colors.textSubtle,
+    marginBottom: spacing.sm,
+  },
+  personalSection: {
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingTop: spacing.md,
   },
   safeArea: {
     backgroundColor: colors.background,
     flex: 1,
   },
-  tagline: {
-    ...typography.body,
+  sectionTitle: {
+    ...typography.title,
     color: colors.text,
-    fontWeight: '800',
-    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  stateFrame: {
+    flex: 1,
+    paddingHorizontal: spacing.xl,
+    paddingTop: 120,
+  },
+  tagline: {
+    ...typography.meta,
+    color: colors.text,
+    fontStyle: 'italic',
+    marginTop: spacing.xs,
   },
 });

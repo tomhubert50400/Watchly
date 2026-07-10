@@ -7,7 +7,7 @@ import {
   TextLayoutEventData,
   View,
 } from 'react-native';
-import { colors, radii, shadows, spacing, touchTargets, typography } from '../design/tokens';
+import { colors, spacing, touchTargets, typography } from '../design/tokens';
 
 const collapsedLineCount = 5;
 
@@ -55,35 +55,26 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   expandButton: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     alignSelf: 'flex-start',
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accentBorder,
-    borderRadius: radii.sm,
-    borderWidth: 1,
     justifyContent: 'center',
-    marginTop: spacing.md,
+    marginTop: spacing.xs,
     minHeight: touchTargets.min,
-    paddingHorizontal: spacing.md,
   },
   expandButtonPressed: {
     opacity: 0.84,
     transform: [{ scale: 0.98 }],
   },
   expandLabel: {
-    color: colors.accentText,
-    fontSize: 13,
+    color: colors.textSubtle,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0,
   },
   panel: {
-    ...shadows.panel,
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    marginBottom: spacing.md,
-    padding: spacing.lg,
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: spacing.xl,
   },
   sectionTitle: {
     ...typography.title,
