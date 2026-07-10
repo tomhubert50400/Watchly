@@ -148,7 +148,7 @@ export function SharedVoteScreen({ route }: Props) {
     } catch (error) {
       if (ownerIdRef.current === expectedOwnerId) {
         const current = ownedVoteRef.current.data;
-        if (current) commitDetails(expectedOwnerId, { ...current, session: rollbackVoteMutation(mutation) });
+        if (current) commitDetails(expectedOwnerId, { ...current, session: rollbackVoteMutation(mutation, current.session) });
         setMutationError(error instanceof Error ? error.message : 'Your vote could not be saved.');
         resource.retry();
       }
@@ -186,7 +186,7 @@ export function SharedVoteScreen({ route }: Props) {
     } catch (error) {
       if (ownerIdRef.current === expectedOwnerId) {
         const current = ownedVoteRef.current.data;
-        if (current) commitDetails(expectedOwnerId, { ...current, session: rollbackVoteMutation(mutation) });
+        if (current) commitDetails(expectedOwnerId, { ...current, session: rollbackVoteMutation(mutation, current.session) });
         setMutationError(error instanceof Error ? error.message : 'The vote could not be closed.');
         resource.retry();
       }

@@ -77,7 +77,17 @@ assert.equal(canCloseVote(true, session({ closesAt: '2026-07-10T11:59:59.000Z' }
   assert.equal(mutation.optimistic.candidates[1]?.userHasVoted, true);
   assert.equal(mutation.optimistic.candidates[1]?.voteCount, 2);
   assert.deepEqual(getVoteLeaders(mutation.optimistic.candidates).leaderIds, ['candidate-a', 'candidate-b']);
-  assert.deepEqual(rollbackVoteMutation(mutation), session());
+  const concurrent = {
+    ...mutation.optimistic,
+    candidates: mutation.optimistic.candidates.map((candidate) =>
+      candidate.id === 'candidate-c' ? { ...candidate, voteCount: 4 } : candidate,
+    ),
+  };
+  const rolledBack = rollbackVoteMutation(mutation, concurrent);
+  assert.equal(rolledBack.candidates[1]?.userHasVoted, false);
+  assert.equal(rolledBack.candidates[1]?.voteCount, 1);
+  assert.equal(rolledBack.candidates[2]?.voteCount, 4);
+  assert.deepEqual(rolledBack.leaders.map((candidate) => candidate.id), ['candidate-c']);
 }
 
 {
@@ -98,7 +108,17 @@ assert.equal(
   assert.equal(mutation.optimistic.status, 'CLOSED');
   assert.equal(mutation.optimistic.closedAt, NOW.toISOString());
   assert.equal(mutation.optimistic.winningCandidateId, 'candidate-a');
-  assert.deepEqual(rollbackVoteMutation(mutation), session());
+  const concurrent = {
+    ...mutation.optimistic,
+    candidates: mutation.optimistic.candidates.map((candidate) =>
+      candidate.id === 'candidate-b' ? { ...candidate, voteCount: 3 } : candidate,
+    ),
+  };
+  const rolledBack = rollbackVoteMutation(mutation, concurrent);
+  assert.equal(rolledBack.status, 'OPEN');
+  assert.equal(rolledBack.closedAt, null);
+  assert.equal(rolledBack.winningCandidateId, null);
+  assert.equal(rolledBack.candidates[1]?.voteCount, 3);
 }
 
 assert.equal(beginOptimisticClose(session(), false, NOW), null);

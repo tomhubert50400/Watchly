@@ -9,6 +9,8 @@ export type VoteLeaders = {
 };
 
 export type VoteMutation = {
+  candidateId?: string;
+  kind: 'close' | 'vote';
   optimistic: SharedVotingSession;
   snapshot: SharedVotingSession;
 };
@@ -104,6 +106,8 @@ export function beginOptimisticVote(
   });
 
   return {
+    candidateId,
+    kind: 'vote',
     optimistic: withComputedLeaders({ ...session, candidates }),
     snapshot: session,
   };
@@ -120,6 +124,7 @@ export function beginOptimisticClose(
 
   const leaders = getVoteLeaders(session.candidates);
   return {
+    kind: 'close',
     optimistic: {
       ...withComputedLeaders(session),
       closedAt: now.toISOString(),
@@ -131,8 +136,33 @@ export function beginOptimisticClose(
   };
 }
 
-export function rollbackVoteMutation(mutation: VoteMutation) {
-  return mutation.snapshot;
+export function rollbackVoteMutation(
+  mutation: VoteMutation,
+  current: SharedVotingSession = mutation.optimistic,
+) {
+  if (mutation.kind === 'close') {
+    return withComputedLeaders({
+      ...current,
+      closedAt: mutation.snapshot.closedAt,
+      status: mutation.snapshot.status,
+      updatedAt: mutation.snapshot.updatedAt,
+      winningCandidateId: mutation.snapshot.winningCandidateId,
+    });
+  }
+
+  const previousCandidate = mutation.snapshot.candidates.find(
+    (candidate) => candidate.id === mutation.candidateId,
+  );
+  if (!previousCandidate) {
+    return current;
+  }
+
+  return withComputedLeaders({
+    ...current,
+    candidates: current.candidates.map((candidate) =>
+      candidate.id === mutation.candidateId ? previousCandidate : candidate,
+    ),
+  });
 }
 
 function withComputedLeaders(session: SharedVotingSession): SharedVotingSession {
