@@ -61,7 +61,7 @@ export function BottomActionSheet({ children, footer, onClose, title, visible }:
             },
           ]}
         >
-          <SafeAreaView edges={['bottom']}>
+          <SafeAreaView edges={['bottom']} style={styles.safeContent}>
             <View style={styles.handle} />
             <View style={styles.header}>
               <Text accessibilityRole="header" style={styles.title}>{title}</Text>
@@ -90,6 +90,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.overlay,
   },
   body: {
+    flex: 1,
     paddingHorizontal: spacing.lg,
   },
   close: {
@@ -130,6 +131,9 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.72,
+  },
+  safeContent: {
+    flex: 1,
   },
   sheet: {
     ...StyleSheet.absoluteFillObject,
