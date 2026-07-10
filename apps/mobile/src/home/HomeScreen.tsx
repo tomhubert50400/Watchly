@@ -1,0 +1,512 @@
+import { useCallback, useMemo } from 'react';
+import { CompositeNavigationProp, useNavigation } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { UserCircle } from 'lucide-react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  CatalogueSearchItem,
+  getCatalogueMovieSections,
+  getEpisodeDetails,
+  getMovieDetails,
+  getSeasonDetails,
+  getSeriesDetails,
+} from '../api/catalogue';
+import { FeedItem, getFeed } from '../api/feed';
+import { listSeriesProgressSummaries, SeriesProgressSummary } from '../api/progress';
+import { useAuthSession } from '../auth/AuthSessionContext';
+import { getPrivateCacheKey, getPublicCacheKey } from '../cache/persistedCache';
+import { useCachedResource } from '../cache/useCachedResource';
+import { Button } from '../components/Button';
+import { EmptyState } from '../components/EmptyState';
+import { IconButton } from '../components/IconButton';
+import { InlineStatusBanner } from '../components/InlineStatusBanner';
+import { MediaPoster } from '../components/MediaPoster';
+import { Screen } from '../components/Screen';
+import { SectionHeader } from '../components/SectionHeader';
+import { colors, radii, spacing, typography } from '../design/tokens';
+import { RootStackParamList, RootTabParamList } from '../navigation/types';
+import { ContinueWatchingRail } from './ContinueWatchingRail';
+import { HomeHero } from './HomeHero';
+import {
+  buildHomeSections,
+  HomeCatalogueData,
+  HomeFeedItem,
+  HomeProgressItem,
+  HomeResource,
+  HomeTrendingItem,
+} from './homeData';
+import { SocialActivityRail } from './SocialActivityRail';
+
+type HomeNavigation = CompositeNavigationProp<
+  BottomTabNavigationProp<RootTabParamList, 'Home'>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
+
+const PUBLIC_HOME_KEY = getPublicCacheKey('home:catalogue:v1');
+
+export function HomeScreen() {
+  const navigation = useNavigation<HomeNavigation>();
+  const {
+    currentUser,
+    firebaseIdToken,
+    socialRevision,
+    trackingRevision,
+  } = useAuthSession();
+  const isSignedIn = Boolean(currentUser && firebaseIdToken);
+  const loadCatalogue = useCallback(loadHomeCatalogue, []);
+  const loadProgress = useCallback(
+    () => firebaseIdToken ? loadHomeProgress(firebaseIdToken) : Promise.resolve([]),
+    [firebaseIdToken, trackingRevision],
+  );
+  const loadFeed = useCallback(
+    () => firebaseIdToken ? loadHomeFeed(firebaseIdToken) : Promise.resolve([]),
+    [firebaseIdToken, socialRevision],
+  );
+  const catalogue = useCachedResource({ key: PUBLIC_HOME_KEY, load: loadCatalogue });
+  const progress = useCachedResource({
+    enabled: isSignedIn,
+    key: currentUser ? getPrivateCacheKey(currentUser.id, 'home:progress:v1') : getPrivateCacheKey('visitor', 'home:progress:v1'),
+    load: loadProgress,
+  });
+  const feed = useCachedResource({
+    enabled: isSignedIn,
+    key: currentUser ? getPrivateCacheKey(currentUser.id, 'home:feed:v1') : getPrivateCacheKey('visitor', 'home:feed:v1'),
+    load: loadFeed,
+  });
+  const sections = useMemo(
+    () => buildHomeSections({
+      catalogue: toHomeResource(catalogue.data, catalogue.error),
+      feed: toHomeResource(feed.data, feed.error),
+      isSignedIn,
+      progress: toHomeResource(progress.data, progress.error),
+    }),
+    [catalogue.data, catalogue.error, feed.data, feed.error, isSignedIn, progress.data, progress.error],
+  );
+  const isRefreshing = catalogue.isRefreshing || progress.isRefreshing || feed.isRefreshing;
+  const isLoadingPersonalization = isSignedIn && (
+    (progress.isInitialLoading && !progress.data) || (feed.isInitialLoading && !feed.data)
+  );
+  const retryAll = useCallback(() => {
+    catalogue.retry();
+    if (isSignedIn) {
+      progress.retry();
+      feed.retry();
+    }
+  }, [catalogue.retry, feed.retry, isSignedIn, progress.retry]);
+
+  if (catalogue.isInitialLoading && !catalogue.data) {
+    return (
+      <Screen title="Watchly">
+        <View style={styles.blockingState}>
+          <InlineStatusBanner detail="Fetching current catalogue titles." tone="updating" />
+        </View>
+      </Screen>
+    );
+  }
+
+  if (catalogue.error && !catalogue.data) {
+    return (
+      <Screen title="Watchly">
+        <EmptyState body={catalogue.error} title="Home is unavailable">
+          <Button label="Retry" onPress={catalogue.retry} />
+        </EmptyState>
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen
+      horizontalPadding={false}
+      refreshControl={
+        <RefreshControl
+          colors={[colors.accent]}
+          onRefresh={retryAll}
+          refreshing={isRefreshing}
+          tintColor={colors.accent}
+        />
+      }
+      statusBanner={
+        isRefreshing ? (
+          <InlineStatusBanner detail="Keeping current content visible while new data arrives." tone="updating" />
+        ) : isLoadingPersonalization ? (
+          <InlineStatusBanner detail="Loading your progress and social activity." title="Personalizing Home" tone="updating" />
+        ) : undefined
+      }
+      tabBarPadding
+      title="Watchly"
+      trailing={
+        <IconButton
+          accessibilityLabel={isSignedIn ? 'Open Profile' : 'Sign in from Profile'}
+          icon={<UserCircle color={colors.textMuted} size={22} strokeWidth={2} />}
+          onPress={() => navigation.navigate('Profile')}
+        />
+      }
+    >
+      <View style={styles.composition}>
+        {sections.map((section) => {
+          if (section.kind === 'hero') {
+            return (
+              <View key="hero" style={styles.hero}>
+                <HomeHero
+                  item={section.item}
+                  onOpen={() => navigation.navigate('FilmDetail', {
+                    title: section.item.title,
+                    tmdbId: section.item.tmdbId,
+                  })}
+                />
+              </View>
+            );
+          }
+
+          if (section.kind === 'continueWatching') {
+            return (
+              <HomeSection key="continue" title="Continue watching">
+                {section.error ? (
+                  <InlineStatusBanner detail={section.error} onRetry={progress.retry} tone="error" />
+                ) : null}
+                {section.items.length > 0 ? (
+                  <ContinueWatchingRail
+                    items={section.items}
+                    onOpen={(item) => navigation.navigate('EpisodeDetail', {
+                      episodeNumber: item.episodeNumber,
+                      seasonNumber: item.seasonNumber,
+                      seriesTitle: item.seriesTitle,
+                      title: item.episodeTitle,
+                      tmdbId: item.seriesTmdbId,
+                    })}
+                  />
+                ) : null}
+              </HomeSection>
+            );
+          }
+
+          if (section.kind === 'socialActivity') {
+            return (
+              <HomeSection key="social" title="From people you follow">
+                {section.error ? (
+                  <InlineStatusBanner detail={section.error} onRetry={feed.retry} tone="error" />
+                ) : null}
+                {section.items.length > 0 ? (
+                  <SocialActivityRail items={section.items} onOpen={(item) => openFeedItem(navigation, item)} />
+                ) : null}
+              </HomeSection>
+            );
+          }
+
+          return (
+            <HomeSection key="trending" title="Trending now">
+              {section.error ? (
+                <InlineStatusBanner detail={section.error} onRetry={catalogue.retry} tone="error" />
+              ) : null}
+              {section.items.length > 0 ? (
+                <TrendingRail
+                  items={section.items}
+                  onOpen={(item) => navigation.navigate('FilmDetail', {
+                    title: item.title,
+                    tmdbId: item.tmdbId,
+                  })}
+                />
+              ) : !section.error ? (
+                <Text style={styles.emptySection}>No trending titles are available right now.</Text>
+              ) : null}
+            </HomeSection>
+          );
+        })}
+        {!isSignedIn ? (
+          <View style={styles.visitorCard}>
+            <Text style={styles.visitorTitle}>Make Home yours</Text>
+            <Text style={styles.visitorBody}>
+              Sign in from Profile to continue series and see reviews from people you follow.
+            </Text>
+            <Button label="Open Profile" onPress={() => navigation.navigate('Profile')} variant="secondary" />
+          </View>
+        ) : null}
+      </View>
+    </Screen>
+  );
+}
+
+function HomeSection({ children, title }: { children: React.ReactNode; title: string }) {
+  return (
+    <View style={styles.section}>
+      <SectionHeader title={title} />
+      <View style={styles.sectionBody}>{children}</View>
+    </View>
+  );
+}
+
+function TrendingRail({
+  items,
+  onOpen,
+}: {
+  items: HomeTrendingItem[];
+  onOpen: (item: HomeTrendingItem) => void;
+}) {
+  return (
+    <ScrollView
+      contentContainerStyle={styles.posterRail}
+      horizontal
+      nestedScrollEnabled
+      showsHorizontalScrollIndicator={false}
+    >
+      {items.map((item) => (
+        <Pressable
+          accessibilityLabel={`Open ${item.title}`}
+          accessibilityRole="button"
+          key={`${item.mediaType}:${item.tmdbId}`}
+          onPress={() => onOpen(item)}
+          style={({ pressed }) => [styles.posterCard, pressed ? styles.pressed : null]}
+        >
+          <MediaPoster posterUrl={item.posterUrl} style={styles.poster} />
+          <Text numberOfLines={2} style={styles.posterTitle}>{item.title}</Text>
+          <Text style={styles.posterMeta}>{formatTrendingMeta(item)}</Text>
+        </Pressable>
+      ))}
+    </ScrollView>
+  );
+}
+
+async function loadHomeCatalogue(): Promise<HomeCatalogueData> {
+  const response = await getCatalogueMovieSections();
+  const featured = response.trending[0] ?? null;
+
+  if (!featured) {
+    return { hero: null, trending: [] };
+  }
+
+  let details = null;
+
+  try {
+    details = (await getMovieDetails(featured.tmdbId)).item;
+  } catch {
+    // The real catalogue item remains usable even if its richer detail request fails.
+  }
+
+  return {
+    hero: {
+      backdropUrl: details?.backdropUrl ?? null,
+      genres: details?.genres ?? [],
+      posterUrl: details?.posterUrl ?? featured.posterUrl,
+      releaseDate: details?.releaseDate ?? featured.releaseDate,
+      runtimeMinutes: details?.runtimeMinutes ?? null,
+      title: details?.title ?? featured.title,
+      tmdbId: featured.tmdbId,
+    },
+    trending: response.trending.slice(1).map(toTrendingItem),
+  };
+}
+
+async function loadHomeProgress(token: string): Promise<HomeProgressItem[]> {
+  const summaries = (await listSeriesProgressSummaries(token)).items.slice(0, 8);
+  const hydrated = await Promise.allSettled(summaries.map(hydrateProgressItem));
+  const fulfilled = hydrated.filter(
+    (result): result is PromiseFulfilledResult<HomeProgressItem | null> => result.status === 'fulfilled',
+  );
+
+  if (summaries.length > 0 && fulfilled.length === 0) {
+    throw new Error('Could not update continue watching.');
+  }
+
+  return fulfilled.flatMap((result) => result.value ? [result.value] : []);
+}
+
+async function hydrateProgressItem(summary: SeriesProgressSummary): Promise<HomeProgressItem | null> {
+  const [seriesResponse, currentSeasonResponse] = await Promise.all([
+    getSeriesDetails(summary.seriesTmdbId),
+    getSeasonDetails(summary.seriesTmdbId, summary.latestSeasonNumber),
+  ]);
+  let nextEpisode = currentSeasonResponse.item.episodes.find(
+    (episode) => episode.episodeNumber > summary.latestEpisodeNumber && isReleased(episode.airDate),
+  );
+
+  if (!nextEpisode) {
+    const nextSeason = seriesResponse.item.seasons
+      .filter((season) => season.seasonNumber > summary.latestSeasonNumber && season.seasonNumber > 0)
+      .sort((left, right) => left.seasonNumber - right.seasonNumber)[0];
+
+    if (nextSeason) {
+      const nextSeasonResponse = await getSeasonDetails(summary.seriesTmdbId, nextSeason.seasonNumber);
+      nextEpisode = nextSeasonResponse.item.episodes.find((episode) => isReleased(episode.airDate));
+    }
+  }
+
+  if (!nextEpisode) {
+    return null;
+  }
+
+  return {
+    backdropUrl: seriesResponse.item.backdropUrl,
+    episodeNumber: nextEpisode.episodeNumber,
+    episodeTitle: nextEpisode.title,
+    seasonNumber: nextEpisode.seasonNumber,
+    seriesTitle: seriesResponse.item.title,
+    seriesTmdbId: summary.seriesTmdbId,
+    watchedEpisodeCount: summary.watchedEpisodeCount,
+  };
+}
+
+async function loadHomeFeed(token: string): Promise<HomeFeedItem[]> {
+  const rawItems = (await getFeed(token)).items.slice(0, 10);
+  const hydrated = await Promise.allSettled(rawItems.map(hydrateFeedItem));
+  const fulfilled = hydrated.filter(
+    (result): result is PromiseFulfilledResult<HomeFeedItem> => result.status === 'fulfilled',
+  );
+
+  if (rawItems.length > 0 && fulfilled.length === 0) {
+    throw new Error('Could not update social activity.');
+  }
+
+  return fulfilled.map((result) => result.value);
+}
+
+async function hydrateFeedItem(item: FeedItem): Promise<HomeFeedItem> {
+  if (item.content.contentType === 'movie') {
+    const movie = (await getMovieDetails(item.content.tmdbId)).item;
+
+    return {
+      authorDisplayName: item.author.displayName,
+      authorId: item.author.id,
+      body: item.body,
+      contentImageUrl: movie.posterUrl,
+      contentTitle: movie.title,
+      id: item.id,
+      target: { contentType: 'movie', tmdbId: item.content.tmdbId },
+      updatedAt: item.updatedAt,
+    };
+  }
+
+  const [episodeResponse, seriesResponse] = await Promise.all([
+    getEpisodeDetails(
+      item.content.seriesTmdbId,
+      item.content.seasonNumber,
+      item.content.episodeNumber,
+    ),
+    getSeriesDetails(item.content.seriesTmdbId),
+  ]);
+
+  return {
+    authorDisplayName: item.author.displayName,
+    authorId: item.author.id,
+    body: item.body,
+    contentImageUrl: episodeResponse.item.stillUrl ?? seriesResponse.item.posterUrl,
+    contentTitle: episodeResponse.item.title,
+    id: item.id,
+    target: {
+      contentType: 'episode',
+      episodeNumber: item.content.episodeNumber,
+      seasonNumber: item.content.seasonNumber,
+      seriesTitle: seriesResponse.item.title,
+      seriesTmdbId: item.content.seriesTmdbId,
+    },
+    updatedAt: item.updatedAt,
+  };
+}
+
+function openFeedItem(navigation: HomeNavigation, item: HomeFeedItem) {
+  if (item.target.contentType === 'movie') {
+    navigation.navigate('FilmDetail', { title: item.contentTitle, tmdbId: item.target.tmdbId });
+    return;
+  }
+
+  navigation.navigate('EpisodeDetail', {
+    episodeNumber: item.target.episodeNumber,
+    seasonNumber: item.target.seasonNumber,
+    seriesTitle: item.target.seriesTitle,
+    title: item.contentTitle,
+    tmdbId: item.target.seriesTmdbId,
+  });
+}
+
+function toTrendingItem(item: CatalogueSearchItem): HomeTrendingItem {
+  return {
+    mediaType: item.mediaType,
+    posterUrl: item.posterUrl,
+    releaseDate: item.releaseDate,
+    title: item.title,
+    tmdbId: item.tmdbId,
+    voteAverage: item.voteAverage,
+  };
+}
+
+function toHomeResource<T>(data: T | null, error: string | null): HomeResource<T> {
+  return { data, error };
+}
+
+function isReleased(airDate: string | null) {
+  return airDate !== null && airDate <= new Date().toISOString().slice(0, 10);
+}
+
+function formatTrendingMeta(item: HomeTrendingItem) {
+  const year = item.releaseDate?.match(/^\d{4}/)?.[0];
+  const rating = item.voteAverage === null ? null : `TMDB ${item.voteAverage.toFixed(1)}/10`;
+
+  return [year, rating].filter(Boolean).join(' · ');
+}
+
+const styles = StyleSheet.create({
+  blockingState: {
+    paddingTop: spacing.xl,
+  },
+  composition: {
+    gap: spacing.xxl,
+  },
+  emptySection: {
+    ...typography.body,
+    color: colors.textMuted,
+    paddingVertical: spacing.md,
+  },
+  hero: {
+    paddingHorizontal: spacing.xl,
+  },
+  poster: {
+    height: 190,
+    width: 126,
+  },
+  posterCard: {
+    width: 126,
+  },
+  posterMeta: {
+    ...typography.meta,
+    color: colors.textSubtle,
+    marginTop: spacing.xs,
+  },
+  posterRail: {
+    gap: spacing.md,
+    paddingRight: spacing.xl,
+  },
+  posterTitle: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 18,
+    marginTop: spacing.sm,
+  },
+  pressed: {
+    opacity: 0.78,
+    transform: [{ scale: 0.99 }],
+  },
+  section: {
+    paddingLeft: spacing.xl,
+  },
+  sectionBody: {
+    gap: spacing.sm,
+  },
+  visitorBody: {
+    ...typography.body,
+    color: colors.textMuted,
+  },
+  visitorCard: {
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    marginHorizontal: spacing.xl,
+    padding: spacing.lg,
+  },
+  visitorTitle: {
+    ...typography.title,
+    color: colors.text,
+  },
+});

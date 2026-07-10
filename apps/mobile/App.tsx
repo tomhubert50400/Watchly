@@ -13,7 +13,7 @@ import { FilmDetailScreen } from './src/catalogue/FilmDetailScreen';
 import { SeasonDetailScreen } from './src/catalogue/SeasonDetailScreen';
 import { SeriesDetailScreen } from './src/catalogue/SeriesDetailScreen';
 import { colors } from './src/design/tokens';
-import { FeedScreen } from './src/feed/FeedScreen';
+import { HomeScreen } from './src/home/HomeScreen';
 import { mainTabs, MainTabName } from './src/navigation/tabConfig';
 import { RootStackParamList, RootTabParamList } from './src/navigation/types';
 import { ToastProvider } from './src/notifications/ToastContext';
@@ -63,7 +63,7 @@ function MainTabs() {
         };
       }}
     >
-      <Tabs.Screen component={FeedScreen} name="Home" />
+      <Tabs.Screen component={HomeScreen} name="Home" />
       <Tabs.Screen component={ExploreTabScreen} name="Explore" />
       <Tabs.Screen component={MyTvScreen} name="Library" />
       <Tabs.Screen component={ProfileScreen} name="Profile" />
