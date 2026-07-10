@@ -1,3 +1,10 @@
+export type RootTabParamList = {
+  Explore: undefined;
+  Home: undefined;
+  Library: undefined;
+  Profile: undefined;
+};
+
 export type RootStackParamList = {
   EpisodeDetail: {
     episodeNumber: number;
