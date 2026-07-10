@@ -24,6 +24,11 @@ enum SharedWatchlistVisibility {
   PRIVATE
 }
 
+enum SharedVotingStatus {
+  OPEN
+  CLOSED
+}
+
 enum TrackedContentType {
   MOVIE
   SERIES
@@ -305,27 +310,35 @@ model SharedWatchlistItem {
 }
 
 model SharedVotingSession {
-  id            String                  @id @default(uuid()) @db.Uuid
-  watchlistId   String                  @db.Uuid
-  title         String                  @db.VarChar(80)
-  createdAt     DateTime                @default(now())
-  updatedAt     DateTime                @updatedAt
-  candidates    SharedVotingCandidate[]
-  watchlist     SharedWatchlist         @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
-  notifications Notification[]
+  id                 String                  @id @default(uuid()) @db.Uuid
+  watchlistId        String                  @db.Uuid
+  title              String                  @db.VarChar(80)
+  status             SharedVotingStatus      @default(OPEN)
+  closesAt           DateTime                @default(dbgenerated("(CURRENT_TIMESTAMP + INTERVAL '7 days')"))
+  closedAt           DateTime?
+  winningCandidateId String?                 @db.Uuid
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  candidates         SharedVotingCandidate[] @relation("SharedVotingCandidates")
+  winner             SharedVotingCandidate?  @relation("SharedVotingWinner", fields: [winningCandidateId], references: [id], onDelete: SetNull)
+  watchlist          SharedWatchlist         @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+  notifications      Notification[]
 
   @@index([watchlistId])
+  @@index([status, closesAt])
+  @@index([winningCandidateId])
   @@map("shared_voting_sessions")
 }
 
 model SharedVotingCandidate {
-  id        String              @id @default(uuid()) @db.Uuid
-  sessionId String              @db.Uuid
-  itemId    String              @db.Uuid
-  createdAt DateTime            @default(now())
-  item      SharedWatchlistItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  session   SharedVotingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  votes     SharedVotingVote[]
+  id          String                @id @default(uuid()) @db.Uuid
+  sessionId   String                @db.Uuid
+  itemId      String                @db.Uuid
+  createdAt   DateTime              @default(now())
+  item        SharedWatchlistItem   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  session     SharedVotingSession   @relation("SharedVotingCandidates", fields: [sessionId], references: [id], onDelete: Cascade)
+  wonSessions SharedVotingSession[] @relation("SharedVotingWinner")
+  votes       SharedVotingVote[]
 
   @@unique([sessionId, itemId])
   @@index([itemId])
@@ -348,7 +361,7 @@ model SharedVotingVote {
 model Notification {
   id                String                   @id @default(uuid()) @db.Uuid
   userId            String                   @db.Uuid
-  kind              NotificationKind        @default(RELEASE)
+  kind              NotificationKind         @default(RELEASE)
   releaseType       ReleaseNotificationType?
   contentType       TrackedContentType?
   tmdbId            Int?

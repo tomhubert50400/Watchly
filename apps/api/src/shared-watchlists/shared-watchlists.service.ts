@@ -2,7 +2,11 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
-import { NotificationKind, TrackedContentType } from '../generated/prisma/enums';
+import {
+  NotificationKind,
+  SharedVotingStatus,
+  TrackedContentType,
+} from '../generated/prisma/enums';
 import {
   SharedWatchlistContentType,
   SharedWatchlistItemDto,
@@ -98,6 +102,7 @@ export class SharedWatchlistsService {
   async getSharedWatchlist(identity: AuthenticatedIdentity, watchlistId: string) {
     const userId = await this.getUserId(identity);
     await this.assertMember(userId, watchlistId);
+    await this.closeExpiredVotingSessions(watchlistId);
 
     const watchlist = await this.withConnectionRetry(() =>
       this.prisma.sharedWatchlist.findUnique({
@@ -158,19 +163,7 @@ export class SharedWatchlistsService {
       })),
       name: watchlist.name,
       updatedAt: watchlist.updatedAt.toISOString(),
-      votingSessions: watchlist.votingSessions.map((session) => ({
-        createdAt: session.createdAt.toISOString(),
-        id: session.id,
-        title: session.title,
-        candidates: session.candidates.map((candidate) => ({
-          contentType: fromTrackedContentType(candidate.item.contentType),
-          id: candidate.id,
-          itemId: candidate.itemId,
-          tmdbId: candidate.item.tmdbId,
-          userHasVoted: candidate.votes.some((vote) => vote.userId === userId),
-          voteCount: candidate.votes.length,
-        })),
-      })),
+      votingSessions: watchlist.votingSessions.map((session) => toVotingSession(session, userId)),
     };
   }
 
@@ -337,6 +330,7 @@ export class SharedWatchlistsService {
   ) {
     const userId = await this.getUserId(identity);
     await this.assertMember(userId, watchlistId);
+    await this.closeExpiredVotingSession(watchlistId, sessionId);
 
     const session = await this.withConnectionRetry(() =>
       this.prisma.sharedVotingSession.findFirst({
@@ -366,19 +360,7 @@ export class SharedWatchlistsService {
       throw new NotFoundException('Voting session not found.');
     }
 
-    return {
-      createdAt: session.createdAt.toISOString(),
-      id: session.id,
-      title: session.title,
-      candidates: session.candidates.map((candidate) => ({
-        contentType: fromTrackedContentType(candidate.item.contentType),
-        id: candidate.id,
-        itemId: candidate.itemId,
-        tmdbId: candidate.item.tmdbId,
-        userHasVoted: candidate.votes.some((vote) => vote.userId === userId),
-        voteCount: candidate.votes.length,
-      })),
-    };
+    return toVotingSession(session, userId);
   }
 
   async voteForCandidate(
@@ -389,40 +371,62 @@ export class SharedWatchlistsService {
   ) {
     const userId = await this.getUserId(identity);
     await this.assertMember(userId, watchlistId);
-    const candidate = await this.withConnectionRetry(() =>
-      this.prisma.sharedVotingCandidate.findFirst({
-      select: {
-        id: true,
-      },
-      where: {
-        id: candidateId,
-        session: {
-          id: sessionId,
+    const result = await this.withConnectionRetry(() =>
+      this.prisma.$transaction(async (transaction) => {
+        const locked = await transaction.$queryRawUnsafe<{ id: string }[]>(
+          'SELECT id FROM "shared_voting_sessions" WHERE id = $1::uuid AND "watchlistId" = $2::uuid FOR UPDATE',
+          sessionId,
           watchlistId,
-        },
-      },
+        );
+
+        if (locked.length === 0) {
+          return 'SESSION_NOT_FOUND' as const;
+        }
+
+        const votingSession = await transaction.sharedVotingSession.findUniqueOrThrow({
+          select: { closesAt: true, status: true },
+          where: { id: sessionId },
+        });
+
+        if (
+          votingSession.status === SharedVotingStatus.CLOSED ||
+          votingSession.closesAt <= new Date()
+        ) {
+          return 'CLOSED' as const;
+        }
+
+        const candidate = await transaction.sharedVotingCandidate.findFirst({
+          select: { id: true },
+          where: { id: candidateId, sessionId },
+        });
+
+        if (!candidate) {
+          return 'CANDIDATE_NOT_FOUND' as const;
+        }
+
+        await transaction.sharedVotingVote.upsert({
+          create: { candidateId, userId },
+          update: {},
+          where: { candidateId_userId: { candidateId, userId } },
+        });
+
+        return 'UPDATED' as const;
       }),
     );
 
-    if (!candidate) {
+    if (result === 'SESSION_NOT_FOUND') {
+      throw new NotFoundException('Voting session not found.');
+    }
+
+    if (result === 'CANDIDATE_NOT_FOUND') {
       throw new NotFoundException('Voting candidate not found.');
     }
 
-    await this.withConnectionRetry(() =>
-      this.prisma.sharedVotingVote.upsert({
-      create: {
-        candidateId,
-        userId,
-      },
-      update: {},
-      where: {
-        candidateId_userId: {
-          candidateId,
-          userId,
-        },
-      },
-      }),
-    );
+    if (result === 'CLOSED') {
+      await this.closeExpiredVotingSession(watchlistId, sessionId);
+      throw new BadRequestException('Voting session is closed.');
+    }
+
     await this.upsertVoteLeaderNotifications(userId, watchlistId, sessionId);
 
     return this.getVotingSession(identity, watchlistId, sessionId);
@@ -436,23 +440,227 @@ export class SharedWatchlistsService {
   ) {
     const userId = await this.getUserId(identity);
     await this.assertMember(userId, watchlistId);
-    await this.withConnectionRetry(() =>
-      this.prisma.sharedVotingVote.deleteMany({
-      where: {
-        candidateId,
-        userId,
-        candidate: {
-          session: {
-            id: sessionId,
-            watchlistId,
-          },
-        },
-      },
+    const result = await this.withConnectionRetry(() =>
+      this.prisma.$transaction(async (transaction) => {
+        const locked = await transaction.$queryRawUnsafe<{ id: string }[]>(
+          'SELECT id FROM "shared_voting_sessions" WHERE id = $1::uuid AND "watchlistId" = $2::uuid FOR UPDATE',
+          sessionId,
+          watchlistId,
+        );
+
+        if (locked.length === 0) {
+          return 'SESSION_NOT_FOUND' as const;
+        }
+
+        const votingSession = await transaction.sharedVotingSession.findUniqueOrThrow({
+          select: { closesAt: true, status: true },
+          where: { id: sessionId },
+        });
+
+        if (
+          votingSession.status === SharedVotingStatus.CLOSED ||
+          votingSession.closesAt <= new Date()
+        ) {
+          return 'CLOSED' as const;
+        }
+
+        await transaction.sharedVotingVote.deleteMany({
+          where: { candidateId, userId, candidate: { sessionId } },
+        });
+
+        return 'UPDATED' as const;
       }),
     );
+
+    if (result === 'SESSION_NOT_FOUND') {
+      throw new NotFoundException('Voting session not found.');
+    }
+
+    if (result === 'CLOSED') {
+      await this.closeExpiredVotingSession(watchlistId, sessionId);
+      throw new BadRequestException('Voting session is closed.');
+    }
+
     await this.upsertVoteLeaderNotifications(userId, watchlistId, sessionId);
 
     return this.getVotingSession(identity, watchlistId, sessionId);
+  }
+
+  async closeVotingSession(
+    identity: AuthenticatedIdentity,
+    watchlistId: string,
+    sessionId: string,
+  ) {
+    const userId = await this.getUserId(identity);
+    await this.assertOwner(userId, watchlistId);
+    const result = await this.finalizeVotingSession(watchlistId, sessionId, false);
+
+    if (!result.found) {
+      throw new NotFoundException('Voting session not found.');
+    }
+
+    return this.getVotingSession(identity, watchlistId, sessionId);
+  }
+
+  private async closeExpiredVotingSessions(watchlistId: string) {
+    const expired = await this.withConnectionRetry(() =>
+      this.prisma.sharedVotingSession.findMany({
+        select: { id: true },
+        where: {
+          closesAt: { lte: new Date() },
+          status: SharedVotingStatus.OPEN,
+          watchlistId,
+        },
+      }),
+    );
+
+    for (const session of expired) {
+      await this.finalizeVotingSession(watchlistId, session.id, true);
+    }
+  }
+
+  private async closeExpiredVotingSession(
+    watchlistId: string,
+    sessionId: string,
+  ) {
+    await this.finalizeVotingSession(watchlistId, sessionId, true);
+  }
+
+  private async finalizeVotingSession(
+    watchlistId: string,
+    sessionId: string,
+    expiredOnly: boolean,
+  ) {
+    const result = await this.withConnectionRetry(() =>
+      this.prisma.$transaction(async (transaction) => {
+        const locked = await transaction.$queryRawUnsafe<{ id: string }[]>(
+          'SELECT id FROM "shared_voting_sessions" WHERE id = $1::uuid AND "watchlistId" = $2::uuid FOR UPDATE',
+          sessionId,
+          watchlistId,
+        );
+
+        if (locked.length === 0) {
+          return { closed: false, found: false, transitioned: false };
+        }
+
+        const session = await transaction.sharedVotingSession.findUniqueOrThrow({
+          include: {
+            candidates: {
+              include: { votes: { select: { id: true } } },
+              orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+            },
+          },
+          where: { id: sessionId },
+        });
+
+        if (session.status === SharedVotingStatus.CLOSED) {
+          return { closed: true, found: true, transitioned: false };
+        }
+
+        if (expiredOnly && session.closesAt > new Date()) {
+          return { closed: false, found: true, transitioned: false };
+        }
+
+        const maxVotes = Math.max(0, ...session.candidates.map((candidate) => candidate.votes.length));
+        const leaders =
+          maxVotes === 0
+            ? []
+            : session.candidates.filter((candidate) => candidate.votes.length === maxVotes);
+        const winningCandidateId = leaders.length === 1 ? leaders[0]!.id : null;
+
+        await transaction.sharedVotingSession.update({
+          data: {
+            closedAt: new Date(),
+            status: SharedVotingStatus.CLOSED,
+            winningCandidateId,
+          },
+          where: { id: sessionId },
+        });
+
+        return { closed: true, found: true, transitioned: true };
+      }),
+    );
+
+    if (result.closed) {
+      await this.createFinalVoteNotifications(watchlistId, sessionId);
+    }
+
+    return result;
+  }
+
+  private async createFinalVoteNotifications(
+    watchlistId: string,
+    sessionId: string,
+  ) {
+    const session = await this.withConnectionRetry(() =>
+      this.prisma.sharedVotingSession.findFirst({
+        include: {
+          candidates: {
+            include: {
+              item: true,
+              votes: { select: { id: true } },
+            },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          },
+          watchlist: {
+            include: { members: { select: { userId: true } } },
+          },
+        },
+        where: { id: sessionId, watchlistId },
+      }),
+    );
+
+    if (!session) {
+      return;
+    }
+
+    const maxVotes = Math.max(0, ...session.candidates.map((candidate) => candidate.votes.length));
+    const leaders =
+      maxVotes === 0
+        ? []
+        : session.candidates
+            .filter((candidate) => candidate.votes.length === maxVotes)
+            .map((candidate) => ({
+              contentType: fromTrackedContentType(candidate.item.contentType),
+              tmdbId: candidate.item.tmdbId,
+            }));
+    const body =
+      leaders.length === 0
+        ? `“${session.title}” closed without a winner.`
+        : leaders.length === 1
+          ? `“${session.title}” has a final winner.`
+          : `“${session.title}” closed with a tie.`;
+    const dedupeKey = `shared-vote-final:${sessionId}`;
+    const actorUserId = session.watchlist.ownerId;
+    const recipients = session.watchlist.members.filter((member) => member.userId !== actorUserId);
+
+    if (recipients.length === 0) {
+      return;
+    }
+
+    await this.withConnectionRetry(() =>
+      this.prisma.notification.createMany({
+        data: recipients.map((recipient) => ({
+          actorUserId,
+          body,
+          dedupeKey,
+          kind: NotificationKind.SHARED_VOTE_UPDATE,
+          routeMetadata: {
+            final: true,
+            leaders,
+            route: 'SharedVote',
+            votingSessionId: sessionId,
+            watchlistId,
+            winningCandidateId: session.winningCandidateId,
+          },
+          sharedWatchlistId: watchlistId,
+          title: 'Shared vote result',
+          userId: recipient.userId,
+          votingSessionId: sessionId,
+        })),
+        skipDuplicates: true,
+      }),
+    );
   }
 
   private async upsertInviteNotification(
@@ -523,7 +731,7 @@ export class SharedWatchlistsService {
       }),
     );
 
-    if (!session) {
+    if (!session || session.status === SharedVotingStatus.CLOSED) {
       return;
     }
 
@@ -674,6 +882,54 @@ function getNotificationLeaderKey(metadata: unknown) {
 
   const leaderKey = (metadata as Record<string, unknown>).leaderKey;
   return typeof leaderKey === 'string' ? leaderKey : null;
+}
+
+type SharedVotingSessionRecord = {
+  candidates: {
+    createdAt: Date;
+    id: string;
+    itemId: string;
+    item: {
+      contentType: TrackedContentType;
+      tmdbId: number;
+    };
+    votes: { userId: string }[];
+  }[];
+  closedAt: Date | null;
+  closesAt: Date;
+  createdAt: Date;
+  id: string;
+  status: SharedVotingStatus;
+  title: string;
+  updatedAt: Date;
+  winningCandidateId: string | null;
+};
+
+function toVotingSession(session: SharedVotingSessionRecord, userId: string) {
+  const candidates = session.candidates.map((candidate) => ({
+    contentType: fromTrackedContentType(candidate.item.contentType),
+    id: candidate.id,
+    itemId: candidate.itemId,
+    tmdbId: candidate.item.tmdbId,
+    userHasVoted: candidate.votes.some((vote) => vote.userId === userId),
+    voteCount: candidate.votes.length,
+  }));
+  const maxVotes = Math.max(0, ...candidates.map((candidate) => candidate.voteCount));
+  const leaders =
+    maxVotes === 0 ? [] : candidates.filter((candidate) => candidate.voteCount === maxVotes);
+
+  return {
+    candidates,
+    closedAt: session.closedAt?.toISOString() ?? null,
+    closesAt: session.closesAt.toISOString(),
+    createdAt: session.createdAt.toISOString(),
+    id: session.id,
+    leaders,
+    status: session.status,
+    title: session.title,
+    updatedAt: session.updatedAt.toISOString(),
+    winningCandidateId: session.winningCandidateId,
+  };
 }
 
 type SharedWatchlistSummaryRecord = {

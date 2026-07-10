@@ -11,6 +11,7 @@ async function main() {
   const runId = Date.now();
   const ownerIdentity = createIdentity(`__shared_watchlist_smoke_owner_${runId}`);
   const memberIdentity = createIdentity(`__shared_watchlist_smoke_member_${runId}`);
+  const secondMemberIdentity = createIdentity(`__shared_watchlist_smoke_second_member_${runId}`);
   const outsiderIdentity = createIdentity(`__shared_watchlist_smoke_outsider_${runId}`);
   const config = new ConfigService(process.env);
   const prisma = new PrismaService(config);
@@ -21,8 +22,9 @@ async function main() {
   try {
     const owner = await auth.getOrCreateUser(ownerIdentity);
     const member = await auth.getOrCreateUser(memberIdentity);
+    const secondMember = await auth.getOrCreateUser(secondMemberIdentity);
     const outsider = await auth.getOrCreateUser(outsiderIdentity);
-    userIds = [owner.id, member.id, outsider.id];
+    userIds = [owner.id, member.id, secondMember.id, outsider.id];
 
     const watchlist = await sharedWatchlists.createSharedWatchlist(ownerIdentity, 'Shared smoke list');
     await assertNotFound(
@@ -31,9 +33,10 @@ async function main() {
     );
 
     await sharedWatchlists.addMember(ownerIdentity, watchlist.id, member.id);
+    await sharedWatchlists.addMember(ownerIdentity, watchlist.id, secondMember.id);
     const memberList = await sharedWatchlists.getSharedWatchlist(memberIdentity, watchlist.id);
 
-    assert(memberList.memberCount === 2, 'Shared watchlist should include owner and added member.');
+    assert(memberList.memberCount === 3, 'Shared watchlist should include owner and added members.');
 
     const matrix = await sharedWatchlists.addItem(memberIdentity, watchlist.id, {
       contentType: 'movie',
@@ -55,6 +58,13 @@ async function main() {
     ]);
     const matrixCandidate = session.candidates.find((candidate) => candidate.itemId === matrix.id);
 
+    assert(session.status === 'OPEN', 'New voting sessions should be open.');
+    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+    const lifecycleMs = new Date(session.closesAt).getTime() - new Date(session.createdAt).getTime();
+    assert(
+      Math.abs(lifecycleMs - sevenDaysMs) < 1_000,
+      'New voting sessions should close seven days after creation by default.',
+    );
     assert(Boolean(matrixCandidate), 'Voting session should include the movie candidate.');
 
     const votedOnce = await sharedWatchlists.voteForCandidate(
@@ -93,8 +103,110 @@ async function main() {
       () => sharedWatchlists.voteForCandidate(outsiderIdentity, watchlist.id, session.id, matrixCandidate!.id),
       'Non-members should not vote.',
     );
+    await assertNotFound(
+      () => sharedWatchlists.getVotingSession(outsiderIdentity, watchlist.id, session.id),
+      'Non-members should not read voting sessions.',
+    );
+    await assertNotFound(
+      () => sharedWatchlists.closeVotingSession(memberIdentity, watchlist.id, session.id),
+      'Members must not close voting sessions they do not own.',
+    );
+    await assertNotFound(
+      () => sharedWatchlists.closeVotingSession(outsiderIdentity, watchlist.id, session.id),
+      'Outsiders must not close voting sessions.',
+    );
 
-    console.log('Shared watchlist smoke passed.');
+    const closed = await sharedWatchlists.closeVotingSession(ownerIdentity, watchlist.id, session.id);
+    assert(closed.status === 'CLOSED', 'Owner close should return a closed session.');
+    assert(Boolean(closed.closedAt), 'Owner close should record closedAt.');
+    assert(
+      closed.winningCandidateId === matrixCandidate!.id,
+      'A uniquely leading candidate should be persisted as the winner.',
+    );
+    assert(getVoteCount(closed, matrixCandidate!.id) === 2, 'Closing must preserve votes.');
+    assert(closed.candidates.length === 2, 'Candidates must remain readable after close.');
+
+    await assertBadRequest(
+      () => sharedWatchlists.voteForCandidate(ownerIdentity, watchlist.id, session.id, matrixCandidate!.id),
+      'Closed sessions must reject votes.',
+    );
+    await assertBadRequest(
+      () => sharedWatchlists.removeVote(ownerIdentity, watchlist.id, session.id, matrixCandidate!.id),
+      'Closed sessions must reject vote removal.',
+    );
+
+    const finalBeforeRepeat = await prisma.notification.findMany({
+      where: {
+        dedupeKey: `shared-vote-final:${session.id}`,
+        votingSessionId: session.id,
+      },
+    });
+    assert(finalBeforeRepeat.length === 2, 'Final result should notify every other member exactly once.');
+    assert(
+      finalBeforeRepeat.every((notification) => notification.actorUserId === owner.id),
+      'Final result must consistently identify the watchlist owner, never the member who triggers expiry.',
+    );
+    assert(
+      new Set(finalBeforeRepeat.map((notification) => notification.userId)).size === 2 &&
+        finalBeforeRepeat.some((notification) => notification.userId === member.id) &&
+        finalBeforeRepeat.some((notification) => notification.userId === secondMember.id),
+      'Final result must target all other members and no outsider.',
+    );
+    const closedAgain = await sharedWatchlists.closeVotingSession(ownerIdentity, watchlist.id, session.id);
+    const finalAfterRepeat = await prisma.notification.findMany({
+      where: {
+        dedupeKey: `shared-vote-final:${session.id}`,
+        votingSessionId: session.id,
+      },
+    });
+    assert(closedAgain.winningCandidateId === matrixCandidate!.id, 'Repeated close must preserve the result.');
+    assert(finalAfterRepeat.length === 2, 'Repeated close must not spam final notifications.');
+
+    const tieSession = await sharedWatchlists.createVotingSession(ownerIdentity, watchlist.id, 'Tie', [
+      matrix.id,
+      got.id,
+    ]);
+    await sharedWatchlists.voteForCandidate(
+      ownerIdentity,
+      watchlist.id,
+      tieSession.id,
+      tieSession.candidates[0]!.id,
+    );
+    await sharedWatchlists.voteForCandidate(
+      ownerIdentity,
+      watchlist.id,
+      tieSession.id,
+      tieSession.candidates[1]!.id,
+    );
+    const tied = await sharedWatchlists.closeVotingSession(ownerIdentity, watchlist.id, tieSession.id);
+    assert(tied.leaders.length === 2, 'Tied leaders must remain visible.');
+    assert(tied.winningCandidateId === null, 'A tied session must not persist an arbitrary winner.');
+
+    const expiringSession = await sharedWatchlists.createVotingSession(
+      ownerIdentity,
+      watchlist.id,
+      'Expired',
+      [matrix.id],
+    );
+    await prisma.sharedVotingSession.update({
+      data: { closesAt: new Date(Date.now() - 60_000) },
+      where: { id: expiringSession.id },
+    });
+    await assertBadRequest(
+      () =>
+        sharedWatchlists.voteForCandidate(
+          memberIdentity,
+          watchlist.id,
+          expiringSession.id,
+          expiringSession.candidates[0]!.id,
+        ),
+      'Expired sessions must reject mutations.',
+    );
+    const expired = await sharedWatchlists.getVotingSession(memberIdentity, watchlist.id, expiringSession.id);
+    assert(expired.status === 'CLOSED', 'Reading an expired session should close it automatically.');
+    assert(Boolean(expired.closedAt), 'Automatic expiry should record closedAt.');
+
+    console.log('Shared watchlist lifecycle security smoke passed.');
   } finally {
     await cleanup(prisma, userIds);
     await prisma.$disconnect();

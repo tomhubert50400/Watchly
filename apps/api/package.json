@@ -15,6 +15,7 @@
     "security:env-secrets": "tsx src/security/environment-secrets-check.ts",
     "security:privacy-smoke": "tsx src/security/privacy-smoke.ts",
     "security:shared-watchlist-smoke": "tsx src/security/shared-watchlist-smoke.ts",
+    "security:shared-vote-migration-smoke": "tsx src/security/shared-vote-migration-smoke.ts",
     "security:onboarding-smoke": "tsx src/security/onboarding-smoke.ts",
     "security:notifications-smoke": "tsx src/security/notifications-smoke.ts",
     "security:prisma-reset-smoke": "tsx src/security/prisma-connection-reset-smoke.ts",
