@@ -30,7 +30,7 @@
   },
   "scripts": {
     "start": "expo start",
-    "test": "tsx src/api/client.qa.ts && tsx src/auth/devAuthConfig.qa.ts && tsx src/design/tokens.qa.ts && tsx src/navigation/tabConfig.qa.ts && tsx src/cache/cachedResourceReducer.qa.ts && tsx src/components/cinematicPrimitives.qa.ts && tsx src/home/homeData.qa.ts && tsx src/catalogue/exploreState.qa.ts && tsx src/catalogue/detailModel.qa.ts && tsx src/library/libraryModel.qa.ts && tsx src/journal/journalModel.qa.ts && tsx src/auth/providerConfig.qa.ts && tsx src/profile/profileModel.qa.ts && tsx src/opinions/opinionState.qa.ts && tsx src/episodes/episodeModel.qa.ts && tsx src/watchlists/watchlistSelection.qa.ts && tsx src/notifications/notificationModel.qa.ts",
+    "test": "tsx src/api/client.qa.ts && tsx src/auth/devAuthConfig.qa.ts && tsx src/design/tokens.qa.ts && tsx src/navigation/tabConfig.qa.ts && tsx src/cache/cachedResourceReducer.qa.ts && tsx src/components/cinematicPrimitives.qa.ts && tsx src/home/homeData.qa.ts && tsx src/catalogue/exploreState.qa.ts && tsx src/catalogue/detailModel.qa.ts && tsx src/library/libraryModel.qa.ts && tsx src/journal/journalModel.qa.ts && tsx src/auth/providerConfig.qa.ts && tsx src/profile/profileModel.qa.ts && tsx src/opinions/opinionState.qa.ts && tsx src/episodes/episodeModel.qa.ts && tsx src/watchlists/watchlistSelection.qa.ts && tsx src/watchlists/sharedVoteModel.qa.ts && tsx src/notifications/notificationModel.qa.ts",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",

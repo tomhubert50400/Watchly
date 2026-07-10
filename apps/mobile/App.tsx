@@ -26,6 +26,7 @@ import { PublicProfileScreen } from './src/profile/PublicProfileScreen';
 import { SettingsScreen } from './src/profile/SettingsScreen';
 
 import { PersonalWatchlistScreen } from './src/watchlists/PersonalWatchlistScreen';
+import { SharedVoteScreen } from './src/watchlists/SharedVoteScreen';
 import { SharedWatchlistScreen } from './src/watchlists/SharedWatchlistScreen';
 import { WatchlistCacheProvider } from './src/watchlists/WatchlistCacheContext';
 
@@ -126,7 +127,7 @@ function AppNavigator() {
               options={({ route }) => ({ title: route.params.title })}
             />
             <Stack.Screen
-              component={SharedWatchlistScreen as never}
+              component={SharedVoteScreen}
               name="SharedVotingSession"
               options={({ route }) => ({ title: route.params.title })}
             />
