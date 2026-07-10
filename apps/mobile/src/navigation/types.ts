@@ -21,6 +21,7 @@ export type RootStackParamList = {
   };
   Journal: undefined;
   MainTabs: NavigatorScreenParams<RootTabParamList> | undefined;
+  Notifications: undefined;
   Onboarding: undefined;
   PersonalWatchlist: {
     title: string;
@@ -41,6 +42,11 @@ export type RootStackParamList = {
     tmdbId: number;
   };
   Settings: undefined;
+  SharedVotingSession: {
+    sessionId: string;
+    title: string;
+    watchlistId: string;
+  };
   SharedWatchlist: {
     title: string;
     watchlistId: string;

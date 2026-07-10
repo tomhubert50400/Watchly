@@ -18,6 +18,7 @@ import { JournalScreen } from './src/journal/JournalScreen';
 import { LibraryScreen } from './src/library/LibraryScreen';
 import { mainTabs, MainTabName } from './src/navigation/tabConfig';
 import { RootStackParamList, RootTabParamList } from './src/navigation/types';
+import { NotificationsScreen } from './src/notifications/NotificationsScreen';
 import { ToastProvider } from './src/notifications/ToastContext';
 import { OnboardingScreen } from './src/onboarding/OnboardingScreen';
 import { ProfileScreen } from './src/profile/ProfileScreen';
@@ -117,10 +118,16 @@ function AppNavigator() {
           <>
             <Stack.Screen component={MainTabs} name="MainTabs" options={{ headerShown: false }} />
             <Stack.Screen component={JournalScreen} name="Journal" options={{ title: 'Journal' }} />
+            <Stack.Screen component={NotificationsScreen} name="Notifications" options={{ title: 'Alerts' }} />
             <Stack.Screen component={SettingsScreen} name="Settings" options={{ title: 'Settings' }} />
             <Stack.Screen
               component={SharedWatchlistScreen}
               name="SharedWatchlist"
+              options={({ route }) => ({ title: route.params.title })}
+            />
+            <Stack.Screen
+              component={SharedWatchlistScreen as never}
+              name="SharedVotingSession"
               options={({ route }) => ({ title: route.params.title })}
             />
             <Stack.Screen

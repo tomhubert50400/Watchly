@@ -1,8 +1,8 @@
 import { useCallback, useMemo } from 'react';
-import { CompositeNavigationProp, useNavigation } from '@react-navigation/native';
+import { CompositeNavigationProp, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { UserCircle } from 'lucide-react-native';
+import { Bell, UserCircle } from 'lucide-react-native';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   CatalogueSearchItem,
@@ -13,6 +13,7 @@ import {
   getSeriesDetails,
 } from '../api/catalogue';
 import { FeedItem, getFeed } from '../api/feed';
+import { listNotifications } from '../api/notifications';
 import { listSeriesProgressSummaries, SeriesProgressSummary } from '../api/progress';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { getPrivateCacheKey, getPublicCacheKey } from '../cache/persistedCache';
@@ -26,6 +27,7 @@ import { Screen } from '../components/Screen';
 import { SectionHeader } from '../components/SectionHeader';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { RootStackParamList, RootTabParamList } from '../navigation/types';
+import { countUnreadNotifications } from '../notifications/notificationModel';
 import { ContinueWatchingRail } from './ContinueWatchingRail';
 import { HomeHero } from './HomeHero';
 import {
@@ -50,6 +52,7 @@ export function HomeScreen() {
   const {
     currentUser,
     firebaseIdToken,
+    getFirebaseIdToken,
     socialRevision,
     trackingRevision,
   } = useAuthSession();
@@ -63,6 +66,15 @@ export function HomeScreen() {
     () => firebaseIdToken ? loadHomeFeed(firebaseIdToken) : Promise.resolve([]),
     [firebaseIdToken, socialRevision],
   );
+  const loadNotifications = useCallback(async () => {
+    const token = await getFirebaseIdToken();
+
+    if (!token) {
+      throw new Error('Sign in again to update Alerts.');
+    }
+
+    return (await listNotifications(token)).items;
+  }, [getFirebaseIdToken]);
   const catalogue = useCachedResource({ key: PUBLIC_HOME_KEY, load: loadCatalogue });
   const progress = useCachedResource({
     enabled: isSignedIn,
@@ -74,6 +86,21 @@ export function HomeScreen() {
     key: currentUser ? getPrivateCacheKey(currentUser.id, 'home:feed:v1') : getPrivateCacheKey('visitor', 'home:feed:v1'),
     load: loadFeed,
   });
+  const notifications = useCachedResource({
+    enabled: isSignedIn,
+    key: currentUser
+      ? getPrivateCacheKey(currentUser.id, 'notifications:inbox:v1')
+      : getPrivateCacheKey('visitor', 'notifications:inbox:v1'),
+    load: loadNotifications,
+  });
+  const unreadNotificationCount = countUnreadNotifications(notifications.data ?? []);
+
+  useFocusEffect(useCallback(() => {
+    if (isSignedIn) {
+      notifications.retry();
+    }
+  }, [isSignedIn, notifications.retry]));
+
   const sections = useMemo(
     () => buildHomeSections({
       catalogue: toHomeResource(catalogue.data, catalogue.error),
@@ -83,7 +110,7 @@ export function HomeScreen() {
     }),
     [catalogue.data, catalogue.error, feed.data, feed.error, isSignedIn, progress.data, progress.error],
   );
-  const isRefreshing = catalogue.isRefreshing || progress.isRefreshing || feed.isRefreshing;
+  const isRefreshing = catalogue.isRefreshing || progress.isRefreshing || feed.isRefreshing || notifications.isRefreshing;
   const isLoadingPersonalization = isSignedIn && (
     (progress.isInitialLoading && !progress.data) || (feed.isInitialLoading && !feed.data)
   );
@@ -92,8 +119,9 @@ export function HomeScreen() {
     if (isSignedIn) {
       progress.retry();
       feed.retry();
+      notifications.retry();
     }
-  }, [catalogue.retry, feed.retry, isSignedIn, progress.retry]);
+  }, [catalogue.retry, feed.retry, isSignedIn, notifications.retry, progress.retry]);
 
   if (catalogue.isInitialLoading && !catalogue.data) {
     return (
@@ -136,11 +164,31 @@ export function HomeScreen() {
       tabBarPadding
       title="Watchly"
       trailing={
-        <IconButton
-          accessibilityLabel={isSignedIn ? 'Open Profile' : 'Sign in from Profile'}
-          icon={<UserCircle color={colors.textMuted} size={22} strokeWidth={2} />}
-          onPress={() => navigation.navigate('Profile')}
-        />
+        <View style={styles.headerActions}>
+          {isSignedIn ? (
+            <View>
+              <IconButton
+                accessibilityLabel={unreadNotificationCount === 0
+                  ? 'Open Alerts, no unread alerts'
+                  : `Open Alerts, ${unreadNotificationCount} unread ${unreadNotificationCount === 1 ? 'alert' : 'alerts'}`}
+                icon={<Bell color={colors.textMuted} size={22} strokeWidth={2} />}
+                onPress={() => navigation.navigate('Notifications')}
+              />
+              {unreadNotificationCount > 0 ? (
+                <View pointerEvents="none" style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeLabel}>
+                    {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+          <IconButton
+            accessibilityLabel={isSignedIn ? 'Open Profile' : 'Sign in from Profile'}
+            icon={<UserCircle color={colors.textMuted} size={22} strokeWidth={2} />}
+            onPress={() => navigation.navigate('Profile')}
+          />
+        </View>
       }
     >
       <View style={styles.composition}>
@@ -458,6 +506,30 @@ const styles = StyleSheet.create({
   },
   hero: {
     paddingHorizontal: spacing.xl,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  notificationBadge: {
+    alignItems: 'center',
+    backgroundColor: colors.accent,
+    borderColor: colors.background,
+    borderRadius: 9,
+    borderWidth: 2,
+    justifyContent: 'center',
+    minHeight: 18,
+    minWidth: 18,
+    paddingHorizontal: 3,
+    position: 'absolute',
+    right: -5,
+    top: -5,
+  },
+  notificationBadgeLabel: {
+    color: colors.textOnAccent,
+    fontSize: 9,
+    fontWeight: '900',
+    lineHeight: 11,
   },
   poster: {
     height: 190,
