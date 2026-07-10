@@ -11,7 +11,6 @@ import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { EpisodeReviewEditor } from '../reviews/EpisodeReviewEditor';
 import { EpisodeProgressControl } from '../tracking/EpisodeProgressControl';
-import { EpisodeRatingControl } from '../tracking/EpisodeRatingControl';
 import { isReleasedDate } from './releaseDates';
 
 type EpisodeDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'EpisodeDetail'>;
@@ -122,8 +121,10 @@ function EpisodeDetailContent({ episode }: { episode: EpisodeDetails }) {
           seriesTmdbId={episode.seriesTmdbId}
         />
         {isReleased ? (
-          <EpisodeRatingControl
+          <EpisodeReviewEditor
             episodeNumber={episode.episodeNumber}
+            mediaTitle={episode.title}
+            posterUrl={episode.stillUrl}
             seasonNumber={episode.seasonNumber}
             seriesTmdbId={episode.seriesTmdbId}
           />
@@ -132,13 +133,7 @@ function EpisodeDetailContent({ episode }: { episode: EpisodeDetails }) {
           <Text style={styles.sectionTitle}>Synopsis</Text>
           <Text style={styles.body}>{episode.overview || 'No synopsis available yet.'}</Text>
         </View>
-        {isReleased ? (
-          <EpisodeReviewEditor
-            episodeNumber={episode.episodeNumber}
-            seasonNumber={episode.seasonNumber}
-            seriesTmdbId={episode.seriesTmdbId}
-          />
-        ) : null}
+
         <View style={styles.panel}>
           <Text style={styles.sectionTitle}>Details</Text>
           <DetailRow label="Season" value={String(episode.seasonNumber)} />

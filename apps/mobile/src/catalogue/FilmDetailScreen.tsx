@@ -13,7 +13,6 @@ import { colors, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 import { MovieReviewEditor } from '../reviews/MovieReviewEditor';
-import { MovieRatingControl } from '../tracking/MovieRatingControl';
 import { TrackingControls } from '../tracking/TrackingControls';
 import { AddToWatchlistControl } from '../watchlists/AddToWatchlistControl';
 import { useCatalogueCache } from './CatalogueCacheContext';
@@ -129,16 +128,12 @@ function MovieDetailContent({
         <View style={styles.personalSection}>
           <Text style={styles.personalEyebrow}>Your activity</Text>
           <TrackingControls contentType="movie" tmdbId={movie.tmdbId} />
-          {isReleased ? <MovieRatingControl tmdbId={movie.tmdbId} /> : null}
+          {isReleased ? (
+            <MovieReviewEditor mediaTitle={movie.title} posterUrl={movie.posterUrl} tmdbId={movie.tmdbId} />
+          ) : null}
         </View>
         <SynopsisPanel overview={movie.overview} />
         <StreamingAvailabilityPanel contentType="movie" tmdbId={movie.tmdbId} />
-        {isReleased ? (
-          <View style={styles.communitySection}>
-            <Text style={styles.sectionTitle}>Your review</Text>
-            <MovieReviewEditor tmdbId={movie.tmdbId} />
-          </View>
-        ) : null}
       </View>
     </View>
   );
@@ -159,9 +154,7 @@ const styles = StyleSheet.create({
   bodyStack: {
     paddingHorizontal: spacing.xl,
   },
-  communitySection: {
-    paddingVertical: spacing.xl,
-  },
+
   content: {
     flexGrow: 1,
     paddingBottom: spacing.xxxl,
@@ -185,11 +178,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     flex: 1,
   },
-  sectionTitle: {
-    ...typography.title,
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
+
   stateFrame: {
     flex: 1,
     paddingHorizontal: spacing.xl,
