@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import { useCallback, useLayoutEffect } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Star } from 'lucide-react-native';
 import { Image, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { EpisodeDetails, getEpisodeDetails } from '../api/catalogue';
+import { EpisodeDetails, EpisodeDetailsResponse, getEpisodeDetails } from '../api/catalogue';
+import { getPublicCacheKey } from '../cache/persistedCache';
+import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
+import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { EpisodeReviewEditor } from '../reviews/EpisodeReviewEditor';
@@ -18,29 +21,14 @@ type EpisodeDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'Epis
 export function EpisodeDetailScreen({ navigation, route }: EpisodeDetailScreenProps) {
   const { episodeNumber, seasonNumber, tmdbId } = route.params;
   const { width: windowWidth } = useWindowDimensions();
-  const [episode, setEpisode] = useState<EpisodeDetails | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  const loadEpisode = useCallback(async () => {
-    setError(null);
-    setIsLoading(true);
-
-    try {
-      const response = await getEpisodeDetails(tmdbId, seasonNumber, episodeNumber);
-
-      setEpisode(response.item);
-    } catch (caughtError) {
-      setEpisode(null);
-      setError(caughtError instanceof Error ? caughtError.message : 'Episode details failed.');
-    } finally {
-      setIsLoading(false);
-    }
+  const loadEpisode = useCallback(() => {
+    return getEpisodeDetails(tmdbId, seasonNumber, episodeNumber);
   }, [episodeNumber, seasonNumber, tmdbId]);
-
-  useEffect(() => {
-    void loadEpisode();
-  }, [loadEpisode]);
+  const resource = useCachedResource<EpisodeDetailsResponse>({
+    key: getPublicCacheKey(`catalogue:series:${tmdbId}:season:${seasonNumber}:episode:${episodeNumber}`),
+    load: loadEpisode,
+  });
+  const episode = resource.data?.item ?? null;
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -61,16 +49,23 @@ export function EpisodeDetailScreen({ navigation, route }: EpisodeDetailScreenPr
   return (
     <View style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {isLoading ? (
+        {!episode && resource.isInitialLoading ? (
           <View style={styles.loadingFrame}>
             <LoadingState label="Loading episode details" />
           </View>
-        ) : error ? (
-          <EmptyState body={error} title="Episode detail failed">
-            <Button label="Retry" onPress={loadEpisode} />
+        ) : !episode && resource.error ? (
+          <EmptyState body={resource.error} title="Episode detail failed">
+            <Button label="Retry" onPress={resource.retry} />
           </EmptyState>
         ) : episode ? (
-          <EpisodeDetailContent episode={episode} />
+          <>
+            {resource.isRefreshing ? (
+              <InlineStatusBanner detail="Refreshing episode details" tone="updating" />
+            ) : resource.error ? (
+              <InlineStatusBanner detail={resource.error} onRetry={resource.retry} title="Episode update failed" tone="error" />
+            ) : null}
+            <EpisodeDetailContent episode={episode} />
+          </>
         ) : null}
       </ScrollView>
     </View>
