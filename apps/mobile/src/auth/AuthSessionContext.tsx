@@ -1,5 +1,6 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getCurrentUser, CurrentUser } from '../api/auth';
+import { clearPrivateCacheForUser } from '../cache/persistedCache';
 import {
   getFreshFirebaseIdToken,
   getFirebaseSessionFromUser,
@@ -169,14 +170,23 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   const signOut = useCallback(async () => {
     setStatus('loading');
     explicitSignOutRef.current = true;
+    const signedOutUserId = currentUser?.id;
+
     await signOutFromFirebase();
-    latestFirebaseIdTokenRef.current = null;
-    setFirebaseIdToken(null);
-    setCurrentUser(null);
-    setSocialRevision(0);
-    setTrackingRevision(0);
-    setStatus('idle');
-  }, []);
+
+    try {
+      if (signedOutUserId) {
+        await clearPrivateCacheForUser(signedOutUserId);
+      }
+    } finally {
+      latestFirebaseIdTokenRef.current = null;
+      setFirebaseIdToken(null);
+      setCurrentUser(null);
+      setSocialRevision(0);
+      setTrackingRevision(0);
+      setStatus('idle');
+    }
+  }, [currentUser?.id]);
 
   const value = useMemo<AuthSessionContextValue>(
     () => ({
