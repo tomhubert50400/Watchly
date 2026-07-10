@@ -126,8 +126,8 @@ const styles = StyleSheet.create({
     padding: controlPadding,
   },
   indicator: {
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.accentBorder,
+    backgroundColor: colors.segmentSelected,
+    borderColor: colors.segmentSelectedBorder,
     borderRadius: radii.sm,
     borderWidth: 1,
     bottom: controlPadding,
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   labelSelected: {
-    color: colors.accentText,
+    color: colors.segmentSelectedText,
   },
   pressed: {
     opacity: 0.78,

@@ -29,7 +29,7 @@
   },
   "scripts": {
     "start": "expo start",
-    "test": "tsx src/api/client.qa.ts && tsx src/auth/devAuthConfig.qa.ts",
+    "test": "tsx src/api/client.qa.ts && tsx src/auth/devAuthConfig.qa.ts && tsx src/design/tokens.qa.ts",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
