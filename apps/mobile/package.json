@@ -30,7 +30,7 @@
   },
   "scripts": {
     "start": "expo start",
-    "test": "tsx src/api/client.qa.ts && tsx src/auth/devAuthConfig.qa.ts && tsx src/design/tokens.qa.ts && tsx src/navigation/tabConfig.qa.ts && tsx src/cache/cachedResourceReducer.qa.ts && tsx src/components/cinematicPrimitives.qa.ts && tsx src/home/homeData.qa.ts",
+    "test": "tsx src/api/client.qa.ts && tsx src/auth/devAuthConfig.qa.ts && tsx src/design/tokens.qa.ts && tsx src/navigation/tabConfig.qa.ts && tsx src/cache/cachedResourceReducer.qa.ts && tsx src/components/cinematicPrimitives.qa.ts && tsx src/home/homeData.qa.ts && tsx src/catalogue/exploreState.qa.ts",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
