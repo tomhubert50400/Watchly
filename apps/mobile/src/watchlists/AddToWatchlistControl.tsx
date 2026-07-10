@@ -39,7 +39,7 @@ type AddToWatchlistControlProps = {
 type CreateWatchlistKind = 'personal' | 'shared';
 
 export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistControlProps) {
-  const { firebaseIdToken, getFirebaseIdToken } = useAuthSession();
+  const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
   const { showToast } = useToast();
   const { preloadWatchlists } = useWatchlistCache();
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
@@ -56,6 +56,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   const loadVersionRef = useRef(0);
   const saveVersionRef = useRef(0);
   const contentKey = `${contentType}:${tmdbId}`;
+  const optionsOwnerKey = `${currentUser?.id ?? 'signed-out'}:${contentKey}`;
 
   const loadOptions = useCallback(async (showLoading: boolean) => {
     if (!firebaseIdToken) return;
@@ -82,13 +83,13 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
 
       if (loadVersionRef.current !== loadVersion) return;
       setOptions(nextOptions);
-      setOptionsContentKey(contentKey);
+      setOptionsContentKey(optionsOwnerKey);
       setInitialSelectedKeys(nextSelectedKeys);
       setSelectedKeys(rollbackSelection(nextSelectedKeys));
     } catch (loadError) {
       if (loadVersionRef.current === loadVersion) {
         setOptions([]);
-        setOptionsContentKey(contentKey);
+        setOptionsContentKey(optionsOwnerKey);
         setInitialSelectedKeys(new Set());
         setSelectedKeys(new Set());
         showToast(loadError instanceof Error ? loadError.message : 'Could not load watchlists.');
@@ -96,7 +97,13 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
     } finally {
       if (loadVersionRef.current === loadVersion) setIsLoading(false);
     }
-  }, [contentKey, contentType, firebaseIdToken, getFirebaseIdToken, showToast, tmdbId]);
+  }, [contentType, firebaseIdToken, getFirebaseIdToken, optionsOwnerKey, showToast, tmdbId]);
+
+  useEffect(() => {
+    saveVersionRef.current += 1;
+    setIsOpen(false);
+    setIsSaving(false);
+  }, [optionsOwnerKey]);
 
   useEffect(() => {
     if (!firebaseIdToken) {
@@ -119,7 +126,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
     setNewWatchlistName('');
     setIsOpen(true);
 
-    if (optionsContentKey !== contentKey) {
+    if (optionsContentKey !== optionsOwnerKey) {
       setOptions([]);
       setInitialSelectedKeys(new Set());
       setSelectedKeys(new Set());
@@ -186,44 +193,73 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
     setOptions((current) => updateOptionSelection(current, previousInitialKeys, nextSelectedKeys));
     setIsSaving(true);
     setIsOpen(false);
+    const completedRollbacks: Array<() => Promise<unknown>> = [];
 
     try {
       const token = await getFirebaseIdToken();
       if (!token) throw new Error('Sign in again to update watchlists.');
 
-      const operations: Promise<unknown>[] = [];
+      const operations: Array<{
+        rollback: () => Promise<unknown>;
+        run: () => Promise<unknown>;
+      }> = [];
 
       saveOptions.forEach((option) => {
         if (addedKeys.has(option.key)) {
           operations.push(option.kind === 'personal'
-            ? addWatchlistItem(token, option.id, { contentType, tmdbId })
-            : addSharedWatchlistItem(token, option.id, { contentType, tmdbId }));
+            ? {
+                rollback: () => removeWatchlistItem(token, option.id, contentType, tmdbId),
+                run: () => addWatchlistItem(token, option.id, { contentType, tmdbId }),
+              }
+            : {
+                rollback: () => removeSharedWatchlistItem(token, option.id, contentType, tmdbId),
+                run: () => addSharedWatchlistItem(token, option.id, { contentType, tmdbId }),
+              });
         }
         if (removedKeys.has(option.key)) {
           operations.push(option.kind === 'personal'
-            ? removeWatchlistItem(token, option.id, contentType, tmdbId)
-            : removeSharedWatchlistItem(token, option.id, contentType, tmdbId));
+            ? {
+                rollback: () => addWatchlistItem(token, option.id, { contentType, tmdbId }),
+                run: () => removeWatchlistItem(token, option.id, contentType, tmdbId),
+              }
+            : {
+                rollback: () => addSharedWatchlistItem(token, option.id, { contentType, tmdbId }),
+                run: () => removeSharedWatchlistItem(token, option.id, contentType, tmdbId),
+              });
         }
       });
 
-      await Promise.all(operations);
+      for (const operation of operations) {
+        await operation.run();
+        completedRollbacks.unshift(operation.rollback);
+      }
 
       void preloadWatchlists();
-      showToast('Watchlists updated.');
+      showToast('Watchlists updated.', 'success');
     } catch (saveError) {
+      const compensationResults = await Promise.allSettled(
+        completedRollbacks.map((rollback) => rollback()),
+      );
+      const rollbackComplete = compensationResults.every((result) => result.status === 'fulfilled');
+
       if (saveVersionRef.current === saveVersion) {
-        setOptions(previousOptions);
-        setInitialSelectedKeys(previousInitialKeys);
-        setSelectedKeys(rollbackSelection(previousInitialKeys));
         setIsOpen(true);
-        showToast(saveError instanceof Error ? saveError.message : 'Could not update watchlists.');
+        if (rollbackComplete) {
+          setOptions(previousOptions);
+          setInitialSelectedKeys(previousInitialKeys);
+          setSelectedKeys(rollbackSelection(previousInitialKeys));
+          showToast(saveError instanceof Error ? saveError.message : 'Could not update watchlists.');
+        } else {
+          await loadOptions(false);
+          showToast('Some list changes could not be rolled back. Showing the latest server state.');
+        }
       }
     } finally {
       if (saveVersionRef.current === saveVersion) setIsSaving(false);
     }
   }
 
-  const hasCurrentOptions = optionsContentKey === contentKey;
+  const hasCurrentOptions = optionsContentKey === optionsOwnerKey;
   const diff = buildSelectionDiff(initialSelectedKeys, selectedKeys);
   const hasChanges = diff.addedKeys.length > 0 || diff.removedKeys.length > 0;
   const hasSharedOptions = options.some((option) => option.kind === 'shared');
