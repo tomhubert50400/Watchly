@@ -1,0 +1,10 @@
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Bell, BellRing } from 'lucide-react-native';
+import { MediaPoster } from '../components/MediaPoster';
+import { colors, radii, spacing } from '../design/tokens';
+import type { LibraryMediaItem } from './useLibraryData';
+
+export function ReleaseAlertRow({ busy, item, onOpen, onToggle }: { busy: boolean; item: LibraryMediaItem; onOpen: () => void; onToggle: () => void }) {
+  return <View style={styles.row}><Pressable accessibilityLabel={`Open ${item.title}`} accessibilityRole="button" onPress={onOpen} style={styles.open}><MediaPoster posterUrl={item.posterUrl} style={styles.poster} /><View style={styles.copy}><Text numberOfLines={1} style={styles.title}>{item.title}</Text><Text style={styles.meta}>{item.contentType === 'movie' ? 'Movie' : 'Series'} · {item.status ?? 'release alert'}</Text></View></Pressable><Pressable accessibilityLabel={`${item.hasReleaseAlert ? 'Disable' : 'Enable'} ${item.title} release alert`} accessibilityRole="button" accessibilityState={{ selected: item.hasReleaseAlert, busy }} disabled={busy} onPress={onToggle} style={[styles.bell, item.hasReleaseAlert && styles.bellActive]}>{item.hasReleaseAlert ? <BellRing color={colors.accentText} size={20} /> : <Bell color={colors.muted} size={20} />}</Pressable></View>;
+}
+const styles = StyleSheet.create({ row: { alignItems: 'center', borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: 'row', gap: spacing.md, minHeight: 82, paddingVertical: spacing.sm }, open: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: spacing.md, minHeight: 62 }, poster: { borderRadius: radii.sm, height: 62, width: 42 }, copy: { flex: 1 }, title: { color: colors.text, fontSize: 15, fontWeight: '800' }, meta: { color: colors.textSubtle, fontSize: 12, marginTop: 3, textTransform: 'capitalize' }, bell: { alignItems: 'center', borderColor: colors.border, borderRadius: 22, borderWidth: 1, height: 44, justifyContent: 'center', width: 44 }, bellActive: { backgroundColor: colors.accentSoft, borderColor: colors.accentBorder } });

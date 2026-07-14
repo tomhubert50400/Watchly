@@ -1,3 +1,12 @@
+import type { NavigatorScreenParams } from '@react-navigation/native';
+
+export type RootTabParamList = {
+  Explore: undefined;
+  Home: undefined;
+  Library: undefined;
+  Profile: undefined;
+};
+
 export type RootStackParamList = {
   EpisodeDetail: {
     episodeNumber: number;
@@ -10,7 +19,9 @@ export type RootStackParamList = {
     title: string;
     tmdbId: number;
   };
-  MainTabs: undefined;
+  Journal: undefined;
+  MainTabs: NavigatorScreenParams<RootTabParamList> | undefined;
+  Notifications: undefined;
   Onboarding: undefined;
   PersonalWatchlist: {
     title: string;
@@ -31,6 +42,11 @@ export type RootStackParamList = {
     tmdbId: number;
   };
   Settings: undefined;
+  SharedVotingSession: {
+    sessionId: string;
+    title: string;
+    watchlistId: string;
+  };
   SharedWatchlist: {
     title: string;
     watchlistId: string;

@@ -1,0 +1,69 @@
+// Node types are intentionally not part of the Expo runtime TypeScript configuration.
+// @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
+import assert from 'node:assert/strict';
+// @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
+import { readFileSync } from 'node:fs';
+
+class ScopedVersionGuard {
+  private scope: string;
+  private version = 0;
+
+  constructor(scope: string) {
+    this.scope = scope;
+  }
+
+  begin() {
+    const request = { scope: this.scope, version: ++this.version };
+    return { isCurrent: () => request.scope === this.scope && request.version === this.version, request };
+  }
+
+  switchScope(scope: string) {
+    if (scope !== this.scope) {
+      this.scope = scope;
+      this.version += 1;
+    }
+  }
+}
+
+const guard = new ScopedVersionGuard('user-a:movie:1');
+const accountARequest = guard.begin();
+guard.switchScope('user-b:movie:1');
+assert.equal(accountARequest.isCurrent(), false, 'an account switch must synchronously invalidate an in-flight response');
+const firstBRequest = guard.begin();
+const retryBRequest = guard.begin();
+assert.equal(firstBRequest.isCurrent(), false, 'a retry must invalidate the older resource request');
+assert.equal(retryBRequest.isCurrent(), true);
+
+function source(path: string) {
+  return readFileSync(new URL(path, import.meta.url), 'utf8');
+}
+
+const watchlistCache = source('../watchlists/WatchlistCacheContext.tsx');
+assert.match(watchlistCache, /getDetailCacheKey\(requestOwner, watchlistId\)/);
+assert.match(watchlistCache, /ownerRef\.current !== ownerId/);
+assert.match(watchlistCache, /assertCurrentRequest\(isCurrent\);[\s\S]*getWatchlist/);
+assert.match(watchlistCache, /getWatchlist[\s\S]*assertCurrentRequest\(isCurrent\);[\s\S]*Promise\.all/);
+assert.match(watchlistCache, /Promise\.all[\s\S]*assertCurrentRequest\(isCurrent\);/);
+
+const personalScreen = source('../watchlists/PersonalWatchlistScreen.tsx');
+assert.match(personalScreen, /stateScope === resourceScope/);
+assert.match(personalScreen, /isLoading && !visibleWatchlist/);
+assert.match(personalScreen, /InlineStatusBanner[\s\S]*onRetry/);
+
+for (const relativePath of [
+  '../opinions/OpinionSheet.tsx',
+  '../tracking/TrackingControls.tsx',
+  '../notifications/ReleaseAlertControl.tsx',
+]) {
+  const control = source(relativePath);
+  assert.match(control, /requestRef\.current\.scope !== requestScope/);
+  assert.match(control, /const isCurrent = \(\) => requestRef\.current\.scope === scope/);
+  assert.match(control, /await [\s\S]*if \(!isCurrent\(\)\) return/);
+}
+
+const movieOpinion = source('../tracking/MovieRatingControl.tsx');
+assert.match(movieOpinion, /key=\{`\$\{currentUser\?\.id \?\? 'signed-out'\}:movie:\$\{tmdbId\}`\}/);
+assert.match(movieOpinion, /ownerKey=\{currentUser\?\.id \?\? null\}/);
+assert.match(movieOpinion, /resourceKey=\{`movie:\$\{tmdbId\}`\}/);
+
+console.log('Private control isolation QA passed.');

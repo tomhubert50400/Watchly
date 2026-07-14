@@ -1,76 +1,94 @@
 import { PropsWithChildren, ReactNode } from 'react';
-import { GestureResponderHandlers, ScrollView, ScrollViewProps, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, spacing, typography } from '../design/tokens';
+import { GestureResponderHandlers, ScrollView, ScrollViewProps, StyleSheet, View } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors, spacing } from '../design/tokens';
+import { AppHeader } from './AppHeader';
 
 type ScreenProps = PropsWithChildren<{
   eyebrow?: string;
   gestureHandlers?: GestureResponderHandlers;
+  headerMode?: 'regular' | 'sticky';
+  horizontalPadding?: boolean | number;
   refreshControl?: ScrollViewProps['refreshControl'];
+  statusBanner?: ReactNode;
+  tabBarPadding?: boolean | number;
   title: string;
   trailing?: ReactNode;
 }>;
 
-export function Screen({ children, eyebrow, gestureHandlers, refreshControl, title, trailing }: ScreenProps) {
+export function Screen({
+  children,
+  eyebrow,
+  gestureHandlers,
+  headerMode = 'regular',
+  horizontalPadding = true,
+  refreshControl,
+  statusBanner,
+  tabBarPadding = false,
+  title,
+  trailing,
+}: ScreenProps) {
+  const insets = useSafeAreaInsets();
+  const sidePadding = typeof horizontalPadding === 'number'
+    ? horizontalPadding
+    : horizontalPadding
+      ? spacing.xl
+      : 0;
+  const chromePadding = sidePadding || spacing.xl;
+  const navigationPadding = typeof tabBarPadding === 'number'
+    ? tabBarPadding
+    : tabBarPadding
+      ? 72
+      : spacing.xxxl;
+  const hasHeader = Boolean(title || eyebrow || trailing);
+
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea} {...gestureHandlers}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: navigationPadding + insets.bottom }]}
         refreshControl={refreshControl}
         showsVerticalScrollIndicator={false}
+        stickyHeaderIndices={headerMode === 'sticky' && hasHeader ? [0] : undefined}
         style={styles.container}
       >
-        <View style={styles.header}>
-          {title || eyebrow ? (
-            <View style={styles.titleGroup}>
-              {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
-              {title ? <Text style={styles.heading}>{title}</Text> : null}
-            </View>
-          ) : (
-            <View style={styles.titleSpacer} />
-          )}
-          {trailing}
-        </View>
-        {children}
+        {hasHeader ? (
+          <View style={[styles.headerShell, headerMode === 'sticky' ? styles.stickyHeader : null, { paddingHorizontal: chromePadding }]}>
+            <AppHeader eyebrow={eyebrow} title={title} trailing={trailing} />
+          </View>
+        ) : null}
+        {statusBanner ? <View style={[styles.banner, { marginHorizontal: chromePadding }]}>{statusBanner}</View> : null}
+        <View style={[styles.body, { paddingHorizontal: sidePadding }]}>{children}</View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  banner: {
+    marginBottom: spacing.md,
+  },
+  body: {
+    flexGrow: 1,
+  },
   container: {
     flex: 1,
   },
   content: {
     flexGrow: 1,
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.xxxl,
-    paddingTop: spacing.xxxl,
   },
-  eyebrow: {
-    ...typography.eyebrow,
-    color: colors.accent,
-    marginBottom: spacing.sm,
-  },
-  header: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.xl,
-  },
-  heading: {
-    ...typography.heading,
-    color: colors.text,
+  headerShell: {
+    backgroundColor: colors.background,
+    paddingBottom: spacing.lg,
+    paddingTop: spacing.xl,
   },
   safeArea: {
     backgroundColor: colors.background,
     flex: 1,
   },
-  titleGroup: {
-    flex: 1,
-    paddingRight: spacing.md,
-  },
-  titleSpacer: {
-    flex: 1,
+  stickyHeader: {
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingBottom: spacing.sm,
+    paddingTop: spacing.sm,
   },
 });

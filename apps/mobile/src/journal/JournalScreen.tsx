@@ -1,0 +1,84 @@
+import { useCallback, useMemo, useState } from 'react';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { getMovieDetails, getSeriesDetails } from '../api/catalogue';
+import { listSeriesProgress, listSeriesProgressSummaries } from '../api/progress';
+import { getOwnProfileOpinions } from '../api/profile';
+import { listMovieRatings } from '../api/ratings';
+import { listTrackingStates } from '../api/tracking';
+import { useAuthSession } from '../auth/AuthSessionContext';
+import { useCachedResource } from '../cache/useCachedResource';
+import { Button } from '../components/Button';
+import { EmptyState } from '../components/EmptyState';
+import { InlineStatusBanner } from '../components/InlineStatusBanner';
+import { LoadingState } from '../components/LoadingState';
+import { Screen } from '../components/Screen';
+import { colors, radii, spacing, typography } from '../design/tokens';
+import { RootStackParamList } from '../navigation/types';
+import { JournalEntryCard } from './JournalEntryCard';
+import { buildJournal, filterJournalEntries, groupJournalEntriesByMonth, JournalEntry, JournalFilter } from './journalModel';
+
+export type HydratedJournalEntry = JournalEntry & { posterUrl: string | null; title: string };
+type JournalData = { averageRating: number | null; entries: HydratedJournalEntry[]; partialError: string | null; reviewCount: number };
+type Navigation = NativeStackNavigationProp<RootStackParamList>;
+const MAX_JOURNAL_HYDRATIONS = 24;
+
+export function JournalScreen() {
+  const navigation = useNavigation<Navigation>();
+  const { currentUser, getFirebaseIdToken, trackingRevision } = useAuthSession();
+  const [filter, setFilter] = useState<JournalFilter>('all');
+  const key = currentUser ? `watchly:user:${currentUser.id}:journal:v1` : 'watchly:user:visitor:journal-disabled';
+  const load = useCallback(async (cached?: JournalData): Promise<JournalData> => {
+    if (!currentUser) throw new Error('Sign in to open your Journal.');
+    const token = await getFirebaseIdToken(); if (!token) throw new Error('Sign in again to open your Journal.');
+    const previous = cached;
+    const [tracking, ratings, opinions, summaries] = await Promise.allSettled([listTrackingStates(token), listMovieRatings(token), getOwnProfileOpinions(token), listSeriesProgressSummaries(token)]);
+    const topResults = { tracking, ratings, opinions, progress: summaries };
+    if (Object.values(topResults).every((result) => result.status === 'rejected')) throw new Error('Could not update your Journal.');
+    const failures = Object.entries(topResults).flatMap(([name, result]) => result.status === 'rejected' ? [`${name} (${errorLabel(result.reason)})`] : []);
+    if (failures.length && previous) return { ...previous, partialError: `Some Journal data could not update: ${failures.join(', ')}.` };
+    const progressResults = summaries.status === 'fulfilled' ? await Promise.allSettled(summaries.value.items.map((summary) => listSeriesProgress(token, summary.seriesTmdbId))) : [];
+    progressResults.forEach((result) => { if (result.status === 'rejected') failures.push(`episode progress (${errorLabel(result.reason)})`); });
+    if (progressResults.some((result) => result.status === 'rejected') && previous) return { ...previous, partialError: `Some Journal data could not update: ${failures.join(', ')}.` };
+    const model = buildJournal({
+      movieRatings: ratings.status === 'fulfilled' ? ratings.value : [],
+      opinions: opinions.status === 'fulfilled' ? opinions.value.items : [],
+      progress: progressResults.flatMap((result) => result.status === 'fulfilled' ? result.value.episodes : []),
+      trackingStates: tracking.status === 'fulfilled' ? tracking.value : [],
+    });
+    const entries = await Promise.all(model.entries.map((entry, index) => {
+      const fallback = previous?.entries.find((old) => old.key === entry.key);
+      return index < MAX_JOURNAL_HYDRATIONS
+        ? hydrateEntry(entry, fallback)
+        : Promise.resolve(fallback ? { ...fallback, ...entry } : toJournalFallback(entry));
+    }));
+    return { ...model, entries, partialError: failures.length ? `Some Journal data could not update: ${failures.join(', ')}.` : null };
+  }, [currentUser, getFirebaseIdToken, key, trackingRevision]);
+  const resource = useCachedResource({ enabled: Boolean(currentUser), key, load });
+  const entries = filterJournalEntries(resource.data?.entries ?? [], filter);
+  const groups = groupJournalEntriesByMonth(entries);
+  const yearCount = (resource.data?.entries ?? []).filter((entry) => new Date(entry.date).getFullYear() === new Date().getFullYear()).length;
+  const banner = resource.isRefreshing ? <InlineStatusBanner tone="updating" /> : resource.error && resource.data ? <InlineStatusBanner detail={resource.error} onRetry={resource.retry} tone="error" title="Journal kept offline" /> : resource.data?.partialError ? <InlineStatusBanner detail={resource.data.partialError} onRetry={resource.retry} tone="error" /> : null;
+
+  return <Screen refreshControl={currentUser ? <RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined} statusBanner={banner} title="">
+    {!currentUser ? <EmptyState body="Sign in from Profile to see your private viewing history and opinions." title="Your Journal is private" />
+      : resource.isInitialLoading && !resource.data ? <LoadingState label="Loading your Journal" />
+      : resource.error && !resource.data ? <EmptyState body={resource.error} title="Journal unavailable"><Button label="Retry" onPress={resource.retry} /></EmptyState>
+      : resource.data ? <View>
+        <View style={styles.intro}><Text style={styles.introText}>Your viewing history, ratings and the stories you kept.</Text><View style={styles.stats}><Stat label={`entries in ${new Date().getFullYear()}`} value={String(yearCount)} /><Stat label="average rating" value={resource.data.averageRating === null ? '—' : resource.data.averageRating.toFixed(1)} /><Stat label="reviews" value={String(resource.data.reviewCount)} /></View></View>
+        <ScrollView contentContainerStyle={styles.filters} horizontal showsHorizontalScrollIndicator={false}>{(['all', 'movies', 'series', 'reviews'] as const).map((value) => <Button key={value} label={value === 'all' ? 'All' : value === 'reviews' ? 'With review' : value[0]!.toUpperCase() + value.slice(1)} onPress={() => setFilter(value)} variant={filter === value ? 'secondary' : 'ghost'} />)}</ScrollView>
+        {resource.data.entries.length === 0 ? <EmptyState body="Watch, rate or review a film or episode and it will appear here." title="Your Journal is ready" />
+          : groups.length === 0 ? <EmptyState body="Choose another filter to see your entries." title="No matching entries" />
+          : <View style={styles.months}>{groups.map((group) => <View key={group.key}><Text style={styles.month}>{formatMonth(group.key)}</Text>{group.entries.map((entry) => <JournalEntryCard entry={entry as HydratedJournalEntry} key={entry.key} onPress={() => openEntry(navigation, entry as HydratedJournalEntry)} />)}</View>)}</View>}
+      </View> : null}
+  </Screen>;
+}
+
+function Stat({ label, value }: { label: string; value: string }) { return <View style={styles.stat}><Text style={styles.statValue}>{value}</Text><Text style={styles.statLabel}>{label}</Text></View>; }
+async function hydrateEntry(entry: JournalEntry, fallback?: HydratedJournalEntry): Promise<HydratedJournalEntry> { try { const details = entry.kind === 'movie' ? (await getMovieDetails(entry.tmdbId)).item : (await getSeriesDetails(entry.tmdbId)).item; return { ...entry, posterUrl: details.posterUrl, title: details.title }; } catch { return fallback ? { ...fallback, ...entry } : toJournalFallback(entry); } }
+function toJournalFallback(entry: JournalEntry): HydratedJournalEntry { return { ...entry, posterUrl: null, title: `${entry.kind === 'movie' ? 'Movie' : 'Series'} TMDB ${entry.tmdbId}` }; }
+function openEntry(navigation: Navigation, entry: HydratedJournalEntry) { if (entry.kind === 'movie') navigation.navigate('FilmDetail', { title: entry.title, tmdbId: entry.tmdbId }); else navigation.navigate('SeriesDetail', { title: entry.title, tmdbId: entry.tmdbId }); }
+function errorLabel(error: unknown) { return error instanceof Error ? error.message : 'unknown error'; }
+function formatMonth(key: string) { const [year, month] = key.split('-').map(Number); return new Date(year!, month! - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }).toUpperCase(); }
+const styles = StyleSheet.create({ intro: { borderBottomColor: colors.border, borderBottomWidth: 1, gap: spacing.md, paddingBottom: spacing.lg }, introText: { ...typography.body, color: colors.textMuted }, stats: { flexDirection: 'row', gap: spacing.lg }, stat: { flex: 1 }, statValue: { color: colors.text, fontSize: 17, fontWeight: '800' }, statLabel: { color: colors.textSubtle, fontSize: 11, marginTop: 2 }, filters: { gap: spacing.xs, paddingVertical: spacing.md }, months: { gap: spacing.md }, month: { ...typography.eyebrow, color: colors.accentText, marginBottom: spacing.md, marginTop: spacing.sm } });

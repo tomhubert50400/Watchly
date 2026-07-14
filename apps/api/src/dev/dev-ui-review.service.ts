@@ -4,6 +4,7 @@ import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
 import {
   AuthProvider,
+  NotificationKind,
   PrivacyVisibility,
   ReleaseNotificationType,
   SharedWatchlistVisibility,
@@ -458,34 +459,36 @@ export class DevUiReviewService {
       {
         body: 'Sample film release alert for the detail-screen bell review.',
         contentType: TrackedContentType.MOVIE,
-        generatedKey: 'ui-review:movie:matrix',
+        dedupeKey: 'ui-review:movie:matrix',
+        kind: NotificationKind.RELEASE,
         readAt: null,
         releasedAt: new Date('1999-03-31T00:00:00.000Z'),
+        releaseType: ReleaseNotificationType.MOVIE_RELEASE,
         title: 'The Matrix release check',
         tmdbId: 603,
-        type: ReleaseNotificationType.MOVIE_RELEASE,
       },
       {
         body: 'Sample new-season alert for the detail-screen bell review.',
         contentType: TrackedContentType.SERIES,
-        generatedKey: 'ui-review:series:got:s1',
+        dedupeKey: 'ui-review:series:got:s1',
+        kind: NotificationKind.RELEASE,
         readAt: null,
         releasedAt: new Date('2011-04-17T00:00:00.000Z'),
+        releaseType: ReleaseNotificationType.SEASON_RELEASE,
         seasonNumber: 1,
         title: 'Game of Thrones: Season 1',
         tmdbId: 1399,
-        type: ReleaseNotificationType.SEASON_RELEASE,
       },
     ];
 
     for (const notification of notifications) {
       await this.prisma.withConnectionRetry(() =>
-        this.prisma.releaseNotification.upsert({
+        this.prisma.notification.upsert({
           create: { ...notification, userId },
           update: notification,
           where: {
-            userId_generatedKey: {
-              generatedKey: notification.generatedKey,
+            userId_dedupeKey: {
+              dedupeKey: notification.dedupeKey,
               userId,
             },
           },

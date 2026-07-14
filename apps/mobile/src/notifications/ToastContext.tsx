@@ -1,18 +1,25 @@
 import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radii, shadows, spacing } from '../design/tokens';
+import { colors, radii, shadows, spacing, touchTargets } from '../design/tokens';
+import { getToastAccessibility } from './toastAccessibility';
 
 type ToastTone = 'error' | 'success';
 
+type ToastAction = {
+  label: string;
+  onPress: () => void;
+};
+
 type ToastState = {
+  action?: ToastAction;
   id: number;
   message: string;
   tone: ToastTone;
 };
 
 type ToastContextValue = {
-  showToast: (message: string, tone?: ToastTone) => void;
+  showToast: (message: string, tone?: ToastTone, action?: ToastAction) => void;
 };
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -40,16 +47,12 @@ export function ToastProvider({ children }: PropsWithChildren) {
     });
   }, [progress]);
 
-  const showToast = useCallback((message: string, tone: ToastTone = 'error') => {
+  const showToast = useCallback((message: string, tone: ToastTone = 'error', action?: ToastAction) => {
     if (hideTimerRef.current) {
       clearTimeout(hideTimerRef.current);
     }
 
-    setToast({
-      id: Date.now(),
-      message,
-      tone,
-    });
+    setToast({ action, id: Date.now(), message, tone });
     progress.stopAnimation();
     progress.setValue(0);
 
@@ -59,7 +62,7 @@ export function ToastProvider({ children }: PropsWithChildren) {
       useNativeDriver: true,
     }).start();
 
-    hideTimerRef.current = setTimeout(hideToast, 3200);
+    hideTimerRef.current = setTimeout(hideToast, 5000);
   }, [hideToast, progress]);
 
   useEffect(() => () => {
@@ -68,17 +71,19 @@ export function ToastProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
+  useEffect(() => {
+    if (!toast || Platform.OS !== 'ios') return;
+    const accessibility = getToastAccessibility(toast);
+    AccessibilityInfo.announceForAccessibility(accessibility.announcement);
+  }, [toast]);
+
   const value = useMemo(() => ({ showToast }), [showToast]);
+  const toastAccessibility = toast ? getToastAccessibility(toast) : null;
   const toastStyle = {
     opacity: progress,
-    transform: [
-      {
-        translateY: progress.interpolate({
-          inputRange: [0, 1],
-          outputRange: [12, 0],
-        }),
-      },
-    ],
+    transform: [{
+      translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }),
+    }],
   };
 
   return (
@@ -88,23 +93,41 @@ export function ToastProvider({ children }: PropsWithChildren) {
         {toast ? (
           <Animated.View
             pointerEvents="box-none"
-            style={[
-              styles.toastFrame,
-              { bottom: insets.bottom + 18 },
-              toastStyle,
-            ]}
+            style={[styles.toastFrame, { bottom: insets.bottom + 18 }, toastStyle]}
           >
-            <Pressable
-              accessibilityLabel="Dismiss notification"
-              accessibilityRole="button"
-              onPress={hideToast}
+            <View
+              accessibilityLabel={toastAccessibility?.announcement}
+              accessibilityLiveRegion={toastAccessibility?.accessibilityLiveRegion}
+              accessibilityRole={toastAccessibility?.accessibilityRole}
+              key={toastAccessibility?.announcementKey}
               style={[
                 styles.toast,
                 toast.tone === 'success' ? styles.successToast : styles.errorToast,
               ]}
             >
-              <Text style={styles.toastText}>{toast.message}</Text>
-            </Pressable>
+              <Pressable
+                accessibilityLabel="Dismiss notification"
+                accessibilityRole="button"
+                onPress={hideToast}
+                style={styles.toastMessage}
+              >
+                <Text style={styles.toastText}>{toast.message}</Text>
+              </Pressable>
+              {toast.action ? (
+                <Pressable
+                  accessibilityLabel={toast.action.label}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    const action = toast.action;
+                    hideToast();
+                    action?.onPress();
+                  }}
+                  style={styles.toastAction}
+                >
+                  <Text style={styles.toastActionText}>{toast.action.label}</Text>
+                </Pressable>
+              ) : null}
+            </View>
           </Animated.View>
         ) : null}
       </View>
@@ -124,23 +147,34 @@ export function useToast() {
 
 const styles = StyleSheet.create({
   errorToast: {
-    borderLeftColor: colors.danger,
+    backgroundColor: colors.dangerBackground,
+    borderColor: colors.dangerBorder,
   },
-  host: {
-    flex: 1,
-  },
+  host: { flex: 1 },
   successToast: {
-    borderLeftColor: colors.success,
+    backgroundColor: colors.successBackground,
+    borderColor: colors.successBorder,
   },
   toast: {
     ...shadows.panel,
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderLeftWidth: 4,
-    borderRadius: radii.md,
+    alignItems: 'center',
+    borderRadius: radii.lg,
     borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    flexDirection: 'row',
+    minHeight: touchTargets.min,
+    paddingHorizontal: spacing.sm,
+  },
+  toastAction: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: touchTargets.min,
+    paddingHorizontal: spacing.sm,
+  },
+  toastActionText: {
+    color: colors.accentText,
+    fontSize: 13,
+    fontWeight: '900',
+    textTransform: 'uppercase',
   },
   toastFrame: {
     left: spacing.md,
@@ -148,10 +182,17 @@ const styles = StyleSheet.create({
     right: spacing.md,
     zIndex: 30,
   },
+  toastMessage: {
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: touchTargets.min,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.sm,
+  },
   toastText: {
     color: colors.text,
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
     letterSpacing: 0,
     lineHeight: 18,
   },

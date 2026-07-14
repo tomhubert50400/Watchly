@@ -1,5 +1,6 @@
 import { StyleSheet, Text, TextInput as NativeTextInput, TextInputProps, View } from 'react-native';
 import { colors, radii, spacing, typography } from '../design/tokens';
+import { resolveTextInputAccessibilityLabel } from './textInputAccessibility';
 
 type AppTextInputProps = TextInputProps & {
   error?: string;
@@ -13,9 +14,11 @@ export function TextInput({ error, helperText, label, ...inputProps }: AppTextIn
       <Text style={styles.label}>{label}</Text>
       <NativeTextInput
         keyboardAppearance="dark"
-        placeholderTextColor={colors.muted}
+        placeholderTextColor={colors.textSubtle}
+        selectionColor={colors.accentText}
         style={[styles.input, error ? styles.inputError : null]}
         {...inputProps}
+        accessibilityLabel={resolveTextInputAccessibilityLabel(label, inputProps.accessibilityLabel)}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {!error && helperText ? <Text style={styles.helper}>{helperText}</Text> : null}
@@ -25,7 +28,7 @@ export function TextInput({ error, helperText, label, ...inputProps }: AppTextIn
 
 const styles = StyleSheet.create({
   error: {
-    ...typography.body,
+    ...typography.meta,
     color: colors.danger,
     marginTop: spacing.xs,
   },
@@ -33,8 +36,8 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   helper: {
-    ...typography.body,
-    color: colors.muted,
+    ...typography.meta,
+    color: colors.textSubtle,
     marginTop: spacing.xs,
   },
   input: {
@@ -44,16 +47,16 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     color: colors.text,
-    minHeight: 48,
+    minHeight: 50,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
   inputError: {
     backgroundColor: colors.dangerBackground,
-    borderColor: colors.danger,
+    borderColor: colors.dangerBorder,
   },
   label: {
-    color: colors.text,
+    color: colors.textMuted,
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0,

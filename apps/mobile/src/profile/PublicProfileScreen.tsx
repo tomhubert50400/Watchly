@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { RouteProp, useRoute } from '@react-navigation/native';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import {
   blockUser,
   BlockState,
@@ -20,7 +20,9 @@ import {
   PublicProfile,
 } from '../api/profile';
 import { Button } from '../components/Button';
+import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
+import { LoadingState } from '../components/LoadingState';
 import { Screen } from '../components/Screen';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
@@ -198,10 +200,7 @@ export function PublicProfileScreen() {
   return (
     <Screen eyebrow="Profile" title="Public profile">
       {status === 'loading' ? (
-        <View style={styles.loading}>
-          <ActivityIndicator color={colors.accent} />
-          <Text style={styles.mutedText}>Loading profile.</Text>
-        </View>
+        <LoadingState label="Loading profile" />
       ) : null}
 
       {status === 'private' ? (
@@ -225,6 +224,7 @@ export function PublicProfileScreen() {
 
       {status === 'blocked' ? (
         <View style={styles.card}>
+          <Chip label="Hidden" tone="neutral" />
           <Text style={styles.name}>Blocked profile</Text>
           <Text style={styles.body}>
             This profile is hidden because you blocked this user.
@@ -251,19 +251,22 @@ export function PublicProfileScreen() {
             postsCount={profile.stats.postsCount}
             reviewsCount={profile.stats.reviewsCount}
           />
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>Public</Text>
-          </View>
-          <Text style={styles.body}>
-            Public written reviews from this profile can appear in followers' feeds.
-          </Text>
-          {!isOwnPreview ? (
-            <Text style={styles.socialState}>
-              {followState?.following
-                ? 'Following. Public written reviews from this profile can appear in your Feed.'
-                : 'Not following yet.'}
+          <View style={styles.socialPanel}>
+            <Chip label={isOwnPreview ? 'Preview' : 'Public'} tone="success" />
+            <Text style={styles.socialTitle}>
+              {isOwnPreview ? 'This is how followers see you' : 'Follow for written reviews'}
             </Text>
-          ) : null}
+            <Text style={styles.body}>
+              Public written reviews from this profile can appear in followers' feeds.
+            </Text>
+            {!isOwnPreview ? (
+              <Text style={styles.socialState}>
+                {followState?.following
+                  ? 'Following. New public reviews can appear in your Feed.'
+                  : 'Not following yet.'}
+              </Text>
+            ) : null}
+          </View>
           {!isOwnPreview ? (
             <>
               <Button
@@ -301,21 +304,6 @@ export function PublicProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  badge: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.successBackground,
-    borderColor: colors.success,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  badgeText: {
-    color: colors.success,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0,
-  },
   body: {
     ...typography.body,
     color: colors.muted,
@@ -328,11 +316,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing.md,
     padding: spacing.lg,
-  },
-  loading: {
-    alignItems: 'center',
-    gap: spacing.md,
-    marginTop: spacing.lg,
   },
   errorText: {
     ...typography.body,
@@ -347,10 +330,22 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   socialState: {
-    color: colors.accent,
+    color: colors.accentText,
     fontSize: 13,
     fontWeight: '800',
     letterSpacing: 0,
+  },
+  socialPanel: {
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+    padding: spacing.lg,
+  },
+  socialTitle: {
+    ...typography.title,
+    color: colors.text,
   },
   stack: {
     gap: spacing.md,

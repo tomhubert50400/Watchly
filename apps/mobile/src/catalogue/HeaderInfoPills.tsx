@@ -1,6 +1,6 @@
-import { StyleSheet, Text, View } from 'react-native';
 import { Star } from 'lucide-react-native';
-import { colors, spacing } from '../design/tokens';
+import { StyleSheet, Text, View } from 'react-native';
+import { colors, spacing, typography } from '../design/tokens';
 
 export type HeaderInfoItem =
   | string
@@ -19,22 +19,26 @@ export function HeaderInfoPills({ items }: HeaderInfoPillsProps) {
   }
 
   return (
-    <View style={styles.row}>
+    <View accessibilityLabel={toAccessibilityLabel(items)} style={styles.row}>
       {items.map((item, index) => (
-        <View key={toItemKey(item)} style={styles.itemGroup}>
-          {index > 0 ? <Text style={styles.separator}>/</Text> : null}
-          {typeof item === 'string' ? (
-            <Text style={styles.label}>{item}</Text>
-          ) : (
-            <View style={styles.ratingGroup}>
-              <Star color={colors.accent} fill={colors.accent} size={11} strokeWidth={2} />
-              <Text style={styles.label}>{item.label}</Text>
-            </View>
+        <View key={toItemKey(item)} style={styles.item}>
+          {index > 0 ? <Text style={styles.separator}>·</Text> : null}
+          {typeof item === 'string' ? null : (
+            <Star color={colors.rating} fill={colors.rating} size={13} strokeWidth={2} />
           )}
+          <Text style={[styles.label, typeof item === 'string' ? null : styles.ratingLabel]}>
+            {typeof item === 'string' ? item : `${item.label} / 5`}
+          </Text>
         </View>
       ))}
     </View>
   );
+}
+
+function toAccessibilityLabel(items: HeaderInfoItem[]) {
+  return items
+    .map((item) => (typeof item === 'string' ? item : `Rating ${item.label} out of 5`))
+    .join(', ');
 }
 
 function toItemKey(item: HeaderInfoItem) {
@@ -42,33 +46,27 @@ function toItemKey(item: HeaderInfoItem) {
 }
 
 const styles = StyleSheet.create({
-  itemGroup: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  label: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0,
-  },
-  ratingGroup: {
+  item: {
     alignItems: 'center',
     flexDirection: 'row',
     gap: 3,
   },
+  label: {
+    ...typography.meta,
+    color: colors.textMuted,
+  },
+  ratingLabel: {
+    color: colors.ratingText,
+  },
   row: {
     alignItems: 'center',
+    columnGap: spacing.xs,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.xs,
     marginTop: spacing.sm,
   },
   separator: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '700',
-    opacity: 0.55,
+    color: colors.textSubtle,
+    marginRight: spacing.xs,
   },
 });

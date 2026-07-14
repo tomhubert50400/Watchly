@@ -30,6 +30,7 @@ export type PublicProfile = {
   profileVisibility: PrivacyVisibility;
   stats: {
     followersCount: number;
+    followingCount: number;
     postsCount: number;
     reviewsCount: number;
   };
@@ -95,6 +96,7 @@ export type ProfileOpinionsResponse = {
   items: ProfileOpinion[];
   stats: {
     followersCount: number;
+    followingCount: number;
     postsCount: number;
     reviewsCount: number;
   };

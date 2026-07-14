@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { Pressable, PressableProps, StyleSheet } from 'react-native';
-import { colors, radii } from '../design/tokens';
+import { colors, radii, touchTargets } from '../design/tokens';
 
 type IconButtonProps = Omit<PressableProps, 'children' | 'style'> & {
   accessibilityLabel: string;
@@ -12,6 +12,7 @@ export function IconButton({ accessibilityLabel, disabled, icon, ...pressablePro
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
+      accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={disabled}
       style={({ pressed }) => [
         styles.base,
@@ -32,9 +33,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radii.md,
     borderWidth: 1,
-    height: 44,
+    height: touchTargets.min,
     justifyContent: 'center',
-    width: 44,
+    width: touchTargets.min,
   },
   disabled: {
     opacity: 0.48,

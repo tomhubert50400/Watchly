@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { CheckCircle2, Search } from 'lucide-react-native';
+import { CheckCircle2 } from 'lucide-react-native';
 import {
   CatalogueSearchItem,
   CatalogueSearchType,
@@ -20,6 +19,9 @@ import { completeOnboarding, updateProfile } from '../api/profile';
 import { upsertTrackingState } from '../api/tracking';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { Button } from '../components/Button';
+import { Chip } from '../components/Chip';
+import { LoadingState } from '../components/LoadingState';
+import { MediaPoster } from '../components/MediaPoster';
 import { Screen } from '../components/Screen';
 import { TextInput } from '../components/TextInput';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
@@ -166,6 +168,7 @@ export function OnboardingScreen() {
               />
             ))}
           </View>
+          <OnboardingHero selected={selected} step={step} />
 
           {step === 0 ? (
             <ProfileBasicsStep
@@ -351,14 +354,11 @@ function StarterInterestsStep({
       </View>
 
       {selected.length > 0 ? (
-        <Text style={styles.selectedText}>{selected.length} selected for My TV</Text>
+        <Chip label={`${selected.length} selected for My TV`} tone="success" />
       ) : null}
 
       {searchLoading ? (
-        <View style={styles.savingRow}>
-          <ActivityIndicator color={colors.accent} />
-          <Text style={styles.mutedText}>Searching TMDB.</Text>
-        </View>
+        <LoadingState label="Searching TMDB" />
       ) : null}
 
       {searchError ? <Text style={styles.errorText}>{searchError}</Text> : null}
@@ -402,17 +402,11 @@ function StarterResultCard({
         pressed ? styles.resultCardPressed : null,
       ]}
     >
-      {item.posterUrl ? (
-        <Image
-          accessibilityIgnoresInvertColors
-          source={{ uri: item.posterUrl }}
-          style={styles.poster}
-        />
-      ) : (
-        <View style={styles.posterPlaceholder}>
-          <Search color={colors.muted} size={22} strokeWidth={2} />
-        </View>
-      )}
+      <MediaPoster
+        accessibilityLabel={`${item.title} poster`}
+        posterUrl={item.posterUrl}
+        style={styles.poster}
+      />
       <View style={styles.resultCopy}>
         <Text numberOfLines={2} style={styles.resultTitle}>
           {item.title}
@@ -427,6 +421,42 @@ function StarterResultCard({
   );
 }
 
+function OnboardingHero({
+  selected,
+  step,
+}: {
+  selected: CatalogueSearchItem[];
+  step: OnboardingStep;
+}) {
+  const heroItems = selected.slice(0, 3);
+
+  return (
+    <View style={styles.heroCard}>
+      <View style={styles.posterStack}>
+        {[0, 1, 2].map((index) => (
+          <MediaPoster
+            accessibilityLabel={
+              heroItems[index] ? `${heroItems[index].title} poster` : 'Starter media poster slot'
+            }
+            key={index}
+            posterUrl={heroItems[index]?.posterUrl ?? null}
+            style={[
+              styles.heroPoster,
+              index === 1 ? styles.heroPosterRaised : null,
+              index === 2 ? styles.heroPosterDimmed : null,
+            ]}
+          />
+        ))}
+      </View>
+      <View style={styles.heroCopy}>
+        <Chip label={`Step ${step + 1} of 3`} tone="accent" />
+        <Text style={styles.heroTitle}>{getStepTitle(step)}</Text>
+        <Text style={styles.heroBody}>{getStepSubtitle(step)}</Text>
+      </View>
+    </View>
+  );
+}
+
 function getStepTitle(step: OnboardingStep) {
   if (step === 0) {
     return 'Profile basics';
@@ -437,6 +467,18 @@ function getStepTitle(step: OnboardingStep) {
   }
 
   return 'Starter watch interests';
+}
+
+function getStepSubtitle(step: OnboardingStep) {
+  if (step === 0) {
+    return 'Give your public reviews a readable byline before the library fills in.';
+  }
+
+  if (step === 1) {
+    return 'Keep tracking private by default while your public review profile stays readable.';
+  }
+
+  return 'Choose a few posters to anchor My TV before you start browsing.';
 }
 
 const styles = StyleSheet.create({
@@ -490,7 +532,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flex: 1,
     justifyContent: 'center',
-    minHeight: 42,
+    minHeight: 44,
     paddingHorizontal: spacing.sm,
   },
   filterLabel: {
@@ -500,7 +542,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   filterLabelSelected: {
-    color: colors.textOnAccent,
+    color: colors.accentText,
   },
   filterPressed: {
     opacity: 0.76,
@@ -510,8 +552,48 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   filterSelected: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
+  },
+  heroBody: {
+    ...typography.body,
+    color: colors.muted,
+  },
+  heroCard: {
+    ...shadows.panel,
+    alignItems: 'center',
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.borderStrong,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.lg,
+    padding: spacing.lg,
+  },
+  heroCopy: {
+    flex: 1,
+    gap: spacing.sm,
+    minWidth: 0,
+  },
+  heroPoster: {
+    height: 116,
+    width: 76,
+  },
+  heroPosterDimmed: {
+    marginLeft: -spacing.xl,
+    opacity: 0.64,
+  },
+  heroPosterRaised: {
+    marginLeft: -spacing.xl,
+    marginTop: -spacing.md,
+  },
+  heroTitle: {
+    ...typography.title,
+    color: colors.text,
+  },
+  posterStack: {
+    flexDirection: 'row',
+    paddingLeft: spacing.sm,
   },
   keyboard: {
     flex: 1,
@@ -521,19 +603,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   poster: {
-    backgroundColor: colors.panelSoft,
-    borderRadius: radii.md,
     height: 84,
-    width: 56,
-  },
-  posterPlaceholder: {
-    alignItems: 'center',
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    height: 84,
-    justifyContent: 'center',
     width: 56,
   },
   progressSegment: {
@@ -563,14 +633,15 @@ const styles = StyleSheet.create({
     opacity: 0.78,
   },
   resultCardSelected: {
-    borderColor: colors.success,
+    backgroundColor: colors.successBackground,
+    borderColor: colors.successBorder,
   },
   resultCopy: {
     flex: 1,
     minWidth: 0,
   },
   resultMeta: {
-    color: colors.accent,
+    color: colors.accentText,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0,
@@ -592,10 +663,5 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...typography.title,
     color: colors.text,
-  },
-  selectedText: {
-    ...typography.body,
-    color: colors.success,
-    fontWeight: '800',
   },
 });

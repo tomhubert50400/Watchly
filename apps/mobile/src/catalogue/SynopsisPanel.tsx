@@ -7,7 +7,7 @@ import {
   TextLayoutEventData,
   View,
 } from 'react-native';
-import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { colors, spacing, touchTargets, typography } from '../design/tokens';
 
 const collapsedLineCount = 5;
 
@@ -51,31 +51,30 @@ export function SynopsisPanel({ overview }: SynopsisPanelProps) {
 const styles = StyleSheet.create({
   body: {
     ...typography.body,
-    color: colors.muted,
+    color: colors.textMuted,
     marginTop: spacing.sm,
   },
   expandButton: {
+    alignItems: 'flex-start',
     alignSelf: 'flex-start',
-    marginTop: spacing.md,
-    paddingVertical: spacing.xs,
+    justifyContent: 'center',
+    marginTop: spacing.xs,
+    minHeight: touchTargets.min,
   },
   expandButtonPressed: {
-    opacity: 0.72,
+    opacity: 0.84,
+    transform: [{ scale: 0.98 }],
   },
   expandLabel: {
-    color: colors.accent,
-    fontSize: 13,
+    color: colors.textSubtle,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0,
   },
   panel: {
-    ...shadows.panel,
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    marginBottom: spacing.md,
-    padding: spacing.lg,
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: spacing.xl,
   },
   sectionTitle: {
     ...typography.title,

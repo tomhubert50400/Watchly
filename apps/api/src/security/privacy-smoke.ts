@@ -96,8 +96,13 @@ async function assertPublicProfileProjection(
   const keys = Object.keys(publicProfile).sort();
 
   assert(
-    keys.join(',') === 'displayName,id,profileVisibility',
+    keys.join(',') === 'displayName,id,profileVisibility,stats',
     `Public profile projection leaked unexpected fields: ${keys.join(',')}`,
+  );
+  const statsKeys = Object.keys(publicProfile.stats).sort();
+  assert(
+    statsKeys.join(',') === 'followersCount,followingCount,postsCount,reviewsCount',
+    `Public profile stats leaked unexpected fields: ${statsKeys.join(',')}`,
   );
 }
 

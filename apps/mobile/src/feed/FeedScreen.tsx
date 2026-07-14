@@ -1,12 +1,15 @@
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ActivityIndicator, Image, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { getEpisodeDetails, getMovieDetails } from '../api/catalogue';
 import { FeedItem, getFeed } from '../api/feed';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { Button } from '../components/Button';
+import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
+import { LoadingState } from '../components/LoadingState';
+import { MediaPoster } from '../components/MediaPoster';
 import { Screen } from '../components/Screen';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
@@ -106,10 +109,7 @@ export function FeedScreen() {
           title="Sign in to see your feed"
         />
       ) : isLoading ? (
-        <View style={styles.loadingPanel}>
-          <ActivityIndicator color={colors.accent} />
-          <Text style={styles.loadingText}>Loading feed</Text>
-        </View>
+        <LoadingState label="Loading feed" />
       ) : error ? (
         <EmptyState body={error} title="Feed failed">
           <Button
@@ -128,6 +128,12 @@ export function FeedScreen() {
         </EmptyState>
       ) : (
         <View style={styles.list}>
+          <View style={styles.feedIntro}>
+            <Text style={styles.feedIntroTitle}>Reviews from people you follow</Text>
+            <Text style={styles.feedIntroBody}>
+              Fresh public notes, ratings, and film diary entries land here.
+            </Text>
+          </View>
           {items.map((item) => (
             <FeedReviewCard item={item} key={item.id} onPress={openFeedItem} />
           ))}
@@ -159,29 +165,27 @@ const FeedReviewCard = memo(function FeedReviewCard({
           <Text numberOfLines={1} style={styles.author}>
             {item.author.displayName ?? 'Unnamed profile'}
           </Text>
-          <Text style={styles.meta}>{item.contentSubtitle}</Text>
+          <Text style={styles.date}>{formatDate(item.updatedAt)}</Text>
         </View>
+        <Chip label="Review" tone="neutral" />
       </View>
       <View style={styles.contentRow}>
-        {item.contentImageUrl ? (
-          <Image
-            accessibilityIgnoresInvertColors
-            accessibilityLabel={`${item.contentTitle} artwork`}
-            source={{ uri: item.contentImageUrl }}
-            style={styles.contentImage}
-          />
-        ) : (
-          <View style={styles.contentImagePlaceholder} />
-        )}
+        <MediaPoster
+          accessibilityLabel={`${item.contentTitle} artwork`}
+          posterUrl={item.contentImageUrl}
+          style={styles.contentImage}
+        />
         <View style={styles.contentCopy}>
+          <Text style={styles.meta}>{item.contentSubtitle}</Text>
           <Text numberOfLines={2} style={styles.contentTitle}>
             {item.contentTitle}
           </Text>
           <Text style={styles.openHint}>Open details</Text>
         </View>
       </View>
-      <Text style={styles.body}>{item.body}</Text>
-      <Text style={styles.date}>{formatDate(item.updatedAt)}</Text>
+      <View style={styles.reviewBody}>
+        <Text style={styles.body}>{item.body}</Text>
+      </View>
     </Pressable>
   );
 });
@@ -271,7 +275,7 @@ const styles = StyleSheet.create({
   },
   body: {
     ...typography.body,
-    color: colors.text,
+    color: colors.textMuted,
   },
   card: {
     ...shadows.panel,
@@ -284,6 +288,7 @@ const styles = StyleSheet.create({
   },
   cardPressed: {
     opacity: 0.78,
+    transform: [{ scale: 0.99 }],
   },
   cardHeader: {
     alignItems: 'center',
@@ -296,18 +301,8 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   contentImage: {
-    backgroundColor: colors.panelSoft,
-    borderRadius: radii.md,
-    height: 82,
-    width: 56,
-  },
-  contentImagePlaceholder: {
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    height: 82,
-    width: 56,
+    height: 102,
+    width: 68,
   },
   contentRow: {
     alignItems: 'center',
@@ -317,7 +312,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     gap: spacing.md,
-    padding: spacing.sm,
+    padding: spacing.md,
   },
   contentTitle: {
     color: colors.text,
@@ -331,6 +326,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0,
+    marginTop: 2,
+  },
+  feedIntro: {
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    gap: spacing.xs,
+    paddingBottom: spacing.md,
+  },
+  feedIntroBody: {
+    ...typography.body,
+    color: colors.muted,
+  },
+  feedIntroTitle: {
+    ...typography.title,
+    color: colors.text,
   },
   headerCopy: {
     flex: 1,
@@ -339,27 +349,12 @@ const styles = StyleSheet.create({
   list: {
     gap: spacing.md,
   },
-  loadingPanel: {
-    alignItems: 'center',
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  loadingText: {
-    ...typography.body,
-    color: colors.text,
-    fontWeight: '700',
-  },
   meta: {
-    color: colors.accent,
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0,
-    marginTop: spacing.xs,
+    marginBottom: spacing.xs,
     textTransform: 'uppercase',
   },
   openHint: {
@@ -369,5 +364,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     marginTop: spacing.xs,
     textTransform: 'uppercase',
+  },
+  reviewBody: {
+    borderLeftColor: colors.borderStrong,
+    borderLeftWidth: 2,
+    paddingLeft: spacing.md,
   },
 });

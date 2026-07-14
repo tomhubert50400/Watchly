@@ -30,9 +30,15 @@ export type SharedVotingCandidate = {
 
 export type SharedVotingSession = {
   candidates: SharedVotingCandidate[];
+  closedAt: string | null;
+  closesAt: string;
   createdAt: string;
   id: string;
+  leaders: SharedVotingCandidate[];
+  status: 'OPEN' | 'CLOSED';
   title: string;
+  updatedAt: string;
+  winningCandidateId: string | null;
 };
 
 export type SharedWatchlist = {
@@ -134,6 +140,18 @@ export function removeSharedCandidateVote(
 ) {
   return apiDelete<SharedVotingSession>(
     `/shared-watchlists/${watchlistId}/voting-sessions/${sessionId}/candidates/${candidateId}/vote`,
+    { token },
+  );
+}
+
+export function closeSharedVotingSession(
+  token: string,
+  watchlistId: string,
+  sessionId: string,
+) {
+  return apiPut<SharedVotingSession>(
+    `/shared-watchlists/${watchlistId}/voting-sessions/${sessionId}/close`,
+    {},
     { token },
   );
 }

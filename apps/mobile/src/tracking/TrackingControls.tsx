@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, PlayCircle, XCircle } from 'lucide-react-native';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import {
   getTrackingState,
   TrackingState,
@@ -10,8 +10,12 @@ import {
 } from '../api/tracking';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SegmentedControl } from '../components/SegmentedControl';
+import { resolveTrackingStatusLayout } from '../components/dynamicTypeLayout';
+import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { colors, spacing } from '../design/tokens';
 import { useToast } from '../notifications/ToastContext';
+import { buildTrackingMutation } from './trackingControlState';
+import { createTrackingStateMemoryCache } from './trackingStateMemoryCache';
 
 type TrackingControlsProps = {
   contentType: TrackedContentType;
@@ -28,66 +32,97 @@ const statusOptions: {
   { Icon: XCircle, label: 'Dropped', value: 'dropped' },
 ];
 
-const trackingStateCache = new Map<string, TrackingState | null>();
+const trackingStateCache = createTrackingStateMemoryCache<TrackingState | null>(100);
 
 function getTrackingStateCacheKey(userId: string, contentType: TrackedContentType, tmdbId: number) {
-  return `${userId}:${contentType}:${tmdbId}`;
+  return JSON.stringify([userId, contentType, tmdbId]);
 }
 
 export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps) {
+  const { fontScale } = useWindowDimensions();
+  const statusLayout = resolveTrackingStatusLayout(fontScale);
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
   const { showToast } = useToast();
-  const trackingStateCacheKey = currentUser
-    ? getTrackingStateCacheKey(currentUser.id, contentType, tmdbId)
+  const ownerId = currentUser?.id ?? null;
+  const trackingStateCacheKey = ownerId
+    ? getTrackingStateCacheKey(ownerId, contentType, tmdbId)
     : null;
+  const requestScope = trackingStateCacheKey ?? 'signed-out';
   const [state, setState] = useState<TrackingState | null>(() =>
-    trackingStateCacheKey ? trackingStateCache.get(trackingStateCacheKey) ?? null : null,
+    ownerId ? trackingStateCache.get(ownerId, contentType, tmdbId) ?? null : null,
   );
-  const saveVersionRef = useRef(0);
+  const [isStateKnown, setIsStateKnown] = useState(() =>
+    ownerId ? trackingStateCache.has(ownerId, contentType, tmdbId) : true,
+  );
+  const [loadError, setLoadError] = useState(false);
+  const [stateScope, setStateScope] = useState(requestScope);
+  const requestRef = useRef({ scope: requestScope, version: 0 });
+  const previousOwnerRef = useRef(ownerId);
+
+  if (requestRef.current.scope !== requestScope) {
+    requestRef.current = { scope: requestScope, version: requestRef.current.version + 1 };
+  }
+
+  const visibleState = stateScope === requestScope ? state : null;
+  const visibleStateKnown = stateScope === requestScope && isStateKnown;
 
   const loadState = useCallback(async () => {
-    if (!firebaseIdToken) {
+    const scope = requestScope;
+    const version = requestRef.current.version + 1;
+    requestRef.current = { scope, version };
+    const isCurrent = () => requestRef.current.scope === scope && requestRef.current.version === version;
+
+    if (!firebaseIdToken || !trackingStateCacheKey) {
       setState(null);
+      setStateScope(scope);
+      setIsStateKnown(true);
+      setLoadError(false);
       return;
     }
 
-    const loadVersion = saveVersionRef.current;
+    setLoadError(false);
 
     try {
       const token = await getFirebaseIdToken();
-
-      if (!token) {
-        throw new Error('Sign in again to load your tracking state.');
-      }
+      if (!isCurrent()) return;
+      if (!token) throw new Error('Sign in again to load your tracking state.');
 
       const loadedState = await getTrackingState(token, contentType, tmdbId);
+      if (!isCurrent()) return;
 
-      if (saveVersionRef.current === loadVersion) {
-        if (currentUser) {
-          trackingStateCache.set(getTrackingStateCacheKey(currentUser.id, contentType, tmdbId), loadedState);
-        }
-        setState(loadedState);
-      }
+      trackingStateCache.set(ownerId!, contentType, tmdbId, loadedState);
+      setState(loadedState);
+      setStateScope(scope);
+      setIsStateKnown(true);
     } catch {
+      if (isCurrent()) setLoadError(true);
       return;
     }
-  }, [contentType, currentUser, firebaseIdToken, getFirebaseIdToken, tmdbId]);
+  }, [contentType, firebaseIdToken, getFirebaseIdToken, ownerId, requestScope, tmdbId, trackingStateCacheKey]);
 
   useEffect(() => {
-    setState(trackingStateCacheKey ? trackingStateCache.get(trackingStateCacheKey) ?? null : null);
-  }, [trackingStateCacheKey]);
+    if (previousOwnerRef.current && previousOwnerRef.current !== ownerId) {
+      trackingStateCache.clearUser(previousOwnerRef.current);
+    }
+    previousOwnerRef.current = ownerId;
+    setState(ownerId ? trackingStateCache.get(ownerId, contentType, tmdbId) ?? null : null);
+    setStateScope(requestScope);
+    setIsStateKnown(ownerId ? trackingStateCache.has(ownerId, contentType, tmdbId) : true);
+    setLoadError(false);
+  }, [contentType, ownerId, requestScope, tmdbId]);
 
   useEffect(() => {
     void loadState();
   }, [loadState]);
 
   async function save(nextStatus: TrackingStatus | null, nextFavorite: boolean) {
-    if (!firebaseIdToken) {
-      return;
-    }
+    if (!firebaseIdToken || !trackingStateCacheKey) return;
 
-    const previousState = state;
-    const saveVersion = saveVersionRef.current + 1;
+    const scope = requestScope;
+    const version = requestRef.current.version + 1;
+    requestRef.current = { scope, version };
+    const isCurrent = () => requestRef.current.scope === scope && requestRef.current.version === version;
+    const previousState = visibleState;
     const optimisticState =
       nextStatus === null && !nextFavorite
         ? null
@@ -100,18 +135,14 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
             updatedAt: new Date().toISOString(),
           };
 
-    saveVersionRef.current = saveVersion;
-    if (trackingStateCacheKey) {
-      trackingStateCache.set(trackingStateCacheKey, optimisticState);
-    }
+    trackingStateCache.set(ownerId!, contentType, tmdbId, optimisticState);
     setState(optimisticState);
+    setStateScope(scope);
 
     try {
       const token = await getFirebaseIdToken();
-
-      if (!token) {
-        throw new Error('Sign in again to save your tracking state.');
-      }
+      if (!isCurrent()) return;
+      if (!token) throw new Error('Sign in again to save your tracking state.');
 
       const savedState = await upsertTrackingState(token, {
         contentType,
@@ -119,26 +150,21 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
         status: nextStatus,
         tmdbId,
       });
+      if (!isCurrent()) return;
 
-      if (saveVersionRef.current === saveVersion) {
-        if (currentUser) {
-          trackingStateCache.set(getTrackingStateCacheKey(currentUser.id, contentType, tmdbId), savedState);
-        }
-        setState(savedState);
-      }
+      trackingStateCache.set(ownerId!, contentType, tmdbId, savedState);
+      setState(savedState);
+      setStateScope(scope);
     } catch (saveError) {
-      if (saveVersionRef.current === saveVersion) {
-        if (trackingStateCacheKey) {
-          trackingStateCache.set(trackingStateCacheKey, previousState);
-        }
-        setState(previousState);
-        showToast(saveError instanceof Error ? saveError.message : 'Could not save your tracking state.');
-      }
+      if (!isCurrent()) return;
+      trackingStateCache.set(ownerId!, contentType, tmdbId, previousState);
+      setState(previousState);
+      setStateScope(scope);
+      showToast(saveError instanceof Error ? saveError.message : 'Could not save your tracking state.');
     }
   }
 
-  const currentStatus = state?.status ?? null;
-  const isFavorite = state?.favorite ?? false;
+  const currentStatus = visibleState?.status ?? null;
 
   if (!firebaseIdToken) {
     return null;
@@ -146,20 +172,38 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
 
   return (
     <View style={styles.container}>
+      {loadError && !visibleStateKnown ? (
+        <InlineStatusBanner
+          detail="Your existing tracking choices were not changed."
+          onRetry={() => void loadState()}
+          title="Could not load tracking"
+          tone="error"
+        />
+      ) : null}
       <SegmentedControl<TrackingStatus>
-        onChange={(nextStatus) => save(currentStatus === nextStatus ? null : nextStatus, isFavorite)}
+        disabled={!visibleStateKnown}
+        onChange={(nextStatus) => {
+          const mutation = buildTrackingMutation(
+            { isKnown: visibleStateKnown, state: visibleState },
+            currentStatus === nextStatus ? null : nextStatus,
+          );
+          if (mutation) void save(mutation.status, mutation.favorite);
+        }}
         options={statusOptions.map(({ Icon, label, value }) => ({
           accessibilityLabel: `${currentStatus === value ? 'Clear' : 'Set'} ${label}`,
           label,
           render: ({ selected }) => (
             <View style={styles.statusContent}>
-              <Icon
-                color={selected ? colors.textOnAccent : colors.text}
-                size={16}
-                strokeWidth={2}
-              />
+              {statusLayout.iconVisible ? (
+                <Icon
+                  color={selected ? colors.textOnAccent : colors.text}
+                  size={16}
+                  strokeWidth={2}
+                />
+              ) : null}
               <Text
-                numberOfLines={1}
+                maxFontSizeMultiplier={statusLayout.maxFontSizeMultiplier}
+                numberOfLines={statusLayout.numberOfLines}
                 style={[styles.statusLabel, selected && styles.statusLabelSelected]}
               >
                 {label}

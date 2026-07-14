@@ -125,6 +125,19 @@ export class SharedWatchlistsController {
     );
   }
 
+  @Put(':watchlistId/voting-sessions/:sessionId/close')
+  async closeVotingSession(
+    @Req() request: AuthenticatedRequest,
+    @Param('watchlistId') watchlistId: string,
+    @Param('sessionId') sessionId: string,
+  ) {
+    return this.watchlists.closeVotingSession(
+      getIdentity(request),
+      parseUuid(watchlistId, 'watchlistId'),
+      parseUuid(sessionId, 'sessionId'),
+    );
+  }
+
   @Put(':watchlistId/voting-sessions/:sessionId/candidates/:candidateId/vote')
   async vote(
     @Req() request: AuthenticatedRequest,

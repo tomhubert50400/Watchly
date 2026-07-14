@@ -15,11 +15,13 @@
     "security:env-secrets": "tsx src/security/environment-secrets-check.ts",
     "security:privacy-smoke": "tsx src/security/privacy-smoke.ts",
     "security:shared-watchlist-smoke": "tsx src/security/shared-watchlist-smoke.ts",
+    "security:shared-vote-migration-smoke": "tsx src/security/shared-vote-migration-smoke.ts",
     "security:onboarding-smoke": "tsx src/security/onboarding-smoke.ts",
+    "security:notifications-smoke": "tsx src/security/notifications-smoke.ts",
     "security:prisma-reset-smoke": "tsx src/security/prisma-connection-reset-smoke.ts",
     "start": "node dist/main.js",
     "start:dev": "tsx watch src/main.ts",
-    "test": "tsx src/security/security-qa.ts",
+    "test": "tsx src/security/security-qa.ts && tsx src/security/auth-token-verifier-qa.ts && tsx src/security/external-http-qa.ts && tsx src/security/notifications-sync-qa.ts",
     "typecheck": "pnpm run prisma:generate && tsc --noEmit"
   },
   "dependencies": {
