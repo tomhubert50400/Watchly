@@ -46,7 +46,7 @@ async function main() {
 
     globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) =>
       ({
-        json: () =>
+        text: () =>
           new Promise<never>((_resolve, reject) => {
             init?.signal?.addEventListener(
               'abort',
@@ -89,6 +89,10 @@ async function main() {
       );
     }
     assert(!invalidTimeoutFetchCalled, 'Invalid timeout values must fail before fetch.');
+
+    globalThis.fetch = (async () => new Response(null, { status: 200 })) as typeof fetch;
+    const emptySuccess = await apiGet<undefined>('/qa-empty-success');
+    assert(emptySuccess === undefined, 'Expected an empty 200 response to represent an absent optional resource.');
 
     globalThis.fetch = (async () => new Response(null, { status: 204 })) as typeof fetch;
     const noContent = await apiGet<undefined>('/qa-no-content');

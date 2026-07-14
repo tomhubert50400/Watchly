@@ -4,6 +4,7 @@ import { deleteEpisodeReview, getEpisodeReview, upsertEpisodeReview } from '../a
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { OpinionSheet } from '../opinions/OpinionSheet';
 import { OpinionOperation } from '../opinions/opinionState';
+import { buildEpisodeOpinionResourceKey } from './episodeOpinionScope';
 
 type EpisodeRatingControlProps = {
   episodeNumber: number;
@@ -20,7 +21,13 @@ export function EpisodeRatingControl({
   seasonNumber,
   seriesTmdbId,
 }: EpisodeRatingControlProps) {
-  const { firebaseIdToken, notifyTrackingChanged } = useAuthSession();
+  const { currentUser, firebaseIdToken, notifyTrackingChanged } = useAuthSession();
+  const resourceKey = buildEpisodeOpinionResourceKey(
+    currentUser?.id,
+    seriesTmdbId,
+    seasonNumber,
+    episodeNumber,
+  );
   const load = useCallback(async () => {
     if (!firebaseIdToken) return { rating: null, review: null };
     const [rating, review] = await Promise.all([
@@ -54,8 +61,10 @@ export function EpisodeRatingControl({
       mediaLabel={mediaTitle}
       mediaMeta={`Season ${seasonNumber} · Episode ${episodeNumber}`}
       onChanged={notifyTrackingChanged}
+      ownerKey={currentUser?.id}
       perform={perform}
       posterUrl={posterUrl}
+      resourceKey={resourceKey}
       signedOutMessage="Sign in from Profile to rate or review this episode."
     />
   );

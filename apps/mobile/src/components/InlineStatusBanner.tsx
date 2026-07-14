@@ -1,5 +1,6 @@
+import { useEffect } from 'react';
 import { CircleCheck, RefreshCw, TriangleAlert, WifiOff } from 'lucide-react-native';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
 import { BannerTone, getBannerPresentation } from './cinematicPrimitives';
 
@@ -30,6 +31,18 @@ export function InlineStatusBanner({ detail, onRetry, retryLabel = 'Retry', titl
         ? <CircleCheck {...iconProps} />
         : <RefreshCw {...iconProps} />;
 
+  const resolvedTitle = title ?? presentation.defaultTitle;
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') {
+      return;
+    }
+
+    const announcement = detail ? `${resolvedTitle}. ${detail}` : resolvedTitle;
+    const timer = setTimeout(() => AccessibilityInfo.announceForAccessibility(announcement), 100);
+    return () => clearTimeout(timer);
+  }, [detail, resolvedTitle]);
+
   return (
     <View
       accessibilityLiveRegion="polite"
@@ -40,7 +53,7 @@ export function InlineStatusBanner({ detail, onRetry, retryLabel = 'Retry', titl
         {presentation.showsActivity ? <ActivityIndicator color={palette.foreground} size="small" /> : icon}
       </View>
       <View style={styles.copy}>
-        <Text style={styles.title}>{title ?? presentation.defaultTitle}</Text>
+        <Text style={styles.title}>{resolvedTitle}</Text>
         {detail ? <Text style={styles.detail}>{detail}</Text> : null}
       </View>
       {onRetry ? (

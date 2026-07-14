@@ -10,7 +10,8 @@ import {
 } from '../generated/prisma/enums';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const MAX_SYNC_ITEMS = 12;
+const SYNC_BATCH_SIZE = 12;
+const MAX_SYNC_SUBSCRIPTIONS = 48;
 
 type ReleaseAlertContentType = 'movie' | 'series';
 
@@ -54,13 +55,15 @@ export class NotificationsService {
   async sync(identity: AuthenticatedIdentity) {
     const userId = await this.getUserId(identity);
     const alertSubscriptions = await this.listAlertSubscriptions(userId);
-    const candidates: NotificationCandidate[] = [];
+    let createdCount = 0;
 
-    for (const item of alertSubscriptions.slice(0, MAX_SYNC_ITEMS)) {
-      candidates.push(...(await this.buildCandidates(item.contentType, item.tmdbId)));
+    for (let offset = 0; offset < alertSubscriptions.length; offset += SYNC_BATCH_SIZE) {
+      const batch = alertSubscriptions.slice(offset, offset + SYNC_BATCH_SIZE);
+      const batchCandidates = await Promise.all(
+        batch.map((item) => this.buildCandidates(item.contentType, item.tmdbId)),
+      );
+      createdCount += await this.createNotifications(userId, batchCandidates.flat());
     }
-
-    const createdCount = await this.createNotifications(userId, candidates);
 
     const list = await this.list(identity);
 
@@ -231,6 +234,7 @@ export class NotificationsService {
         tmdbId: true,
         updatedAt: true,
       },
+      take: MAX_SYNC_SUBSCRIPTIONS,
       where: {
         userId,
       },
@@ -247,27 +251,11 @@ export class NotificationsService {
   }
 
   private async createNotifications(userId: string, candidates: NotificationCandidate[]) {
-    let createdCount = 0;
+    if (candidates.length === 0) return 0;
 
-    for (const candidate of candidates) {
-      const existing = await this.prisma.withConnectionRetry(() =>
-        this.prisma.notification.findUnique({
-        where: {
-          userId_dedupeKey: {
-            dedupeKey: candidate.generatedKey,
-            userId,
-          },
-        },
-        }),
-      );
-
-      if (existing) {
-        continue;
-      }
-
-      await this.prisma.withConnectionRetry(() =>
-        this.prisma.notification.create({
-        data: {
+    const created = await this.prisma.withConnectionRetry(() =>
+      this.prisma.notification.createMany({
+        data: candidates.map((candidate) => ({
           body: candidate.body,
           contentType: candidate.contentType,
           episodeNumber: candidate.episodeNumber,
@@ -279,13 +267,12 @@ export class NotificationsService {
           title: candidate.title,
           tmdbId: candidate.tmdbId,
           userId,
-        },
-        }),
-      );
-      createdCount += 1;
-    }
+        })),
+        skipDuplicates: true,
+      }),
+    );
 
-    return createdCount;
+    return created.count;
   }
 
   private async buildMovieCandidates(tmdbId: number): Promise<NotificationCandidate[]> {

@@ -1,6 +1,7 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { getMovieDetails, getSeriesDetails, MovieDetails, SeriesDetails } from '../api/catalogue';
 import { WatchlistContentType } from '../api/watchlists';
+import { setMemoryResource } from '../cache/memoryResourceCache';
 
 type CatalogueCacheContextValue = {
   getCachedMovie: (tmdbId: number) => MovieDetails | null;
@@ -10,7 +11,7 @@ type CatalogueCacheContextValue = {
   refreshSeries: (tmdbId: number) => Promise<SeriesDetails>;
 };
 
-const MAX_PRELOAD_ITEMS = 40;
+const MAX_PRELOAD_ITEMS = 3;
 const CatalogueCacheContext = createContext<CatalogueCacheContextValue | null>(null);
 
 export function CatalogueCacheProvider({ children }: PropsWithChildren) {
@@ -28,6 +29,11 @@ export function CatalogueCacheProvider({ children }: PropsWithChildren) {
 
     const request = getMovieDetails(tmdbId)
       .then((response) => {
+        setMemoryResource(
+          `watchly:public:catalogue:movie:${tmdbId}`,
+          response.item,
+          new Date().toISOString(),
+        );
         setMovies((current) => ({ ...current, [tmdbId]: response.item }));
 
         return response.item;
@@ -50,6 +56,11 @@ export function CatalogueCacheProvider({ children }: PropsWithChildren) {
 
     const request = getSeriesDetails(tmdbId)
       .then((response) => {
+        setMemoryResource(
+          `watchly:public:catalogue:series:${tmdbId}`,
+          response.item,
+          new Date().toISOString(),
+        );
         setSeries((current) => ({ ...current, [tmdbId]: response.item }));
 
         return response.item;

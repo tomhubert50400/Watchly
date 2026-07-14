@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CacheEnvelope, parseCacheEnvelope, serializeCacheEnvelope } from './cacheEnvelope';
+import { clearMemoryResourcesWithPrefix } from './memoryResourceCache';
 
 const PUBLIC_CACHE_PREFIX = 'watchly:public:';
 const USER_CACHE_PREFIX = 'watchly:user:';
@@ -75,6 +76,7 @@ export async function clearPrivateCacheForUser(
   storage: PersistedCacheStorage = defaultStorage,
 ) {
   const prefix = getPrivateCachePrefix(userId.trim());
+  clearMemoryResourcesWithPrefix(prefix);
   const keys = await storage.getAllKeys();
   const privateKeys = keys.filter((key) => key.startsWith(prefix));
 

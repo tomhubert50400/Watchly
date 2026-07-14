@@ -46,13 +46,13 @@ type OwnedVote = { data: VoteDetails | null; ownerId: string | null };
 
 export function SharedVoteScreen({ route }: Props) {
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
-  const { refreshMovie, refreshSeries } = useCatalogueCache();
+  const { getCachedMovie, getCachedSeries, preloadCatalogueItems } = useCatalogueCache();
   const ownerId = currentUser?.id ?? null;
   const ownerIdRef = useRef(ownerId);
   ownerIdRef.current = ownerId;
   const cacheResource = `shared-vote:${route.params.watchlistId}:${route.params.sessionId}:v1`;
   const cacheKey = getPrivateCacheKey(ownerId ?? 'visitor', cacheResource);
-  const load = useCallback(async (): Promise<VoteDetails> => {
+  const load = useCallback(async (cached?: VoteDetails): Promise<VoteDetails> => {
     const expectedOwnerId = ownerId;
     const token = await getFirebaseIdToken();
     if (!expectedOwnerId || ownerIdRef.current !== expectedOwnerId || !token) {
@@ -63,16 +63,10 @@ export function SharedVoteScreen({ route }: Props) {
     const session = watchlist.votingSessions.find((item) => item.id === route.params.sessionId);
     if (!session) throw new Error('This voting session is no longer available.');
 
-    const entries = await Promise.all(session.candidates.map(async (candidate): Promise<[string, CandidateMedia]> => {
-      try {
-        const media = candidate.contentType === 'movie'
-          ? await refreshMovie(candidate.tmdbId)
-          : await refreshSeries(candidate.tmdbId);
-        return [candidate.id, { genres: media.genres, posterUrl: media.posterUrl, title: media.title }];
-      } catch {
-        return [candidate.id, { genres: [], posterUrl: null, title: null }];
-      }
-    }));
+    const entries = session.candidates.map((candidate): [string, CandidateMedia] => [
+      candidate.id,
+      cached?.candidateMedia[candidate.id] ?? { genres: [], posterUrl: null, title: null },
+    ]);
     if (ownerIdRef.current !== expectedOwnerId) throw new Error('The active account changed while loading this vote.');
     return {
       candidateMedia: Object.fromEntries(entries),
@@ -82,7 +76,7 @@ export function SharedVoteScreen({ route }: Props) {
       session,
       watchlistName: watchlist.name,
     };
-  }, [getFirebaseIdToken, ownerId, refreshMovie, refreshSeries, route.params.sessionId, route.params.watchlistId]);
+  }, [getFirebaseIdToken, ownerId, route.params.sessionId, route.params.watchlistId]);
   const resource = useCachedResource<VoteDetails>({ enabled: Boolean(ownerId && firebaseIdToken), key: cacheKey, load });
   const [ownedVote, setOwnedVote] = useState<OwnedVote>({ data: null, ownerId: null });
   const ownedVoteRef = useRef(ownedVote);
@@ -118,6 +112,14 @@ export function SharedVoteScreen({ route }: Props) {
   const leaderState = useMemo(() => session ? getVoteLeaders(session.candidates) : null, [session]);
   const selectedIds = useMemo(() => session ? new Set(getSelectedCandidateIds(session)) : new Set<string>(), [session]);
 
+  useEffect(() => {
+    if (!session) return;
+    preloadCatalogueItems(session.candidates.map((candidate) => ({
+      contentType: candidate.contentType,
+      tmdbId: candidate.tmdbId,
+    })));
+  }, [preloadCatalogueItems, session]);
+
   const commitDetails = useCallback((expectedOwnerId: string, next: VoteDetails) => {
     if (ownerIdRef.current !== expectedOwnerId) return;
     const owned = { data: next, ownerId: expectedOwnerId };
@@ -128,8 +130,9 @@ export function SharedVoteScreen({ route }: Props) {
 
   async function handleVote(candidateId: string) {
     const expectedOwnerId = ownerIdRef.current;
-    const snapshot = ownedVoteRef.current.data;
-    if (!expectedOwnerId || !snapshot || pendingCandidateId || isClosing) return;
+    const owned = ownedVoteRef.current;
+    const snapshot = owned.data;
+    if (!expectedOwnerId || owned.ownerId !== expectedOwnerId || !snapshot || pendingCandidateId || isClosing) return;
     const mutation = beginOptimisticVote(snapshot.session, candidateId, new Date());
     if (!mutation) return;
     const wasSelected = snapshot.session.candidates.find((candidate) => candidate.id === candidateId)?.userHasVoted === true;
@@ -168,8 +171,9 @@ export function SharedVoteScreen({ route }: Props) {
 
   async function handleClose() {
     const expectedOwnerId = ownerIdRef.current;
-    const snapshot = ownedVoteRef.current.data;
-    if (!expectedOwnerId || !snapshot) return;
+    const owned = ownedVoteRef.current;
+    const snapshot = owned.data;
+    if (!expectedOwnerId || owned.ownerId !== expectedOwnerId || !snapshot) return;
     const mutation = beginOptimisticClose(snapshot.session, snapshot.isOwner, new Date());
     if (!mutation) return;
     setMutationError(null);
@@ -237,7 +241,12 @@ export function SharedVoteScreen({ route }: Props) {
       {leaderState.isTie ? <Text style={styles.resultSummary}>Tie between {leaderState.leaderIds.length} candidates with {leaderState.maxVotes} votes.</Text> : lifecycle === 'closed' && session.winningCandidateId ? <Text style={styles.resultSummary}>A winner has been selected.</Text> : null}
 
       <View style={styles.candidateList}>{session.candidates.map((candidate) => {
-        const media = details.candidateMedia[candidate.id];
+        const catalogueMedia = candidate.contentType === 'movie'
+          ? getCachedMovie(candidate.tmdbId)
+          : getCachedSeries(candidate.tmdbId);
+        const media = catalogueMedia
+          ? { genres: catalogueMedia.genres, posterUrl: catalogueMedia.posterUrl, title: catalogueMedia.title }
+          : details.candidateMedia[candidate.id];
         const isLeader = leaderState.leaderIds.includes(candidate.id);
         const isSelected = selectedIds.has(candidate.id);
         const isPending = pendingCandidateId === candidate.id;

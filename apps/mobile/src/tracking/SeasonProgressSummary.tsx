@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useMemo } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { listSeasonProgress, SeasonProgress } from '../api/progress';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { getPrivateCacheKey } from '../cache/persistedCache';
+import { useCachedResource } from '../cache/useCachedResource';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { useToast } from '../notifications/ToastContext';
 
@@ -17,33 +18,26 @@ export function useSeasonProgressSummary({
   seasonNumber,
   seriesTmdbId,
 }: SeasonProgressSummaryProps) {
-  const { firebaseIdToken, trackingRevision } = useAuthSession();
+  const { currentUser, firebaseIdToken, trackingRevision } = useAuthSession();
   const { showToast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
-  const [progress, setProgress] = useState<SeasonProgress | null>(null);
 
-  const loadProgress = useCallback(async () => {
-    if (!firebaseIdToken) {
-      setProgress(null);
-      return;
-    }
-
-    setIsLoading(true);
-
+  const loadProgress = useCallback(async (): Promise<SeasonProgress> => {
     try {
-      setProgress(await listSeasonProgress(firebaseIdToken, seriesTmdbId, seasonNumber));
+      return await listSeasonProgress(firebaseIdToken!, seriesTmdbId, seasonNumber);
     } catch {
       showToast('Could not load your season progress.');
-    } finally {
-      setIsLoading(false);
+      throw new Error('Could not update your season progress.');
     }
-  }, [firebaseIdToken, seasonNumber, seriesTmdbId, showToast]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void loadProgress();
-    }, [loadProgress, trackingRevision]),
-  );
+  }, [firebaseIdToken, seasonNumber, seriesTmdbId, showToast, trackingRevision]);
+  const resource = useCachedResource({
+    enabled: Boolean(currentUser && firebaseIdToken),
+    key: getPrivateCacheKey(
+      currentUser?.id ?? 'visitor',
+      `season-progress:${seriesTmdbId}:${seasonNumber}:v1`,
+    ),
+    load: loadProgress,
+  });
+  const progress = resource.data;
 
   const watchedEpisodeNumbers = useMemo(
     () => new Set(progress?.episodes.map((episode) => episode.episodeNumber) ?? []),
@@ -62,7 +56,7 @@ export function useSeasonProgressSummary({
                 : 'Sign in from Profile to track episode progress.'}
             </Text>
           </View>
-          {isLoading ? <ActivityIndicator color={colors.accent} /> : null}
+
         </View>
       </View>
     ),

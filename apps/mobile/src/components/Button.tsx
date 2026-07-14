@@ -5,6 +5,7 @@ import { colors, radii, spacing, touchTargets } from '../design/tokens';
 type ButtonVariant = 'danger' | 'ghost' | 'primary' | 'secondary';
 
 type ButtonProps = Omit<PressableProps, 'children' | 'style'> & {
+  compact?: boolean;
   fullWidth?: boolean;
   icon?: ReactNode;
   label: string;
@@ -12,7 +13,7 @@ type ButtonProps = Omit<PressableProps, 'children' | 'style'> & {
   variant?: ButtonVariant;
 };
 
-export function Button({ disabled, fullWidth = false, icon, label, loading = false, variant = 'primary', ...pressableProps }: ButtonProps) {
+export function Button({ compact = false, disabled, fullWidth = false, icon, label, loading = false, variant = 'primary', ...pressableProps }: ButtonProps) {
   const isDisabled = disabled || loading;
 
   return (
@@ -22,6 +23,7 @@ export function Button({ disabled, fullWidth = false, icon, label, loading = fal
       disabled={isDisabled}
       style={({ pressed }) => [
         styles.base,
+        compact ? styles.compact : null,
         fullWidth ? styles.fullWidth : null,
         variant === 'danger' ? styles.danger : null,
         variant === 'ghost' ? styles.ghost : null,
@@ -59,6 +61,9 @@ const styles = StyleSheet.create({
     minHeight: touchTargets.min,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
+  },
+  compact: {
+    paddingHorizontal: spacing.md,
   },
   danger: {
     backgroundColor: colors.dangerBackground,

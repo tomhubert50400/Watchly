@@ -21,11 +21,13 @@ import { TextInput } from '../components/TextInput';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { getVoteLifecycle, getVoteLeaders, getVoteRemainingLabel } from './sharedVoteModel';
+import { takeHydrationItems } from './requestBoundaries';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SharedWatchlist'>;
 type HydratedItem = SharedWatchlist['items'][number] & { posterUrl: string | null; title: string | null };
 type SharedListDetails = { hydratedItems: HydratedItem[]; watchlist: SharedWatchlist };
 type OwnedDetails = { data: SharedListDetails | null; ownerId: string | null };
+const MAX_SHARED_WATCHLIST_HYDRATIONS = 12;
 
 export function SharedWatchlistScreen({ navigation, route }: Props) {
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
@@ -34,7 +36,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
   const ownerIdRef = useRef(ownerId);
   ownerIdRef.current = ownerId;
   const cacheKey = getPrivateCacheKey(ownerId ?? 'visitor', `shared-watchlist:${route.params.watchlistId}:v2`);
-  const load = useCallback(async (): Promise<SharedListDetails> => {
+  const load = useCallback(async (cached?: SharedListDetails): Promise<SharedListDetails> => {
     const expectedOwnerId = ownerId;
     const token = await getFirebaseIdToken();
     if (!expectedOwnerId || ownerIdRef.current !== expectedOwnerId || !token) {
@@ -46,14 +48,21 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
       throw new Error('The active account changed while loading this list.');
     }
 
+    const hydrationIds = new Set(
+      takeHydrationItems(watchlist.items, MAX_SHARED_WATCHLIST_HYDRATIONS).map((item) => item.id),
+    );
     const hydratedItems = await Promise.all(watchlist.items.map(async (item): Promise<HydratedItem> => {
+      const previous = cached?.hydratedItems.find((candidate) => candidate.id === item.id);
+      if (!hydrationIds.has(item.id)) {
+        return { ...item, posterUrl: previous?.posterUrl ?? null, title: previous?.title ?? null };
+      }
       try {
         const media = item.contentType === 'movie'
           ? await refreshMovie(item.tmdbId)
           : await refreshSeries(item.tmdbId);
         return { ...item, posterUrl: media.posterUrl, title: media.title };
       } catch {
-        return { ...item, posterUrl: null, title: null };
+        return { ...item, posterUrl: previous?.posterUrl ?? null, title: previous?.title ?? null };
       }
     }));
 
@@ -105,14 +114,16 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
 
   async function handleAddMember() {
     const expectedOwnerId = ownerIdRef.current;
+    const owned = ownedDetailsRef.current;
+    const snapshot = owned.data;
     const cleanUserId = memberUserId.trim();
-    if (!expectedOwnerId || !watchlist?.isOwner || !cleanUserId || isAddingMember) return;
+    if (!expectedOwnerId || owned.ownerId !== expectedOwnerId || !snapshot?.watchlist.isOwner || !cleanUserId || isAddingMember) return;
     setIsAddingMember(true);
     setMutationError(null);
     try {
       const token = await getFirebaseIdToken();
       if (ownerIdRef.current !== expectedOwnerId || !token) throw new Error('Sign in again to add a member.');
-      await addSharedWatchlistMember(token, watchlist.id, cleanUserId);
+      await addSharedWatchlistMember(token, snapshot.watchlist.id, cleanUserId);
       if (ownerIdRef.current !== expectedOwnerId) return;
       setMemberUserId('');
       resource.retry();
@@ -125,9 +136,10 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
 
   async function handleCreateVote() {
     const expectedOwnerId = ownerIdRef.current;
-    const snapshot = ownedDetailsRef.current.data;
+    const owned = ownedDetailsRef.current;
+    const snapshot = owned.data;
     const title = sessionTitle.trim();
-    if (!expectedOwnerId || !snapshot || !title || snapshot.watchlist.items.length === 0 || isCreatingVote) return;
+    if (!expectedOwnerId || owned.ownerId !== expectedOwnerId || !snapshot || !title || snapshot.watchlist.items.length === 0 || isCreatingVote) return;
     setIsCreatingVote(true);
     setMutationError(null);
     try {

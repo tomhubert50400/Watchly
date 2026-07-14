@@ -99,6 +99,23 @@ async function main() {
       'Member vote should increase the candidate count.',
     );
 
+    await assertBadRequest(
+      () => sharedWatchlists.removeItem(memberIdentity, watchlist.id, 'movie', 603),
+      'Members must not remove an item while it is a candidate in an open voting session.',
+    );
+    const preservedOpenSession = await sharedWatchlists.getVotingSession(
+      memberIdentity,
+      watchlist.id,
+      session.id,
+    );
+    assert(
+      preservedOpenSession.candidates.some(
+        (candidate) =>
+          candidate.id === matrixCandidate!.id && candidate.voteCount === 2,
+      ),
+      'Rejected item removal must preserve the open candidate and its votes.',
+    );
+
     await assertNotFound(
       () => sharedWatchlists.voteForCandidate(outsiderIdentity, watchlist.id, session.id, matrixCandidate!.id),
       'Non-members should not vote.',

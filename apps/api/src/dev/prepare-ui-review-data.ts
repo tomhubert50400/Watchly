@@ -6,6 +6,7 @@ import {
   NotificationKind,
   PrivacyVisibility,
   ReleaseNotificationType,
+  SharedVotingStatus,
   SharedWatchlistVisibility,
   TrackedContentType,
   UserContentStatus,
@@ -62,7 +63,9 @@ async function main() {
   const personalWatchlist = await seedPersonalWatchlist(user.id);
   const sharedWatchlist = await seedSharedWatchlist(user.id, testUser.id);
   const votingSession = await seedVotingSession(user.id, testUser.id, sharedWatchlist.id);
+  const tiedVotingSession = await seedClosedTieSession(user.id, testUser.id, sharedWatchlist.id);
   await seedReleaseAlerts(user.id);
+  await seedSocialAlerts(user.id, testUser.id, sharedWatchlist.id, votingSession.id);
 
   console.log(
     JSON.stringify(
@@ -70,6 +73,7 @@ async function main() {
         personalWatchlistId: personalWatchlist.id,
         sharedWatchlistId: sharedWatchlist.id,
         testUserId: testUser.id,
+        tiedVotingSessionId: tiedVotingSession.id,
         userId: user.id,
         votingSessionId: votingSession.id,
       },
@@ -369,6 +373,10 @@ async function seedVotingSession(userId: string, testUserId: string, watchlistId
     candidates.push(candidate);
   }
 
+  await prisma.sharedVotingVote.deleteMany({
+    where: { candidate: { sessionId: session.id } },
+  });
+
   if (candidates[0]) {
     await vote(candidates[0].id, userId);
     await vote(candidates[0].id, testUserId);
@@ -378,7 +386,55 @@ async function seedVotingSession(userId: string, testUserId: string, watchlistId
     await vote(candidates[1].id, testUserId);
   }
 
-  return session;
+  return prisma.sharedVotingSession.update({
+    data: {
+      closedAt: null,
+      closesAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000),
+      status: SharedVotingStatus.OPEN,
+      winningCandidateId: null,
+    },
+    where: { id: session.id },
+  });
+}
+
+async function seedClosedTieSession(userId: string, testUserId: string, watchlistId: string) {
+  const session = await getOrCreateVotingSession(watchlistId, 'Final tie');
+  const items = await prisma.sharedWatchlistItem.findMany({
+    orderBy: { createdAt: 'asc' },
+    take: 2,
+    where: { watchlistId },
+  });
+  const candidates = [];
+
+  for (const item of items) {
+    candidates.push(await prisma.sharedVotingCandidate.upsert({
+      create: { itemId: item.id, sessionId: session.id },
+      update: {},
+      where: { sessionId_itemId: { itemId: item.id, sessionId: session.id } },
+    }));
+  }
+
+  await prisma.sharedVotingVote.deleteMany({
+    where: { candidate: { sessionId: session.id } },
+  });
+
+  if (candidates[0]) {
+    await vote(candidates[0].id, userId);
+  }
+  if (candidates[1]) {
+    await vote(candidates[1].id, testUserId);
+  }
+
+  const closedAt = new Date();
+  return prisma.sharedVotingSession.update({
+    data: {
+      closedAt,
+      closesAt: new Date(closedAt.getTime() - 60_000),
+      status: SharedVotingStatus.CLOSED,
+      winningCandidateId: null,
+    },
+    where: { id: session.id },
+  });
 }
 
 async function getOrCreateVotingSession(watchlistId: string, title: string) {
@@ -450,6 +506,54 @@ async function seedReleaseAlerts(userId: string) {
     await prisma.notification.upsert({
       create: { ...notification, userId },
       update: notification,
+      where: {
+        userId_dedupeKey: {
+          dedupeKey: notification.dedupeKey,
+          userId,
+        },
+      },
+    });
+  }
+}
+
+async function seedSocialAlerts(
+  userId: string,
+  actorUserId: string,
+  sharedWatchlistId: string,
+  votingSessionId: string,
+) {
+  const notifications = [
+    {
+      actorUserId,
+      body: `You were added to the shared list “${sampleSharedWatchlistName}”.`,
+      dedupeKey: `ui-review:shared-list:${sharedWatchlistId}`,
+      kind: NotificationKind.SHARED_LIST_INVITE,
+      routeMetadata: { route: 'SharedWatchlist', watchlistId: sharedWatchlistId },
+      sharedWatchlistId,
+      title: 'Shared list invitation',
+      votingSessionId: null,
+    },
+    {
+      actorUserId,
+      body: '“Tonight” has a current leader. Open the vote to review or change your choice.',
+      dedupeKey: `ui-review:shared-vote:${votingSessionId}`,
+      kind: NotificationKind.SHARED_VOTE_UPDATE,
+      routeMetadata: {
+        final: false,
+        route: 'SharedVote',
+        votingSessionId,
+        watchlistId: sharedWatchlistId,
+      },
+      sharedWatchlistId,
+      title: 'Shared vote updated',
+      votingSessionId,
+    },
+  ];
+
+  for (const notification of notifications) {
+    await prisma.notification.upsert({
+      create: { ...notification, readAt: null, userId },
+      update: { ...notification, readAt: null },
       where: {
         userId_dedupeKey: {
           dedupeKey: notification.dedupeKey,

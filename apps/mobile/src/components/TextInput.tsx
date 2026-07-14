@@ -1,5 +1,6 @@
 import { StyleSheet, Text, TextInput as NativeTextInput, TextInputProps, View } from 'react-native';
 import { colors, radii, spacing, typography } from '../design/tokens';
+import { resolveTextInputAccessibilityLabel } from './textInputAccessibility';
 
 type AppTextInputProps = TextInputProps & {
   error?: string;
@@ -17,6 +18,7 @@ export function TextInput({ error, helperText, label, ...inputProps }: AppTextIn
         selectionColor={colors.accentText}
         style={[styles.input, error ? styles.inputError : null]}
         {...inputProps}
+        accessibilityLabel={resolveTextInputAccessibilityLabel(label, inputProps.accessibilityLabel)}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {!error && helperText ? <Text style={styles.helper}>{helperText}</Text> : null}

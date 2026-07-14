@@ -12,6 +12,7 @@ export function IconButton({ accessibilityLabel, disabled, icon, ...pressablePro
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
+      accessibilityState={{ disabled: Boolean(disabled) }}
       disabled={disabled}
       style={({ pressed }) => [
         styles.base,

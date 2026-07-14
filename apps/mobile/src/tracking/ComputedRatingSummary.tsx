@@ -1,8 +1,9 @@
-import { useCallback, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useCallback } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { getSeriesRatingSummary, SeriesRatingSummary } from '../api/ratings';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { getPrivateCacheKey } from '../cache/persistedCache';
+import { useCachedResource } from '../cache/useCachedResource';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { useToast } from '../notifications/ToastContext';
 
@@ -17,33 +18,23 @@ export function ComputedRatingSummary({
   seriesTmdbId,
   title,
 }: ComputedRatingSummaryProps) {
-  const { firebaseIdToken } = useAuthSession();
+  const { currentUser, firebaseIdToken, trackingRevision } = useAuthSession();
   const { showToast } = useToast();
-  const [isLoading, setIsLoading] = useState(false);
-  const [summary, setSummary] = useState<SeriesRatingSummary | null>(null);
 
-  const loadSummary = useCallback(async () => {
-    if (!firebaseIdToken) {
-      setSummary(null);
-      return;
-    }
-
-    setIsLoading(true);
-
+  const loadSummary = useCallback(async (): Promise<SeriesRatingSummary> => {
     try {
-      setSummary(await getSeriesRatingSummary(firebaseIdToken, seriesTmdbId));
+      return await getSeriesRatingSummary(firebaseIdToken!, seriesTmdbId);
     } catch {
       showToast('Could not load your computed rating.');
-    } finally {
-      setIsLoading(false);
+      throw new Error('Could not update your computed rating.');
     }
-  }, [firebaseIdToken, seriesTmdbId, showToast]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void loadSummary();
-    }, [loadSummary]),
-  );
+  }, [firebaseIdToken, seriesTmdbId, showToast, trackingRevision]);
+  const resource = useCachedResource({
+    enabled: Boolean(currentUser && firebaseIdToken),
+    key: getPrivateCacheKey(currentUser?.id ?? 'visitor', `series-rating:${seriesTmdbId}:v1`),
+    load: loadSummary,
+  });
+  const summary = resource.data;
 
   const computed = getComputedRating(summary, seasonNumber);
   const body = getBody({
@@ -60,7 +51,7 @@ export function ComputedRatingSummary({
           <Text style={styles.sectionTitle}>{title}</Text>
           <Text style={styles.body}>{body}</Text>
         </View>
-        {isLoading ? <ActivityIndicator color={colors.accent} /> : null}
+
       </View>
       {computed.averageScore !== null ? (
         <Text style={styles.score}>{formatScore(computed.averageScore)}/5</Text>

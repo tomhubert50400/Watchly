@@ -82,7 +82,16 @@ async function apiRequest<T>(method: string, path: string, options: ApiRequestOp
       return undefined as T;
     }
 
-    return (await response.json()) as T;
+    const responseText = await response.text();
+    if (!responseText.trim()) {
+      return undefined as T;
+    }
+
+    try {
+      return JSON.parse(responseText) as T;
+    } catch {
+      throw new ApiError('API returned an invalid response.', response.status);
+    }
   } catch (error) {
     if (error instanceof ApiError) {
       throw error;

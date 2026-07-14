@@ -2,8 +2,7 @@ import { useCallback } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getSeasonDetails, SeasonDetailsResponse } from '../api/catalogue';
-import { getPublicCacheKey } from '../cache/persistedCache';
+import { SeasonDetailsResponse } from '../api/catalogue';
 import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -13,14 +12,15 @@ import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { SeasonEpisodeList } from '../episodes/SeasonEpisodeList';
 import { RootStackParamList } from '../navigation/types';
 import { ComputedRatingSummary } from '../tracking/ComputedRatingSummary';
+import { ensureSeasonDetails, getSeasonResourceKey } from './cataloguePrefetch';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SeasonDetail'>;
 
 export function SeasonDetailScreen({ route }: Props) {
   const { seasonNumber, seriesTitle, tmdbId } = route.params;
-  const load = useCallback(() => getSeasonDetails(tmdbId, seasonNumber), [seasonNumber, tmdbId]);
+  const load = useCallback(() => ensureSeasonDetails(tmdbId, seasonNumber), [seasonNumber, tmdbId]);
   const resource = useCachedResource<SeasonDetailsResponse>({
-    key: getPublicCacheKey(`catalogue:series:${tmdbId}:season:${seasonNumber}`),
+    key: getSeasonResourceKey(tmdbId, seasonNumber),
     load,
   });
   const season = resource.data?.item ?? null;
@@ -83,7 +83,7 @@ export function SeasonDetailScreen({ route }: Props) {
 const styles = StyleSheet.create({
   body: { ...typography.body, color: colors.muted, marginTop: spacing.sm },
   content: { flexGrow: 1, paddingBottom: spacing.xxxl, paddingHorizontal: spacing.xl, paddingTop: spacing.xxxl },
-  eyebrow: { ...typography.eyebrow, color: colors.accent, marginBottom: spacing.xs },
+  eyebrow: { ...typography.eyebrow, color: colors.accentText, marginBottom: spacing.xs },
   header: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.lg },
   headerCopy: { flex: 1, justifyContent: 'center', minWidth: 0 },
   metadata: { ...typography.meta, color: colors.accentText, marginTop: spacing.sm },

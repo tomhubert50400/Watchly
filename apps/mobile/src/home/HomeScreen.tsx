@@ -6,7 +6,6 @@ import { Bell, UserCircle } from 'lucide-react-native';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   CatalogueSearchItem,
-  getCatalogueMovieSections,
   getEpisodeDetails,
   getMovieDetails,
   getSeasonDetails,
@@ -17,6 +16,7 @@ import { listNotifications } from '../api/notifications';
 import { listSeriesProgressSummaries, SeriesProgressSummary } from '../api/progress';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { getPrivateCacheKey, getPublicCacheKey } from '../cache/persistedCache';
+import { setMemoryResource } from '../cache/memoryResourceCache';
 import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -30,6 +30,7 @@ import { RootStackParamList, RootTabParamList } from '../navigation/types';
 import { countUnreadNotifications } from '../notifications/notificationModel';
 import { ContinueWatchingRail } from './ContinueWatchingRail';
 import { HomeHero } from './HomeHero';
+import { ensureCatalogueSections } from '../catalogue/catalogueSectionsResource';
 import {
   buildHomeSections,
   HomeCatalogueData,
@@ -176,7 +177,7 @@ export function HomeScreen() {
               />
               {unreadNotificationCount > 0 ? (
                 <View pointerEvents="none" style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeLabel}>
+                  <Text maxFontSizeMultiplier={1.5} style={styles.notificationBadgeLabel}>
                     {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
                   </Text>
                 </View>
@@ -316,7 +317,7 @@ function TrendingRail({
 }
 
 async function loadHomeCatalogue(): Promise<HomeCatalogueData> {
-  const response = await getCatalogueMovieSections();
+  const response = await ensureCatalogueSections();
   const featured = response.trending[0] ?? null;
 
   if (!featured) {
@@ -327,6 +328,11 @@ async function loadHomeCatalogue(): Promise<HomeCatalogueData> {
 
   try {
     details = (await getMovieDetails(featured.tmdbId)).item;
+    setMemoryResource(
+      `watchly:public:catalogue:movie:${featured.tmdbId}`,
+      details,
+      new Date().toISOString(),
+    );
   } catch {
     // The real catalogue item remains usable even if its richer detail request fails.
   }

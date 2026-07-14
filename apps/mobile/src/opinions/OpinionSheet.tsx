@@ -1,5 +1,5 @@
 import { Star, Trash2 } from 'lucide-react-native';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,10 +10,12 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { BottomActionSheet } from '../components/BottomActionSheet';
 import { Button } from '../components/Button';
+import { useAuthSession } from '../auth/AuthSessionContext';
 import { colors, radii, shadows, spacing, touchTargets, typography } from '../design/tokens';
 import { useToast } from '../notifications/ToastContext';
 import {
@@ -32,6 +34,7 @@ import {
   isOpinionDirty,
   resetOpinionDraft,
 } from './opinionState';
+import { resolveOpinionTriggerLayout } from './opinionTriggerLayout';
 
 const STAR_TARGET_SIZE = 52;
 const STAR_ICON_SIZE = 34;
@@ -48,8 +51,10 @@ type OpinionSheetProps = {
   mediaLabel: string;
   mediaMeta?: string | null;
   onChanged: () => void;
+  ownerKey?: string | null;
   perform: (operation: OpinionOperation) => Promise<void>;
   posterUrl?: string | null;
+  resourceKey?: string;
   signedOutMessage: string;
 };
 
@@ -59,19 +64,36 @@ export function OpinionSheet({
   mediaLabel,
   mediaMeta,
   onChanged,
+  ownerKey,
   perform,
   posterUrl,
+  resourceKey,
   signedOutMessage,
 }: OpinionSheetProps) {
+  const { currentUser } = useAuthSession();
   const { showToast } = useToast();
+  const { fontScale } = useWindowDimensions();
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [opinion, setOpinion] = useState<OpinionState>(() => createOpinionState(null, null));
+  const requestScope = JSON.stringify([ownerKey ?? currentUser?.id ?? null, resourceKey ?? mediaLabel, isSignedIn]);
+  const requestRef = useRef({ scope: requestScope, version: 0 });
+  const triggerLayout = resolveOpinionTriggerLayout(Boolean(loadError), fontScale);
+
+  if (requestRef.current.scope !== requestScope) {
+    requestRef.current = { scope: requestScope, version: requestRef.current.version + 1 };
+  }
 
   const loadOpinion = useCallback(async () => {
+    const scope = requestScope;
+    const version = requestRef.current.version + 1;
+    requestRef.current = { scope, version };
+    const isCurrent = () => requestRef.current.scope === scope && requestRef.current.version === version;
+
     if (!isSignedIn) {
+      setIsLoading(false);
       setOpinion(createOpinionState(null, null));
       setLoadError(null);
       return;
@@ -81,17 +103,22 @@ export function OpinionSheet({
     setLoadError(null);
     try {
       const loaded = await load();
+      if (!isCurrent()) return;
       setOpinion(createOpinionState(loaded.rating, loaded.review));
     } catch {
+      if (!isCurrent()) return;
       setLoadError('Could not load your opinion.');
     } finally {
-      setIsLoading(false);
+      if (isCurrent()) setIsLoading(false);
     }
-  }, [isSignedIn, load]);
+  }, [isSignedIn, load, requestScope]);
 
   useEffect(() => {
+    setIsOpen(false);
+    setIsSaving(false);
+    setOpinion(createOpinionState(null, null));
     void loadOpinion();
-  }, [loadOpinion]);
+  }, [loadOpinion, requestScope]);
 
   const summary = useMemo(() => {
     if (!isSignedIn) return signedOutMessage;
@@ -112,6 +139,10 @@ export function OpinionSheet({
   async function runOperations(operations: OpinionOperation[]) {
     if (operations.length === 0 || isSaving) return false;
 
+    const scope = requestScope;
+    const version = requestRef.current.version + 1;
+    requestRef.current = { scope, version };
+    const isCurrent = () => requestRef.current.scope === scope && requestRef.current.version === version;
     let next = beginOpinionOperations(opinion);
     setOpinion(next);
     setIsSaving(true);
@@ -121,10 +152,12 @@ export function OpinionSheet({
       for (const operation of operations) {
         try {
           await perform(operation);
+          if (!isCurrent()) return false;
           next = applyOperationSuccess(next, operation);
           changed = true;
           setOpinion(next);
         } catch {
+          if (!isCurrent()) return false;
           next = applyOperationFailure(next, operation, operationError(operation));
           setOpinion(next);
           return false;
@@ -132,8 +165,10 @@ export function OpinionSheet({
       }
       return true;
     } finally {
-      setIsSaving(false);
-      if (changed) onChanged();
+      if (isCurrent()) {
+        setIsSaving(false);
+        if (changed) onChanged();
+      }
     }
   }
 
@@ -193,20 +228,26 @@ export function OpinionSheet({
 
   return (
     <View style={styles.triggerPanel}>
-      <View style={styles.triggerCopy}>
-        <Text style={styles.triggerTitle}>Your opinion</Text>
+      <Text style={styles.triggerTitle}>Your opinion</Text>
+      <View style={[styles.triggerContent, triggerLayout.contentStacked ? styles.triggerContentStacked : null]}>
         <Text style={[styles.triggerBody, loadError ? styles.errorText : null]}>{summary}</Text>
+        <View style={[
+          styles.triggerAction,
+          triggerLayout.contentStacked ? styles.triggerActionStacked : null,
+          { maxWidth: triggerLayout.actionMaxWidth },
+        ]}>
+          {isLoading ? <ActivityIndicator color={colors.rating} /> : null}
+          {isSignedIn && !loadError ? (
+            <Button
+              compact
+              disabled={isLoading}
+              label={opinion.savedRating === null ? 'Rate & review' : 'Edit opinion'}
+              onPress={() => setIsOpen(true)}
+            />
+          ) : null}
+          {loadError && isSignedIn ? <Button compact label="Retry" onPress={() => void loadOpinion()} variant="ghost" /> : null}
+        </View>
       </View>
-      {isLoading ? <ActivityIndicator color={colors.rating} /> : null}
-      {isSignedIn ? (
-        <Button
-          disabled={isLoading || Boolean(loadError)}
-          label={opinion.savedRating === null ? 'Rate & review' : 'Edit opinion'}
-          onPress={() => setIsOpen(true)}
-          variant="secondary"
-        />
-      ) : null}
-      {loadError && isSignedIn ? <Button label="Retry" onPress={() => void loadOpinion()} variant="ghost" /> : null}
 
       <BottomActionSheet onClose={closeSheet} title="Your opinion" visible={isOpen}>
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -226,7 +267,33 @@ export function OpinionSheet({
           </View>
 
           <View style={styles.scoreZone}>
-            <View accessibilityRole="radiogroup" style={styles.stars}>
+            <View
+              accessibilityActions={[
+                { label: 'Increase rating by half a star', name: 'increment' },
+                { label: 'Decrease rating by half a star', name: 'decrement' },
+              ]}
+              accessibilityLabel="Rating"
+              accessibilityRole="adjustable"
+              accessibilityState={{ disabled: isSaving }}
+              accessibilityValue={{
+                max: 5,
+                min: 0,
+                now: opinion.draftRating ?? 0,
+                text: opinion.draftRating === null ? 'Not rated' : `${opinion.draftRating} out of 5`,
+              }}
+              onAccessibilityAction={(event) => {
+                setOpinion((current) => {
+                  const value = current.draftRating ?? 0;
+                  const draftRating = event.nativeEvent.actionName === 'increment'
+                    ? Math.min(5, value + 0.5)
+                    : value <= 0.5
+                      ? null
+                      : value - 0.5;
+                  return { ...current, draftRating, error: null };
+                });
+              }}
+              style={styles.stars}
+            >
               {STAR_VALUES.map((star) => (
                 <RatingStar
                   disabled={isSaving}
@@ -240,7 +307,7 @@ export function OpinionSheet({
             <Text accessibilityLiveRegion="polite" style={styles.scoreLabel}>
               {opinion.draftRating === null ? 'Tap to rate' : `${opinion.draftRating} / 5`}
             </Text>
-            <Text style={styles.help}>Tap either half of a star to adjust</Text>
+            <Text style={styles.help}>Tap either half, or swipe up and down with VoiceOver, to adjust</Text>
           </View>
 
           <View style={styles.reviewHeader}>
@@ -277,7 +344,7 @@ export function OpinionSheet({
               <Button disabled={isSaving} label="Clear rating" onPress={confirmClearRating} variant="ghost" />
             ) : null}
           </View>
-          <View style={styles.sheetActions}>
+          <View style={[styles.sheetActions, triggerLayout.actionsStacked ? styles.sheetActionsStacked : null]}>
             <View style={styles.actionButton}><Button disabled={isSaving} fullWidth label="Cancel" onPress={closeSheet} variant="secondary" /></View>
             <View style={styles.saveButton}>
               <Button
@@ -314,9 +381,7 @@ function RatingStar({
 
   return (
     <Pressable
-      accessibilityLabel={`Rate ${star - 0.5} or ${star} out of 5`}
-      accessibilityRole="radio"
-      accessibilityState={{ disabled, selected: score === star - 0.5 || score === star }}
+      accessible={false}
       disabled={disabled}
       onPress={handlePress}
       style={({ pressed }) => [styles.starTarget, pressed ? styles.pressed : null]}
@@ -361,13 +426,17 @@ const styles = StyleSheet.create({
   scoreLabel: { color: colors.ratingText, fontSize: 15, fontWeight: '800', marginTop: spacing.sm },
   scoreZone: { alignItems: 'center', borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: spacing.lg },
   sheetActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+  sheetActionsStacked: { flexDirection: 'column' },
   starClip: { height: STAR_ICON_SIZE, left: 0, overflow: 'hidden', position: 'absolute', top: 0 },
   starFrame: { height: STAR_ICON_SIZE, width: STAR_ICON_SIZE },
   starTarget: { alignItems: 'center', height: STAR_TARGET_SIZE, justifyContent: 'center', width: STAR_TARGET_SIZE },
   stars: { flexDirection: 'row', gap: 2 },
-  triggerBody: { ...typography.body, color: colors.textMuted, marginTop: spacing.xs },
-  triggerCopy: { flex: 1 },
-  triggerPanel: { ...shadows.panel, alignItems: 'center', backgroundColor: colors.panelElevated, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginBottom: spacing.md, padding: spacing.lg },
+  triggerAction: { flexShrink: 0, width: '35%' },
+  triggerActionStacked: { alignSelf: 'flex-start', width: 'auto' },
+  triggerBody: { ...typography.body, color: colors.textMuted, flex: 1, minWidth: 0 },
+  triggerContent: { alignItems: 'center', alignSelf: 'stretch', flexDirection: 'row', gap: spacing.md },
+  triggerContentStacked: { alignItems: 'stretch', flexDirection: 'column' },
+  triggerPanel: { ...shadows.panel, backgroundColor: colors.panelElevated, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, gap: spacing.md, marginBottom: spacing.md, padding: spacing.lg },
   triggerTitle: { ...typography.title, color: colors.text },
   unsaved: { ...typography.meta, color: colors.textSubtle, marginBottom: spacing.lg, marginTop: spacing.sm, textAlign: 'center' },
 });

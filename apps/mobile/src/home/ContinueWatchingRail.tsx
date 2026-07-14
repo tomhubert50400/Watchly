@@ -1,5 +1,6 @@
-import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { colors, radii, spacing, typography } from '../design/tokens';
+import { resolveContinueWatchingLayout } from './continueWatchingLayout';
 import type { HomeProgressItem } from './homeData';
 
 type ContinueWatchingRailProps = {
@@ -8,6 +9,9 @@ type ContinueWatchingRailProps = {
 };
 
 export function ContinueWatchingRail({ items, onOpen }: ContinueWatchingRailProps) {
+  const { fontScale } = useWindowDimensions();
+  const layout = resolveContinueWatchingLayout(fontScale);
+
   return (
     <ScrollView
       contentContainerStyle={styles.rail}
@@ -21,21 +25,21 @@ export function ContinueWatchingRail({ items, onOpen }: ContinueWatchingRailProp
           accessibilityRole="button"
           key={`${item.seriesTmdbId}:${item.seasonNumber}:${item.episodeNumber}`}
           onPress={() => onOpen(item)}
-          style={({ pressed }) => [styles.card, pressed ? styles.pressed : null]}
+          style={({ pressed }) => [styles.card, { width: layout.cardWidth }, pressed ? styles.pressed : null]}
         >
           {item.backdropUrl ? (
             <ImageBackground
               accessibilityIgnoresInvertColors
               imageStyle={styles.image}
               source={{ uri: item.backdropUrl }}
-              style={styles.artwork}
+              style={[styles.artwork, { minHeight: layout.artworkMinHeight }]}
             >
               <View style={styles.scrim} />
-              <CardCopy item={item} />
+              <CardCopy item={item} layout={layout} />
             </ImageBackground>
           ) : (
-            <View style={[styles.artwork, styles.placeholder]}>
-              <CardCopy item={item} />
+            <View style={[styles.artwork, styles.placeholder, { minHeight: layout.artworkMinHeight }]}>
+              <CardCopy item={item} layout={layout} />
             </View>
           )}
         </Pressable>
@@ -44,11 +48,17 @@ export function ContinueWatchingRail({ items, onOpen }: ContinueWatchingRailProp
   );
 }
 
-function CardCopy({ item }: { item: HomeProgressItem }) {
+function CardCopy({
+  item,
+  layout,
+}: {
+  item: HomeProgressItem;
+  layout: ReturnType<typeof resolveContinueWatchingLayout>;
+}) {
   return (
     <View style={styles.copy}>
-      <Text numberOfLines={1} style={styles.title}>{item.seriesTitle}</Text>
-      <Text numberOfLines={1} style={styles.meta}>
+      <Text numberOfLines={layout.titleNumberOfLines} style={styles.title}>{item.seriesTitle}</Text>
+      <Text numberOfLines={layout.metaNumberOfLines} style={styles.meta}>
         S{item.seasonNumber} E{item.episodeNumber} · {item.episodeTitle}
       </Text>
     </View>
@@ -57,7 +67,6 @@ function CardCopy({ item }: { item: HomeProgressItem }) {
 
 const styles = StyleSheet.create({
   artwork: {
-    height: 146,
     justifyContent: 'flex-end',
   },
   card: {
@@ -66,7 +75,6 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     overflow: 'hidden',
-    width: 266,
   },
   copy: {
     padding: spacing.md,

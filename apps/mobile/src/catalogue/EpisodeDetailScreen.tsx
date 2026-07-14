@@ -2,8 +2,7 @@ import { useCallback, useLayoutEffect } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Star } from 'lucide-react-native';
 import { Image, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { EpisodeDetails, EpisodeDetailsResponse, getEpisodeDetails } from '../api/catalogue';
-import { getPublicCacheKey } from '../cache/persistedCache';
+import { EpisodeDetails, EpisodeDetailsResponse } from '../api/catalogue';
 import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
@@ -15,6 +14,7 @@ import { RootStackParamList } from '../navigation/types';
 import { EpisodeReviewEditor } from '../reviews/EpisodeReviewEditor';
 import { EpisodeProgressControl } from '../tracking/EpisodeProgressControl';
 import { isReleasedDate } from './releaseDates';
+import { ensureEpisodeDetails, getEpisodeResourceKey } from './cataloguePrefetch';
 
 type EpisodeDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'EpisodeDetail'>;
 
@@ -22,10 +22,10 @@ export function EpisodeDetailScreen({ navigation, route }: EpisodeDetailScreenPr
   const { episodeNumber, seasonNumber, tmdbId } = route.params;
   const { width: windowWidth } = useWindowDimensions();
   const loadEpisode = useCallback(() => {
-    return getEpisodeDetails(tmdbId, seasonNumber, episodeNumber);
+    return ensureEpisodeDetails(tmdbId, seasonNumber, episodeNumber);
   }, [episodeNumber, seasonNumber, tmdbId]);
   const resource = useCachedResource<EpisodeDetailsResponse>({
-    key: getPublicCacheKey(`catalogue:series:${tmdbId}:season:${seasonNumber}:episode:${episodeNumber}`),
+    key: getEpisodeResourceKey(tmdbId, seasonNumber, episodeNumber),
     load: loadEpisode,
   });
   const episode = resource.data?.item ?? null;

@@ -16,6 +16,8 @@ import { colors } from './src/design/tokens';
 import { HomeScreen } from './src/home/HomeScreen';
 import { JournalScreen } from './src/journal/JournalScreen';
 import { LibraryScreen } from './src/library/LibraryScreen';
+import { appLinking } from './src/navigation/linking';
+import { detailBackOptions, resolvePreviousPageLabel, rootStackScreenOptions } from './src/navigation/stackConfig';
 import { mainTabs, MainTabName } from './src/navigation/tabConfig';
 import { RootStackParamList, RootTabParamList } from './src/navigation/types';
 import { NotificationsScreen } from './src/notifications/NotificationsScreen';
@@ -79,7 +81,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthSessionProvider>
-        <NavigationContainer>
+        <NavigationContainer linking={appLinking}>
           <ToastProvider>
             <CatalogueCacheProvider>
               <WatchlistCacheProvider>
@@ -101,13 +103,15 @@ function AppNavigator() {
     <>
       <StatusBar style="light" />
       <Stack.Navigator
-        screenOptions={{
+        screenOptions={({ navigation }) => ({
           contentStyle: { backgroundColor: colors.background },
+          ...rootStackScreenOptions,
+          ...detailBackOptions(resolvePreviousPageLabel(navigation.getState().routes)),
           headerShadowVisible: false,
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
           headerTitleStyle: styles.stackHeaderTitle,
-        }}
+        })}
       >
         {needsOnboarding ? (
           <Stack.Screen

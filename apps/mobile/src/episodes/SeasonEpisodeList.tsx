@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Check, Star } from 'lucide-react-native';
@@ -7,6 +8,7 @@ import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { isReleasedDate } from '../catalogue/releaseDates';
+import { ensureEpisodeDetails } from '../catalogue/cataloguePrefetch';
 import { isEpisodeWatched } from './episodeModel';
 import { useSeasonEpisodes } from './useSeasonEpisodes';
 
@@ -25,6 +27,17 @@ export function SeasonEpisodeList({
 }: SeasonEpisodeListProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const model = useSeasonEpisodes({ initialSeason, seasonNumber, seriesTmdbId });
+
+  useEffect(() => {
+    const likelyEpisode = model.nextEpisode ?? model.episodes[0];
+    if (likelyEpisode) {
+      void ensureEpisodeDetails(
+        seriesTmdbId,
+        likelyEpisode.seasonNumber,
+        likelyEpisode.episodeNumber,
+      ).catch(() => undefined);
+    }
+  }, [model.episodes, model.nextEpisode, seriesTmdbId]);
 
   if (model.isLoading && !model.season) {
     return (
@@ -94,6 +107,13 @@ export function SeasonEpisodeList({
             accessibilityLabel={`Open ${episode.title}${watched ? ', watched' : isNext ? ', next episode' : ''}`}
             accessibilityRole="button"
             key={episode.id}
+            onPressIn={() => {
+              void ensureEpisodeDetails(
+                seriesTmdbId,
+                episode.seasonNumber,
+                episode.episodeNumber,
+              ).catch(() => undefined);
+            }}
             onPress={() => navigation.navigate('EpisodeDetail', {
               episodeNumber: episode.episodeNumber,
               seasonNumber: episode.seasonNumber,

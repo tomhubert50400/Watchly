@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, StyleProp, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
+import { Animated, Easing, Pressable, StyleProp, StyleSheet, Text, TextStyle, useWindowDimensions, View, ViewStyle } from 'react-native';
 import { colors, radii, spacing, touchTargets } from '../design/tokens';
+import { resolveDynamicTypeLayout } from './dynamicTypeLayout';
 
 type SegmentedControlOption<T extends string> = {
   accessibilityLabel?: string;
@@ -12,6 +13,7 @@ type SegmentedControlOption<T extends string> = {
 type SegmentedControlProps<T extends string> = {
   buttonMinHeight?: number;
   containerStyle?: StyleProp<ViewStyle>;
+  disabled?: boolean;
   labelStyle?: StyleProp<TextStyle>;
   onChange: (value: T) => void;
   options: SegmentedControlOption<T>[];
@@ -25,14 +27,17 @@ const controlPadding = 3;
 export function SegmentedControl<T extends string>({
   buttonMinHeight = 40,
   containerStyle,
+  disabled = false,
   labelStyle,
   onChange,
   options,
   selectedLabelStyle,
   value,
 }: SegmentedControlProps<T>) {
+  const { fontScale } = useWindowDimensions();
+  const dynamicTypeLayout = resolveDynamicTypeLayout(fontScale);
   const [controlWidth, setControlWidth] = useState(0);
-  const buttonHeight = Math.max(buttonMinHeight, touchTargets.min);
+  const buttonHeight = Math.max(buttonMinHeight, touchTargets.min, dynamicTypeLayout.segmentMinHeight);
   const initialIndex = options.findIndex((option) => option.value === value);
   const selectionProgress = useRef(new Animated.Value(Math.max(initialIndex, 0))).current;
   const selectedIndex = options.findIndex((option) => option.value === value);
@@ -59,9 +64,14 @@ export function SegmentedControl<T extends string>({
   return (
     <View
       onLayout={(event) => setControlWidth(event.nativeEvent.layout.width)}
-      style={[styles.control, containerStyle]}
+      style={[
+        styles.control,
+        dynamicTypeLayout.segmentStacked && styles.controlStacked,
+        disabled && styles.controlDisabled,
+        containerStyle,
+      ]}
     >
-      {indicatorWidth > 0 && selectedIndex >= 0 ? (
+      {!dynamicTypeLayout.segmentStacked && indicatorWidth > 0 && selectedIndex >= 0 ? (
         <Animated.View
           pointerEvents="none"
           style={[
@@ -80,12 +90,15 @@ export function SegmentedControl<T extends string>({
           <Pressable
             accessibilityLabel={option.accessibilityLabel ?? option.label}
             accessibilityRole="button"
-            accessibilityState={{ selected }}
+            accessibilityState={{ disabled, selected }}
+            disabled={disabled}
             key={option.value}
             onPress={() => onChange(option.value)}
             style={({ pressed }) => [
               styles.button,
               { minHeight: buttonHeight },
+              dynamicTypeLayout.segmentStacked && styles.buttonStacked,
+              dynamicTypeLayout.segmentStacked && selected && styles.buttonStackedSelected,
               pressed && styles.pressed,
             ]}
           >
@@ -93,7 +106,7 @@ export function SegmentedControl<T extends string>({
               option.render({ selected })
             ) : (
               <Text
-                numberOfLines={1}
+                numberOfLines={dynamicTypeLayout.segmentNumberOfLines}
                 style={[styles.label, labelStyle, selected && styles.labelSelected, selected && selectedLabelStyle]}
               >
                 {option.label}
@@ -116,6 +129,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     zIndex: 1,
   },
+  buttonStacked: {
+    flex: 0,
+    width: '100%',
+  },
+  buttonStackedSelected: {
+    backgroundColor: colors.segmentSelected,
+    borderColor: colors.segmentSelectedBorder,
+    borderWidth: 1,
+  },
   control: {
     backgroundColor: colors.panelSoft,
     borderColor: colors.border,
@@ -124,6 +146,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: controlGap,
     padding: controlPadding,
+  },
+  controlDisabled: {
+    opacity: 0.55,
+  },
+  controlStacked: {
+    flexDirection: 'column',
   },
   indicator: {
     backgroundColor: colors.segmentSelected,

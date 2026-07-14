@@ -8,7 +8,7 @@ export type CachedResourceState<T> = {
 
 export type CachedResourceAction<T> =
   | { type: 'cacheLoaded'; data: T; savedAt: string }
-  | { type: 'requestStarted' }
+  | { type: 'requestStarted'; visible?: boolean }
   | { type: 'requestSucceeded'; data: T; savedAt: string }
   | { type: 'requestFailed'; error: string }
   | { type: 'reset' };
@@ -42,7 +42,7 @@ export function cachedResourceReducer<T>(
         ...state,
         error: null,
         isInitialLoading: state.data === null,
-        isRefreshing: state.data !== null,
+        isRefreshing: state.data !== null && action.visible !== false,
       };
     case 'requestFailed':
       return {

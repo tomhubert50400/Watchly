@@ -30,6 +30,7 @@ import {
   type NotificationItem,
   type NotificationTarget,
 } from './notificationModel';
+import { loadNotificationItems } from './notificationsLoader';
 
 type NotificationsScreenProps = NativeStackScreenProps<RootStackParamList, 'Notifications'>;
 type OwnedInbox = { items: NotificationItem[]; ownerId: string | null };
@@ -62,23 +63,10 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
       throw new Error('Sign in again to update Alerts.');
     }
 
-    try {
-      const listed = await listNotifications(token);
-
-      try {
-        const synced = await syncNotifications(token);
-        return synced.items;
-      } catch {
-        // GET content remains useful if release synchronization is unavailable.
-        return listed.items;
-      }
-    } catch (listError) {
-      try {
-        return (await syncNotifications(token)).items;
-      } catch {
-        throw listError;
-      }
-    }
+    return loadNotificationItems(token, {
+      list: listNotifications,
+      sync: syncNotifications,
+    });
   }, [getFirebaseIdToken, ownerId]);
   const resource = useCachedResource<NotificationItem[]>({
     enabled: Boolean(ownerId && firebaseIdToken),

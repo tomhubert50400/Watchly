@@ -15,7 +15,8 @@ import {
   cachedResourceReducer,
   createInitialCachedResourceState,
 } from './cachedResourceReducer';
-import { createRequestVersionGuard } from './useCachedResource';
+import { setMemoryResource } from './memoryResourceCache';
+import { createCachedResourceStateFromMemory, createRequestVersionGuard } from './useCachedResource';
 
 const initial = createInitialCachedResourceState<string[]>();
 assert.deepEqual(initial, {
@@ -24,6 +25,15 @@ assert.deepEqual(initial, {
   isInitialLoading: false,
   isRefreshing: false,
   savedAt: null,
+});
+
+setMemoryResource('watchly:public:instant', ['instant'], '2026-07-11T00:00:00.000Z');
+assert.deepEqual(createCachedResourceStateFromMemory<string[]>('watchly:public:instant'), {
+  data: ['instant'],
+  error: null,
+  isInitialLoading: false,
+  isRefreshing: false,
+  savedAt: '2026-07-11T00:00:00.000Z',
 });
 
 const initialLoading = cachedResourceReducer(initial, { type: 'requestStarted' });
@@ -47,6 +57,11 @@ const refreshing = cachedResourceReducer(firstSuccess, { type: 'requestStarted' 
 assert.equal(refreshing.isInitialLoading, false);
 assert.equal(refreshing.isRefreshing, true);
 assert.deepEqual(refreshing.data, ['first']);
+
+const silentlyRevalidating = cachedResourceReducer(firstSuccess, { type: 'requestStarted', visible: false });
+assert.equal(silentlyRevalidating.isInitialLoading, false, 'cached content must stay visible during background refresh');
+assert.equal(silentlyRevalidating.isRefreshing, false, 'background refresh must not announce a loading state');
+assert.deepEqual(silentlyRevalidating.data, ['first']);
 
 const refreshed = cachedResourceReducer(refreshing, {
   type: 'requestSucceeded',

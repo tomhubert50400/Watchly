@@ -12,7 +12,7 @@ type MovieRatingControlProps = {
 };
 
 export function MovieRatingControl({ mediaTitle = 'This film', posterUrl, tmdbId }: MovieRatingControlProps) {
-  const { firebaseIdToken, notifyTrackingChanged } = useAuthSession();
+  const { currentUser, firebaseIdToken, notifyTrackingChanged } = useAuthSession();
   const load = useCallback(async () => {
     if (!firebaseIdToken) return { rating: null, review: null };
     const [rating, review] = await Promise.all([
@@ -42,11 +42,14 @@ export function MovieRatingControl({ mediaTitle = 'This film', posterUrl, tmdbId
   return (
     <OpinionSheet
       isSignedIn={Boolean(firebaseIdToken)}
+      key={`${currentUser?.id ?? 'signed-out'}:movie:${tmdbId}`}
       load={load}
       mediaLabel={mediaTitle}
       onChanged={notifyTrackingChanged}
+      ownerKey={currentUser?.id ?? null}
       perform={perform}
       posterUrl={posterUrl}
+      resourceKey={`movie:${tmdbId}`}
       signedOutMessage="Sign in from Profile to rate or review this film."
     />
   );

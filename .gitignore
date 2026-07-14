@@ -20,5 +20,8 @@ apps/api/src/generated/
 
 *.log
 *.pyc
+.DS_Store
 __pycache__/
+.hermes-audit/
 expo-go-*-qr.png
+*-expo-go*-qr.png

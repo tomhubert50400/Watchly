@@ -532,7 +532,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flex: 1,
     justifyContent: 'center',
-    minHeight: 42,
+    minHeight: 44,
     paddingHorizontal: spacing.sm,
   },
   filterLabel: {
@@ -641,7 +641,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   resultMeta: {
-    color: colors.accent,
+    color: colors.accentText,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0,

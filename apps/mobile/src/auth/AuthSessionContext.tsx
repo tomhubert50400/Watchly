@@ -1,6 +1,7 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getCurrentUser, CurrentUser } from '../api/auth';
 import { clearPrivateCacheForUser } from '../cache/persistedCache';
+import { createAuthTransitionGuard, performGuaranteedSignOut } from './authTransition';
 import {
   getFreshFirebaseIdToken,
   getFirebaseSessionFromUser,
@@ -37,6 +38,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   const explicitSignOutRef = useRef(false);
   const devSignInAttemptedRef = useRef(false);
   const latestFirebaseIdTokenRef = useRef<string | null>(null);
+  const authTransitionsRef = useRef(createAuthTransitionGuard());
 
   useEffect(() => {
     latestFirebaseIdTokenRef.current = firebaseIdToken;
@@ -49,8 +51,11 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     setTrackingRevision((revision) => revision + 1);
   }, []);
   const getFirebaseIdToken = useCallback(async () => {
+    const transition = authTransitionsRef.current.current();
     try {
       const nextToken = await getFreshFirebaseIdToken();
+
+      if (!authTransitionsRef.current.isCurrent(transition)) return null;
 
       if (!nextToken && latestFirebaseIdTokenRef.current && !explicitSignOutRef.current) {
         return latestFirebaseIdTokenRef.current;
@@ -66,6 +71,8 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
 
       return nextToken;
     } catch {
+      if (!authTransitionsRef.current.isCurrent(transition)) return null;
+
       if (latestFirebaseIdTokenRef.current && !explicitSignOutRef.current) {
         return latestFirebaseIdTokenRef.current;
       }
@@ -79,14 +86,17 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
-  const applyFirebaseSession = useCallback(async (firebaseIdToken: string) => {
-    const user = await getCurrentUser(firebaseIdToken);
+  const applyFirebaseSession = useCallback(async (nextFirebaseIdToken: string, transition: number) => {
+    const user = await getCurrentUser(nextFirebaseIdToken);
+
+    if (!authTransitionsRef.current.isCurrent(transition)) return false;
 
     explicitSignOutRef.current = false;
-    latestFirebaseIdTokenRef.current = firebaseIdToken;
-    setFirebaseIdToken(firebaseIdToken);
+    latestFirebaseIdTokenRef.current = nextFirebaseIdToken;
+    setFirebaseIdToken(nextFirebaseIdToken);
     setCurrentUser(user);
     setStatus('signedIn');
+    return true;
   }, []);
 
   useEffect(() => {
@@ -95,10 +105,9 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     setStatus('loading');
 
     const unsubscribe = subscribeToFirebaseAuthState((firebaseUser) => {
+      const transition = authTransitionsRef.current.begin();
       void (async () => {
-        if (!isMounted) {
-          return;
-        }
+        if (!isMounted || !authTransitionsRef.current.isCurrent(transition)) return;
 
         if (!firebaseUser) {
           if (!explicitSignOutRef.current && !devSignInAttemptedRef.current) {
@@ -107,8 +116,10 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
             try {
               const devSession = await signInWithConfiguredDevAccount();
 
+              if (!isMounted || !authTransitionsRef.current.isCurrent(transition)) return;
+
               if (devSession) {
-                await applyFirebaseSession(devSession.firebaseIdToken);
+                await applyFirebaseSession(devSession.firebaseIdToken, transition);
                 return;
               }
             } catch {
@@ -116,9 +127,9 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
             }
           }
 
-          if (latestFirebaseIdTokenRef.current && !explicitSignOutRef.current) {
-            return;
-          }
+          if (!authTransitionsRef.current.isCurrent(transition)) return;
+
+          if (latestFirebaseIdTokenRef.current && !explicitSignOutRef.current) return;
 
           setFirebaseIdToken(null);
           setCurrentUser(null);
@@ -129,62 +140,73 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
         try {
           const firebaseSession = await getFirebaseSessionFromUser(firebaseUser);
 
-          if (isMounted) {
-            await applyFirebaseSession(firebaseSession.firebaseIdToken);
-          }
-        } catch {
-          if (isMounted) {
-            if (latestFirebaseIdTokenRef.current && !explicitSignOutRef.current) {
-              return;
-            }
+          if (!isMounted || !authTransitionsRef.current.isCurrent(transition)) return;
 
-            setFirebaseIdToken(null);
-            setCurrentUser(null);
-            setStatus('error');
-          }
+          await applyFirebaseSession(firebaseSession.firebaseIdToken, transition);
+        } catch {
+          if (!isMounted || !authTransitionsRef.current.isCurrent(transition)) return;
+
+          if (latestFirebaseIdTokenRef.current && !explicitSignOutRef.current) return;
+
+          setFirebaseIdToken(null);
+          setCurrentUser(null);
+          setStatus('error');
         }
       })();
     });
 
     return () => {
       isMounted = false;
+      authTransitionsRef.current.invalidate();
       unsubscribe();
     };
   }, [applyFirebaseSession]);
 
   const signInWithGoogle = useCallback(async (googleIdToken: string) => {
+    const transition = authTransitionsRef.current.begin();
+    explicitSignOutRef.current = false;
     setStatus('loading');
-    const firebaseSession = await signInWithGoogleIdToken(googleIdToken);
+    try {
+      const firebaseSession = await signInWithGoogleIdToken(googleIdToken);
 
-    await applyFirebaseSession(firebaseSession.firebaseIdToken);
+      if (!authTransitionsRef.current.isCurrent(transition)) return;
+
+      await applyFirebaseSession(firebaseSession.firebaseIdToken, transition);
+    } catch (error) {
+      if (authTransitionsRef.current.isCurrent(transition)) setStatus('error');
+      throw error;
+    }
   }, [applyFirebaseSession]);
   const refreshCurrentUser = useCallback(async () => {
-    if (!firebaseIdToken) {
-      return;
-    }
+    if (!firebaseIdToken) return;
 
+    const transition = authTransitionsRef.current.current();
     const user = await getCurrentUser(firebaseIdToken);
+
+    if (!authTransitionsRef.current.isCurrent(transition)) return;
 
     setCurrentUser(user);
   }, [firebaseIdToken]);
   const signOut = useCallback(async () => {
+    const transition = authTransitionsRef.current.begin();
     setStatus('loading');
     explicitSignOutRef.current = true;
     const signedOutUserId = currentUser?.id;
-
-    await signOutFromFirebase();
+    latestFirebaseIdTokenRef.current = null;
+    setFirebaseIdToken(null);
+    setCurrentUser(null);
+    setSocialRevision(0);
+    setTrackingRevision(0);
 
     try {
-      if (signedOutUserId) {
-        await clearPrivateCacheForUser(signedOutUserId);
-      }
+      await performGuaranteedSignOut(signedOutUserId, {
+        clearPrivateCacheForUser,
+        signOutFromFirebase,
+      });
+      const isCurrentAfterFirebaseSignOut = authTransitionsRef.current.isCurrent(transition);
+      if (!isCurrentAfterFirebaseSignOut || !authTransitionsRef.current.isCurrent(transition)) return;
     } finally {
-      latestFirebaseIdTokenRef.current = null;
-      setFirebaseIdToken(null);
-      setCurrentUser(null);
-      setSocialRevision(0);
-      setTrackingRevision(0);
-      setStatus('idle');
+      if (authTransitionsRef.current.isCurrent(transition)) setStatus('idle');
     }
   }, [currentUser?.id]);
 
@@ -223,9 +245,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
 export function useAuthSession() {
   const context = useContext(AuthSessionContext);
 
-  if (!context) {
-    throw new Error('useAuthSession must be used inside AuthSessionProvider.');
-  }
+  if (!context) throw new Error('useAuthSession must be used inside AuthSessionProvider.');
 
   return context;
 }

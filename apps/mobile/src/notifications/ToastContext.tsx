@@ -1,7 +1,8 @@
 import { PropsWithChildren, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radii, shadows, spacing, touchTargets } from '../design/tokens';
+import { getToastAccessibility } from './toastAccessibility';
 
 type ToastTone = 'error' | 'success';
 
@@ -70,7 +71,14 @@ export function ToastProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
+  useEffect(() => {
+    if (!toast || Platform.OS !== 'ios') return;
+    const accessibility = getToastAccessibility(toast);
+    AccessibilityInfo.announceForAccessibility(accessibility.announcement);
+  }, [toast]);
+
   const value = useMemo(() => ({ showToast }), [showToast]);
+  const toastAccessibility = toast ? getToastAccessibility(toast) : null;
   const toastStyle = {
     opacity: progress,
     transform: [{
@@ -88,6 +96,10 @@ export function ToastProvider({ children }: PropsWithChildren) {
             style={[styles.toastFrame, { bottom: insets.bottom + 18 }, toastStyle]}
           >
             <View
+              accessibilityLabel={toastAccessibility?.announcement}
+              accessibilityLiveRegion={toastAccessibility?.accessibilityLiveRegion}
+              accessibilityRole={toastAccessibility?.accessibilityRole}
+              key={toastAccessibility?.announcementKey}
               style={[
                 styles.toast,
                 toast.tone === 'success' ? styles.successToast : styles.errorToast,

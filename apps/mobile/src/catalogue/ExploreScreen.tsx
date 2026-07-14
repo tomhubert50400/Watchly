@@ -18,10 +18,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   CatalogueSearchItem,
-  getCatalogueMovieSections,
   searchCatalogue,
 } from '../api/catalogue';
-import { getPublicCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -30,6 +28,8 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
+import { useCatalogueCache } from './CatalogueCacheContext';
+import { loadCatalogueSections, PUBLIC_CATALOGUE_SECTIONS_KEY } from './catalogueSectionsResource';
 import { ExploreMediaCard } from './ExploreMediaCard';
 import {
   buildExploreSections,
@@ -39,7 +39,6 @@ import {
 } from './exploreState';
 
 const SEARCH_INPUT_ACCESSORY_ID = 'explore-search-keyboard-accessory';
-const PUBLIC_EXPLORE_KEY = getPublicCacheKey('explore:sections:v1');
 const EMPTY_SECTIONS: Record<ExploreSection, CatalogueSearchItem[]> = { announced: [], trending: [] };
 
 type ExploreScreenProps = {
@@ -48,6 +47,7 @@ type ExploreScreenProps = {
 
 export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { preloadCatalogueItems } = useCatalogueCache();
   const [query, setQuery] = useState('');
   const [activeSection, setActiveSection] = useState<ExploreSection>('trending');
   const [searchItems, setSearchItems] = useState<CatalogueSearchItem[]>([]);
@@ -57,12 +57,15 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
   const [searchRevision, setSearchRevision] = useState(0);
   const trimmedQuery = query.trim();
   const isSearching = trimmedQuery.length >= 2;
-  const loadSections = useCallback(async () => {
-    const response = await getCatalogueMovieSections();
-    return buildExploreSections(response);
-  }, []);
-  const sections = useCachedResource({ key: PUBLIC_EXPLORE_KEY, load: loadSections });
-  const sectionItems = sections.data ?? EMPTY_SECTIONS;
+  const sections = useCachedResource({
+    key: PUBLIC_CATALOGUE_SECTIONS_KEY,
+    load: loadCatalogueSections,
+    staleTimeMs: 15 * 60 * 1000,
+  });
+  const sectionItems = useMemo(
+    () => sections.data ? buildExploreSections(sections.data) : EMPTY_SECTIONS,
+    [sections.data],
+  );
   const visibleSearchItems = searchItemsQuery === trimmedQuery ? searchItems : [];
   const visibleItems = isSearching ? visibleSearchItems : sectionItems[activeSection];
   const visibleError = isSearching ? searchError : sections.error;
@@ -79,13 +82,21 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
   const groupedSearchItems = useMemo(() => groupSearchResults(visibleSearchItems), [visibleSearchItems]);
 
   useEffect(() => {
-    if (isActive) {
+    if (!isActive) {
+      Keyboard.dismiss();
+    }
+  }, [isActive]);
+
+  useEffect(() => {
+    if (!isActive || isSearching) {
       return;
     }
 
-    setQuery('');
-    Keyboard.dismiss();
-  }, [isActive]);
+    preloadCatalogueItems(visibleItems.map((item) => ({
+      contentType: item.mediaType,
+      tmdbId: item.tmdbId,
+    })));
+  }, [isActive, isSearching, preloadCatalogueItems, visibleItems]);
 
   useEffect(() => {
     if (!isSearching) {
@@ -185,7 +196,7 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
               <Pressable
                 accessibilityLabel="Clear search"
                 accessibilityRole="button"
-                hitSlop={8}
+                hitSlop={12}
                 onPress={() => setQuery('')}
                 style={({ pressed }) => [styles.searchClearButton, pressed ? styles.pressed : null]}
               >
@@ -618,10 +629,10 @@ const styles = StyleSheet.create({
   searchClearButton: {
     alignItems: 'center',
     backgroundColor: colors.textMuted,
-    borderRadius: 10,
-    height: 20,
+    borderRadius: 12,
+    height: 24,
     justifyContent: 'center',
-    width: 20,
+    width: 24,
   },
   searchInput: {
     ...typography.body,

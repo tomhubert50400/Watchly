@@ -7,6 +7,7 @@ import { useAuthSession } from '../auth/AuthSessionContext';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
+import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { LoadingState } from '../components/LoadingState';
 import { MediaPoster } from '../components/MediaPoster';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
@@ -16,53 +17,68 @@ import { HydratedPersonalWatchlistItem, useWatchlistCache } from './WatchlistCac
 type PersonalWatchlistScreenProps = NativeStackScreenProps<RootStackParamList, 'PersonalWatchlist'>;
 
 export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlistScreenProps) {
-  const { firebaseIdToken, getFirebaseIdToken } = useAuthSession();
+  const { currentUser, firebaseIdToken } = useAuthSession();
   const { getCachedPersonalWatchlist, refreshPersonalWatchlist } = useWatchlistCache();
   const { watchlistId } = route.params;
+  const resourceScope = JSON.stringify([currentUser?.id ?? null, watchlistId]);
+  const initialCached = getCachedPersonalWatchlist(watchlistId);
   const [error, setError] = useState<string | null>(null);
   const [hydratedItems, setHydratedItems] = useState<HydratedPersonalWatchlistItem[]>(
-    () => getCachedPersonalWatchlist(watchlistId)?.hydratedItems ?? [],
+    () => initialCached?.hydratedItems ?? [],
   );
-  const [isLoading, setIsLoading] = useState(() => !getCachedPersonalWatchlist(watchlistId));
-  const [watchlist, setWatchlist] = useState<PersonalWatchlist | null>(
-    () => getCachedPersonalWatchlist(watchlistId)?.watchlist ?? null,
-  );
-  const hasVisibleWatchlistRef = useRef(Boolean(watchlist));
+  const [isLoading, setIsLoading] = useState(() => !initialCached);
+  const [watchlist, setWatchlist] = useState<PersonalWatchlist | null>(() => initialCached?.watchlist ?? null);
+  const [stateScope, setStateScope] = useState(resourceScope);
+  const requestRef = useRef({ scope: resourceScope, version: 0 });
+  const visibleStateRef = useRef({ scope: stateScope, watchlist });
+  visibleStateRef.current = { scope: stateScope, watchlist };
 
-  const loadWatchlist = useCallback(async (showLoading = false) => {
-    if (!firebaseIdToken) {
+  if (requestRef.current.scope !== resourceScope) {
+    requestRef.current = { scope: resourceScope, version: requestRef.current.version + 1 };
+  }
+
+  const isStateCurrent = stateScope === resourceScope;
+  const visibleWatchlist = isStateCurrent ? watchlist : null;
+  const visibleItems = isStateCurrent ? hydratedItems : [];
+
+  const loadWatchlist = useCallback(async () => {
+    const requestScope = resourceScope;
+    const requestVersion = requestRef.current.version + 1;
+    requestRef.current = { scope: requestScope, version: requestVersion };
+    const isCurrent = () => requestRef.current.scope === requestScope
+      && requestRef.current.version === requestVersion;
+
+    if (!firebaseIdToken || !currentUser) {
       setError(null);
       setHydratedItems([]);
       setIsLoading(false);
       setWatchlist(null);
+      setStateScope(requestScope);
       return;
     }
 
     setError(null);
-    setIsLoading(showLoading || !hasVisibleWatchlistRef.current);
+    setIsLoading(!visibleStateRef.current.watchlist);
 
     try {
-      const token = await getFirebaseIdToken();
-
-      if (!token) {
-        throw new Error('Sign in again to load this list.');
-      }
-
       const cached = await refreshPersonalWatchlist(watchlistId);
+      if (!isCurrent()) return;
 
       setHydratedItems(cached.hydratedItems);
       setWatchlist(cached.watchlist);
-      hasVisibleWatchlistRef.current = true;
+      setStateScope(requestScope);
     } catch (loadError) {
+      if (!isCurrent()) return;
       setError(loadError instanceof Error ? loadError.message : 'Could not load the list.');
-      if (!hasVisibleWatchlistRef.current) {
+      if (visibleStateRef.current.scope !== requestScope || !visibleStateRef.current.watchlist) {
         setHydratedItems([]);
         setWatchlist(null);
+        setStateScope(requestScope);
       }
     } finally {
-      setIsLoading(false);
+      if (isCurrent()) setIsLoading(false);
     }
-  }, [firebaseIdToken, getFirebaseIdToken, refreshPersonalWatchlist, watchlistId]);
+  }, [currentUser, firebaseIdToken, refreshPersonalWatchlist, resourceScope, watchlistId]);
 
   useEffect(() => {
     const cached = getCachedPersonalWatchlist(watchlistId);
@@ -70,15 +86,17 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     if (cached) {
       setHydratedItems(cached.hydratedItems);
       setWatchlist(cached.watchlist);
-      hasVisibleWatchlistRef.current = true;
+      setStateScope(resourceScope);
       setIsLoading(false);
-      void loadWatchlist(false);
+      void loadWatchlist();
       return;
     }
 
-    hasVisibleWatchlistRef.current = false;
-    void loadWatchlist(true);
-  }, [loadWatchlist, watchlistId]);
+    setHydratedItems([]);
+    setWatchlist(null);
+    setStateScope(resourceScope);
+    void loadWatchlist();
+  }, [loadWatchlist, resourceScope, watchlistId]);
 
   function openItem(item: HydratedPersonalWatchlistItem) {
     if (item.contentType === 'movie') {
@@ -105,27 +123,32 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
 
   return (
     <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
-      {isLoading ? (
+      {isLoading && !visibleWatchlist ? (
         <LoadingState label="Loading list" />
-      ) : error && !watchlist ? (
+      ) : error && !visibleWatchlist ? (
         <EmptyState body={error} title="List failed">
-          <Button label="Retry" onPress={() => loadWatchlist(true)} />
+          <Button label="Retry" onPress={() => loadWatchlist()} />
         </EmptyState>
-      ) : watchlist ? (
+      ) : visibleWatchlist ? (
         <>
+          {isLoading ? (
+            <InlineStatusBanner detail="Keeping this list visible while fresh data arrives." tone="updating" />
+          ) : error ? (
+            <InlineStatusBanner detail={error} onRetry={() => void loadWatchlist()} tone="error" title="List kept visible" />
+          ) : null}
           <View style={styles.panel}>
             <View style={styles.headerRow}>
               <View style={styles.headerCopy}>
                 <Text style={styles.eyebrow}>Personal watchlist</Text>
-                <Text style={styles.title}>{watchlist.name}</Text>
+                <Text style={styles.title}>{visibleWatchlist.name}</Text>
                 <Text style={styles.body}>
-                  {watchlist.items.length === 1 ? '1 title' : `${watchlist.items.length} titles`}
+                  {visibleWatchlist.items.length === 1 ? '1 title' : `${visibleWatchlist.items.length} titles`}
                 </Text>
               </View>
               <Pressable
                 accessibilityLabel="Refresh list"
                 accessibilityRole="button"
-                onPress={() => loadWatchlist(true)}
+                onPress={() => loadWatchlist()}
                 style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
               >
                 <RefreshCw color={colors.text} size={18} strokeWidth={2} />
@@ -135,11 +158,11 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
 
           <View style={styles.panel}>
             <Text style={styles.sectionTitle}>Titles</Text>
-            {hydratedItems.length === 0 ? (
+            {visibleItems.length === 0 ? (
               <Text style={styles.body}>Add films or series from detail pages to start shaping this list.</Text>
             ) : (
               <View style={styles.itemRows}>
-                {hydratedItems.map((item) => (
+                {visibleItems.map((item) => (
                   <Pressable
                     accessibilityLabel={`Open ${item.title}`}
                     accessibilityRole="button"

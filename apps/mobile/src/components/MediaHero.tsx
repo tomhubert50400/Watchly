@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { colors, shadows, spacing, typography } from '../design/tokens';
+import { mediaHeroFadeColors } from './mediaHeroGradient';
 import { MediaPoster } from './MediaPoster';
 
 type MediaHeroProps = {
@@ -38,7 +39,11 @@ export function MediaHero({
           <View style={styles.backdropPlaceholder} />
         )}
         <View style={styles.scrim} />
-        <View style={styles.bottomShade} />
+        <View pointerEvents="none" style={styles.backdropFade}>
+          {mediaHeroFadeColors.map((backgroundColor) => (
+            <View key={backgroundColor} style={[styles.fadeBand, { backgroundColor }]} />
+          ))}
+        </View>
       </View>
       <View style={styles.identityRow}>
         <MediaPoster
@@ -94,12 +99,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panelSoft,
     flex: 1,
   },
-  bottomShade: {
-    backgroundColor: colors.background,
+  backdropFade: {
     bottom: 0,
-    height: 132,
+    height: 158,
     left: 0,
-    opacity: 0.82,
     position: 'absolute',
     right: 0,
   },
@@ -116,6 +119,9 @@ const styles = StyleSheet.create({
     ...typography.eyebrow,
     color: colors.accentText,
     marginBottom: spacing.xs,
+  },
+  fadeBand: {
+    flex: 1,
   },
   identityRow: {
     alignItems: 'flex-end',

@@ -326,6 +326,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
       <Pressable
         accessibilityLabel="Add to watchlist"
         accessibilityRole="button"
+        accessibilityState={{ busy: isSaving, disabled: !firebaseIdToken || isSaving }}
         disabled={!firebaseIdToken || isSaving}
         onPress={openSheet}
         style={({ pressed }) => [

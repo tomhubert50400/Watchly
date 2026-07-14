@@ -1,9 +1,11 @@
-import { useCallback, useMemo, useState } from 'react';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useCallback, useMemo } from 'react';
+import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { listSeriesProgress, SeriesProgress } from '../api/progress';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { getPrivateCacheKey } from '../cache/persistedCache';
+import { useCachedResource } from '../cache/useCachedResource';
 import { SeriesDetails } from '../api/catalogue';
 import { colors, radii, shadows, spacing } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
@@ -26,29 +28,23 @@ export function SeriesProgressSummary({
   seriesTmdbId,
 }: SeriesProgressSummaryProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { firebaseIdToken, trackingRevision } = useAuthSession();
+  const { currentUser, firebaseIdToken, trackingRevision } = useAuthSession();
   const { showToast } = useToast();
-  const [progress, setProgress] = useState<SeriesProgress | null>(null);
 
-  const loadProgress = useCallback(async () => {
-    if (!firebaseIdToken) {
-      setProgress(null);
-      return;
-    }
-
+  const loadProgress = useCallback(async (): Promise<SeriesProgress> => {
     try {
-      setProgress(await listSeriesProgress(firebaseIdToken, seriesTmdbId));
+      return await listSeriesProgress(firebaseIdToken!, seriesTmdbId);
     } catch {
       showToast('Could not load your series progress.');
-      return;
+      throw new Error('Could not update your series progress.');
     }
-  }, [firebaseIdToken, seriesTmdbId, showToast]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void loadProgress();
-    }, [loadProgress, trackingRevision]),
-  );
+  }, [firebaseIdToken, seriesTmdbId, showToast, trackingRevision]);
+  const resource = useCachedResource({
+    enabled: Boolean(currentUser && firebaseIdToken),
+    key: getPrivateCacheKey(currentUser?.id ?? 'visitor', `series-progress:${seriesTmdbId}:v1`),
+    load: loadProgress,
+  });
+  const progress = resource.data;
 
   const resumeEpisode = useMemo(
     () => getResumeEpisode(seasons, progress),
@@ -183,7 +179,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     justifyContent: 'center',
-    minHeight: 34,
+    minHeight: 44,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
   },

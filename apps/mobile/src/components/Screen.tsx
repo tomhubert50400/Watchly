@@ -34,6 +34,7 @@ export function Screen({
     : horizontalPadding
       ? spacing.xl
       : 0;
+  const chromePadding = sidePadding || spacing.xl;
   const navigationPadding = typeof tabBarPadding === 'number'
     ? tabBarPadding
     : tabBarPadding
@@ -51,11 +52,11 @@ export function Screen({
         style={styles.container}
       >
         {hasHeader ? (
-          <View style={[styles.headerShell, headerMode === 'sticky' ? styles.stickyHeader : null, { paddingHorizontal: sidePadding }]}>
+          <View style={[styles.headerShell, headerMode === 'sticky' ? styles.stickyHeader : null, { paddingHorizontal: chromePadding }]}>
             <AppHeader eyebrow={eyebrow} title={title} trailing={trailing} />
           </View>
         ) : null}
-        {statusBanner ? <View style={[styles.banner, { marginHorizontal: sidePadding }]}>{statusBanner}</View> : null}
+        {statusBanner ? <View style={[styles.banner, { marginHorizontal: chromePadding }]}>{statusBanner}</View> : null}
         <View style={[styles.body, { paddingHorizontal: sidePadding }]}>{children}</View>
       </ScrollView>
     </SafeAreaView>

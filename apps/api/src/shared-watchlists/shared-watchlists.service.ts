@@ -258,15 +258,39 @@ export class SharedWatchlistsService {
     const userId = await this.getUserId(identity);
     await this.assertMember(userId, watchlistId);
 
-    await this.withConnectionRetry(() =>
-      this.prisma.sharedWatchlistItem.deleteMany({
-      where: {
-        contentType: toTrackedContentType(contentType),
-        tmdbId,
-        watchlistId,
-      },
+    const result = await this.withConnectionRetry(() =>
+      this.prisma.$transaction(async (transaction) => {
+        const items = await transaction.$queryRawUnsafe<{ id: string }[]>(
+          'SELECT id FROM "shared_watchlist_items" WHERE "watchlistId" = $1::uuid AND "contentType" = $2::"TrackedContentType" AND "tmdbId" = $3 FOR UPDATE',
+          watchlistId,
+          toTrackedContentType(contentType),
+          tmdbId,
+        );
+
+        if (items.length === 0) {
+          return 'NOT_FOUND' as const;
+        }
+
+        const votingCandidate = await transaction.sharedVotingCandidate.findFirst({
+          select: { id: true },
+          where: { itemId: items[0]!.id },
+        });
+
+        if (votingCandidate) {
+          return 'VOTING_CANDIDATE' as const;
+        }
+
+        await transaction.sharedWatchlistItem.delete({
+          where: { id: items[0]!.id },
+        });
+
+        return 'DELETED' as const;
       }),
     );
+
+    if (result === 'VOTING_CANDIDATE') {
+      throw new BadRequestException('Items used in a voting session cannot be removed.');
+    }
 
     await this.touchSharedWatchlist(watchlistId);
   }

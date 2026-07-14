@@ -21,7 +21,19 @@ async function main() {
   const config = new ConfigService(process.env);
   const prisma = new PrismaService(config);
   const auth = new AuthService(prisma);
-  const catalogue = {} as TmdbCatalogueService;
+  const catalogueRequests = new Set<number>();
+  const catalogue = {
+    getMovie: async (tmdbId: number) => {
+      catalogueRequests.add(tmdbId);
+      return {
+        item: {
+          releaseDate: '2099-01-01',
+          title: `Notification sync movie ${tmdbId}`,
+          tmdbId,
+        },
+      };
+    },
+  } as unknown as TmdbCatalogueService;
   const notifications = new NotificationsService(auth, catalogue, prisma);
   const sharedWatchlists = new SharedWatchlistsService(auth, prisma);
   let userIds: string[] = [];
@@ -79,6 +91,24 @@ async function main() {
       where: { id: outsiderRelease.id },
     });
     assert(untouchedOutsider.readAt === null, 'Mark-all-read must be scoped to the authenticated user.');
+
+    const syncTmdbIds = Array.from({ length: 13 }, (_, index) => 10_000 + index);
+    await prisma.releaseAlertSubscription.createMany({
+      data: syncTmdbIds.map((tmdbId) => ({
+        contentType: TrackedContentType.MOVIE,
+        tmdbId,
+        userId: owner.id,
+      })),
+    });
+    const firstSync = await notifications.sync(ownerIdentity);
+    assert(firstSync.syncedContentCount === 13, 'Sync must report every subscribed title.');
+    assert(firstSync.createdCount === 13, 'Sync must create notifications beyond the first batch of 12.');
+    assert(
+      syncTmdbIds.every((tmdbId) => catalogueRequests.has(tmdbId)),
+      'Sync must process older subscriptions beyond the first batch of 12.',
+    );
+    const secondSync = await notifications.sync(ownerIdentity);
+    assert(secondSync.createdCount === 0, 'A complete repeated sync must remain idempotent.');
 
     const watchlist = await sharedWatchlists.createSharedWatchlist(ownerIdentity, 'Notification smoke list');
     await sharedWatchlists.addMember(ownerIdentity, watchlist.id, member.id);

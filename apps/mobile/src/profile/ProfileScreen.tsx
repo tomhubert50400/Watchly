@@ -36,6 +36,7 @@ type HydratedProfileOpinion = ProfileOpinion & {
   seriesTitle: string | null;
 };
 type CachedProfile = Omit<ProfileModel, 'opinions'> & { opinions: HydratedProfileOpinion[] };
+const MAX_PROFILE_OPINION_HYDRATIONS = 24;
 
 export function ProfileScreen() {
   const navigation = useNavigation<ProfileNavigation>();
@@ -48,7 +49,7 @@ export function ProfileScreen() {
   } = useAuthSession();
   const [shareError, setShareError] = useState<string | null>(null);
   const userId = currentUser?.id ?? null;
-  const loadProfile = useCallback(async (): Promise<CachedProfile> => {
+  const loadProfile = useCallback(async (cached?: CachedProfile): Promise<CachedProfile> => {
     void socialRevision;
     void trackingRevision;
     const token = await getFirebaseIdToken();
@@ -61,7 +62,12 @@ export function ProfileScreen() {
       getOwnProfileOpinions(token),
     ]);
     const model = buildProfileModel(profile, response);
-    const opinions = await Promise.all(model.opinions.map(hydrateProfileOpinion));
+    const opinions = await Promise.all(model.opinions.map((opinion, index) => {
+      const previous = cached?.opinions.find((candidate) => isSameOpinion(candidate, opinion));
+      return index < MAX_PROFILE_OPINION_HYDRATIONS
+        ? hydrateProfileOpinion(opinion, previous)
+        : Promise.resolve(previous ? { ...previous, ...opinion } : fallbackOpinion(opinion));
+    }));
 
     return { ...model, opinions };
   }, [getFirebaseIdToken, socialRevision, trackingRevision]);
@@ -224,13 +230,16 @@ function openOpinion(navigation: ProfileNavigation, item: HydratedProfileOpinion
   });
 }
 
-async function hydrateProfileOpinion(item: ProfileOpinion): Promise<HydratedProfileOpinion> {
+async function hydrateProfileOpinion(
+  item: ProfileOpinion,
+  previous?: HydratedProfileOpinion,
+): Promise<HydratedProfileOpinion> {
   if (item.content.contentType === 'movie') {
     try {
       const response = await withTimeout(getMovieDetails(item.content.tmdbId), 2500);
       return { ...item, contentImageUrl: response.item.posterUrl, contentSubtitle: 'Movie', contentTitle: response.item.title, seriesTitle: null };
     } catch {
-      return fallbackOpinion(item);
+      return previous ? { ...previous, ...item } : fallbackOpinion(item);
     }
   }
   try {
@@ -246,8 +255,12 @@ async function hydrateProfileOpinion(item: ProfileOpinion): Promise<HydratedProf
       seriesTitle: `Series ${item.content.seriesTmdbId}`,
     };
   } catch {
-    return fallbackOpinion(item);
+    return previous ? { ...previous, ...item } : fallbackOpinion(item);
   }
+}
+
+function isSameOpinion(previous: HydratedProfileOpinion, current: ProfileOpinion) {
+  return previous.id === current.id;
 }
 
 function fallbackOpinion(item: ProfileOpinion): HydratedProfileOpinion {

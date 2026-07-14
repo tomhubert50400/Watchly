@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ChevronDown } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -22,6 +22,7 @@ import { HeaderInfoItem, HeaderInfoPills } from './HeaderInfoPills';
 import { StreamingAvailabilityPanel } from './StreamingAvailabilityPanel';
 import { SynopsisPanel } from './SynopsisPanel';
 import { useCatalogueCache } from './CatalogueCacheContext';
+import { ensureSeasonDetails } from './cataloguePrefetch';
 import { formatFivePointRating, getDetailRenderMode } from './detailModel';
 import { isReleasedDate } from './releaseDates';
 
@@ -50,6 +51,16 @@ export function SeriesDetailScreen({ navigation, route }: Props) {
       headerTransparent: true,
     });
   }, [navigation]);
+
+  useEffect(() => {
+    const firstSeason = series?.seasons
+      .filter((season) => season.seasonNumber > 0 && (season.episodeCount ?? 0) > 0)
+      .sort((left, right) => left.seasonNumber - right.seasonNumber)[0];
+
+    if (firstSeason) {
+      void ensureSeasonDetails(tmdbId, firstSeason.seasonNumber).catch(() => undefined);
+    }
+  }, [series?.seasons, tmdbId]);
 
   return (
     <SafeAreaView edges={[]} style={styles.safeArea}>

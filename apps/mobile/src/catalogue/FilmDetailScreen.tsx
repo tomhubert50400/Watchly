@@ -1,10 +1,11 @@
 import { useCallback, useLayoutEffect } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DisplayRating, MovieDetails } from '../api/catalogue';
 import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
+import { resolveDetailMetadataLayout } from '../components/dynamicTypeLayout';
 import { EmptyState } from '../components/EmptyState';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { LoadingState } from '../components/LoadingState';
@@ -89,6 +90,8 @@ function MovieDetailContent({
   movie: MovieDetails;
   onRetry: () => void;
 }) {
+  const { fontScale } = useWindowDimensions();
+  const metadataLayout = resolveDetailMetadataLayout(fontScale);
   const isReleased = isReleasedDate(movie.releaseDate);
   const releaseYear = movie.releaseDate ? movie.releaseDate.slice(0, 4) : null;
   const runtime = formatRuntime(movie.runtimeMinutes);
@@ -109,7 +112,7 @@ function MovieDetailContent({
       >
         <HeaderInfoPills items={infoItems} />
         {movie.genres.length > 0 ? (
-          <Text numberOfLines={1} style={styles.genres}>
+          <Text numberOfLines={metadataLayout.genreNumberOfLines} style={styles.genres}>
             {movie.genres.join(' · ')}
           </Text>
         ) : null}

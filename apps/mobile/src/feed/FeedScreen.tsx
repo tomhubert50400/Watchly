@@ -167,7 +167,7 @@ const FeedReviewCard = memo(function FeedReviewCard({
           </Text>
           <Text style={styles.date}>{formatDate(item.updatedAt)}</Text>
         </View>
-        <Chip label="Review" tone="accent" />
+        <Chip label="Review" tone="neutral" />
       </View>
       <View style={styles.contentRow}>
         <MediaPoster
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   meta: {
-    color: colors.accentText,
+    color: colors.textMuted,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0,

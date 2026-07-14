@@ -8,7 +8,6 @@ import { getOwnProfileOpinions } from '../api/profile';
 import { listMovieRatings } from '../api/ratings';
 import { listTrackingStates } from '../api/tracking';
 import { useAuthSession } from '../auth/AuthSessionContext';
-import { readPersistedCache } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -23,31 +22,37 @@ import { buildJournal, filterJournalEntries, groupJournalEntriesByMonth, Journal
 export type HydratedJournalEntry = JournalEntry & { posterUrl: string | null; title: string };
 type JournalData = { averageRating: number | null; entries: HydratedJournalEntry[]; partialError: string | null; reviewCount: number };
 type Navigation = NativeStackNavigationProp<RootStackParamList>;
+const MAX_JOURNAL_HYDRATIONS = 24;
 
 export function JournalScreen() {
   const navigation = useNavigation<Navigation>();
   const { currentUser, getFirebaseIdToken, trackingRevision } = useAuthSession();
   const [filter, setFilter] = useState<JournalFilter>('all');
   const key = currentUser ? `watchly:user:${currentUser.id}:journal:v1` : 'watchly:user:visitor:journal-disabled';
-  const load = useCallback(async (): Promise<JournalData> => {
+  const load = useCallback(async (cached?: JournalData): Promise<JournalData> => {
     if (!currentUser) throw new Error('Sign in to open your Journal.');
     const token = await getFirebaseIdToken(); if (!token) throw new Error('Sign in again to open your Journal.');
-    const previous = await readPersistedCache<JournalData>(key).catch(() => null);
+    const previous = cached;
     const [tracking, ratings, opinions, summaries] = await Promise.allSettled([listTrackingStates(token), listMovieRatings(token), getOwnProfileOpinions(token), listSeriesProgressSummaries(token)]);
     const topResults = { tracking, ratings, opinions, progress: summaries };
     if (Object.values(topResults).every((result) => result.status === 'rejected')) throw new Error('Could not update your Journal.');
     const failures = Object.entries(topResults).flatMap(([name, result]) => result.status === 'rejected' ? [`${name} (${errorLabel(result.reason)})`] : []);
-    if (failures.length && previous) return { ...previous.data, partialError: `Some Journal data could not update: ${failures.join(', ')}.` };
+    if (failures.length && previous) return { ...previous, partialError: `Some Journal data could not update: ${failures.join(', ')}.` };
     const progressResults = summaries.status === 'fulfilled' ? await Promise.allSettled(summaries.value.items.map((summary) => listSeriesProgress(token, summary.seriesTmdbId))) : [];
     progressResults.forEach((result) => { if (result.status === 'rejected') failures.push(`episode progress (${errorLabel(result.reason)})`); });
-    if (progressResults.some((result) => result.status === 'rejected') && previous) return { ...previous.data, partialError: `Some Journal data could not update: ${failures.join(', ')}.` };
+    if (progressResults.some((result) => result.status === 'rejected') && previous) return { ...previous, partialError: `Some Journal data could not update: ${failures.join(', ')}.` };
     const model = buildJournal({
       movieRatings: ratings.status === 'fulfilled' ? ratings.value : [],
       opinions: opinions.status === 'fulfilled' ? opinions.value.items : [],
       progress: progressResults.flatMap((result) => result.status === 'fulfilled' ? result.value.episodes : []),
       trackingStates: tracking.status === 'fulfilled' ? tracking.value : [],
     });
-    const entries = await Promise.all(model.entries.map((entry) => hydrateEntry(entry, previous?.data.entries.find((old) => old.key === entry.key))));
+    const entries = await Promise.all(model.entries.map((entry, index) => {
+      const fallback = previous?.entries.find((old) => old.key === entry.key);
+      return index < MAX_JOURNAL_HYDRATIONS
+        ? hydrateEntry(entry, fallback)
+        : Promise.resolve(fallback ? { ...fallback, ...entry } : toJournalFallback(entry));
+    }));
     return { ...model, entries, partialError: failures.length ? `Some Journal data could not update: ${failures.join(', ')}.` : null };
   }, [currentUser, getFirebaseIdToken, key, trackingRevision]);
   const resource = useCachedResource({ enabled: Boolean(currentUser), key, load });
@@ -71,7 +76,8 @@ export function JournalScreen() {
 }
 
 function Stat({ label, value }: { label: string; value: string }) { return <View style={styles.stat}><Text style={styles.statValue}>{value}</Text><Text style={styles.statLabel}>{label}</Text></View>; }
-async function hydrateEntry(entry: JournalEntry, fallback?: HydratedJournalEntry): Promise<HydratedJournalEntry> { try { const details = entry.kind === 'movie' ? (await getMovieDetails(entry.tmdbId)).item : (await getSeriesDetails(entry.tmdbId)).item; return { ...entry, posterUrl: details.posterUrl, title: details.title }; } catch { return fallback ? { ...fallback, ...entry } : { ...entry, posterUrl: null, title: `${entry.kind === 'movie' ? 'Movie' : 'Series'} TMDB ${entry.tmdbId}` }; } }
+async function hydrateEntry(entry: JournalEntry, fallback?: HydratedJournalEntry): Promise<HydratedJournalEntry> { try { const details = entry.kind === 'movie' ? (await getMovieDetails(entry.tmdbId)).item : (await getSeriesDetails(entry.tmdbId)).item; return { ...entry, posterUrl: details.posterUrl, title: details.title }; } catch { return fallback ? { ...fallback, ...entry } : toJournalFallback(entry); } }
+function toJournalFallback(entry: JournalEntry): HydratedJournalEntry { return { ...entry, posterUrl: null, title: `${entry.kind === 'movie' ? 'Movie' : 'Series'} TMDB ${entry.tmdbId}` }; }
 function openEntry(navigation: Navigation, entry: HydratedJournalEntry) { if (entry.kind === 'movie') navigation.navigate('FilmDetail', { title: entry.title, tmdbId: entry.tmdbId }); else navigation.navigate('SeriesDetail', { title: entry.title, tmdbId: entry.tmdbId }); }
 function errorLabel(error: unknown) { return error instanceof Error ? error.message : 'unknown error'; }
 function formatMonth(key: string) { const [year, month] = key.split('-').map(Number); return new Date(year!, month! - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }).toUpperCase(); }
