@@ -2,6 +2,10 @@ import type { CatalogueSearchItem, CatalogueSearchType } from '../api/catalogue'
 
 export type ExploreSection = 'trending' | 'announced';
 
+export type ExploreSearchSort = 'rating' | 'relevance';
+
+export const DEFAULT_EXPLORE_SEARCH_SORT: ExploreSearchSort = 'rating';
+
 export type ExploreSections = Record<ExploreSection, CatalogueSearchItem[]>;
 
 type ExploreViewStateInput = {
@@ -61,6 +65,19 @@ export function filterSearchResults(
   type: CatalogueSearchType,
 ) {
   return type === 'all' ? items : items.filter((item) => item.mediaType === type);
+}
+
+export function sortSearchResults(
+  items: readonly CatalogueSearchItem[],
+  sort: ExploreSearchSort,
+) {
+  if (sort === 'relevance') {
+    return items;
+  }
+
+  return [...items].sort(
+    (first, second) => (second.voteAverage ?? -1) - (first.voteAverage ?? -1),
+  );
 }
 
 export function getExploreViewState({ activeSection, query }: ExploreViewStateInput): ExploreViewState {

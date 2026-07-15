@@ -35,10 +35,13 @@ import { loadCatalogueSections, PUBLIC_CATALOGUE_SECTIONS_KEY } from './catalogu
 import { ExploreMediaCard } from './ExploreMediaCard';
 import {
   buildExploreSections,
+  DEFAULT_EXPLORE_SEARCH_SORT,
+  deduplicateMediaItems,
   ExploreSection,
+  ExploreSearchSort,
   filterSearchResults,
   getExploreViewState,
-  groupSearchResults,
+  sortSearchResults,
 } from './exploreState';
 
 const SEARCH_INPUT_ACCESSORY_ID = 'explore-search-keyboard-accessory';
@@ -53,6 +56,7 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
   const { preloadCatalogueItems } = useCatalogueCache();
   const [query, setQuery] = useState('');
   const [searchType, setSearchType] = useState<CatalogueSearchType>('all');
+  const [searchSort, setSearchSort] = useState<ExploreSearchSort>(DEFAULT_EXPLORE_SEARCH_SORT);
   const [activeSection, setActiveSection] = useState<ExploreSection>('trending');
   const [searchItems, setSearchItems] = useState<CatalogueSearchItem[]>([]);
   const [searchItemsQuery, setSearchItemsQuery] = useState('');
@@ -71,8 +75,10 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
     [sections.data],
   );
   const visibleSearchItems = useMemo(
-    () => searchItemsQuery === trimmedQuery ? filterSearchResults(searchItems, searchType) : [],
-    [searchItems, searchItemsQuery, searchType, trimmedQuery],
+    () => searchItemsQuery === trimmedQuery
+      ? sortSearchResults(filterSearchResults(searchItems, searchType), searchSort)
+      : [],
+    [searchItems, searchItemsQuery, searchSort, searchType, trimmedQuery],
   );
   const visibleItems = isSearching ? visibleSearchItems : sectionItems[activeSection];
   const visibleError = isSearching ? searchError : sections.error;
@@ -86,8 +92,6 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
     itemCount: visibleItems.length,
     query,
   });
-  const groupedSearchItems = useMemo(() => groupSearchResults(visibleSearchItems), [visibleSearchItems]);
-
   useEffect(() => {
     if (!isActive) {
       Keyboard.dismiss();
@@ -123,8 +127,7 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
             return;
           }
 
-          const groupedItems = groupSearchResults(response.items);
-          setSearchItems(groupedItems.movies.concat(groupedItems.series));
+          setSearchItems(deduplicateMediaItems(response.items));
           setSearchItemsQuery(trimmedQuery);
         })
         .catch((error) => {
@@ -212,17 +215,27 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
             ) : null}
           </View>
           {isSearching ? (
-            <SegmentedControl
-              buttonMinHeight={44}
-              containerStyle={styles.sectionControl}
-              onChange={setSearchType}
-              options={[
-                { accessibilityLabel: 'Show all results', label: 'All', value: 'all' },
-                { accessibilityLabel: 'Show films only', label: 'Films', value: 'movie' },
-                { accessibilityLabel: 'Show series only', label: 'Series', value: 'series' },
-              ]}
-              value={searchType}
-            />
+            <View style={styles.searchControls}>
+              <SegmentedControl
+                buttonMinHeight={44}
+                onChange={setSearchType}
+                options={[
+                  { accessibilityLabel: 'Show all results', label: 'All', value: 'all' },
+                  { accessibilityLabel: 'Show films only', label: 'Films', value: 'movie' },
+                  { accessibilityLabel: 'Show series only', label: 'Series', value: 'series' },
+                ]}
+                value={searchType}
+              />
+              <SegmentedControl
+                buttonMinHeight={44}
+                onChange={setSearchSort}
+                options={[
+                  { accessibilityLabel: 'Sort by highest rating', label: 'Top rated', value: 'rating' },
+                  { accessibilityLabel: 'Sort by relevance', label: 'Relevance', value: 'relevance' },
+                ]}
+                value={searchSort}
+              />
+            </View>
           ) : (
             <SegmentedControl
               buttonMinHeight={42}
@@ -241,10 +254,11 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
           {isSearching ? (
             <SearchComposition
               error={visibleError}
-              groupedItems={groupedSearchItems}
               isLoading={isSearchLoading}
+              items={visibleSearchItems}
               onOpen={openItem}
               onRetry={retryVisible}
+              searchType={searchType}
               viewState={viewState}
             />
           ) : (
@@ -356,26 +370,28 @@ function DiscoveryComposition({
 
 function SearchComposition({
   error,
-  groupedItems,
   isLoading,
+  items,
   onOpen,
   onRetry,
+  searchType,
   viewState,
 }: {
   error: string | null;
-  groupedItems: ReturnType<typeof groupSearchResults>;
   isLoading: boolean;
+  items: readonly CatalogueSearchItem[];
   onOpen: (item: CatalogueSearchItem) => void;
   onRetry: () => void;
+  searchType: CatalogueSearchType;
   viewState: ReturnType<typeof getExploreViewState>;
 }) {
-  const itemCount = groupedItems.movies.length + groupedItems.series.length;
+  const title = searchType === 'movie' ? 'Films' : searchType === 'series' ? 'Series' : 'Results';
 
-  if (isLoading && itemCount === 0) {
+  if (isLoading && items.length === 0) {
     return <InlineStatusBanner title={viewState.loadingLabel} tone="updating" />;
   }
 
-  if (error && itemCount === 0) {
+  if (error && items.length === 0) {
     return (
       <EmptyState body={error} title={viewState.errorTitle}>
         <Button label="Retry search" onPress={onRetry} />
@@ -383,7 +399,7 @@ function SearchComposition({
     );
   }
 
-  if (itemCount === 0) {
+  if (items.length === 0) {
     return <EmptyState body={viewState.emptyBody} title={viewState.emptyTitle} />;
   }
 
@@ -394,8 +410,7 @@ function SearchComposition({
       ) : error ? (
         <InlineStatusBanner detail={error} onRetry={onRetry} title={viewState.errorTitle} tone="error" />
       ) : null}
-      <SearchGroup items={groupedItems.movies} onOpen={onOpen} title="Films" />
-      <SearchGroup items={groupedItems.series} onOpen={onOpen} title="Series" />
+      <SearchGroup items={items} onOpen={onOpen} title={title} />
     </View>
   );
 }
@@ -405,7 +420,7 @@ function SearchGroup({
   onOpen,
   title,
 }: {
-  items: CatalogueSearchItem[];
+  items: readonly CatalogueSearchItem[];
   onOpen: (item: CatalogueSearchItem) => void;
   title: string;
 }) {
@@ -657,6 +672,10 @@ const styles = StyleSheet.create({
     height: 24,
     justifyContent: 'center',
     width: 24,
+  },
+  searchControls: {
+    gap: spacing.sm,
+    marginTop: spacing.md,
   },
   searchInput: {
     ...typography.body,
