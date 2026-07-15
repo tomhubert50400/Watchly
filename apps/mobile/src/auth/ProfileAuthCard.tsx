@@ -212,7 +212,7 @@ function ProviderLogo({ id }: { id: AuthProviderConfig['id'] }) {
         <Image
           accessibilityIgnoresInvertColors
           accessible={false}
-          source={require('../../assets/google-signin-light-square@4x.png')}
+          source={require('../../assets/google-signin-light-square.png')}
           style={styles.googleLogoAsset}
         />
       </View>
