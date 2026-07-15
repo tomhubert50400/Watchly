@@ -64,6 +64,7 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
   const { preloadCatalogueItems } = useCatalogueCache();
   const [query, setQuery] = useState('');
   const [searchType, setSearchType] = useState<CatalogueSearchType>('all');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [activeSection, setActiveSection] = useState<ExploreSection>('trending');
   const [searchItems, setSearchItems] = useState<CatalogueSearchItem[]>([]);
   const [searchItemsQuery, setSearchItemsQuery] = useState('');
@@ -72,6 +73,7 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
   const [searchRevision, setSearchRevision] = useState(0);
   const trimmedQuery = query.trim();
   const isSearching = trimmedQuery.length >= 2;
+  const showSearchTypeFilters = isSearchFocused || isSearching;
   const sections = useCachedResource({
     key: PUBLIC_CATALOGUE_SECTIONS_KEY,
     load: loadCatalogueSections,
@@ -198,7 +200,9 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
               inputMode="search"
               inputAccessoryViewID={Platform.OS === 'ios' ? SEARCH_INPUT_ACCESSORY_ID : undefined}
               keyboardAppearance="dark"
+              onBlur={() => setIsSearchFocused(false)}
               onChangeText={setQuery}
+              onFocus={() => setIsSearchFocused(true)}
               onSubmitEditing={Keyboard.dismiss}
               placeholder="Search a film or series"
               placeholderTextColor={colors.muted}
@@ -219,7 +223,7 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
               </Pressable>
             ) : null}
           </View>
-          {isSearching ? (
+          {showSearchTypeFilters ? (
             <View style={styles.searchTypeFilters}>
               {SEARCH_TYPE_OPTIONS.map((option) => {
                 const selected = searchType === option.value;
