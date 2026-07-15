@@ -17,14 +17,16 @@ export function AppHeader({ eyebrow, leading, title, trailing }: AppHeaderProps)
       {leading ? <View style={styles.leading}>{leading}</View> : null}
       <View style={styles.copy}>
         {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
-        <Text
-          accessibilityRole="header"
-          maxFontSizeMultiplier={dynamicTypeLayout.headerTitleMaxFontSizeMultiplier}
-          numberOfLines={2}
-          style={styles.title}
-        >
-          {title}
-        </Text>
+        {title ? (
+          <Text
+            accessibilityRole="header"
+            maxFontSizeMultiplier={dynamicTypeLayout.headerTitleMaxFontSizeMultiplier}
+            numberOfLines={2}
+            style={styles.title}
+          >
+            {title}
+          </Text>
+        ) : null}
       </View>
       {trailing ? <View style={[styles.trailing, dynamicTypeLayout.headerStacked && styles.trailingStacked]}>{trailing}</View> : null}
     </View>
