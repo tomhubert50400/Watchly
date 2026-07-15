@@ -21,7 +21,12 @@ export function SignInSheet({ body, onClose, title, visible }: SignInSheetProps)
 
   return (
     <BottomActionSheet onClose={onClose} title="Sign in to Watchly" visible>
-      <ScrollView contentContainerStyle={styles.sheetContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        bounces={false}
+        contentContainerStyle={styles.sheetContent}
+        disableScrollViewPanResponder
+        showsVerticalScrollIndicator={false}
+      >
         <ProfileAuthCard body={body} embedded title={title} />
       </ScrollView>
     </BottomActionSheet>

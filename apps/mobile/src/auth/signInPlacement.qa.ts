@@ -4,6 +4,14 @@ import assert from 'node:assert/strict';
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import { readFileSync } from 'node:fs';
 
+const signInSheetSource = readFileSync(new URL('./SignInRequired.tsx', import.meta.url), 'utf8');
+
+assert.match(
+  signInSheetSource,
+  /<ScrollView\s+bounces=\{false\}[\s\S]*?disableScrollViewPanResponder/,
+  'the sign-in sheet scroll view must yield downward drags to the sheet',
+);
+
 const protectedScreens = [
   '../feed/FeedScreen.tsx',
   '../journal/JournalScreen.tsx',
