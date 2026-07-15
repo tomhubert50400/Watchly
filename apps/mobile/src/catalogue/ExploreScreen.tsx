@@ -23,10 +23,12 @@ import {
 } from '../api/catalogue';
 import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
+import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { hapticSelection } from '../feedback/haptics';
 import { RootStackParamList } from '../navigation/types';
 import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 import { useCatalogueCache } from './CatalogueCacheContext';
@@ -43,6 +45,15 @@ import {
 
 const SEARCH_INPUT_ACCESSORY_ID = 'explore-search-keyboard-accessory';
 const EMPTY_SECTIONS: Record<ExploreSection, CatalogueSearchItem[]> = { announced: [], trending: [] };
+const SEARCH_TYPE_OPTIONS: {
+  accessibilityLabel: string;
+  label: string;
+  value: CatalogueSearchType;
+}[] = [
+  { accessibilityLabel: 'Show all results', label: 'All', value: 'all' },
+  { accessibilityLabel: 'Show films only', label: 'Films', value: 'movie' },
+  { accessibilityLabel: 'Show series only', label: 'Series', value: 'series' },
+];
 
 type ExploreScreenProps = {
   isActive?: boolean;
@@ -209,17 +220,40 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
             ) : null}
           </View>
           {isSearching ? (
-            <SegmentedControl
-              buttonMinHeight={44}
-              containerStyle={styles.searchTypeControl}
-              onChange={setSearchType}
-              options={[
-                { accessibilityLabel: 'Show all results', label: 'All', value: 'all' },
-                { accessibilityLabel: 'Show films only', label: 'Films', value: 'movie' },
-                { accessibilityLabel: 'Show series only', label: 'Series', value: 'series' },
-              ]}
-              value={searchType}
-            />
+            <View style={styles.searchTypeFilters}>
+              {SEARCH_TYPE_OPTIONS.map((option) => {
+                const selected = searchType === option.value;
+
+                return (
+                  <Pressable
+                    accessibilityLabel={option.accessibilityLabel}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    key={option.value}
+                    onPress={() => {
+                      if (!selected) {
+                        hapticSelection();
+                        setSearchType(option.value);
+                      }
+                    }}
+                    style={({ pressed }) => [
+                      styles.searchTypeButton,
+                      pressed ? styles.searchTypeButtonPressed : null,
+                    ]}
+                  >
+                    <Chip
+                      label={option.label}
+                      style={[styles.searchTypeChip, selected ? null : styles.searchTypeChipIdle]}
+                      textStyle={[
+                        styles.searchTypeChipText,
+                        selected ? null : styles.searchTypeChipTextIdle,
+                      ]}
+                      tone={selected ? 'accent' : 'neutral'}
+                    />
+                  </Pressable>
+                );
+              })}
+            </View>
           ) : (
             <SegmentedControl
               buttonMinHeight={42}
@@ -664,11 +698,34 @@ const styles = StyleSheet.create({
     minWidth: 0,
     paddingVertical: spacing.sm,
   },
-  searchTypeControl: {
-    alignSelf: 'flex-start',
-    marginTop: spacing.sm,
-    maxWidth: '100%',
-    width: 228,
+  searchTypeButton: {
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  searchTypeButtonPressed: {
+    transform: [{ scale: 0.97 }],
+  },
+  searchTypeChip: {
+    borderRadius: radii.xl,
+    minHeight: 30,
+    paddingHorizontal: 12,
+  },
+  searchTypeChipIdle: {
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
+  },
+  searchTypeChipText: {
+    fontSize: 13,
+    textTransform: 'none',
+  },
+  searchTypeChipTextIdle: {
+    color: colors.textSubtle,
+  },
+  searchTypeFilters: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
   },
   section: {
     gap: spacing.sm,
