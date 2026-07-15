@@ -1,8 +1,9 @@
 import { X } from 'lucide-react-native';
-import { PropsWithChildren, ReactNode, useEffect, useRef } from 'react';
-import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { PropsWithChildren, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Animated, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
+import { getBottomSheetDragOffset, shouldDismissBottomSheet } from './bottomActionSheetGesture';
 
 type BottomActionSheetProps = PropsWithChildren<{
   footer?: ReactNode;
@@ -13,9 +14,13 @@ type BottomActionSheetProps = PropsWithChildren<{
 
 export function BottomActionSheet({ children, footer, onClose, title, visible }: BottomActionSheetProps) {
   const progress = useRef(new Animated.Value(0)).current;
+  const dragY = useRef(new Animated.Value(0)).current;
+  const isClosing = useRef(false);
 
   useEffect(() => {
     if (visible) {
+      isClosing.current = false;
+      dragY.setValue(0);
       progress.setValue(0);
       Animated.spring(progress, {
         damping: 24,
@@ -25,17 +30,63 @@ export function BottomActionSheet({ children, footer, onClose, title, visible }:
         useNativeDriver: true,
       }).start();
     }
-  }, [progress, visible]);
+  }, [dragY, progress, visible]);
 
-  const requestClose = () => {
+  const requestClose = useCallback(() => {
+    if (isClosing.current) {
+      return;
+    }
+
+    isClosing.current = true;
     Animated.timing(progress, {
       duration: 180,
       toValue: 0,
       useNativeDriver: true,
     }).start(({ finished }) => {
-      if (finished) onClose();
+      if (finished) {
+        onClose();
+      } else {
+        isClosing.current = false;
+      }
     });
-  };
+  }, [onClose, progress]);
+
+  const snapBack = useCallback(() => {
+    Animated.spring(dragY, {
+      damping: 24,
+      mass: 0.8,
+      stiffness: 280,
+      toValue: 0,
+      useNativeDriver: true,
+    }).start();
+  }, [dragY]);
+
+  const panResponder = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_, gesture) => (
+      gesture.dy > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx)
+    ),
+    onPanResponderMove: (_, gesture) => {
+      dragY.setValue(getBottomSheetDragOffset(gesture.dy));
+    },
+    onPanResponderRelease: (_, gesture) => {
+      if (shouldDismissBottomSheet(gesture.dy, gesture.vy)) {
+        requestClose();
+        return;
+      }
+
+      snapBack();
+    },
+    onPanResponderTerminate: snapBack,
+  }), [dragY, requestClose, snapBack]);
+
+  const backdropOpacity = Animated.multiply(
+    progress,
+    dragY.interpolate({
+      extrapolate: 'clamp',
+      inputRange: [0, 320],
+      outputRange: [1, 0.45],
+    }),
+  );
 
   return (
     <Modal
@@ -47,7 +98,7 @@ export function BottomActionSheet({ children, footer, onClose, title, visible }:
       visible={visible}
     >
       <View style={styles.modal}>
-        <Animated.View style={[styles.backdrop, { opacity: progress }]}>
+        <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
           <Pressable accessibilityLabel="Close sheet" accessibilityRole="button" onPress={requestClose} style={StyleSheet.absoluteFill} />
         </Animated.View>
         <Animated.View
@@ -57,23 +108,25 @@ export function BottomActionSheet({ children, footer, onClose, title, visible }:
             {
               transform: [{
                 translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [640, 0] }),
-              }],
+              }, { translateY: dragY }],
             },
           ]}
         >
           <SafeAreaView edges={['bottom']} style={styles.safeContent}>
-            <View style={styles.handle} />
-            <View style={styles.header}>
-              <Text accessibilityRole="header" style={styles.title}>{title}</Text>
-              <Pressable
-                accessibilityLabel="Close"
-                accessibilityRole="button"
-                hitSlop={4}
-                onPress={requestClose}
-                style={({ pressed }) => [styles.close, pressed ? styles.pressed : null]}
-              >
-                <X color={colors.textMuted} size={22} strokeWidth={2} />
-              </Pressable>
+            <View {...panResponder.panHandlers}>
+              <View style={styles.handle} />
+              <View style={styles.header}>
+                <Text accessibilityRole="header" style={styles.title}>{title}</Text>
+                <Pressable
+                  accessibilityLabel="Close"
+                  accessibilityRole="button"
+                  hitSlop={4}
+                  onPress={requestClose}
+                  style={({ pressed }) => [styles.close, pressed ? styles.pressed : null]}
+                >
+                  <X color={colors.textMuted} size={22} strokeWidth={2} />
+                </Pressable>
+              </View>
             </View>
             <View style={styles.body}>{children}</View>
             {footer ? <View style={styles.footer}>{footer}</View> : null}
