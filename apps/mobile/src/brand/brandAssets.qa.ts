@@ -30,6 +30,7 @@ for (const [file, width, height] of [
   ['../../assets/android-icon-foreground.png', 512, 512],
   ['../../assets/android-icon-background.png', 512, 512],
   ['../../assets/android-icon-monochrome.png', 432, 432],
+  ['../../assets/google-signin-light-square@4x.png', 160, 160],
 ] as const) {
   const url = new URL(file, import.meta.url);
   assert.ok(existsSync(url), `${file} must exist`);
@@ -61,6 +62,9 @@ assert.match(brandWordmarkSource, /style=\{\{ height, width \}\}/, 'the wordmark
 assert.doesNotMatch(brandWordmarkSource, /absoluteFillObject/, 'the wordmark must not fall back to its intrinsic PNG size');
 assert.match(authSource, /<BrandLogo size=\{76\}/, 'sign-in must use the official Watchly mark');
 assert.doesNotMatch(authSource, /logoText/, 'the placeholder W must be removed');
+assert.doesNotMatch(authSource, /googleLetter/, 'Google sign-in must not use a text placeholder logo');
+assert.match(authSource, /google-signin-light-square@4x\.png/, 'Google sign-in must use the approved gradient G asset');
+assert.match(authSource, /accessibilityIgnoresInvertColors/, 'the Google logo colors must not be inverted');
 assert.equal((homeSource.match(/<BrandWordmark height=\{44\} \/>/g) ?? []).length, 3, 'all Home states must use the Watchly wordmark');
 assert.doesNotMatch(homeSource, /title="Watchly"/, 'the Home wordmark must replace the text title');
 assert.match(appHeaderSource, /\{title \? \(/, 'empty visual headers must not render an empty text title');

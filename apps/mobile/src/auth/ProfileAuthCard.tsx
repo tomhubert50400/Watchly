@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { ApiError } from '../api/client';
 import { BrandLogo } from '../brand/BrandLogo';
@@ -207,7 +207,16 @@ function ProviderButton({ disabled, label, logo, onPress, white }: {
 
 function ProviderLogo({ id }: { id: AuthProviderConfig['id'] }) {
   if (id === 'google') {
-    return <Text style={styles.googleLetter}>G</Text>;
+    return (
+      <View style={styles.googleLogoCrop}>
+        <Image
+          accessibilityIgnoresInvertColors
+          accessible={false}
+          source={require('../../assets/google-signin-light-square@4x.png')}
+          style={styles.googleLogoAsset}
+        />
+      </View>
+    );
   }
   if (id === 'apple') {
     return (
@@ -257,7 +266,8 @@ const styles = StyleSheet.create({
   discord: { backgroundColor: '#5865F2', borderColor: '#5865F2' },
   facebook: { backgroundColor: '#1877F2', borderColor: '#1877F2' },
   glow: { backgroundColor: colors.accentSoft, borderRadius: 155, height: 310, left: '10%', opacity: 0.7, position: 'absolute', top: 14, width: '80%' },
-  googleLetter: { color: '#4285F4', fontSize: 20, fontWeight: '900' },
+  googleLogoAsset: { height: 40, left: -10, position: 'absolute', top: -10, width: 40 },
+  googleLogoCrop: { height: 20, overflow: 'hidden', width: 20 },
   logoSlot: { alignItems: 'center', height: 24, justifyContent: 'center', width: 24 },
   microsoft: { backgroundColor: '#F7F3F5', borderColor: '#F7F3F5' },
   moreLabel: { color: colors.textSubtle, fontSize: 10, fontWeight: '800', marginBottom: spacing.sm, marginTop: spacing.lg, textAlign: 'center' },
@@ -266,10 +276,10 @@ const styles = StyleSheet.create({
   primaryList: { gap: spacing.sm, marginTop: spacing.lg },
   providerButton: { alignItems: 'center', borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', minHeight: 50, paddingHorizontal: spacing.md },
   providerButtonLabel: { color: colors.text, flex: 1, fontSize: 14, fontWeight: '800', marginRight: 24, textAlign: 'center' },
-  providerButtonLabelDark: { color: '#121017' },
+  providerButtonLabelDark: { color: '#1F1F1F' },
   providerDark: { backgroundColor: colors.background, borderColor: colors.borderStrong },
   providerName: { color: colors.textSubtle, fontSize: 10, fontWeight: '700' },
-  providerWhite: { backgroundColor: '#F7F3F5', borderColor: '#F7F3F5' },
+  providerWhite: { backgroundColor: '#FFFFFF', borderColor: '#747775' },
   roundProvider: { alignItems: 'center', borderRadius: 28, borderWidth: 1, height: 52, justifyContent: 'center', width: 52 },
   secondaryItem: { alignItems: 'center', gap: spacing.xs },
   secondaryRow: { flexDirection: 'row', gap: spacing.lg, justifyContent: 'center' },
