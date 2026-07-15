@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { ApiError } from '../api/client';
 import { colors, radii, spacing, typography } from '../design/tokens';
+import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { useAuthSession } from './AuthSessionContext';
 import { getMissingFirebaseConfig } from './firebase';
 import { authRedirectScheme, getMissingGoogleClientConfig, googleClientIds } from './googleAuthConfig';
@@ -52,11 +53,13 @@ export function ProfileAuthCard({
       setMessage(null);
       try {
         await signInWithGoogle(idToken);
+        hapticSuccess();
         if (mounted) {
           setConnectingProvider(null);
           setLocalStatus('idle');
         }
       } catch (error) {
+        hapticError();
         if (mounted) {
           console.warn('Sign-in failed', safeError(error));
           setConnectingProvider(null);
@@ -71,10 +74,12 @@ export function ProfileAuthCard({
       if (typeof idToken === 'string' && idToken.length > 0) {
         void finishGoogleSignIn(idToken);
       } else {
+        hapticError();
         setLocalStatus('error');
         setMessage('Google did not return an ID token.');
       }
     } else if (response?.type === 'error') {
+      hapticError();
       setConnectingProvider(null);
       setLocalStatus('error');
       setMessage('Google sign-in was rejected.');
@@ -103,6 +108,7 @@ export function ProfileAuthCard({
     try {
       await promptAsync();
     } catch {
+      hapticError();
       setConnectingProvider(null);
       setLocalStatus('error');
       setMessage('Could not open Google sign-in.');

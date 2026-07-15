@@ -22,6 +22,7 @@ import { BottomActionSheet } from '../components/BottomActionSheet';
 import { Button } from '../components/Button';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { colors, radii, spacing, typography } from '../design/tokens';
+import { hapticConfirm, hapticError, hapticSelection, hapticSuccess } from '../feedback/haptics';
 import { useToast } from '../notifications/ToastContext';
 import { useWatchlistCache } from './WatchlistCacheContext';
 import { WatchlistOption, WatchlistOptionRow } from './WatchlistOptionRow';
@@ -161,7 +162,9 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
       setSelectedKeys((current) => autoSelectCreatedWatchlist(current, option.key));
       setIsCreateFormOpen(false);
       setNewWatchlistName('');
+      hapticSuccess();
     } catch (createError) {
+      hapticError();
       showToast(createError instanceof Error ? createError.message : 'Could not create this watchlist.');
     } finally {
       setIsCreating(false);
@@ -169,6 +172,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   }
 
   function toggleOption(key: string) {
+    hapticSelection();
     setSelectedKeys((current) => {
       const next = new Set(current);
       if (next.has(key)) next.delete(key);
@@ -239,6 +243,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
 
       void preloadWatchlists();
       showToast('Watchlists updated.', 'success');
+      hapticConfirm();
     } catch (saveError) {
       const compensationResults = await Promise.allSettled(
         completedRollbacks.map((rollback) => rollback()),
@@ -246,6 +251,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
       const rollbackComplete = compensationResults.every((result) => result.status === 'fulfilled');
 
       if (saveVersionRef.current === saveVersion) {
+        hapticError();
         setIsOpen(true);
         if (rollbackComplete) {
           setOptions(previousOptions);

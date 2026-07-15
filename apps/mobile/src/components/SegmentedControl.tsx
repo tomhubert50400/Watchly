@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Pressable, StyleProp, StyleSheet, Text, TextStyle, useWindowDimensions, View, ViewStyle } from 'react-native';
 import { colors, radii, spacing, touchTargets } from '../design/tokens';
+import { hapticSelection } from '../feedback/haptics';
 import { resolveDynamicTypeLayout } from './dynamicTypeLayout';
 
 type SegmentedControlOption<T extends string> = {
@@ -93,7 +94,10 @@ export function SegmentedControl<T extends string>({
             accessibilityState={{ disabled, selected }}
             disabled={disabled}
             key={option.value}
-            onPress={() => onChange(option.value)}
+            onPress={() => {
+              if (!selected) hapticSelection();
+              onChange(option.value);
+            }}
             style={({ pressed }) => [
               styles.button,
               { minHeight: buttonHeight },

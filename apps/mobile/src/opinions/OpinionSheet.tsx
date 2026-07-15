@@ -18,6 +18,7 @@ import { Button } from '../components/Button';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInSheet } from '../auth/SignInRequired';
 import { colors, radii, shadows, spacing, touchTargets, typography } from '../design/tokens';
+import { hapticConfirm, hapticError, hapticSelection } from '../feedback/haptics';
 import { useToast } from '../notifications/ToastContext';
 import {
   MAX_REVIEW_LENGTH,
@@ -163,9 +164,11 @@ export function OpinionSheet({
           if (!isCurrent()) return false;
           next = applyOperationFailure(next, operation, operationError(operation));
           setOpinion(next);
+          hapticError();
           return false;
         }
       }
+      if (changed) hapticConfirm();
       return true;
     } finally {
       if (isCurrent()) {
@@ -286,13 +289,20 @@ export function OpinionSheet({
                 text: opinion.draftRating === null ? 'Not rated' : `${opinion.draftRating} out of 5`,
               }}
               onAccessibilityAction={(event) => {
+                const value = opinion.draftRating ?? 0;
+                const nextRating = event.nativeEvent.actionName === 'increment'
+                  ? Math.min(5, value + 0.5)
+                  : value <= 0.5
+                    ? null
+                    : value - 0.5;
+                if (nextRating !== opinion.draftRating) hapticSelection();
                 setOpinion((current) => {
-                  const value = current.draftRating ?? 0;
+                  const currentValue = current.draftRating ?? 0;
                   const draftRating = event.nativeEvent.actionName === 'increment'
-                    ? Math.min(5, value + 0.5)
-                    : value <= 0.5
+                    ? Math.min(5, currentValue + 0.5)
+                    : currentValue <= 0.5
                       ? null
-                      : value - 0.5;
+                      : currentValue - 0.5;
                   return { ...current, draftRating, error: null };
                 });
               }}
@@ -386,7 +396,9 @@ function RatingStar({
 }) {
   const fill = score === null || score <= star - 1 ? 0 : score >= star ? STAR_ICON_SIZE : STAR_ICON_SIZE / 2;
   function handlePress(event: GestureResponderEvent) {
-    onSelect(getHalfStarScore(star, event.nativeEvent.locationX, STAR_TARGET_SIZE));
+    const nextScore = getHalfStarScore(star, event.nativeEvent.locationX, STAR_TARGET_SIZE);
+    if (nextScore !== score) hapticSelection();
+    onSelect(nextScore);
   }
 
   return (

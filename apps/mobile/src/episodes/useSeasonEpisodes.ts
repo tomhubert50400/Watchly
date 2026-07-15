@@ -9,6 +9,7 @@ import {
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { getPrivateCacheKey, getPublicCacheKey, writePersistedCache } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
+import { hapticConfirm, hapticError } from '../feedback/haptics';
 import { useToast } from '../notifications/ToastContext';
 import {
   applyEpisodeMutation,
@@ -180,12 +181,14 @@ export function useSeasonEpisodes({
         return;
       }
       notifyTrackingChanged();
+      hapticConfirm();
       showToast('Episode progress restored.', 'success');
     } catch {
       if (isMountedRef.current && watchedStateOwnerRef.current === privateCacheKey) {
         setWatchedState(stateBeforeUndo);
         watchedStateRef.current = stateBeforeUndo;
         void persistState(stateBeforeUndo).catch(() => undefined);
+        hapticError();
         showToast('Could not undo episode progress.');
       }
     } finally {
@@ -241,6 +244,7 @@ export function useSeasonEpisodes({
       watchedStateRef.current = confirmedState;
       await persistState(confirmedState);
       notifyTrackingChanged();
+      hapticConfirm();
       showToast(watched ? 'Episode marked watched.' : 'Episode marked unwatched.', 'success', {
         label: 'Undo',
         onPress: () => void performUndo(optimistic.intent),
@@ -251,6 +255,7 @@ export function useSeasonEpisodes({
         setWatchedState(rolledBack);
         watchedStateRef.current = rolledBack;
         void persistState(rolledBack).catch(() => undefined);
+        hapticError();
         showToast('Could not save your episode progress.');
       }
     } finally {

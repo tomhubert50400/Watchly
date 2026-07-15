@@ -19,6 +19,7 @@ import { SectionHeader } from '../components/SectionHeader';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { TextInput } from '../components/TextInput';
 import { colors, spacing, typography } from '../design/tokens';
+import { hapticConfirm, hapticError, hapticSuccess } from '../feedback/haptics';
 import { RootStackParamList } from '../navigation/types';
 import { ContinueWatchingCard } from './ContinueWatchingCard';
 import { buildLibrarySummary } from './libraryModel';
@@ -95,10 +96,16 @@ export function LibraryScreen() {
       if (item.hasReleaseAlert) await disableReleaseAlert(token, item.contentType, item.tmdbId); else await enableReleaseAlert(token, item.contentType, item.tmdbId);
       if (activeOwnerIdRef.current !== ownerId) return;
       await persist(cacheKey, next);
-      if (activeOwnerIdRef.current === ownerId) notifyTrackingChanged();
+      if (activeOwnerIdRef.current === ownerId) {
+        notifyTrackingChanged();
+        hapticConfirm();
+      }
     } catch (error) {
       updateData(ownerId, (current) => rollbackAlertValue(current, item.key, !item.hasReleaseAlert, item.hasReleaseAlert));
-      if (activeOwnerIdRef.current === ownerId) setActionError(error instanceof Error ? error.message : 'Could not update this alert.');
+      if (activeOwnerIdRef.current === ownerId) {
+        setActionError(error instanceof Error ? error.message : 'Could not update this alert.');
+        hapticError();
+      }
     }
     finally { if (activeOwnerIdRef.current === ownerId) setBusyKey(null); }
   }
@@ -114,8 +121,17 @@ export function LibraryScreen() {
       const nextList: LibraryListItem = { id: created.id, isOwner: true, itemCount: created.itemCount, key: `${newListKind}:${created.id}`, kind: newListKind, memberCount: newListKind === 'shared' ? (created as Awaited<ReturnType<typeof createSharedWatchlist>>).memberCount : null, name: created.name, posterUrls: [], updatedAt: created.updatedAt };
       const next = { ...data, lists: [nextList, ...data.lists] };
       updateData(ownerId, (current) => current.lists.some((list) => list.key === nextList.key) ? current : { ...current, lists: [nextList, ...current.lists] });
-      await persist(cacheKey, next); if (activeOwnerIdRef.current === ownerId) setNewListName('');
-    } catch (error) { if (activeOwnerIdRef.current === ownerId) setActionError(error instanceof Error ? error.message : 'Could not create this list.'); }
+      await persist(cacheKey, next);
+      if (activeOwnerIdRef.current === ownerId) {
+        setNewListName('');
+        hapticSuccess();
+      }
+    } catch (error) {
+      if (activeOwnerIdRef.current === ownerId) {
+        setActionError(error instanceof Error ? error.message : 'Could not create this list.');
+        hapticError();
+      }
+    }
     finally { if (activeOwnerIdRef.current === ownerId) setBusyKey(null); }
   }
 
@@ -124,10 +140,19 @@ export function LibraryScreen() {
     const ownerId = currentUser.id; const cacheKey = resource.key; const previousIndex = data.lists.findIndex((item) => item.key === list.key);
     const next = { ...data, lists: data.lists.filter((item) => item.key !== list.key) };
     updateData(ownerId, () => next); setBusyKey(list.key); setActionError(null);
-    try { const token = await getFirebaseIdToken(); if (!token) throw new Error('Sign in again to delete this list.'); if (list.kind === 'personal') await deleteWatchlist(token, list.id); else await deleteSharedWatchlist(token, list.id); if (activeOwnerIdRef.current !== ownerId) return; await persist(cacheKey, next); }
+    try {
+      const token = await getFirebaseIdToken(); if (!token) throw new Error('Sign in again to delete this list.');
+      if (list.kind === 'personal') await deleteWatchlist(token, list.id); else await deleteSharedWatchlist(token, list.id);
+      if (activeOwnerIdRef.current !== ownerId) return;
+      await persist(cacheKey, next);
+      if (activeOwnerIdRef.current === ownerId) hapticConfirm();
+    }
     catch (error) {
       updateData(ownerId, (current) => rollbackRemovedList(current, list, previousIndex));
-      if (activeOwnerIdRef.current === ownerId) setActionError(error instanceof Error ? error.message : 'Could not delete this list.');
+      if (activeOwnerIdRef.current === ownerId) {
+        setActionError(error instanceof Error ? error.message : 'Could not delete this list.');
+        hapticError();
+      }
     }
     finally { if (activeOwnerIdRef.current === ownerId) setBusyKey(null); }
   }

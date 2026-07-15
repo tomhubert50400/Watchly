@@ -22,6 +22,7 @@ import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { TextInput } from '../components/TextInput';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { hapticError, hapticSuccess } from '../feedback/haptics';
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
 
@@ -102,9 +103,11 @@ export function SettingsScreen() {
       await refreshCurrentUser();
       setStatus('ready');
       setMessage('Settings saved.');
+      hapticSuccess();
     } catch {
       setStatus('error');
       setMessage('Could not save profile settings.');
+      hapticError();
     }
   }
 

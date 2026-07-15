@@ -20,6 +20,7 @@ import { MediaPoster } from '../components/MediaPoster';
 import { Screen } from '../components/Screen';
 import { TextInput } from '../components/TextInput';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
+import { hapticConfirm, hapticError, hapticSuccess } from '../feedback/haptics';
 import { RootStackParamList } from '../navigation/types';
 import { getVoteLifecycle, getVoteLeaders, getVoteRemainingLabel } from './sharedVoteModel';
 import { takeHydrationItems } from './requestBoundaries';
@@ -128,8 +129,12 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
       if (ownerIdRef.current !== expectedOwnerId) return;
       setMemberUserId('');
       resource.retry();
+      hapticConfirm();
     } catch (error) {
-      if (ownerIdRef.current === expectedOwnerId) setMutationError(error instanceof Error ? error.message : 'Could not add this member.');
+      if (ownerIdRef.current === expectedOwnerId) {
+        setMutationError(error instanceof Error ? error.message : 'Could not add this member.');
+        hapticError();
+      }
     } finally {
       if (ownerIdRef.current === expectedOwnerId) setIsAddingMember(false);
     }
@@ -155,11 +160,15 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
         watchlist: { ...snapshot.watchlist, votingSessions: [created, ...snapshot.watchlist.votingSessions] },
       });
       setSessionTitle('Tonight');
+      hapticSuccess();
       navigation.navigate('SharedVotingSession', {
         sessionId: created.id, title: created.title, watchlistId: snapshot.watchlist.id,
       });
     } catch (error) {
-      if (ownerIdRef.current === expectedOwnerId) setMutationError(error instanceof Error ? error.message : 'Could not create the vote.');
+      if (ownerIdRef.current === expectedOwnerId) {
+        setMutationError(error instanceof Error ? error.message : 'Could not create the vote.');
+        hapticError();
+      }
     } finally {
       if (ownerIdRef.current === expectedOwnerId) setIsCreatingVote(false);
     }

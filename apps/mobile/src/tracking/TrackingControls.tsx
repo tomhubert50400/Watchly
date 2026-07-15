@@ -13,6 +13,7 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { resolveTrackingStatusLayout } from '../components/dynamicTypeLayout';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { colors, spacing } from '../design/tokens';
+import { hapticConfirm, hapticError } from '../feedback/haptics';
 import { useToast } from '../notifications/ToastContext';
 import { buildTrackingMutation } from './trackingControlState';
 import { createTrackingStateMemoryCache } from './trackingStateMemoryCache';
@@ -155,11 +156,13 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
       trackingStateCache.set(ownerId!, contentType, tmdbId, savedState);
       setState(savedState);
       setStateScope(scope);
+      hapticConfirm();
     } catch (saveError) {
       if (!isCurrent()) return;
       trackingStateCache.set(ownerId!, contentType, tmdbId, previousState);
       setState(previousState);
       setStateScope(scope);
+      hapticError();
       showToast(saveError instanceof Error ? saveError.message : 'Could not save your tracking state.');
     }
   }

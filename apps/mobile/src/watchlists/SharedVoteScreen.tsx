@@ -21,6 +21,7 @@ import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { MediaPoster } from '../components/MediaPoster';
 import { Screen } from '../components/Screen';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
+import { hapticConfirm, hapticError, hapticSuccess } from '../feedback/haptics';
 import { RootStackParamList } from '../navigation/types';
 import {
   beginOptimisticClose,
@@ -149,11 +150,13 @@ export function SharedVoteScreen({ route }: Props) {
       if (ownerIdRef.current !== expectedOwnerId) return;
       const current = ownedVoteRef.current.data;
       if (current) commitDetails(expectedOwnerId, { ...current, session: confirmed });
+      hapticConfirm();
     } catch (error) {
       if (ownerIdRef.current === expectedOwnerId) {
         const current = ownedVoteRef.current.data;
         if (current) commitDetails(expectedOwnerId, { ...current, session: rollbackVoteMutation(mutation, current.session) });
         setMutationError(error instanceof Error ? error.message : 'Your vote could not be saved.');
+        hapticError();
         resource.retry();
       }
     } finally {
@@ -188,11 +191,13 @@ export function SharedVoteScreen({ route }: Props) {
       const current = ownedVoteRef.current.data;
       if (current) commitDetails(expectedOwnerId, { ...current, session: confirmed });
       resource.retry();
+      hapticSuccess();
     } catch (error) {
       if (ownerIdRef.current === expectedOwnerId) {
         const current = ownedVoteRef.current.data;
         if (current) commitDetails(expectedOwnerId, { ...current, session: rollbackVoteMutation(mutation, current.session) });
         setMutationError(error instanceof Error ? error.message : 'The vote could not be closed.');
+        hapticError();
         resource.retry();
       }
     } finally {

@@ -11,6 +11,7 @@ import {
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInSheet } from '../auth/SignInRequired';
 import { colors, radii } from '../design/tokens';
+import { hapticConfirm, hapticError } from '../feedback/haptics';
 import { useToast } from './ToastContext';
 import { getReleaseAlertControlPresentation, ReleaseAlertLoadStatus } from './releaseAlertControlState';
 
@@ -102,10 +103,12 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
       setState(nextState);
       setStateScope(scope);
       notifyTrackingChanged();
+      hapticConfirm();
     } catch (toggleError) {
       if (!isCurrent()) return;
       setState(previousState);
       setStateScope(scope);
+      hapticError();
       showToast(toggleError instanceof Error ? toggleError.message : 'Could not update release alerts.');
     }
   }
