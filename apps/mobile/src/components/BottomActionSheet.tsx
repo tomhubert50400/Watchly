@@ -3,7 +3,11 @@ import { PropsWithChildren, ReactNode, useCallback, useEffect, useMemo, useRef }
 import { Animated, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
-import { getBottomSheetDragOffset, shouldDismissBottomSheet } from './bottomActionSheetGesture';
+import {
+  getBottomSheetDragOffset,
+  shouldCaptureBottomSheetDrag,
+  shouldDismissBottomSheet,
+} from './bottomActionSheetGesture';
 
 type BottomActionSheetProps = PropsWithChildren<{
   footer?: ReactNode;
@@ -62,8 +66,8 @@ export function BottomActionSheet({ children, footer, onClose, title, visible }:
   }, [dragY]);
 
   const panResponder = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: (_, gesture) => (
-      gesture.dy > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx)
+    onMoveShouldSetPanResponderCapture: (_, gesture) => (
+      shouldCaptureBottomSheetDrag(gesture.dx, gesture.dy)
     ),
     onPanResponderMove: (_, gesture) => {
       dragY.setValue(getBottomSheetDragOffset(gesture.dy));
@@ -102,6 +106,7 @@ export function BottomActionSheet({ children, footer, onClose, title, visible }:
           <Pressable accessibilityLabel="Close sheet" accessibilityRole="button" onPress={requestClose} style={StyleSheet.absoluteFill} />
         </Animated.View>
         <Animated.View
+          {...panResponder.panHandlers}
           accessibilityViewIsModal
           style={[
             styles.sheet,
@@ -113,7 +118,7 @@ export function BottomActionSheet({ children, footer, onClose, title, visible }:
           ]}
         >
           <SafeAreaView edges={['bottom']} style={styles.safeContent}>
-            <View {...panResponder.panHandlers}>
+            <View>
               <View style={styles.handle} />
               <View style={styles.header}>
                 <Text accessibilityRole="header" style={styles.title}>{title}</Text>
