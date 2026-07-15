@@ -19,7 +19,7 @@ export function BrandLogo({ size }: BrandLogoProps) {
         accessibilityIgnoresInvertColors
         resizeMode="contain"
         source={watchlyLogo}
-        style={styles.image}
+        style={{ height: size, width: size }}
       />
     </View>
   );
@@ -29,8 +29,5 @@ const styles = StyleSheet.create({
   frame: {
     alignSelf: 'center',
     overflow: 'hidden',
-  },
-  image: {
-    ...StyleSheet.absoluteFillObject,
   },
 });

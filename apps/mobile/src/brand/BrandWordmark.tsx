@@ -8,19 +8,21 @@ type BrandWordmarkProps = {
 };
 
 export function BrandWordmark({ height }: BrandWordmarkProps) {
+  const width = height * WORDMARK_ASPECT_RATIO;
+
   return (
     <View
       accessibilityLabel="Watchly"
       accessibilityRole="header"
       importantForAccessibility="yes"
-      style={[styles.frame, { height, width: height * WORDMARK_ASPECT_RATIO }]}
+      style={[styles.frame, { height, width }]}
     >
       <Image
         accessible={false}
         accessibilityIgnoresInvertColors
         resizeMode="contain"
         source={watchlyWordmark}
-        style={styles.image}
+        style={{ height, width }}
       />
     </View>
   );
@@ -29,8 +31,5 @@ export function BrandWordmark({ height }: BrandWordmarkProps) {
 const styles = StyleSheet.create({
   frame: {
     flexShrink: 0,
-  },
-  image: {
-    ...StyleSheet.absoluteFillObject,
   },
 });

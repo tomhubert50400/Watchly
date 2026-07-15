@@ -50,11 +50,15 @@ assert.match(brandLogoSource, /watchly-logo-ui\.png/, 'runtime UI must use the o
 assert.doesNotMatch(brandLogoSource, /watchly-logo-transparent\.png/, 'runtime UI must not decode the full source logo');
 assert.match(brandLogoSource, /accessible=\{false\}/, 'decorative brand marks must not repeat nearby accessible text');
 assert.match(brandLogoSource, /alignSelf: 'center'/, 'the sign-in brand mark must stay centered');
+assert.match(brandLogoSource, /style=\{\{ height: size, width: size \}\}/, 'the logo Image must use its rendered size');
+assert.doesNotMatch(brandLogoSource, /absoluteFillObject/, 'the logo must not fall back to its intrinsic PNG size');
 assert.match(brandWordmarkSource, /watchly-wordmark-ui\.png/, 'Home must use the optimized wordmark asset');
 assert.doesNotMatch(brandWordmarkSource, /watchly-wordmark-transparent\.png/, 'Home must not decode the full wordmark source');
 assert.match(brandWordmarkSource, /accessible=\{false\}/, 'the visual wordmark must not duplicate its header label');
 assert.match(brandWordmarkSource, /accessibilityLabel="Watchly"/, 'the wordmark must preserve the Home heading label');
 assert.match(brandWordmarkSource, /accessibilityRole="header"/, 'the wordmark must remain a semantic heading');
+assert.match(brandWordmarkSource, /style=\{\{ height, width \}\}/, 'the wordmark Image must use its rendered size');
+assert.doesNotMatch(brandWordmarkSource, /absoluteFillObject/, 'the wordmark must not fall back to its intrinsic PNG size');
 assert.match(authSource, /<BrandLogo size=\{76\}/, 'sign-in must use the official Watchly mark');
 assert.doesNotMatch(authSource, /logoText/, 'the placeholder W must be removed');
 assert.equal((homeSource.match(/<BrandWordmark height=\{44\} \/>/g) ?? []).length, 3, 'all Home states must use the Watchly wordmark');
