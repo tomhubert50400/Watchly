@@ -4,11 +4,9 @@ import assert from 'node:assert/strict';
 import type { CatalogueSearchItem } from '../api/catalogue';
 import {
   buildExploreSections,
-  DEFAULT_EXPLORE_SEARCH_SORT,
   filterSearchResults,
   getExploreViewState,
   groupSearchResults,
-  sortSearchResults,
 } from './exploreState';
 
 function item(
@@ -69,28 +67,6 @@ assert.deepEqual(
   filterSearchResults(mixedSearchResults, 'series'),
   [seriesWithSameTmdbId],
   'the series filter only keeps series visible',
-);
-
-const lowerRated = { ...item(2, 'movie', 'Lower rated'), voteAverage: 6 };
-const highestRated = { ...item(3, 'movie', 'Highest rated'), voteAverage: 9 };
-const equallyRated = { ...item(4, 'series', 'Equally rated'), voteAverage: 9 };
-const unrated = { ...item(5, 'series', 'Unrated'), voteAverage: null };
-const relevanceOrder = [lowerRated, highestRated, equallyRated, unrated];
-
-assert.equal(
-  DEFAULT_EXPLORE_SEARCH_SORT,
-  'rating',
-  'rating is the default search result order',
-);
-assert.deepEqual(
-  sortSearchResults(relevanceOrder, 'rating'),
-  [highestRated, equallyRated, lowerRated, unrated],
-  'rating order puts the highest ratings first, keeps ties stable, and leaves unrated titles last',
-);
-assert.deepEqual(
-  sortSearchResults(relevanceOrder, 'relevance'),
-  relevanceOrder,
-  'relevance order preserves the TMDB result order',
 );
 
 assert.deepEqual(

@@ -35,13 +35,10 @@ import { loadCatalogueSections, PUBLIC_CATALOGUE_SECTIONS_KEY } from './catalogu
 import { ExploreMediaCard } from './ExploreMediaCard';
 import {
   buildExploreSections,
-  DEFAULT_EXPLORE_SEARCH_SORT,
   deduplicateMediaItems,
   ExploreSection,
-  ExploreSearchSort,
   filterSearchResults,
   getExploreViewState,
-  sortSearchResults,
 } from './exploreState';
 
 const SEARCH_INPUT_ACCESSORY_ID = 'explore-search-keyboard-accessory';
@@ -56,7 +53,6 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
   const { preloadCatalogueItems } = useCatalogueCache();
   const [query, setQuery] = useState('');
   const [searchType, setSearchType] = useState<CatalogueSearchType>('all');
-  const [searchSort, setSearchSort] = useState<ExploreSearchSort>(DEFAULT_EXPLORE_SEARCH_SORT);
   const [activeSection, setActiveSection] = useState<ExploreSection>('trending');
   const [searchItems, setSearchItems] = useState<CatalogueSearchItem[]>([]);
   const [searchItemsQuery, setSearchItemsQuery] = useState('');
@@ -75,10 +71,8 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
     [sections.data],
   );
   const visibleSearchItems = useMemo(
-    () => searchItemsQuery === trimmedQuery
-      ? sortSearchResults(filterSearchResults(searchItems, searchType), searchSort)
-      : [],
-    [searchItems, searchItemsQuery, searchSort, searchType, trimmedQuery],
+    () => searchItemsQuery === trimmedQuery ? filterSearchResults(searchItems, searchType) : [],
+    [searchItems, searchItemsQuery, searchType, trimmedQuery],
   );
   const visibleItems = isSearching ? visibleSearchItems : sectionItems[activeSection];
   const visibleError = isSearching ? searchError : sections.error;
@@ -215,27 +209,17 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
             ) : null}
           </View>
           {isSearching ? (
-            <View style={styles.searchControls}>
-              <SegmentedControl
-                buttonMinHeight={44}
-                onChange={setSearchType}
-                options={[
-                  { accessibilityLabel: 'Show all results', label: 'All', value: 'all' },
-                  { accessibilityLabel: 'Show films only', label: 'Films', value: 'movie' },
-                  { accessibilityLabel: 'Show series only', label: 'Series', value: 'series' },
-                ]}
-                value={searchType}
-              />
-              <SegmentedControl
-                buttonMinHeight={44}
-                onChange={setSearchSort}
-                options={[
-                  { accessibilityLabel: 'Sort by highest rating', label: 'Top rated', value: 'rating' },
-                  { accessibilityLabel: 'Sort by relevance', label: 'Relevance', value: 'relevance' },
-                ]}
-                value={searchSort}
-              />
-            </View>
+            <SegmentedControl
+              buttonMinHeight={44}
+              containerStyle={styles.searchTypeControl}
+              onChange={setSearchType}
+              options={[
+                { accessibilityLabel: 'Show all results', label: 'All', value: 'all' },
+                { accessibilityLabel: 'Show films only', label: 'Films', value: 'movie' },
+                { accessibilityLabel: 'Show series only', label: 'Series', value: 'series' },
+              ]}
+              value={searchType}
+            />
           ) : (
             <SegmentedControl
               buttonMinHeight={42}
@@ -673,16 +657,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 24,
   },
-  searchControls: {
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
   searchInput: {
     ...typography.body,
     color: colors.text,
     flex: 1,
     minWidth: 0,
     paddingVertical: spacing.sm,
+  },
+  searchTypeControl: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.sm,
+    maxWidth: '100%',
+    width: 228,
   },
   section: {
     gap: spacing.sm,
