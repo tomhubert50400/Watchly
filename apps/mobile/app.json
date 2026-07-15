@@ -7,6 +7,11 @@
     "newArchEnabled": false,
     "orientation": "portrait",
     "icon": "./assets/icon.png",
+    "splash": {
+      "backgroundColor": "#090C13",
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain"
+    },
     "userInterfaceStyle": "light",
     "ios": {
       "bundleIdentifier": "com.tom.tvapp.dev",
@@ -18,7 +23,7 @@
     "android": {
       "package": "com.tom.tvapp.dev",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#090C13",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

@@ -4,6 +4,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { ApiError } from '../api/client';
+import { BrandLogo } from '../brand/BrandLogo';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { useAuthSession } from './AuthSessionContext';
@@ -122,7 +123,7 @@ export function ProfileAuthCard({
     <View style={[styles.shell, embedded ? styles.shellEmbedded : null]}>
       <View pointerEvents="none" style={styles.glow} />
       <View style={styles.card}>
-        <View style={styles.logoMark}><Text style={styles.logoText}>W</Text></View>
+        <BrandLogo size={76} />
         <Text accessibilityRole="header" style={styles.title}>{title}</Text>
         <Text style={styles.body}>{body}</Text>
 
@@ -257,9 +258,7 @@ const styles = StyleSheet.create({
   facebook: { backgroundColor: '#1877F2', borderColor: '#1877F2' },
   glow: { backgroundColor: colors.accentSoft, borderRadius: 155, height: 310, left: '10%', opacity: 0.7, position: 'absolute', top: 14, width: '80%' },
   googleLetter: { color: '#4285F4', fontSize: 20, fontWeight: '900' },
-  logoMark: { alignItems: 'center', alignSelf: 'center', backgroundColor: colors.accentSoft, borderColor: colors.accentBorder, borderRadius: 18, borderWidth: 1, height: 65, justifyContent: 'center', width: 65 },
   logoSlot: { alignItems: 'center', height: 24, justifyContent: 'center', width: 24 },
-  logoText: { color: colors.accentText, fontSize: 24, fontWeight: '900' },
   microsoft: { backgroundColor: '#F7F3F5', borderColor: '#F7F3F5' },
   moreLabel: { color: colors.textSubtle, fontSize: 10, fontWeight: '800', marginBottom: spacing.sm, marginTop: spacing.lg, textAlign: 'center' },
   note: { color: colors.textSubtle, fontSize: 11, lineHeight: 15, marginTop: spacing.md, textAlign: 'center' },

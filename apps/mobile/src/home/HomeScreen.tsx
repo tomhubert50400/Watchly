@@ -16,6 +16,7 @@ import { listNotifications } from '../api/notifications';
 import { listSeriesProgressSummaries, SeriesProgressSummary } from '../api/progress';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
+import { BrandLogo } from '../brand/BrandLogo';
 import { getPrivateCacheKey, getPublicCacheKey } from '../cache/persistedCache';
 import { setMemoryResource } from '../cache/memoryResourceCache';
 import { useCachedResource } from '../cache/useCachedResource';
@@ -127,7 +128,7 @@ export function HomeScreen() {
 
   if (catalogue.isInitialLoading && !catalogue.data) {
     return (
-      <Screen title="Watchly">
+      <Screen leading={<BrandLogo size={44} />} title="Watchly">
         <View style={styles.blockingState}>
           <InlineStatusBanner detail="Fetching current catalogue titles." tone="updating" />
         </View>
@@ -137,7 +138,7 @@ export function HomeScreen() {
 
   if (catalogue.error && !catalogue.data) {
     return (
-      <Screen title="Watchly">
+      <Screen leading={<BrandLogo size={44} />} title="Watchly">
         <EmptyState body={catalogue.error} title="Home is unavailable">
           <Button label="Retry" onPress={catalogue.retry} />
         </EmptyState>
@@ -164,6 +165,7 @@ export function HomeScreen() {
         ) : undefined
       }
       tabBarPadding
+      leading={<BrandLogo size={44} />}
       title="Watchly"
       trailing={
         <View style={styles.headerActions}>

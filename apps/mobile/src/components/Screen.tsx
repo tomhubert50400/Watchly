@@ -9,6 +9,7 @@ type ScreenProps = PropsWithChildren<{
   gestureHandlers?: GestureResponderHandlers;
   headerMode?: 'regular' | 'sticky';
   horizontalPadding?: boolean | number;
+  leading?: ReactNode;
   refreshControl?: ScrollViewProps['refreshControl'];
   statusBanner?: ReactNode;
   tabBarPadding?: boolean | number;
@@ -22,6 +23,7 @@ export function Screen({
   gestureHandlers,
   headerMode = 'regular',
   horizontalPadding = true,
+  leading,
   refreshControl,
   statusBanner,
   tabBarPadding = false,
@@ -40,7 +42,7 @@ export function Screen({
     : tabBarPadding
       ? 72
       : spacing.xxxl;
-  const hasHeader = Boolean(title || eyebrow || trailing);
+  const hasHeader = Boolean(title || eyebrow || leading || trailing);
 
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea} {...gestureHandlers}>
@@ -53,7 +55,7 @@ export function Screen({
       >
         {hasHeader ? (
           <View style={[styles.headerShell, headerMode === 'sticky' ? styles.stickyHeader : null, { paddingHorizontal: chromePadding }]}>
-            <AppHeader eyebrow={eyebrow} title={title} trailing={trailing} />
+            <AppHeader eyebrow={eyebrow} leading={leading} title={title} trailing={trailing} />
           </View>
         ) : null}
         {statusBanner ? <View style={[styles.banner, { marginHorizontal: chromePadding }]}>{statusBanner}</View> : null}
