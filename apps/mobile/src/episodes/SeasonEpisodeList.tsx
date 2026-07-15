@@ -67,7 +67,7 @@ export function SeasonEpisodeList({
           <Text style={styles.progressMeta}>
             {model.isSignedIn
               ? `${model.progress.completed} watched · ${Math.round(model.progress.fraction * 100)}% complete`
-              : 'Sign in from Profile to track progress'}
+              : 'Sign in to track progress'}
           </Text>
         </View>
         <View style={styles.progressCount}>

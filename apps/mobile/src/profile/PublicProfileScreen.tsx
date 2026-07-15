@@ -27,6 +27,7 @@ import { Screen } from '../components/Screen';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { SignInRequiredCard } from '../auth/SignInRequired';
 import { ProfileSummaryCard } from './ProfileSummaryCard';
 
 type PublicProfileRoute = RouteProp<RootStackParamList, 'PublicProfile'>;
@@ -195,6 +196,17 @@ export function PublicProfileScreen() {
     } finally {
       setIsUpdatingFollow(false);
     }
+  }
+
+  if (!firebaseIdToken) {
+    return (
+      <Screen eyebrow="Profile" title="Public profile">
+        <SignInRequiredCard
+          body="You need to be signed in to view profiles and follow people. Sign in here to continue."
+          title="Sign in to view profiles"
+        />
+      </Screen>
+    );
   }
 
   return (

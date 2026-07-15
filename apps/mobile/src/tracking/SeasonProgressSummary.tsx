@@ -53,7 +53,7 @@ export function useSeasonProgressSummary({
             <Text style={styles.body}>
               {firebaseIdToken
                 ? `${progress?.watchedEpisodeCount ?? 0}/${episodeCount} watched`
-                : 'Sign in from Profile to track episode progress.'}
+                : 'Sign in to track episode progress.'}
             </Text>
           </View>
 

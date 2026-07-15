@@ -7,6 +7,7 @@ import { createSharedWatchlist, deleteSharedWatchlist } from '../api/sharedWatch
 import { disableReleaseAlert, enableReleaseAlert } from '../api/notifications';
 import { createWatchlist, deleteWatchlist } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { SignInRequiredCard } from '../auth/SignInRequired';
 import { writePersistedCache } from '../cache/persistedCache';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -133,7 +134,7 @@ export function LibraryScreen() {
 
   const banner = resource.isRefreshing ? <InlineStatusBanner tone="updating" /> : resource.error && data ? <InlineStatusBanner detail={resource.error} onRetry={resource.retry} tone="error" title="Library kept offline" /> : (data?.partialError || actionError) ? <InlineStatusBanner detail={actionError ?? data?.partialError ?? ''} onRetry={resource.retry} tone="error" title="Some data needs attention" /> : null;
   return <Screen eyebrow={currentUser ? 'Your collection' : undefined} refreshControl={currentUser ? <RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined} statusBanner={banner} tabBarPadding title="Library" trailing={currentUser ? <IconButton accessibilityLabel="Open Journal" icon={<BookOpen color={colors.text} size={21} />} onPress={() => navigation.navigate('Journal')} /> : null}>
-    {!currentUser ? <EmptyState body="Sign in from Profile to keep your progress, ratings, release alerts and lists together." title="Your cinema lives here" />
+    {!currentUser ? <SignInRequiredCard body="You need to be signed in to use this section. Sign in here to keep your progress, ratings, release alerts and lists together." title="Sign in to use Library" />
       : resource.isInitialLoading && !data ? <LoadingState label="Loading your library" />
       : resource.error && !data ? <EmptyState body={resource.error} title="Library unavailable"><Button label="Retry" onPress={resource.retry} /></EmptyState>
       : data && data.items.length === 0 && data.lists.length === 0 ? <EmptyState body="Track a title or create a list. Your progress and ratings will appear here automatically." title="Start your Library"><Button label="Explore titles" onPress={() => navigation.navigate('MainTabs', { screen: 'Explore' })} /></EmptyState>

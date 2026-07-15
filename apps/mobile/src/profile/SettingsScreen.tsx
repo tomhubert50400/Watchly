@@ -16,8 +16,8 @@ import {
   updateProfile,
 } from '../api/profile';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { SignInRequiredCard } from '../auth/SignInRequired';
 import { Button } from '../components/Button';
-import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { TextInput } from '../components/TextInput';
@@ -111,7 +111,10 @@ export function SettingsScreen() {
   if (!firebaseIdToken && authStatus !== 'loading') {
     return (
       <Screen eyebrow="Account" title="Settings">
-        <EmptyState body="Sign in from Profile before changing privacy controls." title="Account required" />
+        <SignInRequiredCard
+          body="You need to be signed in to use account settings. Sign in here to manage your profile and privacy controls."
+          title="Sign in to use Settings"
+        />
       </Screen>
     );
   }

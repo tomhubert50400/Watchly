@@ -15,6 +15,7 @@ import { FeedItem, getFeed } from '../api/feed';
 import { listNotifications } from '../api/notifications';
 import { listSeriesProgressSummaries, SeriesProgressSummary } from '../api/progress';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey, getPublicCacheKey } from '../cache/persistedCache';
 import { setMemoryResource } from '../cache/memoryResourceCache';
 import { useCachedResource } from '../cache/useCachedResource';
@@ -25,7 +26,7 @@ import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { MediaPoster } from '../components/MediaPoster';
 import { Screen } from '../components/Screen';
 import { SectionHeader } from '../components/SectionHeader';
-import { colors, radii, spacing, typography } from '../design/tokens';
+import { colors, spacing, typography } from '../design/tokens';
 import { RootStackParamList, RootTabParamList } from '../navigation/types';
 import { countUnreadNotifications } from '../notifications/notificationModel';
 import { ContinueWatchingRail } from './ContinueWatchingRail';
@@ -185,7 +186,7 @@ export function HomeScreen() {
             </View>
           ) : null}
           <IconButton
-            accessibilityLabel={isSignedIn ? 'Open Profile' : 'Sign in from Profile'}
+            accessibilityLabel="Open Profile"
             icon={<UserCircle color={colors.textMuted} size={22} strokeWidth={2} />}
             onPress={() => navigation.navigate('Profile')}
           />
@@ -263,12 +264,11 @@ export function HomeScreen() {
           );
         })}
         {!isSignedIn ? (
-          <View style={styles.visitorCard}>
-            <Text style={styles.visitorTitle}>Make Home yours</Text>
-            <Text style={styles.visitorBody}>
-              Sign in from Profile to continue series and see reviews from people you follow.
-            </Text>
-            <Button label="Open Profile" onPress={() => navigation.navigate('Profile')} variant="secondary" />
+          <View style={styles.signInCard}>
+            <SignInRequiredCard
+              body="You need to be signed in to personalize Home. Sign in here to continue series and see reviews from people you follow."
+              title="Sign in to make Home yours"
+            />
           </View>
         ) : null}
       </View>
@@ -570,21 +570,7 @@ const styles = StyleSheet.create({
   sectionBody: {
     gap: spacing.sm,
   },
-  visitorBody: {
-    ...typography.body,
-    color: colors.textMuted,
-  },
-  visitorCard: {
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    gap: spacing.md,
+  signInCard: {
     marginHorizontal: spacing.xl,
-    padding: spacing.lg,
-  },
-  visitorTitle: {
-    ...typography.title,
-    color: colors.text,
   },
 });

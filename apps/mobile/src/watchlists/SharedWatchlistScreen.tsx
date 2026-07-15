@@ -9,6 +9,7 @@ import {
   type SharedWatchlist,
 } from '../api/sharedWatchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey, writePersistedCache } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
@@ -165,7 +166,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
   }
 
   if (!ownerId || !firebaseIdToken) {
-    return <Screen title=""><EmptyState body="Sign in from Profile to open member-only shared lists." title="Sign in required" /></Screen>;
+    return <Screen title=""><SignInRequiredCard body="You need to be signed in to use member-only shared lists. Sign in here to open this list." title="Sign in to view this shared list" /></Screen>;
   }
   if (resource.isInitialLoading && !details) {
     return <Screen title="" statusBanner={<InlineStatusBanner detail="Loading this private shared list." tone="updating" />} />;

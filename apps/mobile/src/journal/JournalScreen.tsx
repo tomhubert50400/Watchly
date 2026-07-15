@@ -8,6 +8,7 @@ import { getOwnProfileOpinions } from '../api/profile';
 import { listMovieRatings } from '../api/ratings';
 import { listTrackingStates } from '../api/tracking';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { SignInRequiredCard } from '../auth/SignInRequired';
 import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -62,7 +63,7 @@ export function JournalScreen() {
   const banner = resource.isRefreshing ? <InlineStatusBanner tone="updating" /> : resource.error && resource.data ? <InlineStatusBanner detail={resource.error} onRetry={resource.retry} tone="error" title="Journal kept offline" /> : resource.data?.partialError ? <InlineStatusBanner detail={resource.data.partialError} onRetry={resource.retry} tone="error" /> : null;
 
   return <Screen refreshControl={currentUser ? <RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined} statusBanner={banner} title="">
-    {!currentUser ? <EmptyState body="Sign in from Profile to see your private viewing history and opinions." title="Your Journal is private" />
+    {!currentUser ? <SignInRequiredCard body="You need to be signed in to use your private Journal. Sign in here to see your viewing history and opinions." title="Sign in to use Journal" />
       : resource.isInitialLoading && !resource.data ? <LoadingState label="Loading your Journal" />
       : resource.error && !resource.data ? <EmptyState body={resource.error} title="Journal unavailable"><Button label="Retry" onPress={resource.retry} /></EmptyState>
       : resource.data ? <View>

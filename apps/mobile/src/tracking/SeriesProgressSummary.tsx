@@ -4,6 +4,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { listSeriesProgress, SeriesProgress } from '../api/progress';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
 import { SeriesDetails } from '../api/catalogue';
@@ -52,7 +53,6 @@ export function SeriesProgressSummary({
   );
   const watchedCount = progress?.watchedEpisodeCount ?? 0;
   const body = getBody({
-    isSignedIn: Boolean(firebaseIdToken),
     resumeEpisode,
     watchedCount,
   });
@@ -69,6 +69,15 @@ export function SeriesProgressSummary({
       title: `S${resumeEpisode.seasonNumber} E${resumeEpisode.episodeNumber}`,
       tmdbId: seriesTmdbId,
     });
+  }
+
+  if (!firebaseIdToken) {
+    return (
+      <SignInRequiredCard
+        body="You need to be signed in to track this series. Sign in here to save progress and continue watching."
+        title="Sign in to track this series"
+      />
+    );
   }
 
   return (
@@ -139,18 +148,12 @@ function getResumeEpisode(seasons: SeriesDetails['seasons'], progress: SeriesPro
 }
 
 function getBody({
-  isSignedIn,
   resumeEpisode,
   watchedCount,
 }: {
-  isSignedIn: boolean;
   resumeEpisode: ResumeEpisode | null;
   watchedCount: number;
 }) {
-  if (!isSignedIn) {
-    return 'Sign in from Profile to resume this series.';
-  }
-
   if (!resumeEpisode) {
     return watchedCount > 0 ? 'All available episodes are marked watched.' : 'No episodes available to resume.';
   }

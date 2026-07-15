@@ -5,6 +5,7 @@ import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native'
 import { getEpisodeDetails, getMovieDetails } from '../api/catalogue';
 import { FeedItem, getFeed } from '../api/feed';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { SignInRequiredCard } from '../auth/SignInRequired';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
@@ -104,9 +105,9 @@ export function FeedScreen() {
       title="Feed"
     >
       {!firebaseIdToken ? (
-        <EmptyState
-          body="Sign in from Profile, then follow public profiles to see their written reviews."
-          title="Sign in to see your feed"
+        <SignInRequiredCard
+          body="You need to be signed in to use your social feed. Sign in here, then follow public profiles to see their written reviews."
+          title="Sign in to see your Feed"
         />
       ) : isLoading ? (
         <LoadingState label="Loading feed" />

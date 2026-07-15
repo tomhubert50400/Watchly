@@ -11,6 +11,7 @@ import {
   voteForSharedCandidate,
 } from '../api/sharedWatchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey, writePersistedCache } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
@@ -200,7 +201,7 @@ export function SharedVoteScreen({ route }: Props) {
   }
 
   if (!ownerId || !firebaseIdToken) {
-    return <Screen title=""><EmptyState body="Sign in from Profile to join this shared vote." title="Sign in required" /></Screen>;
+    return <Screen title=""><SignInRequiredCard body="You need to be signed in to join this private shared vote. Sign in here to continue." title="Sign in to join this vote" /></Screen>;
   }
   if (resource.isInitialLoading && !details) {
     return <Screen title="" statusBanner={<InlineStatusBanner detail="Loading candidates and current votes." tone="updating" />} />;

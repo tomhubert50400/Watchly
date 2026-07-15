@@ -4,6 +4,7 @@ import { RefreshCw } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PersonalWatchlist } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { SignInRequiredCard } from '../auth/SignInRequired';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
@@ -116,7 +117,10 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   if (!firebaseIdToken) {
     return (
       <View style={styles.pageFallback}>
-        <EmptyState body="Sign in from Profile to open your private lists." title="Sign in required" />
+        <SignInRequiredCard
+          body="You need to be signed in to use private lists. Sign in here to open this watchlist."
+          title="Sign in to view this list"
+        />
       </View>
     );
   }

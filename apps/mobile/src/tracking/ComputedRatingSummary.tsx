@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { getSeriesRatingSummary, SeriesRatingSummary } from '../api/ratings';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
@@ -36,10 +37,18 @@ export function ComputedRatingSummary({
   });
   const summary = resource.data;
 
+  if (!firebaseIdToken) {
+    return (
+      <SignInRequiredCard
+        body="You need to be signed in to use personal ratings. Sign in here to rate episodes and see your computed score."
+        title="Sign in to see your rating"
+      />
+    );
+  }
+
   const computed = getComputedRating(summary, seasonNumber);
   const body = getBody({
     averageScore: computed.averageScore,
-    isSignedIn: Boolean(firebaseIdToken),
     ratedEpisodeCount: computed.ratedEpisodeCount,
     seasonNumber,
   });
@@ -85,19 +94,13 @@ function getComputedRating(summary: SeriesRatingSummary | null, seasonNumber: nu
 
 function getBody({
   averageScore,
-  isSignedIn,
   ratedEpisodeCount,
   seasonNumber,
 }: {
   averageScore: number | null;
-  isSignedIn: boolean;
   ratedEpisodeCount: number;
   seasonNumber: number | undefined;
 }) {
-  if (!isSignedIn) {
-    return 'Sign in from Profile to see your computed ratings.';
-  }
-
   if (averageScore === null) {
     return seasonNumber === undefined
       ? 'Rate episodes to compute your series rating.'

@@ -17,6 +17,7 @@ import {
   WatchlistContentType,
 } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { SignInSheet } from '../auth/SignInRequired';
 import { BottomActionSheet } from '../components/BottomActionSheet';
 import { Button } from '../components/Button';
 import { SegmentedControl } from '../components/SegmentedControl';
@@ -48,6 +49,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [newWatchlistKind, setNewWatchlistKind] = useState<CreateWatchlistKind>('personal');
   const [newWatchlistName, setNewWatchlistName] = useState('');
   const [optionsContentKey, setOptionsContentKey] = useState<string | null>(null);
@@ -103,6 +105,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
     saveVersionRef.current += 1;
     setIsOpen(false);
     setIsSaving(false);
+    setIsSignInOpen(false);
   }, [optionsOwnerKey]);
 
   useEffect(() => {
@@ -324,15 +327,15 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   return (
     <>
       <Pressable
-        accessibilityLabel="Add to watchlist"
+        accessibilityLabel={firebaseIdToken ? 'Add to watchlist' : 'Sign in to add to watchlist'}
         accessibilityRole="button"
-        accessibilityState={{ busy: isSaving, disabled: !firebaseIdToken || isSaving }}
-        disabled={!firebaseIdToken || isSaving}
-        onPress={openSheet}
+        accessibilityState={{ busy: isSaving, disabled: isSaving }}
+        disabled={isSaving}
+        onPress={() => firebaseIdToken ? openSheet() : setIsSignInOpen(true)}
         style={({ pressed }) => [
           styles.trigger,
-          pressed && firebaseIdToken ? styles.pressed : null,
-          (!firebaseIdToken || isSaving) ? styles.disabled : null,
+          pressed && !isSaving ? styles.pressed : null,
+          isSaving ? styles.disabled : null,
         ]}
       >
         {isSaving ? (
@@ -378,6 +381,12 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
           </ScrollView>
         )}
       </BottomActionSheet>
+      <SignInSheet
+        body="You need to be signed in to add titles to a watchlist. Sign in here to continue."
+        onClose={() => setIsSignInOpen(false)}
+        title="Sign in to use watchlists"
+        visible={isSignInOpen && !firebaseIdToken}
+      />
     </>
   );
 }

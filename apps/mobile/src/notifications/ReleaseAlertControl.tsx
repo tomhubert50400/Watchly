@@ -9,6 +9,7 @@ import {
   ReleaseAlertState,
 } from '../api/notifications';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { SignInSheet } from '../auth/SignInRequired';
 import { colors, radii } from '../design/tokens';
 import { useToast } from './ToastContext';
 import { getReleaseAlertControlPresentation, ReleaseAlertLoadStatus } from './releaseAlertControlState';
@@ -23,6 +24,7 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
   const { showToast } = useToast();
   const requestScope = JSON.stringify([currentUser?.id ?? null, contentType, tmdbId]);
   const [loadStatus, setLoadStatus] = useState<ReleaseAlertLoadStatus>('loading');
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [state, setState] = useState<ReleaseAlertState | null>(null);
   const [stateScope, setStateScope] = useState(requestScope);
   const requestRef = useRef({ scope: requestScope, version: 0 });
@@ -67,12 +69,13 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
   useEffect(() => {
     setState(null);
     setStateScope(requestScope);
+    setIsSignInOpen(false);
     void loadAlert();
   }, [loadAlert, requestScope]);
 
   async function toggleAlert() {
     if (!firebaseIdToken || !currentUser) {
-      showToast('Sign in to enable release alerts.');
+      setIsSignInOpen(true);
       return;
     }
 
@@ -109,36 +112,47 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
 
   const presentation = getReleaseAlertControlPresentation(loadStatus, visibleState);
   const { enabled } = presentation;
+  const requiresSignIn = !firebaseIdToken || !currentUser;
 
   return (
-    <Pressable
-      accessibilityLabel={presentation.accessibilityLabel}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: presentation.disabled, selected: enabled }}
-      disabled={presentation.disabled}
-      onPress={(event) => {
-        event.stopPropagation();
-        if (presentation.action === 'retry') {
-          void loadAlert();
-        } else if (presentation.action === 'toggle') {
-          void toggleAlert();
-        }
-      }}
-      style={({ pressed }) => [
-        styles.iconButton,
-        enabled && styles.iconButtonEnabled,
-        loadStatus === 'error' && styles.iconButtonError,
-        pressed && styles.pressed,
-      ]}
-    >
-      {loadStatus === 'error' ? (
-        <TriangleAlert color={colors.danger} size={19} strokeWidth={2.2} />
-      ) : enabled ? (
-        <BellRing color={colors.textOnAccent} size={19} strokeWidth={2.2} />
-      ) : (
-        <BellOff color={colors.muted} size={19} strokeWidth={2.2} />
-      )}
-    </Pressable>
+    <>
+      <Pressable
+        accessibilityLabel={requiresSignIn ? 'Sign in to enable release alerts' : presentation.accessibilityLabel}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: requiresSignIn ? false : presentation.disabled, selected: enabled }}
+        disabled={requiresSignIn ? false : presentation.disabled}
+        onPress={(event) => {
+          event.stopPropagation();
+          if (requiresSignIn) {
+            setIsSignInOpen(true);
+          } else if (presentation.action === 'retry') {
+            void loadAlert();
+          } else if (presentation.action === 'toggle') {
+            void toggleAlert();
+          }
+        }}
+        style={({ pressed }) => [
+          styles.iconButton,
+          enabled && styles.iconButtonEnabled,
+          loadStatus === 'error' && !requiresSignIn && styles.iconButtonError,
+          pressed && styles.pressed,
+        ]}
+      >
+        {loadStatus === 'error' && !requiresSignIn ? (
+          <TriangleAlert color={colors.danger} size={19} strokeWidth={2.2} />
+        ) : enabled ? (
+          <BellRing color={colors.textOnAccent} size={19} strokeWidth={2.2} />
+        ) : (
+          <BellOff color={colors.muted} size={19} strokeWidth={2.2} />
+        )}
+      </Pressable>
+      <SignInSheet
+        body="You need to be signed in to enable release alerts. Sign in here to continue."
+        onClose={() => setIsSignInOpen(false)}
+        title="Sign in to use release alerts"
+        visible={isSignInOpen && requiresSignIn}
+      />
+    </>
   );
 }
 

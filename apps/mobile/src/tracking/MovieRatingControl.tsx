@@ -50,7 +50,7 @@ export function MovieRatingControl({ mediaTitle = 'This film', posterUrl, tmdbId
       perform={perform}
       posterUrl={posterUrl}
       resourceKey={`movie:${tmdbId}`}
-      signedOutMessage="Sign in from Profile to rate or review this film."
+      signedOutMessage="You need to be signed in to rate or review this film. Sign in here to continue."
     />
   );
 }

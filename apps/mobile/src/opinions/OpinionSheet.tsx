@@ -16,6 +16,7 @@ import {
 import { BottomActionSheet } from '../components/BottomActionSheet';
 import { Button } from '../components/Button';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { SignInSheet } from '../auth/SignInRequired';
 import { colors, radii, shadows, spacing, touchTargets, typography } from '../design/tokens';
 import { useToast } from '../notifications/ToastContext';
 import {
@@ -76,6 +77,7 @@ export function OpinionSheet({
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [opinion, setOpinion] = useState<OpinionState>(() => createOpinionState(null, null));
   const requestScope = JSON.stringify([ownerKey ?? currentUser?.id ?? null, resourceKey ?? mediaLabel, isSignedIn]);
@@ -116,6 +118,7 @@ export function OpinionSheet({
   useEffect(() => {
     setIsOpen(false);
     setIsSaving(false);
+    setIsSignInOpen(false);
     setOpinion(createOpinionState(null, null));
     void loadOpinion();
   }, [loadOpinion, requestScope]);
@@ -245,6 +248,7 @@ export function OpinionSheet({
               onPress={() => setIsOpen(true)}
             />
           ) : null}
+          {!isSignedIn ? <Button compact label="Sign in here" onPress={() => setIsSignInOpen(true)} /> : null}
           {loadError && isSignedIn ? <Button compact label="Retry" onPress={() => void loadOpinion()} variant="ghost" /> : null}
         </View>
       </View>
@@ -359,6 +363,12 @@ export function OpinionSheet({
           {isOpinionDirty(opinion) ? <Text style={styles.unsaved}>Unsaved changes</Text> : null}
         </ScrollView>
       </BottomActionSheet>
+      <SignInSheet
+        body={signedOutMessage}
+        onClose={() => setIsSignInOpen(false)}
+        title="Sign in to rate and review"
+        visible={isSignInOpen && !isSignedIn}
+      />
     </View>
   );
 }

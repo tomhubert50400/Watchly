@@ -65,7 +65,7 @@ export function EpisodeRatingControl({
       perform={perform}
       posterUrl={posterUrl}
       resourceKey={resourceKey}
-      signedOutMessage="Sign in from Profile to rate or review this episode."
+      signedOutMessage="You need to be signed in to rate or review this episode. Sign in here to continue."
     />
   );
 }

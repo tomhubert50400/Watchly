@@ -20,7 +20,17 @@ const googleRequestClientIds = {
   webClientId: googleClientIds.webClientId ?? 'missing-web-client-id',
 };
 
-export function ProfileAuthCard() {
+type ProfileAuthCardProps = {
+  body?: string;
+  embedded?: boolean;
+  title?: string;
+};
+
+export function ProfileAuthCard({
+  body = 'Sync your lists, ratings, and progress across all your devices.',
+  embedded = false,
+  title = 'Your Watchly starts here',
+}: ProfileAuthCardProps = {}) {
   const { signInWithGoogle, status: sessionStatus } = useAuthSession();
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
   const [localStatus, setLocalStatus] = useState<AuthStatus>('idle');
@@ -103,12 +113,12 @@ export function ProfileAuthCard() {
   const secondaryProviders = authProviders.filter((provider) => provider.presentation === 'secondary');
 
   return (
-    <View style={styles.shell}>
+    <View style={[styles.shell, embedded ? styles.shellEmbedded : null]}>
       <View pointerEvents="none" style={styles.glow} />
       <View style={styles.card}>
         <View style={styles.logoMark}><Text style={styles.logoText}>W</Text></View>
-        <Text accessibilityRole="header" style={styles.title}>Your Watchly starts here</Text>
-        <Text style={styles.body}>Sync your lists, ratings, and progress across all your devices.</Text>
+        <Text accessibilityRole="header" style={styles.title}>{title}</Text>
+        <Text style={styles.body}>{body}</Text>
 
         {missingConfig.length > 0 ? (
           <Text accessibilityLiveRegion="polite" style={styles.configWarning}>
@@ -260,5 +270,6 @@ const styles = StyleSheet.create({
   secondaryRow: { flexDirection: 'row', gap: spacing.lg, justifyContent: 'center' },
   setupMessage: { ...typography.meta, color: colors.textMuted, marginTop: spacing.md, textAlign: 'center' },
   shell: { paddingHorizontal: spacing.lg, paddingTop: spacing.xxl, position: 'relative' },
+  shellEmbedded: { paddingHorizontal: 0, paddingTop: 0 },
   title: { color: colors.text, fontSize: 25, fontWeight: '900', lineHeight: 30, marginTop: spacing.md, textAlign: 'center' },
 });
