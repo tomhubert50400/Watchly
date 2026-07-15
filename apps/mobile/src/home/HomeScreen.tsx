@@ -33,6 +33,7 @@ import { countUnreadNotifications } from '../notifications/notificationModel';
 import { ContinueWatchingRail } from './ContinueWatchingRail';
 import { HomeHero } from './HomeHero';
 import { ensureCatalogueSections } from '../catalogue/catalogueSectionsResource';
+import { CatalogueRating } from '../catalogue/CatalogueRating';
 import {
   buildHomeSections,
   HomeCatalogueData,
@@ -310,8 +311,8 @@ function TrendingRail({
           style={({ pressed }) => [styles.posterCard, pressed ? styles.pressed : null]}
         >
           <MediaPoster posterUrl={item.posterUrl} style={styles.poster} />
-          <Text numberOfLines={2} style={styles.posterTitle}>{item.title}</Text>
-          <Text style={styles.posterMeta}>{formatTrendingMeta(item)}</Text>
+          <Text numberOfLines={1} style={styles.posterTitle}>{item.title}</Text>
+          <TrendingMetadata item={item} />
         </Pressable>
       ))}
     </ScrollView>
@@ -493,11 +494,20 @@ function isReleased(airDate: string | null) {
   return airDate !== null && airDate <= new Date().toISOString().slice(0, 10);
 }
 
-function formatTrendingMeta(item: HomeTrendingItem) {
+function TrendingMetadata({ item }: { item: HomeTrendingItem }) {
   const year = item.releaseDate?.match(/^\d{4}/)?.[0];
-  const rating = item.voteAverage === null ? null : `TMDB ${item.voteAverage.toFixed(1)}/10`;
 
-  return [year, rating].filter(Boolean).join(' · ');
+  if (!year && item.voteAverage === null) {
+    return null;
+  }
+
+  return (
+    <View style={styles.posterMetaRow}>
+      {year ? <Text numberOfLines={1} style={styles.posterMeta}>{year}</Text> : null}
+      {year && item.voteAverage !== null ? <Text style={styles.posterMetaSeparator}>·</Text> : null}
+      <CatalogueRating voteAverage={item.voteAverage} />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -549,7 +559,16 @@ const styles = StyleSheet.create({
   posterMeta: {
     ...typography.meta,
     color: colors.textSubtle,
+  },
+  posterMetaRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 5,
     marginTop: spacing.xs,
+  },
+  posterMetaSeparator: {
+    ...typography.meta,
+    color: colors.textSubtle,
   },
   posterRail: {
     gap: spacing.md,

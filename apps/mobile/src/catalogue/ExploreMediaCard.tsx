@@ -1,10 +1,11 @@
 import { memo } from 'react';
-import { CalendarDays, Star } from 'lucide-react-native';
+import { CalendarDays } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { CatalogueSearchItem } from '../api/catalogue';
 import { MediaPoster } from '../components/MediaPoster';
 import { colors, spacing, typography } from '../design/tokens';
 import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
+import { CatalogueRating } from './CatalogueRating';
 
 type ExploreMediaCardProps = {
   item: CatalogueSearchItem;
@@ -19,7 +20,11 @@ export const ExploreMediaCard = memo(function ExploreMediaCard({
   onPress,
   showReleaseAlert = false,
 }: ExploreMediaCardProps) {
-  const metadata = formatMetadata(item, showReleaseAlert);
+  const releaseMetadata = showReleaseAlert
+    ? formatReleaseDate(item.releaseDate) ?? 'Date to be announced'
+    : null;
+  const year = showReleaseAlert ? null : item.releaseDate?.match(/^\d{4}/)?.[0] ?? null;
+  const hasRating = !showReleaseAlert && item.voteAverage !== null;
 
   return (
     <View style={[styles.shell, layout === 'grid' ? styles.gridShell : styles.railShell]}>
@@ -34,15 +39,17 @@ export const ExploreMediaCard = memo(function ExploreMediaCard({
           posterUrl={item.posterUrl}
           style={[styles.poster, layout === 'grid' ? styles.gridPoster : styles.railPoster]}
         />
-        <Text numberOfLines={2} style={styles.title}>{item.title}</Text>
-        {metadata ? (
+        <Text numberOfLines={1} style={styles.title}>{item.title}</Text>
+        {showReleaseAlert ? (
           <View style={styles.metaRow}>
-            {showReleaseAlert ? (
-              <CalendarDays color={colors.textSubtle} size={13} strokeWidth={2} />
-            ) : item.voteAverage !== null ? (
-              <Star color={colors.rating} fill={colors.rating} size={13} strokeWidth={2} />
-            ) : null}
-            <Text numberOfLines={1} style={styles.meta}>{metadata}</Text>
+            <CalendarDays color={colors.textSubtle} size={13} strokeWidth={2} />
+            <Text numberOfLines={1} style={styles.meta}>{releaseMetadata}</Text>
+          </View>
+        ) : year || hasRating ? (
+          <View style={styles.metaRow}>
+            {year ? <Text numberOfLines={1} style={styles.meta}>{year}</Text> : null}
+            {year && hasRating ? <Text style={styles.metaSeparator}>·</Text> : null}
+            <CatalogueRating voteAverage={item.voteAverage} />
           </View>
         ) : null}
       </Pressable>
@@ -54,17 +61,6 @@ export const ExploreMediaCard = memo(function ExploreMediaCard({
     </View>
   );
 });
-
-function formatMetadata(item: CatalogueSearchItem, showReleaseAlert: boolean) {
-  if (showReleaseAlert) {
-    return formatReleaseDate(item.releaseDate) ?? 'Date to be announced';
-  }
-
-  const year = item.releaseDate?.match(/^\d{4}/)?.[0] ?? null;
-  const rating = item.voteAverage === null ? null : `TMDB ${item.voteAverage.toFixed(1)}/10`;
-
-  return [rating, year].filter(Boolean).join(' · ');
-}
 
 function formatReleaseDate(value: string | null) {
   if (!value) {
@@ -112,6 +108,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 5,
     marginTop: spacing.xs,
+  },
+  metaSeparator: {
+    ...typography.meta,
+    color: colors.textSubtle,
   },
   poster: {
     width: '100%',

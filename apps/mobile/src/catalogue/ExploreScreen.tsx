@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { CalendarDays, Search, Star, X } from 'lucide-react-native';
+import { CalendarDays, Search, X } from 'lucide-react-native';
 import {
   ImageBackground,
   InputAccessoryView,
@@ -29,6 +29,7 @@ import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 import { useCatalogueCache } from './CatalogueCacheContext';
+import { CatalogueRating } from './CatalogueRating';
 import { loadCatalogueSections, PUBLIC_CATALOGUE_SECTIONS_KEY } from './catalogueSectionsResource';
 import { ExploreMediaCard } from './ExploreMediaCard';
 import {
@@ -421,9 +422,8 @@ function ExploreFeature({
   showReleaseAlert: boolean;
 }) {
   const releaseDate = formatFeatureDate(item.releaseDate);
-  const metadata = showReleaseAlert
-    ? [item.mediaType === 'movie' ? 'Film' : 'Series', releaseDate]
-    : [item.mediaType === 'movie' ? 'Film' : 'Series', item.voteAverage === null ? null : `TMDB ${item.voteAverage.toFixed(1)}/10`];
+  const mediaTypeLabel = item.mediaType === 'movie' ? 'Film' : 'Series';
+  const hasSecondaryMetadata = showReleaseAlert ? releaseDate !== null : item.voteAverage !== null;
   const copy = (
     <>
       <View style={styles.featureScrim} />
@@ -431,12 +431,14 @@ function ExploreFeature({
         <Text style={styles.featureEyebrow}>{showReleaseAlert ? 'Coming soon' : 'Watchly discovery'}</Text>
         <Text accessibilityRole="header" numberOfLines={2} style={styles.featureTitle}>{item.title}</Text>
         <View style={styles.featureMetaRow}>
+          {showReleaseAlert ? <CalendarDays color={colors.textMuted} size={14} strokeWidth={2} /> : null}
+          <Text style={styles.featureMeta}>{mediaTypeLabel}</Text>
+          {hasSecondaryMetadata ? <Text style={styles.featureMetaSeparator}>·</Text> : null}
           {showReleaseAlert ? (
-            <CalendarDays color={colors.textMuted} size={14} strokeWidth={2} />
+            releaseDate ? <Text style={styles.featureMeta}>{releaseDate}</Text> : null
           ) : (
-            <Star color={colors.rating} fill={colors.rating} size={14} strokeWidth={2} />
+            <CatalogueRating voteAverage={item.voteAverage} />
           )}
-          <Text style={styles.featureMeta}>{metadata.filter(Boolean).join(' · ')}</Text>
         </View>
       </View>
     </>
@@ -534,6 +536,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.xs,
     marginTop: spacing.xs,
+  },
+  featureMetaSeparator: {
+    ...typography.meta,
+    color: colors.textMuted,
   },
   featurePlaceholder: {
     backgroundColor: colors.panelElevated,
