@@ -15,6 +15,11 @@ const exploreSource = readFileSync(new URL('ExploreScreen.tsx', import.meta.url)
 const homeSource = readFileSync(new URL('../home/HomeScreen.tsx', import.meta.url), 'utf8');
 
 assert.match(ratingSource, /color: colors\.rating/, 'catalogue ratings must use Watchly pink');
+assert.match(
+  ratingSource,
+  /<Star color=\{colors\.rating\} fill=\{colors\.rating\}/,
+  'catalogue ratings must include the pink star icon',
+);
 assert.match(exploreCardSource, /<Text numberOfLines=\{1\} style=\{styles\.title\}>/);
 assert.match(homeSource, /<Text numberOfLines=\{1\} style=\{styles\.posterTitle\}>/);
 
