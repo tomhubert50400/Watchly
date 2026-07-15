@@ -1,4 +1,4 @@
-import type { CatalogueSearchItem } from '../api/catalogue';
+import type { CatalogueSearchItem, CatalogueSearchType } from '../api/catalogue';
 
 export type ExploreSection = 'trending' | 'announced';
 
@@ -54,6 +54,13 @@ export function groupSearchResults(items: readonly CatalogueSearchItem[]) {
     movies: uniqueItems.filter((item) => item.mediaType === 'movie'),
     series: uniqueItems.filter((item) => item.mediaType === 'series'),
   };
+}
+
+export function filterSearchResults(
+  items: readonly CatalogueSearchItem[],
+  type: CatalogueSearchType,
+) {
+  return type === 'all' ? items : items.filter((item) => item.mediaType === type);
 }
 
 export function getExploreViewState({ activeSection, query }: ExploreViewStateInput): ExploreViewState {

@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   CatalogueSearchItem,
+  CatalogueSearchType,
   searchCatalogue,
 } from '../api/catalogue';
 import { useCachedResource } from '../cache/useCachedResource';
@@ -35,6 +36,7 @@ import { ExploreMediaCard } from './ExploreMediaCard';
 import {
   buildExploreSections,
   ExploreSection,
+  filterSearchResults,
   getExploreViewState,
   groupSearchResults,
 } from './exploreState';
@@ -50,6 +52,7 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { preloadCatalogueItems } = useCatalogueCache();
   const [query, setQuery] = useState('');
+  const [searchType, setSearchType] = useState<CatalogueSearchType>('all');
   const [activeSection, setActiveSection] = useState<ExploreSection>('trending');
   const [searchItems, setSearchItems] = useState<CatalogueSearchItem[]>([]);
   const [searchItemsQuery, setSearchItemsQuery] = useState('');
@@ -67,7 +70,10 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
     () => sections.data ? buildExploreSections(sections.data) : EMPTY_SECTIONS,
     [sections.data],
   );
-  const visibleSearchItems = searchItemsQuery === trimmedQuery ? searchItems : [];
+  const visibleSearchItems = useMemo(
+    () => searchItemsQuery === trimmedQuery ? filterSearchResults(searchItems, searchType) : [],
+    [searchItems, searchItemsQuery, searchType, trimmedQuery],
+  );
   const visibleItems = isSearching ? visibleSearchItems : sectionItems[activeSection];
   const visibleError = isSearching ? searchError : sections.error;
   const isVisibleLoading = isSearching
@@ -205,7 +211,19 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
               </Pressable>
             ) : null}
           </View>
-          {!isSearching ? (
+          {isSearching ? (
+            <SegmentedControl
+              buttonMinHeight={44}
+              containerStyle={styles.sectionControl}
+              onChange={setSearchType}
+              options={[
+                { accessibilityLabel: 'Show all results', label: 'All', value: 'all' },
+                { accessibilityLabel: 'Show films only', label: 'Films', value: 'movie' },
+                { accessibilityLabel: 'Show series only', label: 'Series', value: 'series' },
+              ]}
+              value={searchType}
+            />
+          ) : (
             <SegmentedControl
               buttonMinHeight={42}
               containerStyle={styles.sectionControl}
@@ -216,7 +234,7 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
               ]}
               value={activeSection}
             />
-          ) : null}
+          )}
         </View>
 
         <View style={styles.content}>

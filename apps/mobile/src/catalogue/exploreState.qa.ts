@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import type { CatalogueSearchItem } from '../api/catalogue';
 import {
   buildExploreSections,
+  filterSearchResults,
   getExploreViewState,
   groupSearchResults,
 } from './exploreState';
@@ -48,6 +49,24 @@ assert.deepEqual(
     series: [seriesWithSameTmdbId],
   },
   'search results are deduplicated and grouped by real API media type',
+);
+
+const mixedSearchResults = [seriesWithSameTmdbId, duplicatedMovie];
+
+assert.deepEqual(
+  filterSearchResults(mixedSearchResults, 'all'),
+  mixedSearchResults,
+  'the all filter keeps films and series visible',
+);
+assert.deepEqual(
+  filterSearchResults(mixedSearchResults, 'movie'),
+  [duplicatedMovie],
+  'the film filter only keeps films visible',
+);
+assert.deepEqual(
+  filterSearchResults(mixedSearchResults, 'series'),
+  [seriesWithSameTmdbId],
+  'the series filter only keeps series visible',
 );
 
 assert.deepEqual(
