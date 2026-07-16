@@ -1,7 +1,7 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { ApiError } from '../api/client';
 import { BrandLogo } from '../brand/BrandLogo';
@@ -9,7 +9,7 @@ import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { useAuthSession } from './AuthSessionContext';
 import { getMissingFirebaseConfig } from './firebase';
-import { authRedirectScheme, getMissingGoogleClientConfig, googleClientIds } from './googleAuthConfig';
+import { getMissingGoogleClientConfig, googleClientIds, googleNativeRedirectUri } from './googleAuthConfig';
 import { authProviders, type AuthProviderConfig } from './providerConfig';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -38,12 +38,11 @@ export function ProfileAuthCard({
   const [localStatus, setLocalStatus] = useState<AuthStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const missingConfig = useMemo(
-    () => [...getMissingFirebaseConfig(), ...getMissingGoogleClientConfig()],
+    () => [...getMissingFirebaseConfig(), ...getMissingGoogleClientConfig(Platform.OS)],
     [],
   );
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest(
-    { ...googleRequestClientIds, selectAccount: true },
-    { path: 'auth', scheme: authRedirectScheme },
+    { ...googleRequestClientIds, redirectUri: googleNativeRedirectUri, selectAccount: true },
   );
 
   useEffect(() => {
