@@ -23,7 +23,9 @@ type SegmentedControlProps<T extends string> = {
 };
 
 const controlGap = 3;
+const controlBorderWidth = 1;
 const controlPadding = 3;
+const controlInset = controlBorderWidth + controlPadding;
 
 export function SegmentedControl<T extends string>({
   buttonMinHeight = 40,
@@ -44,7 +46,7 @@ export function SegmentedControl<T extends string>({
   const selectedIndex = options.findIndex((option) => option.value === value);
   const indicatorWidth =
     options.length > 0
-      ? Math.max((controlWidth - controlPadding * 2 - controlGap * (options.length - 1)) / options.length, 0)
+      ? Math.max((controlWidth - controlInset * 2 - controlGap * (options.length - 1)) / options.length, 0)
       : 0;
   const translateX = selectionProgress.interpolate({
     inputRange: options.length > 0 ? options.map((_, index) => index) : [0],
@@ -146,7 +148,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panelSoft,
     borderColor: colors.border,
     borderRadius: radii.md,
-    borderWidth: 1,
+    borderWidth: controlBorderWidth,
     flexDirection: 'row',
     gap: controlGap,
     padding: controlPadding,
@@ -162,10 +164,10 @@ const styles = StyleSheet.create({
     borderColor: colors.segmentSelectedBorder,
     borderRadius: radii.sm,
     borderWidth: 1,
-    bottom: controlPadding,
-    left: controlPadding,
+    bottom: controlInset,
+    left: controlInset,
     position: 'absolute',
-    top: controlPadding,
+    top: controlInset,
   },
   label: {
     color: colors.textSubtle,
