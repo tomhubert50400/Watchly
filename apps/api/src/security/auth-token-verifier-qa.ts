@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { UnauthorizedException } from '@nestjs/common';
 import {
+  shouldCheckFirebaseTokenRevocation,
   verifyBearerTokenWithAuth,
   verifyFirebaseIdToken,
 } from '../auth/firebase-token-verifier.service';
@@ -28,12 +29,40 @@ async function main() {
     },
   };
 
-  await verifyFirebaseIdToken(firebaseAuth, 'qa-token');
+  await verifyFirebaseIdToken(firebaseAuth, 'qa-token', true);
   assert.equal(receivedToken, 'qa-token', 'The original bearer token must be passed to Firebase.');
   assert.equal(
     receivedCheckRevoked,
     true,
     'Firebase ID tokens must be checked for revocation and disabled users.',
+  );
+
+  await verifyFirebaseIdToken(firebaseAuth, 'local-token', false);
+  assert.equal(receivedToken, 'local-token');
+  assert.equal(
+    receivedCheckRevoked,
+    false,
+    'Local token verification must not require unavailable Firebase Admin credentials.',
+  );
+  assert.equal(
+    shouldCheckFirebaseTokenRevocation('development', undefined, undefined),
+    false,
+    'Local development without Admin credentials must skip the remote revocation lookup.',
+  );
+  assert.equal(
+    shouldCheckFirebaseTokenRevocation('development', undefined, 'firebase-admin.json'),
+    true,
+    'Local development with explicit Admin credentials must check revocation.',
+  );
+  assert.equal(
+    shouldCheckFirebaseTokenRevocation('production', undefined, undefined),
+    true,
+    'Production must always check revoked and disabled Firebase users.',
+  );
+  assert.equal(
+    shouldCheckFirebaseTokenRevocation('development', '127.0.0.1:9099', 'firebase-admin.json'),
+    false,
+    'The local Auth emulator must not perform a production revocation lookup.',
   );
 
   const rejected = await verifyBearerTokenWithAuth(

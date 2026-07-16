@@ -8,11 +8,19 @@ import { AuthenticatedIdentity } from './auth.types';
 @Injectable()
 export class FirebaseTokenVerifier {
   private readonly allowEmulatorPasswordProvider: boolean;
+  private readonly checkRevokedTokens: boolean;
 
   constructor(@Inject(ConfigService) config: ConfigService) {
+    const authEmulatorHost = config.get<string>('FIREBASE_AUTH_EMULATOR_HOST');
+
     this.allowEmulatorPasswordProvider =
       config.get<string>('NODE_ENV') !== 'production' &&
-      Boolean(config.get<string>('FIREBASE_AUTH_EMULATOR_HOST'));
+      Boolean(authEmulatorHost);
+    this.checkRevokedTokens = shouldCheckFirebaseTokenRevocation(
+      config.get<string>('NODE_ENV'),
+      authEmulatorHost,
+      config.get<string>('GOOGLE_APPLICATION_CREDENTIALS'),
+    );
 
     if (getApps().length === 0) {
       initializeApp({
@@ -24,6 +32,7 @@ export class FirebaseTokenVerifier {
   async verifyBearerToken(token: string): Promise<AuthenticatedIdentity> {
     return verifyBearerTokenWithAuth(getAuth(), token, {
       allowPasswordProvider: this.allowEmulatorPasswordProvider,
+      checkRevoked: this.checkRevokedTokens,
     });
   }
 }
@@ -33,12 +42,12 @@ type FirebaseAuthVerifier = Pick<ReturnType<typeof getAuth>, 'verifyIdToken'>;
 export async function verifyBearerTokenWithAuth(
   auth: FirebaseAuthVerifier,
   token: string,
-  options: { allowPasswordProvider?: boolean } = {},
+  options: { allowPasswordProvider?: boolean; checkRevoked?: boolean } = {},
 ): Promise<AuthenticatedIdentity> {
   let decodedToken: DecodedIdToken;
 
   try {
-    decodedToken = await verifyFirebaseIdToken(auth, token);
+    decodedToken = await verifyFirebaseIdToken(auth, token, options.checkRevoked !== false);
   } catch {
     throw new UnauthorizedException('Invalid auth token.');
   }
@@ -59,8 +68,22 @@ export async function verifyBearerTokenWithAuth(
   };
 }
 
-export function verifyFirebaseIdToken(auth: FirebaseAuthVerifier, token: string) {
-  return auth.verifyIdToken(token, true);
+export function shouldCheckFirebaseTokenRevocation(
+  nodeEnv: string | undefined,
+  authEmulatorHost: string | undefined,
+  applicationCredentialsPath: string | undefined,
+) {
+  if (authEmulatorHost) return false;
+
+  return nodeEnv === 'production' || Boolean(applicationCredentialsPath);
+}
+
+export function verifyFirebaseIdToken(
+  auth: FirebaseAuthVerifier,
+  token: string,
+  checkRevoked: boolean,
+) {
+  return auth.verifyIdToken(token, checkRevoked);
 }
 
 function mapFirebaseProvider(
