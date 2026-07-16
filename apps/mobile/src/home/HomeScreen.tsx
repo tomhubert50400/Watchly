@@ -101,9 +101,9 @@ export function HomeScreen() {
 
   useFocusEffect(useCallback(() => {
     if (isSignedIn) {
-      notifications.retry();
+      notifications.revalidate();
     }
-  }, [isSignedIn, notifications.retry]));
+  }, [isSignedIn, notifications.revalidate]));
 
   const sections = useMemo(
     () => buildHomeSections({

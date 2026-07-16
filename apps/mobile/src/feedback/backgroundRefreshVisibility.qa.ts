@@ -58,6 +58,28 @@ assert.match(
   /section\.error && section\.items\.length === 0/,
   'Home must hide refresh failures when section content is already visible',
 );
+assert.match(
+  homeSource,
+  /useFocusEffect\(useCallback\(\(\) => \{\s*if \(isSignedIn\) \{\s*notifications\.revalidate\(\);\s*\}\s*\}, \[isSignedIn, notifications\.revalidate\]\)\);/,
+  'Home focus updates must revalidate notifications without driving the native refresh control',
+);
+assert.doesNotMatch(
+  homeSource,
+  /useFocusEffect\(useCallback\(\(\) => \{\s*if \(isSignedIn\) \{\s*notifications\.retry\(\);/,
+  'Home focus updates must not trigger a visible pull-to-refresh',
+);
+
+const cachedResourceSource = source('../cache/useCachedResource.ts');
+assert.match(
+  cachedResourceSource,
+  /revalidate: \(\) => void/,
+  'cached resources must expose a silent revalidation path',
+);
+assert.match(
+  cachedResourceSource,
+  /isRequestedRefresh = isManualRetry \|\| isSilentRevalidation/,
+  'silent revalidation must still bypass fresh-cache short circuits',
+);
 
 const exploreSource = source('../catalogue/ExploreScreen.tsx');
 assert.match(

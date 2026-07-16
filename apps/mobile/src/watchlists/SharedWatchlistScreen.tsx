@@ -128,7 +128,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
       await addSharedWatchlistMember(token, snapshot.watchlist.id, cleanUserId);
       if (ownerIdRef.current !== expectedOwnerId) return;
       setMemberUserId('');
-      resource.retry();
+      resource.revalidate();
       hapticConfirm();
     } catch (error) {
       if (ownerIdRef.current === expectedOwnerId) {

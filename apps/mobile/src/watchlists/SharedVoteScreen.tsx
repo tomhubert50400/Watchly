@@ -157,7 +157,7 @@ export function SharedVoteScreen({ route }: Props) {
         if (current) commitDetails(expectedOwnerId, { ...current, session: rollbackVoteMutation(mutation, current.session) });
         setMutationError(error instanceof Error ? error.message : 'Your vote could not be saved.');
         hapticError();
-        resource.retry();
+        resource.revalidate();
       }
     } finally {
       if (ownerIdRef.current === expectedOwnerId) setPendingCandidateId(null);
@@ -190,7 +190,7 @@ export function SharedVoteScreen({ route }: Props) {
       if (ownerIdRef.current !== expectedOwnerId) return;
       const current = ownedVoteRef.current.data;
       if (current) commitDetails(expectedOwnerId, { ...current, session: confirmed });
-      resource.retry();
+      resource.revalidate();
       hapticSuccess();
     } catch (error) {
       if (ownerIdRef.current === expectedOwnerId) {
@@ -198,7 +198,7 @@ export function SharedVoteScreen({ route }: Props) {
         if (current) commitDetails(expectedOwnerId, { ...current, session: rollbackVoteMutation(mutation, current.session) });
         setMutationError(error instanceof Error ? error.message : 'The vote could not be closed.');
         hapticError();
-        resource.retry();
+        resource.revalidate();
       }
     } finally {
       if (ownerIdRef.current === expectedOwnerId) setIsClosing(false);

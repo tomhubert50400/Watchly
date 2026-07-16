@@ -22,6 +22,7 @@ type UseCachedResourceOptions<T> = {
 const DEFAULT_STALE_TIME_MS = 5 * 60 * 1000;
 
 export type UseCachedResourceResult<T> = CachedResourceState<T> & {
+  revalidate: () => void;
   retry: () => void;
 };
 
@@ -74,7 +75,9 @@ export function useCachedResource<T>({
     createCachedResourceStateFromMemory<T>,
   );
   const [retryRevision, setRetryRevision] = useState(0);
+  const [revalidateRevision, setRevalidateRevision] = useState(0);
   const handledRetryRevisionRef = useRef(0);
+  const handledRevalidateRevisionRef = useRef(0);
   const loadRef = useRef(load);
   const requestVersionsRef = useRef(createRequestVersionGuard());
   const stateKeyRef = useRef(key);
@@ -83,13 +86,19 @@ export function useCachedResource<T>({
   const retry = useCallback(() => {
     setRetryRevision((revision) => revision + 1);
   }, []);
+  const revalidate = useCallback(() => {
+    setRevalidateRevision((revision) => revision + 1);
+  }, []);
 
   useEffect(() => {
     const requestVersions = requestVersionsRef.current;
     const memoryEntry = getMemoryResource<T>(key);
     const isManualRetry = handledRetryRevisionRef.current !== retryRevision;
+    const isSilentRevalidation = handledRevalidateRevisionRef.current !== revalidateRevision;
+    const isRequestedRefresh = isManualRetry || isSilentRevalidation;
     const loadChanged = loadRef.current !== load;
     handledRetryRevisionRef.current = retryRevision;
+    handledRevalidateRevisionRef.current = revalidateRevision;
     loadRef.current = load;
 
     if (!enabled) {
@@ -108,7 +117,7 @@ export function useCachedResource<T>({
 
     if (
       memoryEntry &&
-      !isManualRetry &&
+      !isRequestedRefresh &&
       !loadChanged &&
       isMemoryResourceFresh(memoryEntry.savedAt, staleTimeMs)
     ) {
@@ -150,7 +159,7 @@ export function useCachedResource<T>({
 
       if (
         cachedSavedAt &&
-        !isManualRetry &&
+        !isRequestedRefresh &&
         !loadChanged &&
         isMemoryResourceFresh(cachedSavedAt, staleTimeMs)
       ) {
@@ -180,18 +189,20 @@ export function useCachedResource<T>({
     return () => {
       requestVersions.invalidate();
     };
-  }, [enabled, key, load, retryRevision, staleTimeMs]);
+  }, [enabled, key, load, retryRevision, revalidateRevision, staleTimeMs]);
 
   if (!enabled || keyChangedDuringRender) {
     const memoryState = enabled ? createCachedResourceStateFromMemory<T>(key) : null;
     return {
       ...(memoryState ?? createInitialCachedResourceState<T>()),
+      revalidate,
       retry,
     };
   }
 
   return {
     ...state,
+    revalidate,
     retry,
   };
 }
