@@ -8,7 +8,6 @@ import { SignInRequiredCard } from '../auth/SignInRequired';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
-import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { LoadingState } from '../components/LoadingState';
 import { MediaPoster } from '../components/MediaPoster';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
@@ -135,11 +134,6 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
         </EmptyState>
       ) : visibleWatchlist ? (
         <>
-          {isLoading ? (
-            <InlineStatusBanner detail="Keeping this list visible while fresh data arrives." tone="updating" />
-          ) : error ? (
-            <InlineStatusBanner detail={error} onRetry={() => void loadWatchlist()} tone="error" title="List kept visible" />
-          ) : null}
           <View style={styles.panel}>
             <View style={styles.headerRow}>
               <View style={styles.headerCopy}>

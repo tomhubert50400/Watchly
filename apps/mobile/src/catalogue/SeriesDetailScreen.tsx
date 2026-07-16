@@ -7,7 +7,6 @@ import { SeriesDetails } from '../api/catalogue';
 import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
-import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { LoadingState } from '../components/LoadingState';
 import { MediaHero } from '../components/MediaHero';
 import { SegmentedControl } from '../components/SegmentedControl';
@@ -75,9 +74,6 @@ export function SeriesDetailScreen({ navigation, route }: Props) {
           </View>
         ) : series ? (
           <SeriesDetailContent
-            error={resource.error}
-            isRefreshing={resource.isRefreshing || resource.isInitialLoading}
-            onRetry={resource.retry}
             series={series}
           />
         ) : null}
@@ -86,10 +82,7 @@ export function SeriesDetailScreen({ navigation, route }: Props) {
   );
 }
 
-function SeriesDetailContent({ error, isRefreshing, onRetry, series }: {
-  error: string | null;
-  isRefreshing: boolean;
-  onRetry: () => void;
+function SeriesDetailContent({ series }: {
   series: SeriesDetails;
 }) {
   const [activeView, setActiveView] = useState<'details' | 'episodes'>('details');
@@ -117,11 +110,6 @@ function SeriesDetailContent({ error, isRefreshing, onRetry, series }: {
         {series.tagline ? <Text numberOfLines={2} style={styles.tagline}>{series.tagline}</Text> : null}
       </MediaHero>
       <View style={styles.bodyStack}>
-        {isRefreshing ? (
-          <InlineStatusBanner detail="Refreshing series details" tone="updating" />
-        ) : error ? (
-          <InlineStatusBanner detail={error} onRetry={onRetry} title="Series update failed" tone="error" />
-        ) : null}
         <SegmentedControl
           containerStyle={styles.viewSwitchControl}
           onChange={setActiveView}

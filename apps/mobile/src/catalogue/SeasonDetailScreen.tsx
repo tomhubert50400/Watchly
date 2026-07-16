@@ -6,7 +6,6 @@ import { SeasonDetailsResponse } from '../api/catalogue';
 import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
-import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { LoadingState } from '../components/LoadingState';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { SeasonEpisodeList } from '../episodes/SeasonEpisodeList';
@@ -36,11 +35,6 @@ export function SeasonDetailScreen({ route }: Props) {
           </EmptyState>
         ) : season ? (
           <View>
-            {resource.isRefreshing ? (
-              <InlineStatusBanner detail="Refreshing season details" tone="updating" />
-            ) : resource.error ? (
-              <InlineStatusBanner detail={resource.error} onRetry={resource.retry} title="Season update failed" tone="error" />
-            ) : null}
             <View style={styles.header}>
               {season.posterUrl ? (
                 <Image

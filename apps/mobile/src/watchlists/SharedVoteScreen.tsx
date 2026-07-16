@@ -216,13 +216,9 @@ export function SharedVoteScreen({ route }: Props) {
   }
   if (!details || !session || !lifecycle || !leaderState) return null;
 
-  const statusBanner = resource.isRefreshing
-    ? <InlineStatusBanner detail="Keeping the saved vote visible." tone="updating" />
-    : resource.error
-      ? <InlineStatusBanner detail={resource.error} onRetry={resource.retry} tone="offline" />
-      : mutationError
-        ? <InlineStatusBanner detail={mutationError} tone="error" />
-        : undefined;
+  const statusBanner = mutationError
+    ? <InlineStatusBanner detail={mutationError} tone="error" />
+    : undefined;
   const lifecycleCopy = lifecycle === 'open' ? 'Vote open' : lifecycle === 'expired' ? 'Voting time ended' : 'Final result';
 
   return (

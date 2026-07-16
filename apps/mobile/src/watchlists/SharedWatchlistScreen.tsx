@@ -185,13 +185,9 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
   }
   if (!details || !watchlist) return null;
 
-  const statusBanner = resource.isRefreshing
-    ? <InlineStatusBanner detail="Keeping saved titles visible." tone="updating" />
-    : resource.error
-      ? <InlineStatusBanner detail={resource.error} onRetry={resource.retry} tone="offline" />
-      : mutationError
-        ? <InlineStatusBanner detail={mutationError} tone="error" />
-        : undefined;
+  const statusBanner = mutationError
+    ? <InlineStatusBanner detail={mutationError} tone="error" />
+    : undefined;
 
   return (
     <Screen

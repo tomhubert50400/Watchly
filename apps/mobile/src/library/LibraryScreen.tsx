@@ -157,7 +157,7 @@ export function LibraryScreen() {
     finally { if (activeOwnerIdRef.current === ownerId) setBusyKey(null); }
   }
 
-  const banner = resource.isRefreshing ? <InlineStatusBanner tone="updating" /> : resource.error && data ? <InlineStatusBanner detail={resource.error} onRetry={resource.retry} tone="error" title="Library kept offline" /> : (data?.partialError || actionError) ? <InlineStatusBanner detail={actionError ?? data?.partialError ?? ''} onRetry={resource.retry} tone="error" title="Some data needs attention" /> : null;
+  const banner = actionError ? <InlineStatusBanner detail={actionError} tone="error" title="Action failed" /> : null;
   return <Screen eyebrow={currentUser ? 'Your collection' : undefined} refreshControl={currentUser ? <RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined} statusBanner={banner} tabBarPadding title="Library" trailing={currentUser ? <IconButton accessibilityLabel="Open Journal" icon={<BookOpen color={colors.text} size={21} />} onPress={() => navigation.navigate('Journal')} /> : null}>
     {!currentUser ? <SignInRequiredCard body="You need to be signed in to use this section. Sign in here to keep your progress, ratings, release alerts and lists together." title="Sign in to use Library" />
       : resource.isInitialLoading && !data ? <LoadingState label="Loading your library" />

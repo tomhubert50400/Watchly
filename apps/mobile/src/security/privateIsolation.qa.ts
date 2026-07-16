@@ -48,7 +48,16 @@ assert.match(watchlistCache, /Promise\.all[\s\S]*assertCurrentRequest\(isCurrent
 const personalScreen = source('../watchlists/PersonalWatchlistScreen.tsx');
 assert.match(personalScreen, /stateScope === resourceScope/);
 assert.match(personalScreen, /isLoading && !visibleWatchlist/);
-assert.match(personalScreen, /InlineStatusBanner[\s\S]*onRetry/);
+assert.match(
+  personalScreen,
+  /error && !visibleWatchlist[\s\S]*<Button label="Retry"/,
+  'a personal watchlist load failure must stay actionable when no list is visible',
+);
+assert.doesNotMatch(
+  personalScreen,
+  /error && visibleWatchlist[\s\S]*InlineStatusBanner/,
+  'a personal watchlist refresh failure must stay silent while saved content is visible',
+);
 
 for (const relativePath of [
   '../opinions/OpinionSheet.tsx',

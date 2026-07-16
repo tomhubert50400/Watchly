@@ -12,7 +12,6 @@ import { SignInRequiredCard } from '../auth/SignInRequired';
 import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
-import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { LoadingState } from '../components/LoadingState';
 import { Screen } from '../components/Screen';
 import { colors, radii, spacing, typography } from '../design/tokens';
@@ -60,9 +59,7 @@ export function JournalScreen() {
   const entries = filterJournalEntries(resource.data?.entries ?? [], filter);
   const groups = groupJournalEntriesByMonth(entries);
   const yearCount = (resource.data?.entries ?? []).filter((entry) => new Date(entry.date).getFullYear() === new Date().getFullYear()).length;
-  const banner = resource.isRefreshing ? <InlineStatusBanner tone="updating" /> : resource.error && resource.data ? <InlineStatusBanner detail={resource.error} onRetry={resource.retry} tone="error" title="Journal kept offline" /> : resource.data?.partialError ? <InlineStatusBanner detail={resource.data.partialError} onRetry={resource.retry} tone="error" /> : null;
-
-  return <Screen refreshControl={currentUser ? <RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined} statusBanner={banner} title="">
+  return <Screen refreshControl={currentUser ? <RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined} title="">
     {!currentUser ? <SignInRequiredCard body="You need to be signed in to use your private Journal. Sign in here to see your viewing history and opinions." title="Sign in to use Journal" />
       : resource.isInitialLoading && !resource.data ? <LoadingState label="Loading your Journal" />
       : resource.error && !resource.data ? <EmptyState body={resource.error} title="Journal unavailable"><Button label="Retry" onPress={resource.retry} /></EmptyState>

@@ -295,11 +295,7 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
         />
       }
       statusBanner={
-        resource.isRefreshing ? (
-          <InlineStatusBanner detail="Keeping saved alerts visible while checking for updates." tone="updating" />
-        ) : resource.error ? (
-          <InlineStatusBanner detail="Showing your last saved alerts." onRetry={resource.retry} tone="offline" />
-        ) : mutationError ? (
+        mutationError ? (
           <InlineStatusBanner detail={mutationError} tone="error" />
         ) : undefined
       }

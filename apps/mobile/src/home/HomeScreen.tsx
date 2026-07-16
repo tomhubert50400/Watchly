@@ -115,9 +115,6 @@ export function HomeScreen() {
     [catalogue.data, catalogue.error, feed.data, feed.error, isSignedIn, progress.data, progress.error],
   );
   const isRefreshing = catalogue.isRefreshing || progress.isRefreshing || feed.isRefreshing || notifications.isRefreshing;
-  const isLoadingPersonalization = isSignedIn && (
-    (progress.isInitialLoading && !progress.data) || (feed.isInitialLoading && !feed.data)
-  );
   const retryAll = useCallback(() => {
     catalogue.retry();
     if (isSignedIn) {
@@ -157,13 +154,6 @@ export function HomeScreen() {
           refreshing={isRefreshing}
           tintColor={colors.accent}
         />
-      }
-      statusBanner={
-        isRefreshing ? (
-          <InlineStatusBanner detail="Keeping current content visible while new data arrives." tone="updating" />
-        ) : isLoadingPersonalization ? (
-          <InlineStatusBanner detail="Loading your progress and social activity." title="Personalizing Home" tone="updating" />
-        ) : undefined
       }
       tabBarPadding
       leading={<BrandWordmark height={44} />}
@@ -215,7 +205,7 @@ export function HomeScreen() {
           if (section.kind === 'continueWatching') {
             return (
               <HomeSection key="continue" title="Continue watching">
-                {section.error ? (
+                {section.error && section.items.length === 0 ? (
                   <InlineStatusBanner detail={section.error} onRetry={progress.retry} tone="error" />
                 ) : null}
                 {section.items.length > 0 ? (
@@ -237,7 +227,7 @@ export function HomeScreen() {
           if (section.kind === 'socialActivity') {
             return (
               <HomeSection key="social" title="From people you follow">
-                {section.error ? (
+                {section.error && section.items.length === 0 ? (
                   <InlineStatusBanner detail={section.error} onRetry={feed.retry} tone="error" />
                 ) : null}
                 {section.items.length > 0 ? (
@@ -249,7 +239,7 @@ export function HomeScreen() {
 
           return (
             <HomeSection key="trending" title="Trending now">
-              {section.error ? (
+              {section.error && section.items.length === 0 ? (
                 <InlineStatusBanner detail={section.error} onRetry={catalogue.retry} tone="error" />
               ) : null}
               {section.items.length > 0 ? (

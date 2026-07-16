@@ -7,7 +7,6 @@ import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { resolveDetailMetadataLayout } from '../components/dynamicTypeLayout';
 import { EmptyState } from '../components/EmptyState';
-import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { LoadingState } from '../components/LoadingState';
 import { MediaHero } from '../components/MediaHero';
 import { colors, spacing, typography } from '../design/tokens';
@@ -68,10 +67,7 @@ export function FilmDetailScreen({ navigation, route }: FilmDetailScreenProps) {
           </View>
         ) : movie ? (
           <MovieDetailContent
-            error={resource.error}
-            isRefreshing={resource.isRefreshing || resource.isInitialLoading}
             movie={movie}
-            onRetry={resource.retry}
           />
         ) : null}
       </ScrollView>
@@ -80,15 +76,9 @@ export function FilmDetailScreen({ navigation, route }: FilmDetailScreenProps) {
 }
 
 function MovieDetailContent({
-  error,
-  isRefreshing,
   movie,
-  onRetry,
 }: {
-  error: string | null;
-  isRefreshing: boolean;
   movie: MovieDetails;
-  onRetry: () => void;
 }) {
   const { fontScale } = useWindowDimensions();
   const metadataLayout = resolveDetailMetadataLayout(fontScale);
@@ -123,11 +113,6 @@ function MovieDetailContent({
         ) : null}
       </MediaHero>
       <View style={styles.bodyStack}>
-        {isRefreshing ? (
-          <InlineStatusBanner detail="Refreshing film details" tone="updating" />
-        ) : error ? (
-          <InlineStatusBanner detail={error} onRetry={onRetry} title="Film update failed" tone="error" />
-        ) : null}
         <View style={styles.personalSection}>
           <Text style={styles.personalEyebrow}>Your activity</Text>
           <TrackingControls contentType="movie" tmdbId={movie.tmdbId} />

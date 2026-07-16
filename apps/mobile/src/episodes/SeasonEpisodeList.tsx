@@ -78,17 +78,6 @@ export function SeasonEpisodeList({
         </View>
       </View>
 
-      {model.isRefreshing ? (
-        <InlineStatusBanner detail="Refreshing episodes and progress" tone="updating" />
-      ) : model.error && model.episodes.length > 0 ? (
-        <InlineStatusBanner
-          detail={model.error}
-          onRetry={model.retry}
-          title="Episode update failed"
-          tone="error"
-        />
-      ) : null}
-
       {model.episodes.length > 0 ? model.episodes.map((episode) => {
         const watched = isEpisodeWatched(
           model.watchedState,

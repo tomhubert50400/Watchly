@@ -7,7 +7,6 @@ import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
-import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { mediaHeroFadeColors } from '../components/mediaHeroGradient';
 import { colors, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
@@ -59,9 +58,6 @@ export function EpisodeDetailScreen({ navigation, route }: EpisodeDetailScreenPr
         ) : episode ? (
           <EpisodeDetailContent
             episode={episode}
-            error={resource.error}
-            isRefreshing={resource.isRefreshing || resource.isInitialLoading}
-            onRetry={resource.retry}
             seriesTitle={route.params.seriesTitle}
           />
         ) : null}
@@ -72,15 +68,9 @@ export function EpisodeDetailScreen({ navigation, route }: EpisodeDetailScreenPr
 
 function EpisodeDetailContent({
   episode,
-  error,
-  isRefreshing,
-  onRetry,
   seriesTitle,
 }: {
   episode: EpisodeDetails;
-  error: string | null;
-  isRefreshing: boolean;
-  onRetry: () => void;
   seriesTitle: string;
 }) {
   const runtime = episode.runtimeMinutes ? `${episode.runtimeMinutes}m` : null;
@@ -125,11 +115,6 @@ function EpisodeDetailContent({
         </View>
       </View>
       <View style={styles.bodyStack}>
-        {isRefreshing ? (
-          <InlineStatusBanner detail="Refreshing episode details" tone="updating" />
-        ) : error ? (
-          <InlineStatusBanner detail={error} onRetry={onRetry} title="Episode update failed" tone="error" />
-        ) : null}
         <SynopsisPanel overview={episode.overview} />
         <View style={styles.personalSection}>
           <Text style={styles.personalEyebrow}>Your activity</Text>

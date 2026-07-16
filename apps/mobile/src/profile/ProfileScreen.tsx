@@ -15,7 +15,6 @@ import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
 import { IconButton } from '../components/IconButton';
-import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { LoadingState } from '../components/LoadingState';
 import { MediaPoster } from '../components/MediaPoster';
 import { Screen } from '../components/Screen';
@@ -96,17 +95,6 @@ export function ProfileScreen() {
     );
   }
 
-  const statusBanner = resource.isRefreshing ? (
-    <InlineStatusBanner detail="Your saved profile stays visible." tone="updating" />
-  ) : resource.error && profile ? (
-    <InlineStatusBanner
-      detail="Showing your last saved public activity."
-      onRetry={resource.retry}
-      title="Could not refresh profile"
-      tone="error"
-    />
-  ) : undefined;
-
   return (
     <Screen
       refreshControl={
@@ -117,7 +105,6 @@ export function ProfileScreen() {
           tintColor={colors.accent}
         />
       }
-      statusBanner={statusBanner}
       tabBarPadding
       title="Profile"
       trailing={

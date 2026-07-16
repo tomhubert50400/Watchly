@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
@@ -30,19 +30,24 @@ export function FeedScreen() {
   const [items, setItems] = useState<HydratedFeedItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
 
   const loadFeed = useCallback(async (showLoading = true) => {
     if (!firebaseIdToken) {
       setError(null);
       setItems([]);
+      itemsRef.current = [];
       return;
     }
 
+    const hasVisibleItems = itemsRef.current.length > 0;
     setError(null);
-    if (showLoading) {
+    if (showLoading && !hasVisibleItems) {
       setIsLoading(true);
     } else {
-      setIsRefreshing(true);
+      setIsLoading(false);
+      if (!showLoading) setIsRefreshing(true);
     }
 
     try {
@@ -50,15 +55,16 @@ export function FeedScreen() {
       const hydratedItems = await Promise.all(response.items.map(hydrateFeedItem));
 
       setItems(hydratedItems);
+      itemsRef.current = hydratedItems;
     } catch (loadError) {
-      setItems([]);
-      setError(loadError instanceof Error ? loadError.message : 'Could not load your feed.');
-    } finally {
-      if (showLoading) {
-        setIsLoading(false);
-      } else {
-        setIsRefreshing(false);
+      if (!hasVisibleItems) {
+        setItems([]);
+        itemsRef.current = [];
+        setError(loadError instanceof Error ? loadError.message : 'Could not load your feed.');
       }
+    } finally {
+      setIsLoading(false);
+      if (!showLoading) setIsRefreshing(false);
     }
   }, [firebaseIdToken]);
 
@@ -109,7 +115,7 @@ export function FeedScreen() {
           body="You need to be signed in to use your social feed. Sign in here, then follow public profiles to see their written reviews."
           title="Sign in to see your Feed"
         />
-      ) : isLoading ? (
+      ) : isLoading && items.length === 0 ? (
         <LoadingState label="Loading feed" />
       ) : error ? (
         <EmptyState body={error} title="Feed failed">

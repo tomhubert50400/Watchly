@@ -47,7 +47,7 @@ export function EpisodeProgressControl({ episodeNumber, seasonNumber, seriesTmdb
         }))}
         value={currentStatus}
       />
-      {model.isSaving || model.isRefreshing ? (
+      {model.isSaving ? (
         <View style={styles.loadingOverlay} pointerEvents="none">
           <ActivityIndicator color={colors.textOnAccent} />
         </View>

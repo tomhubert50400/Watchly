@@ -182,7 +182,7 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
           <RefreshControl
             colors={[colors.accent]}
             onRefresh={refreshVisible}
-            refreshing={isSearching ? isSearchLoading : sections.isRefreshing}
+            refreshing={!isSearching && sections.isRefreshing}
             tintColor={colors.accent}
           />
         }
@@ -288,7 +288,6 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
               activeSection={activeSection}
               error={sections.error}
               isInitialLoading={isVisibleLoading}
-              isRefreshing={sections.isRefreshing}
               items={sectionItems[activeSection]}
               onOpen={openItem}
               onRetry={sections.retry}
@@ -320,7 +319,6 @@ function DiscoveryComposition({
   activeSection,
   error,
   isInitialLoading,
-  isRefreshing,
   items,
   onOpen,
   onRetry,
@@ -329,7 +327,6 @@ function DiscoveryComposition({
   activeSection: ExploreSection;
   error: string | null;
   isInitialLoading: boolean;
-  isRefreshing: boolean;
   items: CatalogueSearchItem[];
   onOpen: (item: CatalogueSearchItem) => void;
   onRetry: () => void;
@@ -356,11 +353,6 @@ function DiscoveryComposition({
 
   return (
     <View style={styles.composition}>
-      {isRefreshing ? (
-        <InlineStatusBanner detail="Cached discovery stays visible while Watchly updates it." tone="updating" />
-      ) : error ? (
-        <InlineStatusBanner detail={error} onRetry={onRetry} title={viewState.errorTitle} tone="error" />
-      ) : null}
       <ExploreFeature
         item={featured}
         onPress={() => onOpen(featured)}
@@ -427,11 +419,6 @@ function SearchComposition({
 
   return (
     <View style={styles.composition}>
-      {isLoading ? (
-        <InlineStatusBanner detail="Keeping these results visible while search updates." tone="updating" />
-      ) : error ? (
-        <InlineStatusBanner detail={error} onRetry={onRetry} title={viewState.errorTitle} tone="error" />
-      ) : null}
       <SearchGroup items={items} onOpen={onOpen} title={title} />
     </View>
   );
