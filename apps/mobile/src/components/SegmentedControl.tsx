@@ -26,6 +26,7 @@ const controlGap = 3;
 const controlBorderWidth = 1;
 const controlPadding = 3;
 const controlInset = controlBorderWidth + controlPadding;
+const indicatorOuterInset = controlBorderWidth + controlInset;
 
 export function SegmentedControl<T extends string>({
   buttonMinHeight = 40,
@@ -46,7 +47,7 @@ export function SegmentedControl<T extends string>({
   const selectedIndex = options.findIndex((option) => option.value === value);
   const indicatorWidth =
     options.length > 0
-      ? Math.max((controlWidth - controlInset * 2 - controlGap * (options.length - 1)) / options.length, 0)
+      ? Math.max((controlWidth - indicatorOuterInset * 2 - controlGap * (options.length - 1)) / options.length, 0)
       : 0;
   const translateX = selectionProgress.interpolate({
     inputRange: options.length > 0 ? options.map((_, index) => index) : [0],
