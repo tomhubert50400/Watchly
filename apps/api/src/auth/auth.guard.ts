@@ -16,7 +16,7 @@ export class AuthGuard implements CanActivate {
   }
 }
 
-function extractBearerToken(authorization: string | string[] | undefined): string {
+export function extractBearerToken(authorization: string | string[] | undefined): string {
   if (typeof authorization !== 'string') {
     throw new UnauthorizedException('Missing auth token.');
   }

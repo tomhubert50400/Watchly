@@ -4,6 +4,7 @@ import { GUARDS_METADATA, MODULE_METADATA } from '@nestjs/common/constants';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { AuthGuard } from '../auth/auth.guard';
+import { OptionalAuthGuard } from '../auth/optional-auth.guard';
 import { AuthController } from '../auth/auth.controller';
 import { BlocksController } from '../blocks/blocks.controller';
 import { CatalogueController } from '../catalogue/catalogue.controller';
@@ -20,7 +21,11 @@ import {
   MovieRatingsController,
   SeriesRatingsController,
 } from '../ratings/ratings.controller';
-import { EpisodeReviewsController, MovieReviewsController } from '../reviews/reviews.controller';
+import {
+  EpisodeCommunityController,
+  EpisodeReviewsController,
+  MovieReviewsController,
+} from '../reviews/reviews.controller';
 import { SharedWatchlistsController } from '../shared-watchlists/shared-watchlists.controller';
 import { TrackingController } from '../tracking/tracking.controller';
 import { WatchlistsController } from '../watchlists/watchlists.controller';
@@ -46,6 +51,7 @@ const protectedControllers = [
 ];
 
 const publicControllers = [CatalogueController];
+const optionalAuthControllers = [EpisodeCommunityController];
 
 async function main() {
   process.env.DATABASE_URL ??= 'postgresql://postgres:postgres@localhost:5432/tv_app?schema=public';
@@ -57,6 +63,7 @@ async function main() {
     ...assertProtectedControllersUseAuthGuard(),
     ...assertAuthMeUsesAuthGuard(),
     ...assertPublicControllersStayPublic(),
+    ...assertOptionalAuthControllersUseOptionalAuthGuard(),
     ...assertGlobalThrottlerGuard(AppModule),
   ];
 
@@ -65,6 +72,14 @@ async function main() {
   }
 
   console.log('Security QA passed.');
+}
+
+function assertOptionalAuthControllersUseOptionalAuthGuard() {
+  return optionalAuthControllers.flatMap((controller) =>
+    hasGuard(controller, OptionalAuthGuard)
+      ? []
+      : [`${controller.name} must use OptionalAuthGuard.`],
+  );
 }
 
 function assertProtectedControllersUseAuthGuard() {

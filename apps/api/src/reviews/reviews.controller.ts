@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { AuthenticatedRequest } from '../auth/auth.types';
+import { OptionalAuthGuard } from '../auth/optional-auth.guard';
 import { ReviewBodyDto } from './reviews.dto';
 import { ReviewsService } from './reviews.service';
 
@@ -95,6 +96,27 @@ export class EpisodeReviewsController {
     );
 
     return { deleted: true };
+  }
+}
+
+@Controller('community/episodes')
+@UseGuards(OptionalAuthGuard)
+export class EpisodeCommunityController {
+  constructor(@Inject(ReviewsService) private readonly reviews: ReviewsService) {}
+
+  @Get(':seriesTmdbId/seasons/:seasonNumber/episodes/:episodeNumber')
+  async get(
+    @Req() request: AuthenticatedRequest,
+    @Param('seriesTmdbId') seriesTmdbId: string,
+    @Param('seasonNumber') seasonNumber: string,
+    @Param('episodeNumber') episodeNumber: string,
+  ) {
+    return this.reviews.getEpisodeCommunity(
+      request.authIdentity ?? null,
+      parseTmdbId(seriesTmdbId),
+      parseSeasonNumber(seasonNumber),
+      parseEpisodeNumber(episodeNumber),
+    );
   }
 }
 
