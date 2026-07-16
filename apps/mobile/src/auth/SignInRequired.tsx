@@ -27,7 +27,13 @@ export function SignInSheet({ body, onClose, title, visible }: SignInSheetProps)
         disableScrollViewPanResponder
         showsVerticalScrollIndicator={false}
       >
-        <ProfileAuthCard body={body} embedded title={title} />
+        <View
+          onResponderTerminationRequest={() => true}
+          onStartShouldSetResponder={() => true}
+          style={styles.sheetGestureSurface}
+        >
+          <ProfileAuthCard body={body} embedded title={title} />
+        </View>
       </ScrollView>
     </BottomActionSheet>
   );
@@ -88,6 +94,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   sheetContent: {
+    flexGrow: 1,
     paddingBottom: spacing.xl,
+  },
+  sheetGestureSurface: {
+    flex: 1,
   },
 });
