@@ -16,6 +16,21 @@ export type EpisodeReview = {
   updatedAt: string;
 };
 
+export type EpisodeCommunityResponse = {
+  averageScore: number | null;
+  ratingCount: number;
+  reviews: {
+    author: {
+      displayName: string | null;
+      id: string;
+    };
+    body: string;
+    id: string;
+    score: number;
+    updatedAt: string;
+  }[];
+};
+
 export function getMovieReview(token: string, tmdbId: number) {
   return apiGet<MovieReview | null>(`/reviews/movies/${tmdbId}`, { token });
 }
@@ -62,4 +77,16 @@ export function deleteEpisodeReview(
   episodeNumber: number,
 ) {
   return apiDelete<{ deleted: true }>(episodeReviewPath(seriesTmdbId, seasonNumber, episodeNumber), { token });
+}
+
+export function getEpisodeCommunity(
+  token: string | null,
+  seriesTmdbId: number,
+  seasonNumber: number,
+  episodeNumber: number,
+) {
+  return apiGet<EpisodeCommunityResponse>(
+    `/community/episodes/${seriesTmdbId}/seasons/${seasonNumber}/episodes/${episodeNumber}`,
+    token ? { token } : {},
+  );
 }

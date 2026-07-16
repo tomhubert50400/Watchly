@@ -1,26 +1,28 @@
 import { useCallback, useLayoutEffect } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Star } from 'lucide-react-native';
-import { Image, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { EpisodeDetails, EpisodeDetailsResponse } from '../api/catalogue';
 import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
-import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
-import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { mediaHeroFadeColors } from '../components/mediaHeroGradient';
+import { colors, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { EpisodeReviewEditor } from '../reviews/EpisodeReviewEditor';
 import { EpisodeProgressControl } from '../tracking/EpisodeProgressControl';
 import { isReleasedDate } from './releaseDates';
 import { ensureEpisodeDetails, getEpisodeResourceKey } from './cataloguePrefetch';
+import { EpisodeCommunityPanel } from './EpisodeCommunityPanel';
+import { HeaderInfoItem, HeaderInfoPills } from './HeaderInfoPills';
+import { SynopsisPanel } from './SynopsisPanel';
 
 type EpisodeDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'EpisodeDetail'>;
 
 export function EpisodeDetailScreen({ navigation, route }: EpisodeDetailScreenProps) {
   const { episodeNumber, seasonNumber, tmdbId } = route.params;
-  const { width: windowWidth } = useWindowDimensions();
   const loadEpisode = useCallback(() => {
     return ensureEpisodeDetails(tmdbId, seasonNumber, episodeNumber);
   }, [episodeNumber, seasonNumber, tmdbId]);
@@ -32,23 +34,20 @@ export function EpisodeDetailScreen({ navigation, route }: EpisodeDetailScreenPr
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerBackground: undefined,
-      headerRight: undefined,
-      headerTitle: () => (
-        <View pointerEvents="none" style={[styles.headerTitleRow, { width: windowWidth }]}>
-          <Text numberOfLines={1} style={styles.headerSeriesTitle}>
-            {route.params.seriesTitle}
-          </Text>
-          {episode?.airDate ? <Text style={styles.headerAirDate}>{episode.airDate}</Text> : null}
-        </View>
-      ),
-      title: undefined,
+      headerStyle: { backgroundColor: 'transparent' },
+      headerTintColor: colors.text,
+      headerTitle: '',
+      headerTransparent: true,
     });
-  }, [episode?.airDate, navigation, route.params.seriesTitle, windowWidth]);
+  }, [navigation]);
 
   return (
-    <View style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <SafeAreaView edges={[]} style={styles.safeArea}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        contentInsetAdjustmentBehavior="never"
+        showsVerticalScrollIndicator={false}
+      >
         {!episode && resource.isInitialLoading ? (
           <View style={styles.loadingFrame}>
             <LoadingState label="Loading episode details" />
@@ -58,25 +57,47 @@ export function EpisodeDetailScreen({ navigation, route }: EpisodeDetailScreenPr
             <Button label="Retry" onPress={resource.retry} />
           </EmptyState>
         ) : episode ? (
-          <>
-            {resource.isRefreshing ? (
-              <InlineStatusBanner detail="Refreshing episode details" tone="updating" />
-            ) : resource.error ? (
-              <InlineStatusBanner detail={resource.error} onRetry={resource.retry} title="Episode update failed" tone="error" />
-            ) : null}
-            <EpisodeDetailContent episode={episode} />
-          </>
+          <EpisodeDetailContent
+            episode={episode}
+            error={resource.error}
+            isRefreshing={resource.isRefreshing || resource.isInitialLoading}
+            onRetry={resource.retry}
+            seriesTitle={route.params.seriesTitle}
+          />
         ) : null}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
-function EpisodeDetailContent({ episode }: { episode: EpisodeDetails }) {
+function EpisodeDetailContent({
+  episode,
+  error,
+  isRefreshing,
+  onRetry,
+  seriesTitle,
+}: {
+  episode: EpisodeDetails;
+  error: string | null;
+  isRefreshing: boolean;
+  onRetry: () => void;
+  seriesTitle: string;
+}) {
   const runtime = episode.runtimeMinutes ? `${episode.runtimeMinutes}m` : null;
   const isReleased = isReleasedDate(episode.airDate);
   const episodeCode = `S${episode.seasonNumber} E${episode.episodeNumber}`;
-  const rating = isReleased && episode.voteAverage ? `${(episode.voteAverage / 2).toFixed(1)}/5` : null;
+  const rating = isReleased && episode.voteAverage ? (episode.voteAverage / 2).toFixed(1) : null;
+  const infoItems = [
+    episodeCode,
+    episode.airDate,
+    runtime,
+    rating ? { icon: 'star', label: rating } satisfies HeaderInfoItem : null,
+  ].filter(Boolean) as HeaderInfoItem[];
+  const detailItems = [
+    `Season ${episode.seasonNumber}`,
+    `Episode ${episode.episodeNumber}`,
+    runtime,
+  ].filter(Boolean);
 
   return (
     <View>
@@ -92,70 +113,58 @@ function EpisodeDetailContent({ episode }: { episode: EpisodeDetails }) {
           <View style={styles.stillPlaceholder} />
         )}
         <View style={styles.heroScrim} />
+        <View pointerEvents="none" style={styles.heroFade}>
+          {mediaHeroFadeColors.map((backgroundColor) => (
+            <View key={backgroundColor} style={[styles.fadeBand, { backgroundColor }]} />
+          ))}
+        </View>
         <View style={styles.heroCopy}>
-          <Text style={styles.eyebrow}>Episode</Text>
+          <Text numberOfLines={1} style={styles.eyebrow}>{seriesTitle} · Episode</Text>
           <Text style={styles.title}>{episode.title}</Text>
-          <View style={styles.metaRow}>
-            <Chip label={episodeCode} tone="accent" />
-            {episode.airDate ? <Chip label={episode.airDate} /> : null}
-            {runtime ? <Chip label={runtime} /> : null}
-            {rating ? (
-              <Chip
-                icon={<Star color={colors.rating} fill={colors.rating} size={11} strokeWidth={2} />}
-                label={rating}
-                tone="rating"
-              />
-            ) : null}
-          </View>
+          <HeaderInfoPills items={infoItems} />
         </View>
       </View>
       <View style={styles.bodyStack}>
-        <EpisodeProgressControl
+        {isRefreshing ? (
+          <InlineStatusBanner detail="Refreshing episode details" tone="updating" />
+        ) : error ? (
+          <InlineStatusBanner detail={error} onRetry={onRetry} title="Episode update failed" tone="error" />
+        ) : null}
+        <SynopsisPanel overview={episode.overview} />
+        <View style={styles.personalSection}>
+          <Text style={styles.personalEyebrow}>Your activity</Text>
+          <EpisodeProgressControl
+            episodeNumber={episode.episodeNumber}
+            seasonNumber={episode.seasonNumber}
+            seriesTmdbId={episode.seriesTmdbId}
+          />
+          {isReleased ? (
+            <EpisodeReviewEditor
+              episodeNumber={episode.episodeNumber}
+              mediaTitle={episode.title}
+              posterUrl={episode.stillUrl}
+              seasonNumber={episode.seasonNumber}
+              seriesTmdbId={episode.seriesTmdbId}
+            />
+          ) : null}
+        </View>
+
+        <EpisodeCommunityPanel
           episodeNumber={episode.episodeNumber}
           seasonNumber={episode.seasonNumber}
           seriesTmdbId={episode.seriesTmdbId}
         />
-        {isReleased ? (
-          <EpisodeReviewEditor
-            episodeNumber={episode.episodeNumber}
-            mediaTitle={episode.title}
-            posterUrl={episode.stillUrl}
-            seasonNumber={episode.seasonNumber}
-            seriesTmdbId={episode.seriesTmdbId}
-          />
-        ) : null}
-        <View style={styles.panel}>
-          <Text style={styles.sectionTitle}>Synopsis</Text>
-          <Text style={styles.body}>{episode.overview || 'No synopsis available yet.'}</Text>
-        </View>
 
-        <View style={styles.panel}>
+        <View style={styles.detailsSection}>
           <Text style={styles.sectionTitle}>Details</Text>
-          <DetailRow label="Season" value={String(episode.seasonNumber)} />
-          <DetailRow label="Episode" value={String(episode.episodeNumber)} />
-          <DetailRow label="Air date" value={episode.airDate ?? 'Unknown'} />
-          <DetailRow label="Runtime" value={runtime ?? 'Unknown'} />
+          <Text style={styles.detailSummary}>{detailItems.join(' · ')}</Text>
         </View>
       </View>
-    </View>
-  );
-}
-
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.detailRow}>
-      <Text style={styles.detailLabel}>{label}</Text>
-      <Text style={styles.detailValue}>{value}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  body: {
-    ...typography.body,
-    color: colors.muted,
-    marginTop: spacing.sm,
-  },
   content: {
     flexGrow: 1,
     paddingBottom: spacing.xxxl,
@@ -163,56 +172,27 @@ const styles = StyleSheet.create({
   },
   bodyStack: {
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl,
   },
-  detailLabel: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0,
-    textTransform: 'uppercase',
-  },
-  detailRow: {
-    borderTopColor: colors.border,
-    borderTopWidth: StyleSheet.hairlineWidth,
+  detailsSection: {
     gap: spacing.xs,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.lg,
   },
-  detailValue: {
-    ...typography.body,
-    color: colors.text,
+  detailSummary: {
+    ...typography.meta,
+    color: colors.textSubtle,
   },
   eyebrow: {
     ...typography.eyebrow,
     color: colors.accentText,
     marginBottom: spacing.xs,
   },
-  headerAirDate: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0,
-    position: 'absolute',
-    right: spacing.xl + spacing.xxl,
-    textTransform: 'uppercase',
-  },
-  headerSeriesTitle: {
-    color: colors.text,
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: 0,
-    maxWidth: 180,
-    textAlign: 'center',
-    transform: [{ translateX: -spacing.xl }],
-  },
-  headerTitleRow: {
-    alignItems: 'center',
-    height: 44,
-    justifyContent: 'center',
+  fadeBand: {
+    flex: 1,
   },
   hero: {
     backgroundColor: colors.panelSoft,
-    minHeight: 282,
+    height: 340,
+    marginBottom: spacing.sm,
     overflow: 'hidden',
   },
   heroCopy: {
@@ -221,28 +201,30 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: spacing.xl,
   },
+  heroFade: {
+    bottom: 0,
+    height: 180,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+  },
   heroScrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: colors.overlay,
   },
   loadingFrame: {
-    padding: spacing.xl,
+    paddingHorizontal: spacing.xl,
+    paddingTop: 120,
   },
-  metaRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-    marginTop: spacing.md,
+  personalEyebrow: {
+    ...typography.eyebrow,
+    color: colors.textSubtle,
+    marginBottom: spacing.sm,
   },
-  panel: {
-    ...shadows.panel,
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    marginTop: spacing.lg,
-    padding: spacing.lg,
+  personalSection: {
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingTop: spacing.xl,
   },
   safeArea: {
     backgroundColor: colors.background,
@@ -254,19 +236,19 @@ const styles = StyleSheet.create({
   },
   still: {
     backgroundColor: colors.panelSoft,
-    height: 282,
+    height: '100%',
     width: '100%',
   },
   stillPlaceholder: {
     backgroundColor: colors.panelSoft,
-    height: 282,
+    height: '100%',
     width: '100%',
   },
   title: {
     color: colors.text,
-    fontSize: 32,
+    fontSize: 29,
     fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 38,
+    letterSpacing: -0.6,
+    lineHeight: 33,
   },
 });
