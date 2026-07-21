@@ -1,16 +1,26 @@
+import { useLayoutEffect } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Chip } from '../components/Chip';
-import { MediaPoster } from '../components/MediaPoster';
-import { Screen } from '../components/Screen';
+import { ChevronRight } from 'lucide-react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { MediaHero } from '../components/MediaHero';
 import { StarRatingDisplay } from '../components/StarRatingDisplay';
-import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { colors, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 
 type ReviewDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'ReviewDetail'>;
 
 export function ReviewDetailScreen({ navigation, route }: ReviewDetailScreenProps) {
   const review = route.params;
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerStyle: { backgroundColor: 'transparent' },
+      headerTintColor: colors.text,
+      headerTitle: '',
+      headerTransparent: true,
+    });
+  }, [navigation]);
 
   function openContent() {
     if (review.target.contentType === 'movie') {
@@ -31,38 +41,61 @@ export function ReviewDetailScreen({ navigation, route }: ReviewDetailScreenProp
   }
 
   return (
-    <Screen eyebrow="Review" title={review.authorDisplayName}>
-      <View style={styles.metaRow}>
-        <Chip label="Review" tone="neutral" />
-        <Text style={styles.date}>{formatDate(review.updatedAt)}</Text>
-      </View>
-
-      <Pressable
-        accessibilityLabel={`Open ${review.contentTitle}`}
-        accessibilityRole="button"
-        onPress={openContent}
-        style={({ pressed }) => [styles.contentCard, pressed ? styles.pressed : null]}
+    <SafeAreaView edges={[]} style={styles.safeArea}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        contentInsetAdjustmentBehavior="never"
+        showsVerticalScrollIndicator={false}
       >
-        <MediaPoster
-          accessibilityLabel={`${review.contentTitle} artwork`}
-          posterUrl={review.contentImageUrl}
-          style={styles.poster}
-        />
-        <View style={styles.contentCopy}>
-          <Text style={styles.contentMeta}>{review.contentSubtitle}</Text>
-          <Text style={styles.contentTitle}>{review.contentTitle}</Text>
-          <Text style={styles.contentAction}>Open content</Text>
-        </View>
-      </Pressable>
+        <Pressable
+          accessibilityLabel={`Open ${review.contentTitle}`}
+          accessibilityRole="button"
+          onPress={openContent}
+          style={({ pressed }) => (pressed ? styles.heroPressed : null)}
+        >
+          <MediaHero
+            backdropUrl={review.contentImageUrl}
+            eyebrow={review.contentSubtitle}
+            posterAccessibilityLabel={`${review.contentTitle} artwork`}
+            posterUrl={review.contentImageUrl}
+            title={review.contentTitle}
+          >
+            <View style={styles.openRow}>
+              <Text style={styles.openLabel}>Open content</Text>
+              <ChevronRight color={colors.accentText} size={16} strokeWidth={2.5} />
+            </View>
+          </MediaHero>
+        </Pressable>
 
-      <View style={styles.reviewCard}>
-        {review.rating !== null ? (
-          <StarRatingDisplay rating={review.rating} showValue size={19} />
-        ) : null}
-        <Text selectable style={styles.reviewBody}>{review.body}</Text>
-      </View>
-    </Screen>
+        <View style={styles.reviewSection}>
+          <View style={styles.authorRow}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{getInitial(review.authorDisplayName)}</Text>
+            </View>
+            <View style={styles.authorCopy}>
+              <Text style={styles.reviewLabel}>Review by</Text>
+              <Text style={styles.authorName}>{review.authorDisplayName}</Text>
+              <Text style={styles.date}>{formatDate(review.updatedAt)}</Text>
+            </View>
+          </View>
+
+          {review.rating !== null ? (
+            <View style={styles.ratingRow}>
+              <StarRatingDisplay rating={review.rating} showValue size={19} />
+            </View>
+          ) : null}
+
+          <View style={styles.reviewCopy}>
+            <Text selectable style={styles.reviewBody}>{review.body}</Text>
+          </View>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
+}
+
+function getInitial(displayName: string) {
+  return displayName.trim().slice(0, 1).toUpperCase() || '?';
 }
 
 function formatDate(value: string) {
@@ -73,62 +106,87 @@ function formatDate(value: string) {
 }
 
 const styles = StyleSheet.create({
-  contentAction: {
-    ...typography.meta,
-    color: colors.accentText,
-    marginTop: spacing.xs,
-  },
-  contentCard: {
-    alignItems: 'center',
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  contentCopy: {
+  authorCopy: {
     flex: 1,
     minWidth: 0,
   },
-  contentMeta: {
-    ...typography.meta,
-    color: colors.textSubtle,
-  },
-  contentTitle: {
+  authorName: {
     ...typography.title,
     color: colors.text,
     marginTop: 2,
   },
+  authorRow: {
+    alignItems: 'center',
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    gap: spacing.md,
+    paddingBottom: spacing.lg,
+  },
+  avatar: {
+    alignItems: 'center',
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
+    borderRadius: 24,
+    borderWidth: 1,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
+  },
+  avatarText: {
+    color: colors.accentText,
+    fontSize: 19,
+    fontWeight: '900',
+  },
+  content: {
+    flexGrow: 1,
+    paddingBottom: spacing.xxxl,
+  },
   date: {
     ...typography.meta,
     color: colors.textSubtle,
+    marginTop: 2,
   },
-  metaRow: {
+  heroPressed: {
+    opacity: 0.82,
+  },
+  openLabel: {
+    ...typography.meta,
+    color: colors.accentText,
+    textTransform: 'uppercase',
+  },
+  openRow: {
     alignItems: 'center',
+    alignSelf: 'flex-start',
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 2,
+    marginTop: spacing.sm,
   },
-  poster: {
-    height: 84,
-    width: 56,
-  },
-  pressed: {
-    opacity: 0.78,
+  ratingRow: {
+    marginTop: spacing.lg,
   },
   reviewBody: {
     color: colors.text,
-    fontSize: 18,
-    lineHeight: 29,
+    fontSize: 19,
+    letterSpacing: -0.1,
+    lineHeight: 30,
   },
-  reviewCard: {
-    ...shadows.panel,
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    gap: spacing.lg,
-    padding: spacing.lg,
+  reviewCopy: {
+    borderLeftColor: colors.borderStrong,
+    borderLeftWidth: 2,
+    marginTop: spacing.lg,
+    paddingLeft: spacing.md,
+  },
+  reviewLabel: {
+    ...typography.eyebrow,
+    color: colors.accentText,
+  },
+  reviewSection: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
+  },
+  safeArea: {
+    backgroundColor: colors.background,
+    flex: 1,
   },
 });
