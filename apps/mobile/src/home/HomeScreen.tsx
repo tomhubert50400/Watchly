@@ -42,7 +42,7 @@ import {
   HomeResource,
   HomeTrendingItem,
 } from './homeData';
-import { SocialActivityRail } from './SocialActivityRail';
+import { SocialActivityList } from './SocialActivityList';
 
 type HomeNavigation = CompositeNavigationProp<
   BottomTabNavigationProp<RootTabParamList, 'Home'>,
@@ -231,7 +231,7 @@ export function HomeScreen() {
                   <InlineStatusBanner detail={section.error} onRetry={feed.retry} tone="error" />
                 ) : null}
                 {section.items.length > 0 ? (
-                  <SocialActivityRail
+                  <SocialActivityList
                     items={section.items}
                     onOpenContent={(item) => openFeedContent(navigation, item)}
                   />

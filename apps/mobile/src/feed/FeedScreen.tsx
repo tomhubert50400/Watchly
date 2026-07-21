@@ -1,19 +1,17 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { getEpisodeDetails, getMovieDetails } from '../api/catalogue';
 import { FeedItem, getFeed } from '../api/feed';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { Button } from '../components/Button';
-import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
-import { ExpandableReviewText } from '../components/ExpandableReviewText';
 import { LoadingState } from '../components/LoadingState';
-import { MediaPoster } from '../components/MediaPoster';
 import { Screen } from '../components/Screen';
-import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { SocialReviewPost } from '../components/SocialReviewPost';
+import { colors, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 
 type FeedNavigation = NativeStackNavigationProp<RootStackParamList>;
@@ -143,61 +141,21 @@ export function FeedScreen() {
             </Text>
           </View>
           {items.map((item) => (
-            <FeedReviewCard item={item} key={item.id} onOpenContent={openContent} />
+            <SocialReviewPost
+              authorDisplayName={item.author.displayName}
+              body={item.body}
+              contentImageUrl={item.contentImageUrl}
+              contentMeta={item.contentSubtitle}
+              contentTitle={item.contentTitle}
+              key={item.id}
+              onOpenContent={() => openContent(item)}
+              updatedAt={item.updatedAt}
+            />
           ))}
         </View>
       )}
     </Screen>
   );
-}
-
-const FeedReviewCard = memo(function FeedReviewCard({
-  item,
-  onOpenContent,
-}: {
-  item: HydratedFeedItem;
-  onOpenContent: (item: HydratedFeedItem) => void;
-}) {
-  return (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{getAuthorInitial(item.author.displayName)}</Text>
-        </View>
-        <View style={styles.headerCopy}>
-          <Text numberOfLines={1} style={styles.author}>
-            {item.author.displayName ?? 'Unnamed profile'}
-          </Text>
-          <Text style={styles.date}>{formatDate(item.updatedAt)}</Text>
-        </View>
-        <Chip label="Review" tone="neutral" />
-      </View>
-      <Pressable
-        accessibilityLabel={`Open ${item.contentTitle}`}
-        accessibilityRole="button"
-        onPress={() => onOpenContent(item)}
-        style={({ pressed }) => [styles.contentRow, pressed ? styles.contentRowPressed : null]}
-      >
-        <MediaPoster
-          accessibilityLabel={`${item.contentTitle} artwork`}
-          posterUrl={item.contentImageUrl}
-          style={styles.contentImage}
-        />
-        <View style={styles.contentCopy}>
-          <Text style={styles.meta}>{item.contentSubtitle}</Text>
-          <Text numberOfLines={2} style={styles.contentTitle}>
-            {item.contentTitle}
-          </Text>
-          <Text style={styles.openHint}>Open content</Text>
-        </View>
-      </Pressable>
-      <ExpandableReviewText body={item.body} style={styles.reviewBody} />
-    </View>
-  );
-});
-
-function getAuthorInitial(displayName: string | null) {
-  return (displayName ?? '?').trim().slice(0, 1).toUpperCase() || '?';
 }
 
 async function hydrateFeedItem(item: FeedItem): Promise<HydratedFeedItem> {
@@ -248,88 +206,7 @@ async function hydrateFeedItem(item: FeedItem): Promise<HydratedFeedItem> {
   }
 }
 
-function formatDate(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return '';
-  }
-
-  return date.toLocaleDateString();
-}
-
 const styles = StyleSheet.create({
-  author: {
-    ...typography.title,
-    color: colors.text,
-  },
-  avatar: {
-    alignItems: 'center',
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    height: 48,
-    justifyContent: 'center',
-    width: 48,
-  },
-  avatarText: {
-    color: colors.accent,
-    fontSize: 21,
-    fontWeight: '900',
-    letterSpacing: 0,
-  },
-  card: {
-    ...shadows.panel,
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  cardHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  contentCopy: {
-    flex: 1,
-    justifyContent: 'center',
-    minWidth: 0,
-  },
-  contentImage: {
-    height: 102,
-    width: 68,
-  },
-  contentRow: {
-    alignItems: 'center',
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  contentRowPressed: {
-    opacity: 0.78,
-    transform: [{ scale: 0.99 }],
-  },
-  contentTitle: {
-    color: colors.text,
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 22,
-  },
-  date: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0,
-    marginTop: 2,
-  },
   feedIntro: {
     borderBottomColor: colors.border,
     borderBottomWidth: 1,
@@ -344,32 +221,7 @@ const styles = StyleSheet.create({
     ...typography.title,
     color: colors.text,
   },
-  headerCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
   list: {
-    gap: spacing.md,
-  },
-  meta: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0,
-    marginBottom: spacing.xs,
-    textTransform: 'uppercase',
-  },
-  openHint: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0,
-    marginTop: spacing.xs,
-    textTransform: 'uppercase',
-  },
-  reviewBody: {
-    borderLeftColor: colors.borderStrong,
-    borderLeftWidth: 2,
-    paddingLeft: spacing.md,
+    gap: 0,
   },
 });

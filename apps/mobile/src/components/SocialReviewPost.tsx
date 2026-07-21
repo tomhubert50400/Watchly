@@ -1,0 +1,157 @@
+import { memo } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors, radii, spacing, typography } from '../design/tokens';
+import { ExpandableReviewText } from './ExpandableReviewText';
+import { MediaPoster } from './MediaPoster';
+
+type SocialReviewPostProps = {
+  authorDisplayName: string | null;
+  body: string;
+  contentImageUrl: string | null;
+  contentMeta: string;
+  contentTitle: string;
+  onOpenContent: () => void;
+  updatedAt: string;
+};
+
+export const SocialReviewPost = memo(function SocialReviewPost({
+  authorDisplayName,
+  body,
+  contentImageUrl,
+  contentMeta,
+  contentTitle,
+  onOpenContent,
+  updatedAt,
+}: SocialReviewPostProps) {
+  const visibleAuthor = authorDisplayName?.trim() || 'Watchly member';
+
+  return (
+    <View style={styles.post}>
+      <View style={styles.avatar}>
+        <Text style={styles.avatarText}>{getInitial(visibleAuthor)}</Text>
+      </View>
+      <View style={styles.postContent}>
+        <View style={styles.byline}>
+          <Text numberOfLines={1} style={styles.author}>{visibleAuthor}</Text>
+          <Text style={styles.date}>{formatDate(updatedAt)}</Text>
+        </View>
+        <Pressable
+          accessibilityLabel={`Open ${contentTitle}`}
+          accessibilityRole="button"
+          onPress={onOpenContent}
+          style={({ pressed }) => [styles.mediaLink, pressed ? styles.mediaLinkPressed : null]}
+        >
+          <MediaPoster
+            accessibilityLabel={`${contentTitle} artwork`}
+            posterUrl={contentImageUrl}
+            style={styles.poster}
+          />
+          <View style={styles.mediaCopy}>
+            <Text style={styles.mediaMeta}>{contentMeta}</Text>
+            <Text numberOfLines={2} style={styles.mediaTitle}>{contentTitle}</Text>
+            <Text style={styles.openLabel}>Open content</Text>
+          </View>
+        </Pressable>
+        <ExpandableReviewText body={body} style={styles.review} />
+      </View>
+    </View>
+  );
+});
+
+function getInitial(displayName: string) {
+  return displayName.slice(0, 1).toUpperCase() || '?';
+}
+
+function formatDate(value: string) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+const styles = StyleSheet.create({
+  author: {
+    color: colors.text,
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '800',
+    lineHeight: 20,
+  },
+  avatar: {
+    alignItems: 'center',
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    height: 42,
+    justifyContent: 'center',
+    width: 42,
+  },
+  avatarText: {
+    color: colors.accent,
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  byline: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  date: {
+    ...typography.meta,
+    color: colors.textSubtle,
+  },
+  mediaCopy: {
+    flex: 1,
+    justifyContent: 'center',
+    minWidth: 0,
+  },
+  mediaLink: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  mediaLinkPressed: {
+    opacity: 0.72,
+  },
+  mediaMeta: {
+    ...typography.meta,
+    color: colors.textSubtle,
+    marginBottom: 2,
+    textTransform: 'uppercase',
+  },
+  mediaTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '800',
+    lineHeight: 21,
+  },
+  openLabel: {
+    ...typography.meta,
+    color: colors.accentText,
+    marginTop: spacing.xs,
+    textTransform: 'uppercase',
+  },
+  post: {
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingVertical: spacing.lg,
+  },
+  postContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+  poster: {
+    height: 81,
+    width: 54,
+  },
+  review: {
+    marginTop: spacing.md,
+  },
+});
