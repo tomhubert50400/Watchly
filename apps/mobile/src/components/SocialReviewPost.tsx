@@ -163,6 +163,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.sm,
+    justifyContent: 'flex-end',
     marginTop: spacing.md,
   },
   author: {
