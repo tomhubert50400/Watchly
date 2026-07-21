@@ -14,6 +14,7 @@ import { ProfileAuthCard } from '../auth/ProfileAuthCard';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
+import { ExpandableReviewText } from '../components/ExpandableReviewText';
 import { IconButton } from '../components/IconButton';
 import { LoadingState } from '../components/LoadingState';
 import { MediaPoster } from '../components/MediaPoster';
@@ -165,7 +166,7 @@ export function ProfileScreen() {
                   <ProfileOpinionCard
                     item={item}
                     key={`${item.type}-${item.id}`}
-                    onPress={(opinion) => openOpinion(navigation, opinion, profile.displayName)}
+                    onOpenContent={(opinion) => openOpinion(navigation, opinion)}
                   />
                 ))}
               </View>
@@ -177,9 +178,9 @@ export function ProfileScreen() {
   );
 }
 
-const ProfileOpinionCard = memo(function ProfileOpinionCard({ item, onPress }: {
+const ProfileOpinionCard = memo(function ProfileOpinionCard({ item, onOpenContent }: {
   item: HydratedProfileOpinion;
-  onPress: (item: HydratedProfileOpinion) => void;
+  onOpenContent: (item: HydratedProfileOpinion) => void;
 }) {
   const review = isReview(item);
   const contentTitle = item.content.contentType === 'episode'
@@ -187,47 +188,43 @@ const ProfileOpinionCard = memo(function ProfileOpinionCard({ item, onPress }: {
     : item.contentTitle;
 
   return (
-    <Pressable
-      accessibilityLabel={review ? `Read review of ${item.contentTitle}` : `Open ${item.contentTitle}`}
-      accessibilityRole="button"
-      onPress={() => onPress(item)}
-      style={({ pressed }) => [styles.card, pressed ? styles.cardPressed : null]}
-    >
-      <MediaPoster
-        accessibilityLabel={`${item.contentTitle} artwork`}
-        posterUrl={item.contentImageUrl}
-        style={styles.poster}
-      />
-      <View style={styles.cardCopy}>
-        <View style={styles.metaRow}>
-          <Chip label={review ? 'Review' : 'Rating'} tone={review ? 'neutral' : 'rating'} />
-          <Text style={styles.date}>{formatDate(item.updatedAt)}</Text>
+    <View style={styles.card}>
+      <Pressable
+        accessibilityLabel={`Open ${item.contentTitle}`}
+        accessibilityRole="button"
+        onPress={() => onOpenContent(item)}
+        style={({ pressed }) => [styles.mediaLink, pressed ? styles.cardPressed : null]}
+      >
+        <MediaPoster
+          accessibilityLabel={`${item.contentTitle} artwork`}
+          posterUrl={item.contentImageUrl}
+          style={styles.poster}
+        />
+        <View style={styles.cardCopy}>
+          <View style={styles.metaRow}>
+            <Chip label={review ? 'Review' : 'Rating'} tone={review ? 'neutral' : 'rating'} />
+            <Text style={styles.date}>{formatDate(item.updatedAt)}</Text>
+          </View>
+          <Text numberOfLines={2} style={styles.contentTitle}>{contentTitle}</Text>
+          <Text numberOfLines={1} style={styles.subtitle}>{item.contentSubtitle}</Text>
+          <StarRatingDisplay rating={item.score} showValue size={17} />
         </View>
-        <Text numberOfLines={2} style={styles.contentTitle}>{contentTitle}</Text>
-        <Text numberOfLines={1} style={styles.subtitle}>{item.contentSubtitle}</Text>
-        <StarRatingDisplay rating={item.score} showValue size={17} />
-        {review ? <Text numberOfLines={4} style={styles.review}>{item.body}</Text> : null}
-      </View>
-    </Pressable>
+      </Pressable>
+      {review ? <ExpandableReviewText body={item.body} style={styles.review} /> : null}
+    </View>
   );
 });
 
 function openOpinion(
   navigation: ProfileNavigation,
   item: HydratedProfileOpinion,
-  authorDisplayName: string,
 ) {
   const target = getProfileOpinionTarget(item, {
-    authorDisplayName,
-    contentImageUrl: item.contentImageUrl,
-    contentSubtitle: item.contentSubtitle,
     contentTitle: item.contentTitle,
     seriesTitle: item.seriesTitle,
   });
 
-  if (target.name === 'ReviewDetail') {
-    navigation.navigate(target.name, target.params);
-  } else if (target.name === 'FilmDetail') {
+  if (target.name === 'FilmDetail') {
     navigation.navigate(target.name, target.params);
   } else {
     navigation.navigate(target.name, target.params);
@@ -298,7 +295,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radii.lg,
     borderWidth: 1,
-    flexDirection: 'row',
     gap: spacing.md,
     padding: spacing.md,
   },
@@ -336,6 +332,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     justifyContent: 'space-between',
   },
+  mediaLink: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
   opinionList: {
     gap: spacing.md,
   },
@@ -347,11 +347,8 @@ const styles = StyleSheet.create({
     width: 75,
   },
   review: {
-    ...typography.body,
     borderLeftColor: colors.borderStrong,
     borderLeftWidth: 2,
-    color: colors.textMuted,
-    marginTop: spacing.sm,
     paddingLeft: spacing.sm,
   },
   stack: {

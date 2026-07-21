@@ -19,6 +19,14 @@ const movieReview: ProfileOpinion = {
   type: 'movieReview',
   updatedAt: '2026-07-09T12:00:00.000Z',
 };
+const episodeReview: ProfileOpinion = {
+  body: 'A perfect bottle episode.',
+  content: { contentType: 'episode', episodeNumber: 7, seasonNumber: 2, seriesTmdbId: 1396 },
+  id: 'episode-review-public',
+  score: 5,
+  type: 'episodeReview',
+  updatedAt: '2026-07-08T12:00:00.000Z',
+};
 const response = {
   items: [movieRating, movieReview],
   stats: { followersCount: 7, followingCount: 3, postsCount: 2, reviewsCount: 1 },
@@ -46,29 +54,30 @@ assert.deepEqual(publicModel.stats, {
   reviewsCount: 1,
 });
 const presentation = {
-  authorDisplayName: 'Watchly UI Review',
-  contentImageUrl: 'https://image.example/matrix.jpg',
-  contentSubtitle: 'Movie',
   contentTitle: 'The Matrix',
   seriesTitle: null,
 };
 assert.deepEqual(getProfileOpinionTarget(movieReview, presentation), {
-  name: 'ReviewDetail',
-  params: {
-    authorDisplayName: 'Watchly UI Review',
-    body: 'A precise, stylish rewatch.',
-    contentImageUrl: 'https://image.example/matrix.jpg',
-    contentSubtitle: 'Movie',
-    contentTitle: 'The Matrix',
-    rating: 4.5,
-    target: { contentType: 'movie', tmdbId: 603 },
-    updatedAt: '2026-07-09T12:00:00.000Z',
-  },
+  name: 'FilmDetail',
+  params: { title: 'The Matrix', tmdbId: 603 },
 });
 assert.deepEqual(getProfileOpinionTarget(movieRating, presentation), {
   name: 'FilmDetail',
   params: { title: 'The Matrix', tmdbId: 603 },
 });
+assert.deepEqual(
+  getProfileOpinionTarget(episodeReview, { contentTitle: 'Better Call Saul', seriesTitle: 'Breaking Bad' }),
+  {
+    name: 'EpisodeDetail',
+    params: {
+      episodeNumber: 7,
+      seasonNumber: 2,
+      seriesTitle: 'Breaking Bad',
+      title: 'Better Call Saul',
+      tmdbId: 1396,
+    },
+  },
+);
 
 const privateRatingsModel = buildProfileModel(
   { ...publicProfile, privacy: { ...publicProfile.privacy, ratingsVisibility: 'private' } },

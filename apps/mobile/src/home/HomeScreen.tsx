@@ -231,7 +231,10 @@ export function HomeScreen() {
                   <InlineStatusBanner detail={section.error} onRetry={feed.retry} tone="error" />
                 ) : null}
                 {section.items.length > 0 ? (
-                  <SocialActivityRail items={section.items} onOpen={(item) => openFeedItem(navigation, item)} />
+                  <SocialActivityRail
+                    items={section.items}
+                    onOpenContent={(item) => openFeedContent(navigation, item)}
+                  />
                 ) : null}
               </HomeSection>
             );
@@ -450,20 +453,21 @@ async function hydrateFeedItem(item: FeedItem): Promise<HomeFeedItem> {
   };
 }
 
-function openFeedItem(navigation: HomeNavigation, item: HomeFeedItem) {
-  const contentSubtitle = item.target.contentType === 'movie'
-    ? 'Movie'
-    : `Season ${item.target.seasonNumber} · Episode ${item.target.episodeNumber}`;
+function openFeedContent(navigation: HomeNavigation, item: HomeFeedItem) {
+  if (item.target.contentType === 'movie') {
+    navigation.navigate('FilmDetail', {
+      title: item.contentTitle,
+      tmdbId: item.target.tmdbId,
+    });
+    return;
+  }
 
-  navigation.navigate('ReviewDetail', {
-    authorDisplayName: item.authorDisplayName ?? 'Watchly member',
-    body: item.body,
-    contentImageUrl: item.contentImageUrl,
-    contentSubtitle,
-    contentTitle: item.contentTitle,
-    rating: null,
-    target: item.target,
-    updatedAt: item.updatedAt,
+  navigation.navigate('EpisodeDetail', {
+    episodeNumber: item.target.episodeNumber,
+    seasonNumber: item.target.seasonNumber,
+    seriesTitle: item.target.seriesTitle,
+    title: item.contentTitle,
+    tmdbId: item.target.seriesTmdbId,
   });
 }
 

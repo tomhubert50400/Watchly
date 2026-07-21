@@ -6,17 +6,13 @@ import type {
 import type { RootStackParamList } from '../navigation/types';
 
 type OpinionPresentation = {
-  authorDisplayName: string;
-  contentImageUrl: string | null;
-  contentSubtitle: string;
   contentTitle: string;
   seriesTitle: string | null;
 };
 
 export type ProfileOpinionTarget =
   | { name: 'EpisodeDetail'; params: RootStackParamList['EpisodeDetail'] }
-  | { name: 'FilmDetail'; params: RootStackParamList['FilmDetail'] }
-  | { name: 'ReviewDetail'; params: RootStackParamList['ReviewDetail'] };
+  | { name: 'FilmDetail'; params: RootStackParamList['FilmDetail'] };
 
 export type ProfileModel = {
   displayName: string;
@@ -65,29 +61,6 @@ export function getProfileOpinionTarget(
   opinion: ProfileOpinion,
   presentation: OpinionPresentation,
 ): ProfileOpinionTarget {
-  if (isReview(opinion)) {
-    const target = opinion.content.contentType === 'movie'
-      ? opinion.content
-      : {
-          ...opinion.content,
-          seriesTitle: presentation.seriesTitle ?? `Series ${opinion.content.seriesTmdbId}`,
-        };
-
-    return {
-      name: 'ReviewDetail',
-      params: {
-        authorDisplayName: presentation.authorDisplayName,
-        body: opinion.body,
-        contentImageUrl: presentation.contentImageUrl,
-        contentSubtitle: presentation.contentSubtitle,
-        contentTitle: presentation.contentTitle,
-        rating: opinion.score,
-        target,
-        updatedAt: opinion.updatedAt,
-      },
-    };
-  }
-
   if (opinion.content.contentType === 'movie') {
     return {
       name: 'FilmDetail',

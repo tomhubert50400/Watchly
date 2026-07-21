@@ -9,6 +9,7 @@ import { SignInRequiredCard } from '../auth/SignInRequired';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
+import { ExpandableReviewText } from '../components/ExpandableReviewText';
 import { LoadingState } from '../components/LoadingState';
 import { MediaPoster } from '../components/MediaPoster';
 import { Screen } from '../components/Screen';
@@ -75,24 +76,22 @@ export function FeedScreen() {
   const refreshFeed = useCallback(() => {
     void loadFeed(false);
   }, [loadFeed]);
-  const openFeedItem = useCallback(
+  const openContent = useCallback(
     (item: HydratedFeedItem) => {
-      const target = item.content.contentType === 'movie'
-        ? item.content
-        : {
-            ...item.content,
-            seriesTitle: item.seriesTitle ?? `Series ${item.content.seriesTmdbId}`,
-          };
+      if (item.content.contentType === 'movie') {
+        navigation.navigate('FilmDetail', {
+          title: item.contentTitle,
+          tmdbId: item.content.tmdbId,
+        });
+        return;
+      }
 
-      navigation.navigate('ReviewDetail', {
-        authorDisplayName: item.author.displayName ?? 'Watchly member',
-        body: item.body,
-        contentImageUrl: item.contentImageUrl,
-        contentSubtitle: item.contentSubtitle,
-        contentTitle: item.contentTitle,
-        rating: null,
-        target,
-        updatedAt: item.updatedAt,
+      navigation.navigate('EpisodeDetail', {
+        episodeNumber: item.content.episodeNumber,
+        seasonNumber: item.content.seasonNumber,
+        seriesTitle: item.seriesTitle ?? `Series ${item.content.seriesTmdbId}`,
+        title: item.contentTitle,
+        tmdbId: item.content.seriesTmdbId,
       });
     },
     [navigation],
@@ -144,7 +143,7 @@ export function FeedScreen() {
             </Text>
           </View>
           {items.map((item) => (
-            <FeedReviewCard item={item} key={item.id} onPress={openFeedItem} />
+            <FeedReviewCard item={item} key={item.id} onOpenContent={openContent} />
           ))}
         </View>
       )}
@@ -154,18 +153,13 @@ export function FeedScreen() {
 
 const FeedReviewCard = memo(function FeedReviewCard({
   item,
-  onPress,
+  onOpenContent,
 }: {
   item: HydratedFeedItem;
-  onPress: (item: HydratedFeedItem) => void;
+  onOpenContent: (item: HydratedFeedItem) => void;
 }) {
   return (
-    <Pressable
-      accessibilityLabel={`Read review of ${item.contentTitle}`}
-      accessibilityRole="button"
-      onPress={() => onPress(item)}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-    >
+    <View style={styles.card}>
       <View style={styles.cardHeader}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{getAuthorInitial(item.author.displayName)}</Text>
@@ -178,7 +172,12 @@ const FeedReviewCard = memo(function FeedReviewCard({
         </View>
         <Chip label="Review" tone="neutral" />
       </View>
-      <View style={styles.contentRow}>
+      <Pressable
+        accessibilityLabel={`Open ${item.contentTitle}`}
+        accessibilityRole="button"
+        onPress={() => onOpenContent(item)}
+        style={({ pressed }) => [styles.contentRow, pressed ? styles.contentRowPressed : null]}
+      >
         <MediaPoster
           accessibilityLabel={`${item.contentTitle} artwork`}
           posterUrl={item.contentImageUrl}
@@ -189,13 +188,11 @@ const FeedReviewCard = memo(function FeedReviewCard({
           <Text numberOfLines={2} style={styles.contentTitle}>
             {item.contentTitle}
           </Text>
-          <Text style={styles.openHint}>Read review</Text>
+          <Text style={styles.openHint}>Open content</Text>
         </View>
-      </View>
-      <View style={styles.reviewBody}>
-        <Text style={styles.body}>{item.body}</Text>
-      </View>
-    </Pressable>
+      </Pressable>
+      <ExpandableReviewText body={item.body} style={styles.reviewBody} />
+    </View>
   );
 });
 
@@ -282,10 +279,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0,
   },
-  body: {
-    ...typography.body,
-    color: colors.textMuted,
-  },
   card: {
     ...shadows.panel,
     backgroundColor: colors.panelElevated,
@@ -294,10 +287,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing.md,
     padding: spacing.lg,
-  },
-  cardPressed: {
-    opacity: 0.78,
-    transform: [{ scale: 0.99 }],
   },
   cardHeader: {
     alignItems: 'center',
@@ -322,6 +311,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.md,
     padding: spacing.md,
+  },
+  contentRowPressed: {
+    opacity: 0.78,
+    transform: [{ scale: 0.99 }],
   },
   contentTitle: {
     color: colors.text,
