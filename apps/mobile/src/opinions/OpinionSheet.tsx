@@ -5,7 +5,6 @@ import {
   Alert,
   GestureResponderEvent,
   Image,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -32,7 +31,7 @@ import {
   buildSavePlan,
   canSaveOpinion,
   createOpinionState,
-  getHalfStarScore,
+  getRatingFromTrackPosition,
   getRatingAccessibilityValue,
   isOpinionDirty,
   resetOpinionDraft,
@@ -41,7 +40,9 @@ import { resolveOpinionTriggerLayout } from './opinionTriggerLayout';
 
 const STAR_TARGET_SIZE = 52;
 const STAR_ICON_SIZE = 34;
+const STAR_GAP = 2;
 const STAR_VALUES = [1, 2, 3, 4, 5] as const;
+const STAR_TRACK_WIDTH = STAR_TARGET_SIZE * STAR_VALUES.length + STAR_GAP * (STAR_VALUES.length - 1);
 
 type LoadedOpinion = {
   rating: number | null;
@@ -83,8 +84,11 @@ export function OpinionSheet({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [opinion, setOpinion] = useState<OpinionState>(() => createOpinionState(null, null));
   const requestScope = JSON.stringify([ownerKey ?? currentUser?.id ?? null, resourceKey ?? mediaLabel, isSignedIn]);
+  const draftRatingRef = useRef(opinion.draftRating);
+  const ratingTrackWidthRef = useRef(STAR_TRACK_WIDTH);
   const requestRef = useRef({ scope: requestScope, version: 0 });
   const triggerLayout = resolveOpinionTriggerLayout(Boolean(loadError), fontScale);
+  draftRatingRef.current = opinion.draftRating;
 
   if (requestRef.current.scope !== requestScope) {
     requestRef.current = { scope: requestScope, version: requestRef.current.version + 1 };
@@ -139,6 +143,20 @@ export function OpinionSheet({
     if (isSaving) return;
     setOpinion((current) => resetOpinionDraft(current));
     setIsOpen(false);
+  }
+
+  function selectDraftRating(draftRating: number | null) {
+    if (draftRating === draftRatingRef.current) return;
+    draftRatingRef.current = draftRating;
+    hapticSelection();
+    setOpinion((current) => ({ ...current, draftRating, error: null }));
+  }
+
+  function selectRatingAtTouch(event: GestureResponderEvent) {
+    selectDraftRating(getRatingFromTrackPosition(
+      event.nativeEvent.locationX,
+      ratingTrackWidthRef.current,
+    ));
   }
 
   async function runOperations(operations: OpinionOperation[]) {
@@ -285,30 +303,25 @@ export function OpinionSheet({
               accessibilityState={{ disabled: isSaving }}
               accessibilityValue={getRatingAccessibilityValue(opinion.draftRating)}
               onAccessibilityAction={(event) => {
-                const value = opinion.draftRating ?? 0;
+                const value = draftRatingRef.current ?? 0;
                 const nextRating = event.nativeEvent.actionName === 'increment'
                   ? Math.min(5, value + 0.5)
                   : value <= 0.5
                     ? null
                     : value - 0.5;
-                if (nextRating !== opinion.draftRating) hapticSelection();
-                setOpinion((current) => {
-                  const currentValue = current.draftRating ?? 0;
-                  const draftRating = event.nativeEvent.actionName === 'increment'
-                    ? Math.min(5, currentValue + 0.5)
-                    : currentValue <= 0.5
-                      ? null
-                      : currentValue - 0.5;
-                  return { ...current, draftRating, error: null };
-                });
+                selectDraftRating(nextRating);
               }}
+              onLayout={(event) => { ratingTrackWidthRef.current = event.nativeEvent.layout.width; }}
+              onMoveShouldSetResponder={() => !isSaving}
+              onResponderGrant={selectRatingAtTouch}
+              onResponderMove={selectRatingAtTouch}
+              onResponderTerminationRequest={() => true}
+              onStartShouldSetResponder={() => !isSaving}
               style={styles.stars}
             >
               {STAR_VALUES.map((star) => (
                 <RatingStar
-                  disabled={isSaving}
                   key={star}
-                  onSelect={(score) => setOpinion((current) => ({ ...current, draftRating: score, error: null }))}
                   score={opinion.draftRating}
                   star={star}
                 />
@@ -317,7 +330,7 @@ export function OpinionSheet({
             <Text accessibilityLiveRegion="polite" style={styles.scoreLabel}>
               {opinion.draftRating === null ? 'Tap to rate' : `${opinion.draftRating} / 5`}
             </Text>
-            <Text style={styles.help}>Tap either half, or swipe up and down with VoiceOver, to adjust</Text>
+            <Text style={styles.help}>Tap or slide across the stars. With VoiceOver, swipe up or down to adjust.</Text>
           </View>
 
           <View style={styles.reviewHeader}>
@@ -380,29 +393,19 @@ export function OpinionSheet({
 }
 
 function RatingStar({
-  disabled,
-  onSelect,
   score,
   star,
 }: {
-  disabled: boolean;
-  onSelect: (score: number) => void;
   score: number | null;
   star: number;
 }) {
   const fill = score === null || score <= star - 1 ? 0 : score >= star ? STAR_ICON_SIZE : STAR_ICON_SIZE / 2;
-  function handlePress(event: GestureResponderEvent) {
-    const nextScore = getHalfStarScore(star, event.nativeEvent.locationX, STAR_TARGET_SIZE);
-    if (nextScore !== score) hapticSelection();
-    onSelect(nextScore);
-  }
 
   return (
-    <Pressable
+    <View
       accessible={false}
-      disabled={disabled}
-      onPress={handlePress}
-      style={({ pressed }) => [styles.starTarget, pressed ? styles.pressed : null]}
+      pointerEvents="none"
+      style={styles.starTarget}
     >
       <View style={styles.starFrame}>
         <Star color={colors.textSubtle} size={STAR_ICON_SIZE} strokeWidth={2} />
@@ -410,7 +413,7 @@ function RatingStar({
           <Star color={colors.rating} fill={colors.rating} size={STAR_ICON_SIZE} strokeWidth={2} />
         </View>
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -435,7 +438,6 @@ const styles = StyleSheet.create({
   meta: { ...typography.meta, color: colors.textMuted, marginTop: spacing.xs },
   operationError: { ...typography.body, color: colors.danger, marginTop: spacing.md },
   poster: { backgroundColor: colors.panelSoft, borderRadius: radii.sm, height: 72, width: 48 },
-  pressed: { opacity: 0.72 },
   reviewHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm, marginTop: spacing.lg },
   reviewHelp: { ...typography.meta, color: colors.textSubtle, marginTop: spacing.sm },
   reviewInput: { ...typography.body, backgroundColor: colors.background, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, color: colors.text, minHeight: 120, padding: spacing.md },
@@ -448,7 +450,7 @@ const styles = StyleSheet.create({
   starClip: { height: STAR_ICON_SIZE, left: 0, overflow: 'hidden', position: 'absolute', top: 0 },
   starFrame: { height: STAR_ICON_SIZE, width: STAR_ICON_SIZE },
   starTarget: { alignItems: 'center', height: STAR_TARGET_SIZE, justifyContent: 'center', width: STAR_TARGET_SIZE },
-  stars: { flexDirection: 'row', gap: 2 },
+  stars: { flexDirection: 'row', gap: STAR_GAP },
   triggerAction: { flexShrink: 0, width: '35%' },
   triggerActionStacked: { alignSelf: 'flex-start', width: 'auto' },
   triggerBody: { ...typography.body, color: colors.textMuted, flex: 1, minWidth: 0 },

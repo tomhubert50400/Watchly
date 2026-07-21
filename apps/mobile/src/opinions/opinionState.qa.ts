@@ -9,17 +9,20 @@ import {
   buildSavePlan,
   canSaveOpinion,
   createOpinionState,
-  getHalfStarScore,
+  getRatingFromTrackPosition,
   getRatingAccessibilityValue,
   isOpinionDirty,
   type OpinionState,
   type OpinionOperation,
 } from './opinionState';
 
-assert.equal(getHalfStarScore(1, 0, 48), 0.5);
-assert.equal(getHalfStarScore(1, 24, 48), 0.5);
-assert.equal(getHalfStarScore(1, 24.01, 48), 1);
-assert.equal(getHalfStarScore(5, 47, 48), 5);
+assert.equal(getRatingFromTrackPosition(-12, 260), 0.5);
+assert.equal(getRatingFromTrackPosition(0, 260), 0.5);
+assert.equal(getRatingFromTrackPosition(26, 260), 0.5);
+assert.equal(getRatingFromTrackPosition(26.01, 260), 1);
+assert.equal(getRatingFromTrackPosition(130, 260), 2.5);
+assert.equal(getRatingFromTrackPosition(234.01, 260), 5);
+assert.equal(getRatingFromTrackPosition(400, 260), 5);
 assert.deepEqual(getRatingAccessibilityValue(0.5), {
   max: 10,
   min: 0,

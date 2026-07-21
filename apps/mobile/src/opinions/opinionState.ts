@@ -26,9 +26,10 @@ export function createOpinionState(rating: number | null, review: string | null)
   };
 }
 
-export function getHalfStarScore(star: number, locationX: number, targetWidth: number) {
-  const boundedStar = Math.min(5, Math.max(1, Math.round(star)));
-  return locationX <= targetWidth / 2 ? boundedStar - 0.5 : boundedStar;
+export function getRatingFromTrackPosition(locationX: number, trackWidth: number) {
+  const boundedPosition = Math.min(trackWidth, Math.max(0, locationX));
+  const halfStarStep = Math.ceil((boundedPosition / trackWidth) * 10);
+  return Math.min(5, Math.max(0.5, halfStarStep / 2));
 }
 
 export function getRatingAccessibilityValue(rating: number | null) {
