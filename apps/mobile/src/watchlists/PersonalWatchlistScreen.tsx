@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RefreshCw } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Text } from 'react-native';
 import { PersonalWatchlist } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { Button } from '../components/Button';
-import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
-import { MediaPoster } from '../components/MediaPoster';
-import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { SectionHeader } from '../components/SectionHeader';
+import { colors, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
+import {
+  WatchlistDisplayItem,
+  WatchlistPage,
+  WatchlistPosterGrid,
+  WatchlistSection,
+} from './WatchlistDetailLayout';
 import { HydratedPersonalWatchlistItem, useWatchlistCache } from './WatchlistCacheContext';
 
 type PersonalWatchlistScreenProps = NativeStackScreenProps<RootStackParamList, 'PersonalWatchlist'>;
@@ -27,6 +31,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     () => initialCached?.hydratedItems ?? [],
   );
   const [isLoading, setIsLoading] = useState(() => !initialCached);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [watchlist, setWatchlist] = useState<PersonalWatchlist | null>(() => initialCached?.watchlist ?? null);
   const [stateScope, setStateScope] = useState(resourceScope);
   const requestRef = useRef({ scope: resourceScope, version: 0 });
@@ -80,6 +85,15 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     }
   }, [currentUser, firebaseIdToken, refreshPersonalWatchlist, resourceScope, watchlistId]);
 
+  const refreshWatchlist = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await loadWatchlist();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [loadWatchlist]);
+
   useEffect(() => {
     const cached = getCachedPersonalWatchlist(watchlistId);
 
@@ -98,34 +112,39 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     void loadWatchlist();
   }, [loadWatchlist, resourceScope, watchlistId]);
 
-  function openItem(item: HydratedPersonalWatchlistItem) {
+  function openItem(item: WatchlistDisplayItem) {
+    const title = item.title ?? (item.contentType === 'movie' ? 'Film' : 'Series');
+
     if (item.contentType === 'movie') {
       navigation.navigate('FilmDetail', {
-        title: item.title,
+        title,
         tmdbId: item.tmdbId,
       });
       return;
     }
 
     navigation.navigate('SeriesDetail', {
-      title: item.title,
+      title,
       tmdbId: item.tmdbId,
     });
   }
 
   if (!firebaseIdToken) {
     return (
-      <View style={styles.pageFallback}>
+      <WatchlistPage>
         <SignInRequiredCard
           body="You need to be signed in to use private lists. Sign in here to open this watchlist."
           title="Sign in to view this list"
         />
-      </View>
+      </WatchlistPage>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
+    <WatchlistPage
+      isRefreshing={isRefreshing}
+      onRefresh={refreshWatchlist}
+    >
       {isLoading && !visibleWatchlist ? (
         <LoadingState label="Loading list" />
       ) : error && !visibleWatchlist ? (
@@ -133,159 +152,27 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
           <Button label="Retry" onPress={() => loadWatchlist()} />
         </EmptyState>
       ) : visibleWatchlist ? (
-        <>
-          <View style={styles.panel}>
-            <View style={styles.headerRow}>
-              <View style={styles.headerCopy}>
-                <Text style={styles.eyebrow}>Personal watchlist</Text>
-                <Text style={styles.title}>{visibleWatchlist.name}</Text>
-                <Text style={styles.body}>
-                  {visibleWatchlist.items.length === 1 ? '1 title' : `${visibleWatchlist.items.length} titles`}
-                </Text>
-              </View>
-              <Pressable
-                accessibilityLabel="Refresh list"
-                accessibilityRole="button"
-                onPress={() => loadWatchlist()}
-                style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
-              >
-                <RefreshCw color={colors.text} size={18} strokeWidth={2} />
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={styles.panel}>
-            <Text style={styles.sectionTitle}>Titles</Text>
-            {visibleItems.length === 0 ? (
-              <Text style={styles.body}>Add films or series from detail pages to start shaping this list.</Text>
-            ) : (
-              <View style={styles.itemRows}>
-                {visibleItems.map((item) => (
-                  <Pressable
-                    accessibilityLabel={`Open ${item.title}`}
-                    accessibilityRole="button"
-                    key={item.id}
-                    onPress={() => openItem(item)}
-                    style={({ pressed }) => [styles.itemRow, pressed && styles.pressed]}
-                  >
-                    <MediaPoster
-                      accessibilityLabel={`${item.title} poster`}
-                      posterUrl={item.posterUrl}
-                      style={styles.poster}
-                    />
-                    <View style={styles.rowCopy}>
-                      <Chip label={item.contentType === 'movie' ? 'Film' : 'Series'} />
-                      <Text numberOfLines={2} style={styles.itemTitle}>
-                        {item.title}
-                      </Text>
-                    </View>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-          </View>
-        </>
+        <WatchlistSection>
+          <SectionHeader title="Titles" />
+          {visibleItems.length === 0 ? (
+            <Text style={styles.emptyCopy}>
+              Add films or series from detail pages to start shaping this list.
+            </Text>
+          ) : (
+            <WatchlistPosterGrid
+              items={visibleItems}
+              onOpen={openItem}
+            />
+          )}
+        </WatchlistSection>
       ) : null}
-    </ScrollView>
+    </WatchlistPage>
   );
 }
 
-const styles = StyleSheet.create({
-  body: {
+const styles = {
+  emptyCopy: {
     ...typography.body,
-    color: colors.muted,
-    marginTop: spacing.sm,
+    color: colors.textMuted,
   },
-  eyebrow: {
-    ...typography.eyebrow,
-    color: colors.accent,
-    marginBottom: spacing.xs,
-  },
-  headerCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  headerRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  iconButton: {
-    alignItems: 'center',
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  itemRow: {
-    alignItems: 'center',
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  itemRows: {
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  itemTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 0,
-    marginTop: spacing.sm,
-  },
-  page: {
-    backgroundColor: colors.background,
-    flexGrow: 1,
-    paddingBottom: spacing.xxxl,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxxl,
-  },
-  pageFallback: {
-    backgroundColor: colors.background,
-    flex: 1,
-    padding: spacing.xl,
-  },
-  panel: {
-    ...shadows.panel,
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    gap: spacing.md,
-    marginBottom: spacing.md,
-    padding: spacing.lg,
-  },
-  poster: {
-    backgroundColor: colors.panelSoft,
-    borderRadius: radii.md,
-    height: 96,
-    width: 64,
-  },
-  pressed: {
-    opacity: 0.78,
-  },
-  rowCopy: {
-    flex: 1,
-    justifyContent: 'center',
-    minWidth: 0,
-  },
-  sectionTitle: {
-    ...typography.title,
-    color: colors.text,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 26,
-    fontWeight: '800',
-    letterSpacing: 0,
-    lineHeight: 32,
-  },
-});
+} as const;

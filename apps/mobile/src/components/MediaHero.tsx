@@ -70,7 +70,8 @@ export function MediaHero({
 const styles = StyleSheet.create({
   accessory: {
     alignItems: 'center',
-    justifyContent: 'center',
+    alignSelf: 'stretch',
+    justifyContent: 'flex-end',
   },
   actionBar: {
     alignItems: 'center',

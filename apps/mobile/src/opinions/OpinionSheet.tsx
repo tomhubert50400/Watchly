@@ -5,14 +5,16 @@ import {
   Alert,
   GestureResponderEvent,
   Image,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
-import { BottomActionSheet } from '../components/BottomActionSheet';
+import {
+  BottomActionSheet,
+  BottomActionSheetScrollView,
+} from '../components/BottomActionSheet';
 import { Button } from '../components/Button';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInSheet } from '../auth/SignInRequired';
@@ -87,7 +89,7 @@ export function OpinionSheet({
   const draftRatingRef = useRef(opinion.draftRating);
   const ratingTrackWidthRef = useRef(STAR_TRACK_WIDTH);
   const requestRef = useRef({ scope: requestScope, version: 0 });
-  const triggerLayout = resolveOpinionTriggerLayout(Boolean(loadError), fontScale);
+  const triggerLayout = resolveOpinionTriggerLayout(fontScale);
   draftRatingRef.current = opinion.draftRating;
 
   if (requestRef.current.scope !== requestScope) {
@@ -251,32 +253,48 @@ export function OpinionSheet({
     );
   }
 
+  const sheetFooter = (
+    <View>
+      <View style={[styles.sheetActions, triggerLayout.actionsStacked ? styles.sheetActionsStacked : null]}>
+        <View style={styles.actionButton}>
+          <Button disabled={isSaving} fullWidth label="Cancel" onPress={closeSheet} variant="secondary" />
+        </View>
+        <View style={styles.saveButton}>
+          <Button
+            disabled={!canSaveOpinion(opinion)}
+            fullWidth
+            label="Save"
+            loading={isSaving}
+            onPress={() => void save()}
+          />
+        </View>
+      </View>
+      {isOpinionDirty(opinion) ? <Text style={styles.unsaved}>Unsaved changes</Text> : null}
+    </View>
+  );
+
   return (
     <View style={styles.triggerPanel}>
       <Text style={styles.triggerTitle}>Your opinion</Text>
-      <View style={[styles.triggerContent, triggerLayout.contentStacked ? styles.triggerContentStacked : null]}>
+      <View style={styles.triggerContent}>
         <Text style={[styles.triggerBody, loadError ? styles.errorText : null]}>{summary}</Text>
-        <View style={[
-          styles.triggerAction,
-          triggerLayout.contentStacked ? styles.triggerActionStacked : null,
-          { maxWidth: triggerLayout.actionMaxWidth },
-        ]}>
+        <View style={styles.triggerAction}>
           {isLoading ? <ActivityIndicator color={colors.rating} /> : null}
           {isSignedIn && !loadError ? (
             <Button
-              compact
               disabled={isLoading}
+              fullWidth
               label={opinion.savedRating === null ? 'Rate & review' : 'Edit opinion'}
               onPress={() => setIsOpen(true)}
             />
           ) : null}
-          {!isSignedIn ? <Button compact label="Sign in here" onPress={() => setIsSignInOpen(true)} /> : null}
-          {loadError && isSignedIn ? <Button compact label="Retry" onPress={() => void loadOpinion()} variant="ghost" /> : null}
+          {!isSignedIn ? <Button fullWidth label="Sign in here" onPress={() => setIsSignInOpen(true)} /> : null}
+          {loadError && isSignedIn ? <Button fullWidth label="Retry" onPress={() => void loadOpinion()} variant="ghost" /> : null}
         </View>
       </View>
 
-      <BottomActionSheet onClose={closeSheet} title="Your opinion" visible={isOpen}>
-        <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <BottomActionSheet footer={sheetFooter} onClose={closeSheet} title="Your opinion" visible={isOpen}>
+        <BottomActionSheetScrollView keyboardShouldPersistTaps="handled">
           <View style={styles.identity}>
             {posterUrl ? (
               <Image
@@ -367,20 +385,7 @@ export function OpinionSheet({
               <Button disabled={isSaving} label="Clear rating" onPress={confirmClearRating} variant="ghost" />
             ) : null}
           </View>
-          <View style={[styles.sheetActions, triggerLayout.actionsStacked ? styles.sheetActionsStacked : null]}>
-            <View style={styles.actionButton}><Button disabled={isSaving} fullWidth label="Cancel" onPress={closeSheet} variant="secondary" /></View>
-            <View style={styles.saveButton}>
-              <Button
-                disabled={!canSaveOpinion(opinion)}
-                fullWidth
-                label="Save"
-                loading={isSaving}
-                onPress={() => void save()}
-              />
-            </View>
-          </View>
-          {isOpinionDirty(opinion) ? <Text style={styles.unsaved}>Unsaved changes</Text> : null}
-        </ScrollView>
+        </BottomActionSheetScrollView>
       </BottomActionSheet>
       <SignInSheet
         body={signedOutMessage}
@@ -445,18 +450,16 @@ const styles = StyleSheet.create({
   saveButton: { flex: 1.45 },
   scoreLabel: { color: colors.ratingText, fontSize: 15, fontWeight: '800', marginTop: spacing.sm },
   scoreZone: { alignItems: 'center', borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, paddingVertical: spacing.lg },
-  sheetActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+  sheetActions: { flexDirection: 'row', gap: spacing.sm },
   sheetActionsStacked: { flexDirection: 'column' },
   starClip: { height: STAR_ICON_SIZE, left: 0, overflow: 'hidden', position: 'absolute', top: 0 },
   starFrame: { height: STAR_ICON_SIZE, width: STAR_ICON_SIZE },
   starTarget: { alignItems: 'center', height: STAR_TARGET_SIZE, justifyContent: 'center', width: STAR_TARGET_SIZE },
   stars: { flexDirection: 'row', gap: STAR_GAP },
-  triggerAction: { flexShrink: 0, width: '35%' },
-  triggerActionStacked: { alignSelf: 'flex-start', width: 'auto' },
-  triggerBody: { ...typography.body, color: colors.textMuted, flex: 1, minWidth: 0 },
-  triggerContent: { alignItems: 'center', alignSelf: 'stretch', flexDirection: 'row', gap: spacing.md },
-  triggerContentStacked: { alignItems: 'stretch', flexDirection: 'column' },
+  triggerAction: { alignSelf: 'stretch' },
+  triggerBody: { ...typography.body, alignSelf: 'stretch', color: colors.textMuted },
+  triggerContent: { alignItems: 'stretch', alignSelf: 'stretch', flexDirection: 'column', gap: spacing.md },
   triggerPanel: { ...shadows.panel, backgroundColor: colors.panelElevated, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, gap: spacing.md, marginBottom: spacing.md, padding: spacing.lg },
   triggerTitle: { ...typography.title, color: colors.text },
-  unsaved: { ...typography.meta, color: colors.textSubtle, marginBottom: spacing.lg, marginTop: spacing.sm, textAlign: 'center' },
+  unsaved: { ...typography.meta, color: colors.textSubtle, marginTop: spacing.sm, textAlign: 'center' },
 });

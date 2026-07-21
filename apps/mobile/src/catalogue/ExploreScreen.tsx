@@ -128,7 +128,7 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
     setIsSearchLoading(true);
 
     const handle = setTimeout(() => {
-      searchCatalogue(trimmedQuery, 'all')
+      searchCatalogue(trimmedQuery, searchType)
         .then((response) => {
           if (!isCurrent) {
             return;
@@ -153,7 +153,7 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
       isCurrent = false;
       clearTimeout(handle);
     };
-  }, [isSearching, searchRevision, trimmedQuery]);
+  }, [isSearching, searchRevision, searchType, trimmedQuery]);
 
   const openItem = useCallback((item: CatalogueSearchItem) => {
     navigation.navigate(item.mediaType === 'movie' ? 'FilmDetail' : 'SeriesDetail', {
@@ -176,7 +176,9 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea}>
       <ScrollView
+        automaticallyAdjustKeyboardInsets
         contentContainerStyle={styles.scrollContent}
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl

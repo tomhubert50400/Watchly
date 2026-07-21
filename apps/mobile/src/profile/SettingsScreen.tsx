@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   StyleSheet,
   Text,
   View,
@@ -134,11 +132,23 @@ export function SettingsScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.keyboard}
-    >
-      <Screen eyebrow="Account" title="Settings">
+      <Screen
+        eyebrow="Account"
+        footer={(
+          <View style={styles.actions}>
+            {status === 'loading' || status === 'saving' ? (
+              <ActivityIndicator color={colors.accent} />
+            ) : null}
+            <Button
+              disabled={!firebaseIdToken || status === 'loading' || status === 'saving'}
+              fullWidth
+              label="Save settings"
+              onPress={saveSettings}
+            />
+          </View>
+        )}
+        title="Settings"
+      >
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Profile</Text>
           <TextInput
@@ -188,18 +198,7 @@ export function SettingsScreen() {
           </Text>
         ) : null}
 
-        <View style={styles.actions}>
-          {status === 'loading' || status === 'saving' ? (
-            <ActivityIndicator color={colors.accent} />
-          ) : null}
-          <Button
-            disabled={!firebaseIdToken || status === 'loading' || status === 'saving'}
-            label="Save settings"
-            onPress={saveSettings}
-          />
-        </View>
       </Screen>
-    </KeyboardAvoidingView>
   );
 }
 
@@ -270,7 +269,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.md,
-    marginTop: spacing.lg,
   },
   card: {
     ...shadows.panel,
@@ -284,9 +282,6 @@ const styles = StyleSheet.create({
   },
   error: {
     color: colors.danger,
-  },
-  keyboard: {
-    flex: 1,
   },
   loadingState: {
     alignItems: 'center',

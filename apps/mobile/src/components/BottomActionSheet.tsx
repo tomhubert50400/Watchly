@@ -1,6 +1,28 @@
 import { X } from 'lucide-react-native';
-import { PropsWithChildren, ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Animated, Modal, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  PropsWithChildren,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import {
+  Animated,
+  Dimensions,
+  Keyboard,
+  KeyboardEvent,
+  Modal,
+  PanResponder,
+  Platform,
+  Pressable,
+  ScrollView,
+  ScrollViewProps,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
 import {
@@ -8,6 +30,7 @@ import {
   shouldCaptureBottomSheetDrag,
   shouldDismissBottomSheet,
 } from './bottomActionSheetGesture';
+import { resolveBottomSheetKeyboardInset } from './bottomActionSheetKeyboard';
 
 type BottomActionSheetProps = PropsWithChildren<{
   footer?: ReactNode;
@@ -16,10 +39,43 @@ type BottomActionSheetProps = PropsWithChildren<{
   visible: boolean;
 }>;
 
+type BottomActionSheetScrollViewProps = PropsWithChildren<ScrollViewProps>;
+
+export function BottomActionSheetScrollView({
+  automaticallyAdjustKeyboardInsets = false,
+  children,
+  contentContainerStyle,
+  keyboardDismissMode = Platform.OS === 'ios' ? 'interactive' : 'on-drag',
+  keyboardShouldPersistTaps = 'handled',
+  ...scrollViewProps
+}: BottomActionSheetScrollViewProps) {
+  return (
+    <ScrollView
+      {...scrollViewProps}
+      automaticallyAdjustKeyboardInsets={automaticallyAdjustKeyboardInsets}
+      bounces={false}
+      contentContainerStyle={styles.scrollContent}
+      disableScrollViewPanResponder
+      keyboardDismissMode={keyboardDismissMode}
+      keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+      showsVerticalScrollIndicator={false}
+    >
+      <View
+        onResponderTerminationRequest={() => true}
+        onStartShouldSetResponder={() => true}
+        style={[styles.scrollGestureSurface, contentContainerStyle]}
+      >
+        {children}
+      </View>
+    </ScrollView>
+  );
+}
+
 export function BottomActionSheet({ children, footer, onClose, title, visible }: BottomActionSheetProps) {
   const progress = useRef(new Animated.Value(0)).current;
   const dragY = useRef(new Animated.Value(0)).current;
   const isClosing = useRef(false);
+  const [keyboardInset, setKeyboardInset] = useState(0);
 
   useEffect(() => {
     if (visible) {
@@ -36,12 +92,39 @@ export function BottomActionSheet({ children, footer, onClose, title, visible }:
     }
   }, [dragY, progress, visible]);
 
+  useEffect(() => {
+    if (!visible) {
+      setKeyboardInset(0);
+      return;
+    }
+
+    const currentKeyboard = Keyboard.metrics();
+    setKeyboardInset(currentKeyboard ? getKeyboardInset(currentKeyboard) : 0);
+
+    const syncWithKeyboard = (event: KeyboardEvent) => {
+      Keyboard.scheduleLayoutAnimation(event);
+      setKeyboardInset(getKeyboardInset(event.endCoordinates));
+    };
+
+    const subscriptions = Platform.OS === 'ios'
+      ? [Keyboard.addListener('keyboardWillChangeFrame', syncWithKeyboard)]
+      : [
+          Keyboard.addListener('keyboardDidShow', syncWithKeyboard),
+          Keyboard.addListener('keyboardDidHide', syncWithKeyboard),
+        ];
+
+    return () => {
+      subscriptions.forEach((subscription) => subscription.remove());
+    };
+  }, [visible]);
+
   const requestClose = useCallback(() => {
     if (isClosing.current) {
       return;
     }
 
     isClosing.current = true;
+    Keyboard.dismiss();
     Animated.timing(progress, {
       duration: 180,
       toValue: 0,
@@ -117,29 +200,35 @@ export function BottomActionSheet({ children, footer, onClose, title, visible }:
             },
           ]}
         >
-          <SafeAreaView edges={['bottom']} style={styles.safeContent}>
-            <View>
-              <View style={styles.handle} />
-              <View style={styles.header}>
-                <Text accessibilityRole="header" style={styles.title}>{title}</Text>
-                <Pressable
-                  accessibilityLabel="Close"
-                  accessibilityRole="button"
-                  hitSlop={4}
-                  onPress={requestClose}
-                  style={({ pressed }) => [styles.close, pressed ? styles.pressed : null]}
-                >
-                  <X color={colors.textMuted} size={22} strokeWidth={2} />
-                </Pressable>
+          <View style={[styles.keyboardFrame, { bottom: keyboardInset }]}>
+            <SafeAreaView edges={keyboardInset > 0 ? [] : ['bottom']} style={styles.safeContent}>
+              <View>
+                <View style={styles.handle} />
+                <View style={styles.header}>
+                  <Text accessibilityRole="header" style={styles.title}>{title}</Text>
+                  <Pressable
+                    accessibilityLabel="Close"
+                    accessibilityRole="button"
+                    hitSlop={4}
+                    onPress={requestClose}
+                    style={({ pressed }) => [styles.close, pressed ? styles.pressed : null]}
+                  >
+                    <X color={colors.textMuted} size={22} strokeWidth={2} />
+                  </Pressable>
+                </View>
               </View>
-            </View>
-            <View style={styles.body}>{children}</View>
-            {footer ? <View style={styles.footer}>{footer}</View> : null}
-          </SafeAreaView>
+              <View style={styles.body}>{children}</View>
+              {footer ? <View style={styles.footer}>{footer}</View> : null}
+            </SafeAreaView>
+          </View>
         </Animated.View>
       </View>
     </Modal>
   );
+}
+
+function getKeyboardInset(frame: KeyboardEvent['endCoordinates']) {
+  return resolveBottomSheetKeyboardInset(frame, Dimensions.get('screen'));
 }
 
 const styles = StyleSheet.create({
@@ -192,6 +281,15 @@ const styles = StyleSheet.create({
   },
   safeContent: {
     flex: 1,
+  },
+  keyboardFrame: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  scrollGestureSurface: {
+    flexGrow: 1,
   },
   sheet: {
     ...StyleSheet.absoluteFillObject,

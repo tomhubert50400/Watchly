@@ -10,6 +10,12 @@ import {
 } from './bottomActionSheetGesture';
 
 const sheetSource = readFileSync(new URL('./BottomActionSheet.tsx', import.meta.url), 'utf8');
+const scrollableSheetFiles = [
+  '../auth/SignInRequired.tsx',
+  '../opinions/OpinionSheet.tsx',
+  '../watchlists/AddToWatchlistControl.tsx',
+  '../watchlists/SharedWatchlistScreen.tsx',
+];
 
 assert.equal(getBottomSheetDragOffset(64), 64, 'downward drag must follow the finger');
 assert.equal(getBottomSheetDragOffset(-50), -8, 'upward drag must keep gentle resistance');
@@ -29,5 +35,34 @@ assert.doesNotMatch(
   /<View \{\.\.\.panResponder\.panHandlers\}>/,
   'drag handling must not be limited to the header content',
 );
+assert.match(
+  sheetSource,
+  /export function BottomActionSheetScrollView/,
+  'scrollable sheet content must use one shared gesture-compatible component',
+);
+assert.match(
+  sheetSource,
+  /bounces=\{false\}[\s\S]*disableScrollViewPanResponder/,
+  'sheet scroll views must yield downward drags to the sheet',
+);
+assert.match(
+  sheetSource,
+  /onResponderTerminationRequest=\{\(\) => true\}[\s\S]*onStartShouldSetResponder=\{\(\) => true\}/,
+  'passive sheet content must let the parent capture swipe-down gestures',
+);
+
+for (const file of scrollableSheetFiles) {
+  const source = readFileSync(new URL(file, import.meta.url), 'utf8');
+  assert.match(
+    source,
+    /<BottomActionSheetScrollView\b/,
+    `${file} must use the shared swipe-down scroll surface`,
+  );
+  assert.doesNotMatch(
+    source,
+    /<ScrollView\b/,
+    `${file} must not bypass the shared swipe-down scroll surface`,
+  );
+}
 
 console.log('Bottom action sheet gesture QA passed.');

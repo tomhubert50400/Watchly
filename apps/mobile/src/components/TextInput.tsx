@@ -1,4 +1,11 @@
-import { StyleSheet, Text, TextInput as NativeTextInput, TextInputProps, View } from 'react-native';
+import {
+  Keyboard,
+  StyleSheet,
+  Text,
+  TextInput as NativeTextInput,
+  TextInputProps,
+  View,
+} from 'react-native';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { resolveTextInputAccessibilityLabel } from './textInputAccessibility';
 
@@ -8,7 +15,17 @@ type AppTextInputProps = TextInputProps & {
   label: string;
 };
 
-export function TextInput({ error, helperText, label, ...inputProps }: AppTextInputProps) {
+export function TextInput({
+  error,
+  helperText,
+  label,
+  multiline,
+  onSubmitEditing,
+  returnKeyType,
+  ...inputProps
+}: AppTextInputProps) {
+  const dismissesKeyboardOnSubmit = !multiline && !onSubmitEditing;
+
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
@@ -19,6 +36,9 @@ export function TextInput({ error, helperText, label, ...inputProps }: AppTextIn
         style={[styles.input, error ? styles.inputError : null]}
         {...inputProps}
         accessibilityLabel={resolveTextInputAccessibilityLabel(label, inputProps.accessibilityLabel)}
+        multiline={multiline}
+        onSubmitEditing={onSubmitEditing ?? (dismissesKeyboardOnSubmit ? Keyboard.dismiss : undefined)}
+        returnKeyType={returnKeyType ?? (multiline ? undefined : 'done')}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {!error && helperText ? <Text style={styles.helper}>{helperText}</Text> : null}

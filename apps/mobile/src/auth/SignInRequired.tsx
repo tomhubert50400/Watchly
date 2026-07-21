@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { LogIn } from 'lucide-react-native';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { BottomActionSheet } from '../components/BottomActionSheet';
+import { StyleSheet, Text, View } from 'react-native';
+import {
+  BottomActionSheet,
+  BottomActionSheetScrollView,
+} from '../components/BottomActionSheet';
 import { Button } from '../components/Button';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { ProfileAuthCard } from './ProfileAuthCard';
@@ -21,20 +24,11 @@ export function SignInSheet({ body, onClose, title, visible }: SignInSheetProps)
 
   return (
     <BottomActionSheet onClose={onClose} title="Sign in to Watchly" visible>
-      <ScrollView
-        bounces={false}
+      <BottomActionSheetScrollView
         contentContainerStyle={styles.sheetContent}
-        disableScrollViewPanResponder
-        showsVerticalScrollIndicator={false}
       >
-        <View
-          onResponderTerminationRequest={() => true}
-          onStartShouldSetResponder={() => true}
-          style={styles.sheetGestureSurface}
-        >
-          <ProfileAuthCard body={body} embedded title={title} />
-        </View>
-      </ScrollView>
+        <ProfileAuthCard body={body} embedded title={title} />
+      </BottomActionSheetScrollView>
     </BottomActionSheet>
   );
 }
@@ -96,8 +90,5 @@ const styles = StyleSheet.create({
   sheetContent: {
     flexGrow: 1,
     paddingBottom: spacing.xl,
-  },
-  sheetGestureSurface: {
-    flex: 1,
   },
 });

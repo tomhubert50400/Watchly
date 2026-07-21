@@ -8,13 +8,8 @@ const signInSheetSource = readFileSync(new URL('./SignInRequired.tsx', import.me
 
 assert.match(
   signInSheetSource,
-  /<ScrollView\s+bounces=\{false\}[\s\S]*?disableScrollViewPanResponder/,
-  'the sign-in sheet scroll view must yield downward drags to the sheet',
-);
-assert.match(
-  signInSheetSource,
-  /<View\s+onResponderTerminationRequest=\{\(\) => true\}\s+onStartShouldSetResponder=\{\(\) => true\}\s+style=\{styles\.sheetGestureSurface\}/,
-  'passive sign-in content must start a responder so the whole sheet can capture its drag',
+  /<BottomActionSheetScrollView\b/,
+  'the sign-in sheet must use the shared swipe-down scroll surface',
 );
 assert.match(
   signInSheetSource,

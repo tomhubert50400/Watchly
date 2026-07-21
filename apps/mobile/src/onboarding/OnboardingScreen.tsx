@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -150,13 +149,51 @@ export function OnboardingScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.keyboard}
-    >
-      <Screen eyebrow={`Onboarding ${progress}`} title={getStepTitle(step)}>
+      <Screen
+        eyebrow={`Onboarding ${progress}`}
+        footer={(
+          <>
+            <View style={styles.actions}>
+              {step > 0 ? (
+                <Button
+                  accessibilityLabel="Go back"
+                  disabled={isFinishing}
+                  label="Back"
+                  onPress={() => setStep((current) => (current - 1) as OnboardingStep)}
+                  variant="secondary"
+                />
+              ) : null}
+              {step < 2 ? (
+                <Button
+                  accessibilityLabel="Continue onboarding"
+                  label="Continue"
+                  onPress={() => setStep((current) => (current + 1) as OnboardingStep)}
+                />
+              ) : (
+                <Button
+                  accessibilityLabel={
+                    selected.length > 0 ? 'Finish onboarding' : 'Skip starter interests and finish'
+                  }
+                  disabled={isFinishing}
+                  label={selected.length > 0 ? 'Finish onboarding' : 'Skip and finish'}
+                  onPress={finishOnboarding}
+                />
+              )}
+            </View>
+            {isFinishing ? (
+              <View style={styles.savingRow}>
+                <ActivityIndicator color={colors.accent} />
+                <Text style={styles.mutedText}>Saving onboarding.</Text>
+              </View>
+            ) : null}
+          </>
+        )}
+        title={getStepTitle(step)}
+      >
         <ScrollView
+          automaticallyAdjustKeyboardInsets
           contentContainerStyle={styles.content}
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -196,43 +233,8 @@ export function OnboardingScreen() {
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-          <View style={styles.actions}>
-            {step > 0 ? (
-              <Button
-                accessibilityLabel="Go back"
-                disabled={isFinishing}
-                label="Back"
-                onPress={() => setStep((current) => (current - 1) as OnboardingStep)}
-                variant="secondary"
-              />
-            ) : null}
-            {step < 2 ? (
-              <Button
-                accessibilityLabel="Continue onboarding"
-                label="Continue"
-                onPress={() => setStep((current) => (current + 1) as OnboardingStep)}
-              />
-            ) : (
-              <Button
-                accessibilityLabel={
-                  selected.length > 0 ? 'Finish onboarding' : 'Skip starter interests and finish'
-                }
-                disabled={isFinishing}
-                label={selected.length > 0 ? 'Finish onboarding' : 'Skip and finish'}
-                onPress={finishOnboarding}
-              />
-            )}
-          </View>
-
-          {isFinishing ? (
-            <View style={styles.savingRow}>
-              <ActivityIndicator color={colors.accent} />
-              <Text style={styles.mutedText}>Saving onboarding.</Text>
-            </View>
-          ) : null}
         </ScrollView>
       </Screen>
-    </KeyboardAvoidingView>
   );
 }
 
@@ -485,7 +487,6 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: spacing.md,
-    marginTop: spacing.lg,
   },
   bodyText: {
     ...typography.body,
@@ -595,9 +596,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingLeft: spacing.sm,
   },
-  keyboard: {
-    flex: 1,
-  },
   mutedText: {
     ...typography.body,
     color: colors.muted,
@@ -659,6 +657,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.md,
+    marginTop: spacing.sm,
   },
   sectionTitle: {
     ...typography.title,

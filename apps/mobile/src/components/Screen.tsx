@@ -1,11 +1,20 @@
 import { PropsWithChildren, ReactNode } from 'react';
-import { GestureResponderHandlers, ScrollView, ScrollViewProps, StyleSheet, View } from 'react-native';
+import {
+  GestureResponderHandlers,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  ScrollViewProps,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing } from '../design/tokens';
 import { AppHeader } from './AppHeader';
 
 type ScreenProps = PropsWithChildren<{
   eyebrow?: string;
+  footer?: ReactNode;
   gestureHandlers?: GestureResponderHandlers;
   headerMode?: 'regular' | 'sticky';
   horizontalPadding?: boolean | number;
@@ -20,6 +29,7 @@ type ScreenProps = PropsWithChildren<{
 export function Screen({
   children,
   eyebrow,
+  footer,
   gestureHandlers,
   headerMode = 'regular',
   horizontalPadding = true,
@@ -42,25 +52,54 @@ export function Screen({
     : tabBarPadding
       ? 72
       : spacing.xxxl;
+  const footerBottomPadding = typeof tabBarPadding === 'number'
+    ? tabBarPadding
+    : tabBarPadding
+      ? 72
+      : spacing.md;
   const hasHeader = Boolean(title || eyebrow || leading || trailing);
 
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea} {...gestureHandlers}>
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: navigationPadding + insets.bottom }]}
-        refreshControl={refreshControl}
-        showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={headerMode === 'sticky' && hasHeader ? [0] : undefined}
-        style={styles.container}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardAvoider}
       >
-        {hasHeader ? (
-          <View style={[styles.headerShell, headerMode === 'sticky' ? styles.stickyHeader : null, { paddingHorizontal: chromePadding }]}>
-            <AppHeader eyebrow={eyebrow} leading={leading} title={title} trailing={trailing} />
+        <ScrollView
+          automaticallyAdjustKeyboardInsets
+          contentContainerStyle={[
+            styles.content,
+            { paddingBottom: footer ? spacing.lg : navigationPadding + insets.bottom },
+          ]}
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={refreshControl}
+          showsVerticalScrollIndicator={false}
+          stickyHeaderIndices={headerMode === 'sticky' && hasHeader ? [0] : undefined}
+          style={styles.container}
+        >
+          {hasHeader ? (
+            <View style={[styles.headerShell, headerMode === 'sticky' ? styles.stickyHeader : null, { paddingHorizontal: chromePadding }]}>
+              <AppHeader eyebrow={eyebrow} leading={leading} title={title} trailing={trailing} />
+            </View>
+          ) : null}
+          {statusBanner ? <View style={[styles.banner, { marginHorizontal: chromePadding }]}>{statusBanner}</View> : null}
+          <View style={[styles.body, { paddingHorizontal: sidePadding }]}>{children}</View>
+        </ScrollView>
+        {footer ? (
+          <View
+            style={[
+              styles.footer,
+              {
+                paddingBottom: footerBottomPadding + insets.bottom,
+                paddingHorizontal: chromePadding,
+              },
+            ]}
+          >
+            {footer}
           </View>
         ) : null}
-        {statusBanner ? <View style={[styles.banner, { marginHorizontal: chromePadding }]}>{statusBanner}</View> : null}
-        <View style={[styles.body, { paddingHorizontal: sidePadding }]}>{children}</View>
-      </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -82,6 +121,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     paddingBottom: spacing.lg,
     paddingTop: spacing.xl,
+  },
+  footer: {
+    backgroundColor: colors.background,
+    borderTopColor: colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: spacing.md,
+  },
+  keyboardAvoider: {
+    flex: 1,
   },
   safeArea: {
     backgroundColor: colors.background,

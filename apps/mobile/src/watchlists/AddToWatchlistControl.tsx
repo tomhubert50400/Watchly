@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BookmarkPlus, Plus, Sparkles } from 'lucide-react-native';
 import {
   addSharedWatchlistItem,
@@ -18,7 +18,10 @@ import {
 } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInSheet } from '../auth/SignInRequired';
-import { BottomActionSheet } from '../components/BottomActionSheet';
+import {
+  BottomActionSheet,
+  BottomActionSheetScrollView,
+} from '../components/BottomActionSheet';
 import { Button } from '../components/Button';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { colors, radii, spacing, typography } from '../design/tokens';
@@ -366,7 +369,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
             <Text style={styles.stateText}>Create your first personal or shared list below.</Text>
           </View>
         ) : (
-          <ScrollView contentContainerStyle={styles.optionList} showsVerticalScrollIndicator={false}>
+          <BottomActionSheetScrollView contentContainerStyle={styles.optionList}>
             {options.map((option) => (
               <WatchlistOptionRow
                 isSelected={selectedKeys.has(option.key)}
@@ -384,7 +387,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
                 </Text>
               </View>
             ) : null}
-          </ScrollView>
+          </BottomActionSheetScrollView>
         )}
       </BottomActionSheet>
       <SignInSheet
