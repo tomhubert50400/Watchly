@@ -253,25 +253,31 @@ export class TmdbCatalogueService {
       throw new ServiceUnavailableException('TMDB_ACCESS_TOKEN is not configured.');
     }
 
-    const endpoint = this.buildSearchEndpoint(query);
-    let payload: TmdbSearchResponse;
+    const mediaTypes: ('movie' | 'series')[] =
+      type === 'all' ? ['movie', 'series'] : [type];
+    let payloads: { mediaType: 'movie' | 'series'; payload: TmdbSearchResponse }[];
 
     try {
-      payload = await fetchWithTimeout(
-        endpoint,
-        {
-          headers: {
-            accept: 'application/json',
-            authorization: ['Bearer', accessToken].join(' '),
-          },
-        },
-        async (response) => {
-          if (!response.ok) {
-            throw new BadGatewayException('TMDB search request failed.');
-          }
+      payloads = await Promise.all(
+        mediaTypes.map(async (mediaType) => ({
+          mediaType,
+          payload: await fetchWithTimeout(
+            this.buildSearchEndpoint(query, mediaType),
+            {
+              headers: {
+                accept: 'application/json',
+                authorization: ['Bearer', accessToken].join(' '),
+              },
+            },
+            async (response) => {
+              if (!response.ok) {
+                throw new BadGatewayException('TMDB search request failed.');
+              }
 
-          return response.json() as Promise<TmdbSearchResponse>;
-        },
+              return response.json() as Promise<TmdbSearchResponse>;
+            },
+          ),
+        })),
       );
     } catch (error) {
       if (error instanceof BadGatewayException) {
@@ -280,13 +286,17 @@ export class TmdbCatalogueService {
 
       throw new BadGatewayException('Could not reach TMDB.');
     }
-    const results = payload.results ?? [];
+    const results = payloads
+      .flatMap(({ mediaType, payload }, sourceIndex) =>
+        (payload.results ?? []).map((item, rank) => ({ item, mediaType, rank, sourceIndex })),
+      )
+      .sort((left, right) => left.rank - right.rank || left.sourceIndex - right.sourceIndex);
 
     return {
       items: results
-        .map((item) => this.toCatalogueItem(item))
+        .map(({ item, mediaType }) => this.toCatalogueItem(item, mediaType))
         .filter((item): item is CatalogueSearchItem => Boolean(item))
-        .filter((item) => type === 'all' || item.mediaType === type),
+        .slice(0, 20),
       provider: 'tmdb',
     };
   }
@@ -442,7 +452,7 @@ export class TmdbCatalogueService {
     };
   }
 
-  private buildSearchEndpoint(query: string) {
+  private buildSearchEndpoint(query: string, mediaType: 'movie' | 'series') {
     const params = new URLSearchParams({
       include_adult: 'false',
       language: 'fr-FR',
@@ -450,7 +460,9 @@ export class TmdbCatalogueService {
       query,
     });
 
-    return `${this.tmdbBaseUrl}/search/multi?${params.toString()}`;
+    const endpointType = mediaType === 'series' ? 'tv' : 'movie';
+
+    return `${this.tmdbBaseUrl}/search/${endpointType}?${params.toString()}`;
   }
 
   private async fetchTmdb<T>(endpoint: string, accessToken: string, label: string): Promise<T> {

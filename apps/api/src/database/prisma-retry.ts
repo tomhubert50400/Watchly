@@ -10,20 +10,24 @@ export function isPrismaConnectionError(error: unknown) {
       driverAdapterError?: {
         cause?: {
           kind?: string;
+          originalCode?: string;
         };
       };
     };
   };
   const message = prismaError.message ?? '';
+  const driverCause = prismaError.meta?.driverAdapterError?.cause;
 
   return (
     prismaError.code === 'ECONNREFUSED' ||
     prismaError.code === 'P1017' ||
+    driverCause?.originalCode === '08P01' ||
     ((prismaError.code === 'P1017' || prismaError.code === 'P2010') &&
-      prismaError.meta?.driverAdapterError?.cause?.kind === 'ConnectionClosed') ||
+      driverCause?.kind === 'ConnectionClosed') ||
     message.includes('Server has closed the connection') ||
     message.includes('Cannot use a pool after calling end on the pool') ||
     message.includes('Connection terminated unexpectedly') ||
+    (message.includes('bind message supplies') && message.includes('prepared statement')) ||
     message.includes('ECONNREFUSED') ||
     message.includes('ECONNRESET')
   );
