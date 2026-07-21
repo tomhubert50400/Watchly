@@ -26,7 +26,6 @@ import { OnboardingScreen } from './src/onboarding/OnboardingScreen';
 import { ProfileScreen } from './src/profile/ProfileScreen';
 import { PublicProfileScreen } from './src/profile/PublicProfileScreen';
 import { SettingsScreen } from './src/profile/SettingsScreen';
-import { ReviewDetailScreen } from './src/reviews/ReviewDetailScreen';
 
 import { PersonalWatchlistScreen } from './src/watchlists/PersonalWatchlistScreen';
 import { SharedVoteScreen } from './src/watchlists/SharedVoteScreen';
@@ -152,7 +151,6 @@ function AppNavigator() {
               name="PublicProfile"
               options={{ title: 'Public profile' }}
             />
-            <Stack.Screen component={ReviewDetailScreen} name="ReviewDetail" options={{ title: 'Review' }} />
             <Stack.Screen
               component={SeasonDetailScreen}
               name="SeasonDetail"

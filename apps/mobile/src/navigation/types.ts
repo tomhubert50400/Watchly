@@ -7,25 +7,6 @@ export type RootTabParamList = {
   Profile: undefined;
 };
 
-export type ReviewDetailParams = {
-  authorDisplayName: string;
-  body: string;
-  contentImageUrl: string | null;
-  contentSubtitle: string;
-  contentTitle: string;
-  rating: number | null;
-  target:
-    | { contentType: 'movie'; tmdbId: number }
-    | {
-        contentType: 'episode';
-        episodeNumber: number;
-        seasonNumber: number;
-        seriesTitle: string;
-        seriesTmdbId: number;
-      };
-  updatedAt: string;
-};
-
 export type RootStackParamList = {
   EpisodeDetail: {
     episodeNumber: number;
@@ -50,7 +31,6 @@ export type RootStackParamList = {
     previewOwnProfile?: boolean;
     userId: string;
   };
-  ReviewDetail: ReviewDetailParams;
   SeasonDetail: {
     seasonNumber: number;
     seriesTitle: string;
