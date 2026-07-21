@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
@@ -10,8 +10,12 @@ type FeedAuthor = {
 };
 
 type FeedMovieReview = {
+  _count: {
+    likes: number;
+  };
   body: string;
   id: string;
+  likes: Array<{ id: string }>;
   tmdbId: number;
   updatedAt: Date;
   user: FeedAuthor;
@@ -19,9 +23,13 @@ type FeedMovieReview = {
 };
 
 type FeedEpisodeReview = {
+  _count: {
+    likes: number;
+  };
   body: string;
   episodeNumber: number;
   id: string;
+  likes: Array<{ id: string }>;
   seasonNumber: number;
   seriesTmdbId: number;
   updatedAt: Date;
@@ -40,6 +48,16 @@ type FeedEpisodeRating = {
   scoreHalfSteps: number;
   seasonNumber: number;
   seriesTmdbId: number;
+  userId: string;
+};
+
+type VisibleReview = {
+  user: {
+    privacySettings: {
+      profileVisibility: PrivacyVisibility;
+      reviewsVisibility: PrivacyVisibility;
+    } | null;
+  };
   userId: string;
 };
 
@@ -63,6 +81,19 @@ export class FeedService {
       const [movieReviews, episodeReviews] = await Promise.all([
         this.prisma.userMovieReview.findMany({
           include: {
+            _count: {
+              select: {
+                likes: true,
+              },
+            },
+            likes: {
+              select: {
+                id: true,
+              },
+              where: {
+                userId: viewer.id,
+              },
+            },
             user: {
               select: {
                 displayName: true,
@@ -82,6 +113,19 @@ export class FeedService {
         }),
         this.prisma.userEpisodeReview.findMany({
           include: {
+            _count: {
+              select: {
+                likes: true,
+              },
+            },
+            likes: {
+              select: {
+                id: true,
+              },
+              where: {
+                userId: viewer.id,
+              },
+            },
             user: {
               select: {
                 displayName: true,
@@ -153,6 +197,129 @@ export class FeedService {
     });
   }
 
+  async likeMovieReview(identity: AuthenticatedIdentity, reviewId: string) {
+    return this.setMovieReviewLike(identity, reviewId, true);
+  }
+
+  async unlikeMovieReview(identity: AuthenticatedIdentity, reviewId: string) {
+    return this.setMovieReviewLike(identity, reviewId, false);
+  }
+
+  async likeEpisodeReview(identity: AuthenticatedIdentity, reviewId: string) {
+    return this.setEpisodeReviewLike(identity, reviewId, true);
+  }
+
+  async unlikeEpisodeReview(identity: AuthenticatedIdentity, reviewId: string) {
+    return this.setEpisodeReviewLike(identity, reviewId, false);
+  }
+
+  private async setMovieReviewLike(
+    identity: AuthenticatedIdentity,
+    reviewId: string,
+    likedByViewer: boolean,
+  ) {
+    const viewer = await this.authService.getOrCreateUser(identity);
+
+    return this.prisma.withConnectionRetry(async () => {
+      const review = await this.prisma.userMovieReview.findUnique({
+        include: {
+          user: {
+            include: {
+              privacySettings: true,
+            },
+          },
+        },
+        where: { id: reviewId },
+      });
+
+      await this.assertReviewVisible(viewer.id, review);
+
+      if (likedByViewer) {
+        await this.prisma.movieReviewLike.upsert({
+          create: { reviewId, userId: viewer.id },
+          update: {},
+          where: {
+            userId_reviewId: { reviewId, userId: viewer.id },
+          },
+        });
+      } else {
+        await this.prisma.movieReviewLike.deleteMany({
+          where: { reviewId, userId: viewer.id },
+        });
+      }
+
+      return {
+        likeCount: await this.prisma.movieReviewLike.count({ where: { reviewId } }),
+        likedByViewer,
+      };
+    });
+  }
+
+  private async setEpisodeReviewLike(
+    identity: AuthenticatedIdentity,
+    reviewId: string,
+    likedByViewer: boolean,
+  ) {
+    const viewer = await this.authService.getOrCreateUser(identity);
+
+    return this.prisma.withConnectionRetry(async () => {
+      const review = await this.prisma.userEpisodeReview.findUnique({
+        include: {
+          user: {
+            include: {
+              privacySettings: true,
+            },
+          },
+        },
+        where: { id: reviewId },
+      });
+
+      await this.assertReviewVisible(viewer.id, review);
+
+      if (likedByViewer) {
+        await this.prisma.episodeReviewLike.upsert({
+          create: { reviewId, userId: viewer.id },
+          update: {},
+          where: {
+            userId_reviewId: { reviewId, userId: viewer.id },
+          },
+        });
+      } else {
+        await this.prisma.episodeReviewLike.deleteMany({
+          where: { reviewId, userId: viewer.id },
+        });
+      }
+
+      return {
+        likeCount: await this.prisma.episodeReviewLike.count({ where: { reviewId } }),
+        likedByViewer,
+      };
+    });
+  }
+
+  private async assertReviewVisible(viewerId: string, review: VisibleReview | null) {
+    if (
+      !review ||
+      review.user.privacySettings?.profileVisibility !== PrivacyVisibility.PUBLIC ||
+      review.user.privacySettings.reviewsVisibility !== PrivacyVisibility.PUBLIC
+    ) {
+      throw new NotFoundException('Review not found.');
+    }
+
+    const block = await this.prisma.userBlock.findFirst({
+      where: {
+        OR: [
+          { blockedUserId: viewerId, blockerId: review.userId },
+          { blockedUserId: review.userId, blockerId: viewerId },
+        ],
+      },
+    });
+
+    if (block) {
+      throw new NotFoundException('Review not found.');
+    }
+  }
+
   private async getVisibleFollowedAuthorIds(viewerId: string) {
     const [follows, blocks] = await Promise.all([
       this.prisma.userFollow.findMany({
@@ -206,6 +373,8 @@ function toMovieFeedItem(review: FeedMovieReview, score: number) {
       tmdbId: review.tmdbId,
     },
     id: review.id,
+    likeCount: review._count.likes,
+    likedByViewer: review.likes.length > 0,
     score,
     type: 'movieReview' as const,
     updatedAt: review.updatedAt.toISOString(),
@@ -223,6 +392,8 @@ function toEpisodeFeedItem(review: FeedEpisodeReview, score: number) {
       seriesTmdbId: review.seriesTmdbId,
     },
     id: review.id,
+    likeCount: review._count.likes,
+    likedByViewer: review.likes.length > 0,
     score,
     type: 'episodeReview' as const,
     updatedAt: review.updatedAt.toISOString(),

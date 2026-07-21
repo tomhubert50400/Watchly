@@ -28,6 +28,10 @@ export class PrismaService implements OnModuleDestroy {
     return this.client.auditLog;
   }
 
+  get episodeReviewLike() {
+    return this.client.episodeReviewLike;
+  }
+
   get authIdentity() {
     return this.client.authIdentity;
   }
@@ -50,6 +54,10 @@ export class PrismaService implements OnModuleDestroy {
 
   get notification() {
     return this.client.notification;
+  }
+
+  get movieReviewLike() {
+    return this.client.movieReviewLike;
   }
 
   get sharedVotingCandidate() {

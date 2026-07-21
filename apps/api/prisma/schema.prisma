@@ -69,8 +69,10 @@ model User {
   contentStates              UserContentState[]
   episodeProgress            UserEpisodeProgress[]
   episodeRatings             UserEpisodeRating[]
+  episodeReviewLikes         EpisodeReviewLike[]
   episodeReviews             UserEpisodeReview[]
   movieRatings               UserMovieRating[]
+  movieReviewLikes           MovieReviewLike[]
   movieReviews               UserMovieReview[]
   releaseAlertSubscriptions  ReleaseAlertSubscription[]
   notifications              Notification[]             @relation("NotificationRecipient")
@@ -172,12 +174,26 @@ model UserMovieReview {
   body      String   @db.VarChar(5000)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  likes     MovieReviewLike[]
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tmdbId])
   @@index([userId])
   @@index([tmdbId])
   @@map("user_movie_reviews")
+}
+
+model MovieReviewLike {
+  id        String          @id @default(uuid()) @db.Uuid
+  reviewId  String          @db.Uuid
+  userId    String          @db.Uuid
+  createdAt DateTime        @default(now())
+  review    UserMovieReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, reviewId])
+  @@index([reviewId])
+  @@map("movie_review_likes")
 }
 
 model UserEpisodeReview {
@@ -189,12 +205,26 @@ model UserEpisodeReview {
   body          String   @db.VarChar(5000)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  likes         EpisodeReviewLike[]
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, seriesTmdbId, seasonNumber, episodeNumber])
   @@index([userId])
   @@index([seriesTmdbId, seasonNumber])
   @@map("user_episode_reviews")
+}
+
+model EpisodeReviewLike {
+  id        String            @id @default(uuid()) @db.Uuid
+  reviewId  String            @db.Uuid
+  userId    String            @db.Uuid
+  createdAt DateTime          @default(now())
+  review    UserEpisodeReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, reviewId])
+  @@index([reviewId])
+  @@map("episode_review_likes")
 }
 
 model UserEpisodeProgress {

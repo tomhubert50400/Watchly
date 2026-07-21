@@ -151,15 +151,48 @@ async function assertFeedPrivacyAndBlocking(
   await reviews.upsertMovieReview(actorIdentity, 603, 'Privacy smoke public review.');
   await follows.followUser(viewerIdentity, actorUserId);
   await assertFeedContainsAuthor(feed, viewerIdentity, actorUserId, true);
+  const initialFeed = await feed.listFeed(viewerIdentity);
+  const review = initialFeed.items.find(
+    (item) => item.author.id === actorUserId && item.type === 'movieReview',
+  );
+
+  assert(Boolean(review), 'Feed should expose the public movie review.');
+  if (!review) return;
+  assert(review.likeCount === 0, 'A new review should start without likes.');
+  assert(!review.likedByViewer, 'A new review should not be liked by the viewer.');
+
+  const liked = await feed.likeMovieReview(viewerIdentity, review.id);
+  assert(liked.likeCount === 1 && liked.likedByViewer, 'The viewer should be able to like a public review.');
+  const repeatedLike = await feed.likeMovieReview(viewerIdentity, review.id);
+  assert(repeatedLike.likeCount === 1, 'Repeated likes should stay idempotent.');
+  const likedFeed = await feed.listFeed(viewerIdentity);
+  const likedReview = likedFeed.items.find((item) => item.id === review.id);
+  assert(
+    likedReview?.likeCount === 1 && likedReview.likedByViewer,
+    'Feed projection should include the current like count and viewer state.',
+  );
 
   await profile.updatePrivacy(actorIdentity, { profileVisibility: 'private' });
   await assertFeedContainsAuthor(feed, viewerIdentity, actorUserId, false);
+  await assertNotFound(
+    () => feed.likeMovieReview(viewerIdentity, review.id),
+    'Private reviews should not accept likes.',
+  );
 
   await profile.updatePrivacy(actorIdentity, { profileVisibility: 'public' });
   await assertFeedContainsAuthor(feed, viewerIdentity, actorUserId, true);
+  const unliked = await feed.unlikeMovieReview(viewerIdentity, review.id);
+  assert(
+    unliked.likeCount === 0 && !unliked.likedByViewer,
+    'The viewer should be able to remove a like from a visible review.',
+  );
 
   await blocks.blockUser(viewerIdentity, actorUserId);
   await assertFeedContainsAuthor(feed, viewerIdentity, actorUserId, false);
+  await assertNotFound(
+    () => feed.likeMovieReview(viewerIdentity, review.id),
+    'Blocked reviews should not accept likes.',
+  );
 
   const followState = await follows.getFollowState(viewerIdentity, actorUserId);
   assert(!followState.following, 'Blocking should clear follow state between the two users.');
