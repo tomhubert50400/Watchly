@@ -131,12 +131,14 @@ export const SocialReviewPost = memo(function SocialReviewPost({
             size={19}
             strokeWidth={2.2}
           />
-          <Text
-            accessibilityLiveRegion="polite"
-            style={[styles.likeCount, likeState.likedByViewer ? styles.likeCountActive : null]}
-          >
-            {likeState.likeCount}
-          </Text>
+          {likeState.likeCount > 0 ? (
+            <Text
+              accessibilityLiveRegion="polite"
+              style={[styles.likeCount, likeState.likedByViewer ? styles.likeCountActive : null]}
+            >
+              {likeState.likeCount}
+            </Text>
+          ) : null}
         </Pressable>
       </View>
     </View>
