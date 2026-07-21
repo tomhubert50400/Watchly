@@ -15,6 +15,7 @@ type FeedMovieReview = {
   tmdbId: number;
   updatedAt: Date;
   user: FeedAuthor;
+  userId: string;
 };
 
 type FeedEpisodeReview = {
@@ -25,6 +26,21 @@ type FeedEpisodeReview = {
   seriesTmdbId: number;
   updatedAt: Date;
   user: FeedAuthor;
+  userId: string;
+};
+
+type FeedMovieRating = {
+  scoreHalfSteps: number;
+  tmdbId: number;
+  userId: string;
+};
+
+type FeedEpisodeRating = {
+  episodeNumber: number;
+  scoreHalfSteps: number;
+  seasonNumber: number;
+  seriesTmdbId: number;
+  userId: string;
 };
 
 @Injectable()
@@ -84,10 +100,51 @@ export class FeedService {
           },
         }),
       ]);
+      const [movieRatings, episodeRatings] = await Promise.all([
+        this.prisma.userMovieRating.findMany({
+          select: {
+            scoreHalfSteps: true,
+            tmdbId: true,
+            userId: true,
+          },
+          where: {
+            OR: movieReviews.map((review) => ({ tmdbId: review.tmdbId, userId: review.userId })),
+          },
+        }),
+        this.prisma.userEpisodeRating.findMany({
+          select: {
+            episodeNumber: true,
+            scoreHalfSteps: true,
+            seasonNumber: true,
+            seriesTmdbId: true,
+            userId: true,
+          },
+          where: {
+            OR: episodeReviews.map((review) => ({
+              episodeNumber: review.episodeNumber,
+              seasonNumber: review.seasonNumber,
+              seriesTmdbId: review.seriesTmdbId,
+              userId: review.userId,
+            })),
+          },
+        }),
+      ]);
+      const movieScores = new Map(
+        movieRatings.map((rating) => [getMovieRatingKey(rating), rating.scoreHalfSteps / 2]),
+      );
+      const episodeScores = new Map(
+        episodeRatings.map((rating) => [getEpisodeRatingKey(rating), rating.scoreHalfSteps / 2]),
+      );
 
       const items = [
-        ...movieReviews.map(toMovieFeedItem),
-        ...episodeReviews.map(toEpisodeFeedItem),
+        ...movieReviews.flatMap((review) => {
+          const score = movieScores.get(getMovieRatingKey(review));
+          return score === undefined ? [] : [toMovieFeedItem(review, score)];
+        }),
+        ...episodeReviews.flatMap((review) => {
+          const score = episodeScores.get(getEpisodeRatingKey(review));
+          return score === undefined ? [] : [toEpisodeFeedItem(review, score)];
+        }),
       ]
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
         .slice(0, FEED_LIMIT);
@@ -140,7 +197,7 @@ export class FeedService {
 
 const FEED_LIMIT = 30;
 
-function toMovieFeedItem(review: FeedMovieReview) {
+function toMovieFeedItem(review: FeedMovieReview, score: number) {
   return {
     author: toAuthor(review.user),
     body: review.body,
@@ -149,12 +206,13 @@ function toMovieFeedItem(review: FeedMovieReview) {
       tmdbId: review.tmdbId,
     },
     id: review.id,
+    score,
     type: 'movieReview' as const,
     updatedAt: review.updatedAt.toISOString(),
   };
 }
 
-function toEpisodeFeedItem(review: FeedEpisodeReview) {
+function toEpisodeFeedItem(review: FeedEpisodeReview, score: number) {
   return {
     author: toAuthor(review.user),
     body: review.body,
@@ -165,6 +223,7 @@ function toEpisodeFeedItem(review: FeedEpisodeReview) {
       seriesTmdbId: review.seriesTmdbId,
     },
     id: review.id,
+    score,
     type: 'episodeReview' as const,
     updatedAt: review.updatedAt.toISOString(),
   };
@@ -175,4 +234,14 @@ function toAuthor(author: FeedAuthor) {
     displayName: author.displayName,
     id: author.id,
   };
+}
+
+function getMovieRatingKey(item: Pick<FeedMovieReview | FeedMovieRating, 'tmdbId' | 'userId'>) {
+  return `${item.userId}:${item.tmdbId}`;
+}
+
+function getEpisodeRatingKey(
+  item: Pick<FeedEpisodeReview | FeedEpisodeRating, 'episodeNumber' | 'seasonNumber' | 'seriesTmdbId' | 'userId'>,
+) {
+  return `${item.userId}:${item.seriesTmdbId}:${item.seasonNumber}:${item.episodeNumber}`;
 }
