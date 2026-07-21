@@ -21,7 +21,7 @@ export function StarRatingDisplay({ accessibilityLabel, rating, showValue = fals
           <View key={index} style={[styles.star, { height: size, width: size }]}>
             <Text style={[styles.glyph, { color: colors.textSubtle, fontSize: size, lineHeight: size }]}>★</Text>
             {fill > 0 ? (
-              <View style={[styles.fillClip, { width: size * fill }]}>
+              <View style={[styles.fillClip, { height: size, width: size * fill }]}>
                 <Text style={[styles.glyph, { color: colors.rating, fontSize: size, lineHeight: size, width: size }]}>★</Text>
               </View>
             ) : null}
