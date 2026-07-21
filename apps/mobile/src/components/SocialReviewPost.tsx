@@ -1,6 +1,15 @@
-import { memo } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
+import { Heart } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radii, spacing, typography } from '../design/tokens';
+import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
+import { hapticError, hapticSelection } from '../feedback/haptics';
+import {
+  applyLikeMutation,
+  beginLikeMutation,
+  rollbackLikeMutation,
+  type FeedLikeState,
+} from '../feed/feedLikeModel';
+import { useToast } from '../notifications/ToastContext';
 import { ExpandableReviewText } from './ExpandableReviewText';
 import { MediaPoster } from './MediaPoster';
 import { StarRatingDisplay } from './StarRatingDisplay';
@@ -11,7 +20,10 @@ type SocialReviewPostProps = {
   contentImageUrl: string | null;
   contentMeta: string;
   contentTitle: string;
+  likeCount: number;
+  likedByViewer: boolean;
   onOpenContent: () => void;
+  onSetLiked: (liked: boolean) => Promise<FeedLikeState>;
   rating: number;
   updatedAt: string;
 };
@@ -22,11 +34,46 @@ export const SocialReviewPost = memo(function SocialReviewPost({
   contentImageUrl,
   contentMeta,
   contentTitle,
+  likeCount,
+  likedByViewer,
   onOpenContent,
+  onSetLiked,
   rating,
   updatedAt,
 }: SocialReviewPostProps) {
   const visibleAuthor = authorDisplayName?.trim() || 'Watchly member';
+  const { showToast } = useToast();
+  const [likeState, setLikeState] = useState<FeedLikeState>({ likeCount, likedByViewer });
+  const [isLikePending, setIsLikePending] = useState(false);
+  const isLikePendingRef = useRef(false);
+
+  useEffect(() => {
+    if (!isLikePendingRef.current) {
+      setLikeState({ likeCount, likedByViewer });
+    }
+  }, [likeCount, likedByViewer]);
+
+  const toggleLike = async () => {
+    if (isLikePendingRef.current) return;
+
+    const mutation = beginLikeMutation(likeState);
+    isLikePendingRef.current = true;
+    setIsLikePending(true);
+    setLikeState(mutation.optimistic);
+    hapticSelection();
+
+    try {
+      const confirmed = await onSetLiked(mutation.optimistic.likedByViewer);
+      setLikeState(applyLikeMutation(confirmed));
+    } catch (error) {
+      setLikeState(rollbackLikeMutation(mutation));
+      hapticError();
+      showToast(error instanceof Error ? error.message : 'Could not update this like.');
+    } finally {
+      isLikePendingRef.current = false;
+      setIsLikePending(false);
+    }
+  };
 
   return (
     <View style={styles.post}>
@@ -58,6 +105,42 @@ export const SocialReviewPost = memo(function SocialReviewPost({
         <StarRatingDisplay rating={rating} showValue size={17} />
       </View>
       <ExpandableReviewText body={body} style={styles.review} />
+      <View style={styles.actions}>
+        <Pressable
+          accessibilityLabel={`${likeState.likedByViewer ? 'Unlike' : 'Like'} ${visibleAuthor}'s review`}
+          accessibilityRole="button"
+          accessibilityState={{
+            busy: isLikePending,
+            disabled: isLikePending,
+            selected: likeState.likedByViewer,
+          }}
+          disabled={isLikePending}
+          onPress={() => {
+            void toggleLike();
+          }}
+          style={({ pressed }) => [
+            styles.likeButton,
+            likeState.likedByViewer ? styles.likeButtonActive : null,
+            pressed ? styles.likeButtonPressed : null,
+            isLikePending ? styles.likeButtonPending : null,
+          ]}
+        >
+          <Heart
+            color={likeState.likedByViewer ? colors.accentText : colors.textMuted}
+            fill={likeState.likedByViewer ? colors.accent : 'transparent'}
+            size={19}
+            strokeWidth={2.2}
+          />
+          <Text style={[styles.likeLabel, likeState.likedByViewer ? styles.likeLabelActive : null]}>
+            {likeState.likedByViewer ? 'Liked' : 'Like'}
+          </Text>
+        </Pressable>
+        {likeState.likeCount > 0 ? (
+          <Text accessibilityLiveRegion="polite" style={styles.likeCount}>
+            {formatLikeCount(likeState.likeCount)}
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 });
@@ -76,7 +159,17 @@ function formatDate(value: string) {
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
+function formatLikeCount(likeCount: number) {
+  return `${likeCount} ${likeCount === 1 ? 'like' : 'likes'}`;
+}
+
 const styles = StyleSheet.create({
+  actions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
   author: {
     color: colors.text,
     flex: 1,
@@ -107,6 +200,35 @@ const styles = StyleSheet.create({
   date: {
     ...typography.meta,
     color: colors.textSubtle,
+  },
+  likeButton: {
+    alignItems: 'center',
+    backgroundColor: colors.panelSoft,
+    borderRadius: radii.md,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minHeight: touchTargets.min,
+    paddingHorizontal: spacing.sm,
+  },
+  likeButtonActive: {
+    backgroundColor: colors.accentSoft,
+  },
+  likeButtonPending: {
+    opacity: 0.58,
+  },
+  likeButtonPressed: {
+    opacity: 0.72,
+  },
+  likeCount: {
+    ...typography.meta,
+    color: colors.textSubtle,
+  },
+  likeLabel: {
+    ...typography.meta,
+    color: colors.textMuted,
+  },
+  likeLabelActive: {
+    color: colors.accentText,
   },
   mediaCopy: {
     flex: 1,

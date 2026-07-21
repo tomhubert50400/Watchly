@@ -49,8 +49,11 @@ export type HomeFeedItem = {
   contentImageUrl: string | null;
   contentTitle: string;
   id: string;
+  likeCount: number;
+  likedByViewer: boolean;
   rating: number;
   target: HomeFeedTarget;
+  type: 'episodeReview' | 'movieReview';
   updatedAt: string;
 };
 

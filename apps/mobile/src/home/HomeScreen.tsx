@@ -11,7 +11,7 @@ import {
   getSeasonDetails,
   getSeriesDetails,
 } from '../api/catalogue';
-import { FeedItem, getFeed } from '../api/feed';
+import { FeedItem, getFeed, setFeedItemLiked } from '../api/feed';
 import { listNotifications } from '../api/notifications';
 import { listSeriesProgressSummaries, SeriesProgressSummary } from '../api/progress';
 import { useAuthSession } from '../auth/AuthSessionContext';
@@ -234,6 +234,13 @@ export function HomeScreen() {
                   <SocialActivityList
                     items={section.items}
                     onOpenContent={(item) => openFeedContent(navigation, item)}
+                    onSetLiked={(item, liked) => {
+                      if (!firebaseIdToken) {
+                        return Promise.reject(new Error('Sign in again to update this like.'));
+                      }
+
+                      return setFeedItemLiked(firebaseIdToken, item, liked);
+                    }}
                   />
                 ) : null}
               </HomeSection>
@@ -421,8 +428,11 @@ async function hydrateFeedItem(item: FeedItem): Promise<HomeFeedItem> {
       contentImageUrl: movie.posterUrl,
       contentTitle: movie.title,
       id: item.id,
+      likeCount: item.likeCount,
+      likedByViewer: item.likedByViewer,
       rating: item.score,
       target: { contentType: 'movie', tmdbId: item.content.tmdbId },
+      type: item.type,
       updatedAt: item.updatedAt,
     };
   }
@@ -443,6 +453,8 @@ async function hydrateFeedItem(item: FeedItem): Promise<HomeFeedItem> {
     contentImageUrl: episodeResponse.item.stillUrl ?? seriesResponse.item.posterUrl,
     contentTitle: episodeResponse.item.title,
     id: item.id,
+    likeCount: item.likeCount,
+    likedByViewer: item.likedByViewer,
     rating: item.score,
     target: {
       contentType: 'episode',
@@ -451,6 +463,7 @@ async function hydrateFeedItem(item: FeedItem): Promise<HomeFeedItem> {
       seriesTitle: seriesResponse.item.title,
       seriesTmdbId: item.content.seriesTmdbId,
     },
+    type: item.type,
     updatedAt: item.updatedAt,
   };
 }

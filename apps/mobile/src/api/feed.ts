@@ -1,4 +1,14 @@
-import { apiGet } from './client';
+import { apiDelete, apiGet, apiPut } from './client';
+
+export type FeedLikeState = {
+  likeCount: number;
+  likedByViewer: boolean;
+};
+
+export type FeedReviewTarget = {
+  id: string;
+  type: 'episodeReview' | 'movieReview';
+};
 
 type FeedAuthor = {
   displayName: string | null;
@@ -13,6 +23,8 @@ type FeedMovieReviewItem = {
     tmdbId: number;
   };
   id: string;
+  likeCount: number;
+  likedByViewer: boolean;
   score: number;
   type: 'movieReview';
   updatedAt: string;
@@ -28,6 +40,8 @@ type FeedEpisodeReviewItem = {
     seriesTmdbId: number;
   };
   id: string;
+  likeCount: number;
+  likedByViewer: boolean;
   score: number;
   type: 'episodeReview';
   updatedAt: string;
@@ -43,4 +57,17 @@ export function getFeed(firebaseIdToken: string): Promise<FeedResponse> {
   return apiGet<FeedResponse>('/feed', {
     token: firebaseIdToken,
   });
+}
+
+export function setFeedItemLiked(
+  firebaseIdToken: string,
+  item: FeedReviewTarget,
+  liked: boolean,
+): Promise<FeedLikeState> {
+  const reviewCollection = item.type === 'movieReview' ? 'movie-reviews' : 'episode-reviews';
+  const path = `/feed/${reviewCollection}/${encodeURIComponent(item.id)}/like`;
+
+  return liked
+    ? apiPut<FeedLikeState>(path, {}, { token: firebaseIdToken })
+    : apiDelete<FeedLikeState>(path, { token: firebaseIdToken });
 }

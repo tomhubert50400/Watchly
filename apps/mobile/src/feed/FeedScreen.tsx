@@ -3,7 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { getEpisodeDetails, getMovieDetails } from '../api/catalogue';
-import { FeedItem, getFeed } from '../api/feed';
+import { FeedItem, getFeed, setFeedItemLiked } from '../api/feed';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { Button } from '../components/Button';
@@ -148,7 +148,10 @@ export function FeedScreen() {
               contentMeta={item.contentSubtitle}
               contentTitle={item.contentTitle}
               key={item.id}
+              likeCount={item.likeCount}
+              likedByViewer={item.likedByViewer}
               onOpenContent={() => openContent(item)}
+              onSetLiked={(liked) => setFeedItemLiked(firebaseIdToken, item, liked)}
               rating={item.score}
               updatedAt={item.updatedAt}
             />

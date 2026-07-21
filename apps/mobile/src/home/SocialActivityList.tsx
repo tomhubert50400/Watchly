@@ -1,14 +1,16 @@
 import { StyleSheet, View } from 'react-native';
 import { SocialReviewPost } from '../components/SocialReviewPost';
 import { spacing } from '../design/tokens';
+import type { FeedLikeState } from '../feed/feedLikeModel';
 import type { HomeFeedItem } from './homeData';
 
 type SocialActivityListProps = {
   items: HomeFeedItem[];
   onOpenContent: (item: HomeFeedItem) => void;
+  onSetLiked: (item: HomeFeedItem, liked: boolean) => Promise<FeedLikeState>;
 };
 
-export function SocialActivityList({ items, onOpenContent }: SocialActivityListProps) {
+export function SocialActivityList({ items, onOpenContent, onSetLiked }: SocialActivityListProps) {
   return (
     <View style={styles.list}>
       {items.map((item) => (
@@ -19,7 +21,10 @@ export function SocialActivityList({ items, onOpenContent }: SocialActivityListP
           contentMeta={formatContentMeta(item)}
           contentTitle={item.contentTitle}
           key={item.id}
+          likeCount={item.likeCount}
+          likedByViewer={item.likedByViewer}
           onOpenContent={() => onOpenContent(item)}
+          onSetLiked={(liked) => onSetLiked(item, liked)}
           rating={item.rating}
           updatedAt={item.updatedAt}
         />
