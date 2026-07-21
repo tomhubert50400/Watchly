@@ -3,9 +3,10 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ChevronRight } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MediaHero } from '../components/MediaHero';
+import { Chip } from '../components/Chip';
+import { MediaPoster } from '../components/MediaPoster';
 import { StarRatingDisplay } from '../components/StarRatingDisplay';
-import { colors, spacing, typography } from '../design/tokens';
+import { colors, radii, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 
 type ReviewDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'ReviewDetail'>;
@@ -15,10 +16,10 @@ export function ReviewDetailScreen({ navigation, route }: ReviewDetailScreenProp
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      headerStyle: { backgroundColor: 'transparent' },
+      headerStyle: { backgroundColor: colors.background },
       headerTintColor: colors.text,
-      headerTitle: '',
-      headerTransparent: true,
+      headerTitle: 'Review',
+      headerTransparent: false,
     });
   }, [navigation]);
 
@@ -47,47 +48,44 @@ export function ReviewDetailScreen({ navigation, route }: ReviewDetailScreenProp
         contentInsetAdjustmentBehavior="never"
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.authorRow}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{getInitial(review.authorDisplayName)}</Text>
+          </View>
+          <View style={styles.authorCopy}>
+            <Text numberOfLines={2} style={styles.authorName}>{review.authorDisplayName}</Text>
+            <Text style={styles.date}>{formatDate(review.updatedAt)}</Text>
+          </View>
+          <Chip label="Review" tone="neutral" />
+        </View>
+
         <Pressable
           accessibilityLabel={`Open ${review.contentTitle}`}
           accessibilityRole="button"
           onPress={openContent}
-          style={({ pressed }) => (pressed ? styles.heroPressed : null)}
+          style={({ pressed }) => [styles.mediaRow, pressed ? styles.mediaRowPressed : null]}
         >
-          <MediaHero
-            backdropUrl={review.contentImageUrl}
-            eyebrow={review.contentSubtitle}
-            posterAccessibilityLabel={`${review.contentTitle} artwork`}
+          <MediaPoster
+            accessibilityLabel={`${review.contentTitle} artwork`}
             posterUrl={review.contentImageUrl}
-            title={review.contentTitle}
-          >
-            <View style={styles.openRow}>
-              <Text style={styles.openLabel}>Open content</Text>
-              <ChevronRight color={colors.accentText} size={16} strokeWidth={2.5} />
-            </View>
-          </MediaHero>
+            style={styles.poster}
+          />
+          <View style={styles.mediaCopy}>
+            <Text style={styles.mediaMeta}>{review.contentSubtitle}</Text>
+            <Text numberOfLines={3} style={styles.mediaTitle}>{review.contentTitle}</Text>
+            <Text style={styles.openLabel}>Open content</Text>
+          </View>
+          <ChevronRight color={colors.accentText} size={20} strokeWidth={2.25} />
         </Pressable>
 
-        <View style={styles.reviewSection}>
-          <View style={styles.authorRow}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{getInitial(review.authorDisplayName)}</Text>
-            </View>
-            <View style={styles.authorCopy}>
-              <Text style={styles.reviewLabel}>Review by</Text>
-              <Text style={styles.authorName}>{review.authorDisplayName}</Text>
-              <Text style={styles.date}>{formatDate(review.updatedAt)}</Text>
-            </View>
+        {review.rating !== null ? (
+          <View style={styles.ratingRow}>
+            <StarRatingDisplay rating={review.rating} showValue size={19} />
           </View>
+        ) : null}
 
-          {review.rating !== null ? (
-            <View style={styles.ratingRow}>
-              <StarRatingDisplay rating={review.rating} showValue size={19} />
-            </View>
-          ) : null}
-
-          <View style={styles.reviewCopy}>
-            <Text selectable style={styles.reviewBody}>{review.body}</Text>
-          </View>
+        <View style={styles.reviewCopy}>
+          <Text selectable style={styles.reviewBody}>{review.body}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -113,7 +111,6 @@ const styles = StyleSheet.create({
   authorName: {
     ...typography.title,
     color: colors.text,
-    marginTop: 2,
   },
   authorRow: {
     alignItems: 'center',
@@ -125,42 +122,69 @@ const styles = StyleSheet.create({
   },
   avatar: {
     alignItems: 'center',
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accentBorder,
-    borderRadius: 24,
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.border,
+    borderRadius: radii.md,
     borderWidth: 1,
     height: 48,
     justifyContent: 'center',
     width: 48,
   },
   avatarText: {
-    color: colors.accentText,
-    fontSize: 19,
+    color: colors.accent,
+    fontSize: 21,
     fontWeight: '900',
+    letterSpacing: 0,
   },
   content: {
     flexGrow: 1,
     paddingBottom: spacing.xxxl,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
   },
   date: {
     ...typography.meta,
     color: colors.textSubtle,
     marginTop: 2,
   },
-  heroPressed: {
-    opacity: 0.82,
+  mediaCopy: {
+    flex: 1,
+    justifyContent: 'center',
+    minWidth: 0,
+  },
+  mediaMeta: {
+    ...typography.meta,
+    color: colors.textMuted,
+    marginBottom: spacing.xs,
+    textTransform: 'uppercase',
+  },
+  mediaRow: {
+    alignItems: 'center',
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    gap: spacing.md,
+    paddingVertical: spacing.lg,
+  },
+  mediaRowPressed: {
+    opacity: 0.72,
+  },
+  mediaTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+    lineHeight: 23,
   },
   openLabel: {
     ...typography.meta,
     color: colors.accentText,
+    marginTop: spacing.xs,
     textTransform: 'uppercase',
   },
-  openRow: {
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    gap: 2,
-    marginTop: spacing.sm,
+  poster: {
+    height: 102,
+    width: 68,
   },
   ratingRow: {
     marginTop: spacing.lg,
@@ -176,14 +200,6 @@ const styles = StyleSheet.create({
     borderLeftWidth: 2,
     marginTop: spacing.lg,
     paddingLeft: spacing.md,
-  },
-  reviewLabel: {
-    ...typography.eyebrow,
-    color: colors.accentText,
-  },
-  reviewSection: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl,
   },
   safeArea: {
     backgroundColor: colors.background,
