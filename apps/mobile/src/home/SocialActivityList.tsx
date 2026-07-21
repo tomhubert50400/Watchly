@@ -20,6 +20,7 @@ export function SocialActivityList({ items, onOpenContent }: SocialActivityListP
           contentTitle={item.contentTitle}
           key={item.id}
           onOpenContent={() => onOpenContent(item)}
+          rating={item.rating}
           updatedAt={item.updatedAt}
         />
       ))}

@@ -421,6 +421,7 @@ async function hydrateFeedItem(item: FeedItem): Promise<HomeFeedItem> {
       contentImageUrl: movie.posterUrl,
       contentTitle: movie.title,
       id: item.id,
+      rating: item.score,
       target: { contentType: 'movie', tmdbId: item.content.tmdbId },
       updatedAt: item.updatedAt,
     };
@@ -442,6 +443,7 @@ async function hydrateFeedItem(item: FeedItem): Promise<HomeFeedItem> {
     contentImageUrl: episodeResponse.item.stillUrl ?? seriesResponse.item.posterUrl,
     contentTitle: episodeResponse.item.title,
     id: item.id,
+    rating: item.score,
     target: {
       contentType: 'episode',
       episodeNumber: item.content.episodeNumber,

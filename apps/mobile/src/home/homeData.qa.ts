@@ -43,6 +43,7 @@ const feed = [
     contentImageUrl: 'https://image.test/review.jpg',
     contentTitle: 'A reviewed movie',
     id: 'review-1',
+    rating: 4.5,
     target: { contentType: 'movie' as const, tmdbId: 31 },
     updatedAt: '2026-07-10T12:00:00.000Z',
   },

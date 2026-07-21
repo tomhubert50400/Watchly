@@ -149,6 +149,7 @@ export function FeedScreen() {
               contentTitle={item.contentTitle}
               key={item.id}
               onOpenContent={() => openContent(item)}
+              rating={item.score}
               updatedAt={item.updatedAt}
             />
           ))}

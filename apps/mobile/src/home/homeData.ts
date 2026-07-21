@@ -49,6 +49,7 @@ export type HomeFeedItem = {
   contentImageUrl: string | null;
   contentTitle: string;
   id: string;
+  rating: number;
   target: HomeFeedTarget;
   updatedAt: string;
 };

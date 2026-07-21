@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { ExpandableReviewText } from './ExpandableReviewText';
 import { MediaPoster } from './MediaPoster';
+import { StarRatingDisplay } from './StarRatingDisplay';
 
 type SocialReviewPostProps = {
   authorDisplayName: string | null;
@@ -11,6 +12,7 @@ type SocialReviewPostProps = {
   contentMeta: string;
   contentTitle: string;
   onOpenContent: () => void;
+  rating: number;
   updatedAt: string;
 };
 
@@ -21,39 +23,41 @@ export const SocialReviewPost = memo(function SocialReviewPost({
   contentMeta,
   contentTitle,
   onOpenContent,
+  rating,
   updatedAt,
 }: SocialReviewPostProps) {
   const visibleAuthor = authorDisplayName?.trim() || 'Watchly member';
 
   return (
     <View style={styles.post}>
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{getInitial(visibleAuthor)}</Text>
-      </View>
-      <View style={styles.postContent}>
-        <View style={styles.byline}>
-          <Text numberOfLines={1} style={styles.author}>{visibleAuthor}</Text>
-          <Text style={styles.date}>{formatDate(updatedAt)}</Text>
+      <View style={styles.byline}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{getInitial(visibleAuthor)}</Text>
         </View>
-        <Pressable
-          accessibilityLabel={`Open ${contentTitle}`}
-          accessibilityRole="button"
-          onPress={onOpenContent}
-          style={({ pressed }) => [styles.mediaLink, pressed ? styles.mediaLinkPressed : null]}
-        >
-          <MediaPoster
-            accessibilityLabel={`${contentTitle} artwork`}
-            posterUrl={contentImageUrl}
-            style={styles.poster}
-          />
-          <View style={styles.mediaCopy}>
-            <Text style={styles.mediaMeta}>{contentMeta}</Text>
-            <Text numberOfLines={2} style={styles.mediaTitle}>{contentTitle}</Text>
-            <Text style={styles.openLabel}>Open content</Text>
-          </View>
-        </Pressable>
-        <ExpandableReviewText body={body} style={styles.review} />
+        <Text numberOfLines={1} style={styles.author}>{visibleAuthor}</Text>
+        <Text style={styles.date}>{formatDate(updatedAt)}</Text>
       </View>
+      <Pressable
+        accessibilityLabel={`Open ${contentTitle}`}
+        accessibilityRole="button"
+        onPress={onOpenContent}
+        style={({ pressed }) => [styles.mediaLink, pressed ? styles.mediaLinkPressed : null]}
+      >
+        <MediaPoster
+          accessibilityLabel={`${contentTitle} artwork`}
+          posterUrl={contentImageUrl}
+          style={styles.poster}
+        />
+        <View style={styles.mediaCopy}>
+          <Text style={styles.mediaMeta}>{contentMeta}</Text>
+          <Text numberOfLines={2} style={styles.mediaTitle}>{contentTitle}</Text>
+          <Text style={styles.openLabel}>Open content</Text>
+        </View>
+      </Pressable>
+      <View style={styles.rating}>
+        <StarRatingDisplay rating={rating} showValue size={17} />
+      </View>
+      <ExpandableReviewText body={body} style={styles.review} />
     </View>
   );
 });
@@ -139,19 +143,17 @@ const styles = StyleSheet.create({
   post: {
     borderBottomColor: colors.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    gap: spacing.sm,
     paddingVertical: spacing.lg,
-  },
-  postContent: {
-    flex: 1,
-    minWidth: 0,
   },
   poster: {
     height: 81,
     width: 54,
   },
   review: {
+    marginTop: spacing.md,
+  },
+  rating: {
+    alignSelf: 'flex-start',
     marginTop: spacing.md,
   },
 });

@@ -13,6 +13,7 @@ type FeedMovieReviewItem = {
     tmdbId: number;
   };
   id: string;
+  score: number;
   type: 'movieReview';
   updatedAt: string;
 };
@@ -27,6 +28,7 @@ type FeedEpisodeReviewItem = {
     seriesTmdbId: number;
   };
   id: string;
+  score: number;
   type: 'episodeReview';
   updatedAt: string;
 };
