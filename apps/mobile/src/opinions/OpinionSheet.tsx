@@ -33,6 +33,7 @@ import {
   canSaveOpinion,
   createOpinionState,
   getHalfStarScore,
+  getRatingAccessibilityValue,
   isOpinionDirty,
   resetOpinionDraft,
 } from './opinionState';
@@ -282,12 +283,7 @@ export function OpinionSheet({
               accessibilityLabel="Rating"
               accessibilityRole="adjustable"
               accessibilityState={{ disabled: isSaving }}
-              accessibilityValue={{
-                max: 5,
-                min: 0,
-                now: opinion.draftRating ?? 0,
-                text: opinion.draftRating === null ? 'Not rated' : `${opinion.draftRating} out of 5`,
-              }}
+              accessibilityValue={getRatingAccessibilityValue(opinion.draftRating)}
               onAccessibilityAction={(event) => {
                 const value = opinion.draftRating ?? 0;
                 const nextRating = event.nativeEvent.actionName === 'increment'

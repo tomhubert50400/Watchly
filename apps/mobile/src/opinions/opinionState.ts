@@ -31,6 +31,15 @@ export function getHalfStarScore(star: number, locationX: number, targetWidth: n
   return locationX <= targetWidth / 2 ? boundedStar - 0.5 : boundedStar;
 }
 
+export function getRatingAccessibilityValue(rating: number | null) {
+  return {
+    max: 10,
+    min: 0,
+    now: (rating ?? 0) * 2,
+    text: rating === null ? 'Not rated' : `${rating} out of 5`,
+  };
+}
+
 export function isOpinionDirty(state: OpinionState) {
   return state.draftRating !== state.savedRating || state.draftReview !== (state.savedReview ?? '');
 }

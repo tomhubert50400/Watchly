@@ -10,6 +10,7 @@ import {
   canSaveOpinion,
   createOpinionState,
   getHalfStarScore,
+  getRatingAccessibilityValue,
   isOpinionDirty,
   type OpinionState,
   type OpinionOperation,
@@ -19,6 +20,18 @@ assert.equal(getHalfStarScore(1, 0, 48), 0.5);
 assert.equal(getHalfStarScore(1, 24, 48), 0.5);
 assert.equal(getHalfStarScore(1, 24.01, 48), 1);
 assert.equal(getHalfStarScore(5, 47, 48), 5);
+assert.deepEqual(getRatingAccessibilityValue(0.5), {
+  max: 10,
+  min: 0,
+  now: 1,
+  text: '0.5 out of 5',
+});
+assert.deepEqual(getRatingAccessibilityValue(null), {
+  max: 10,
+  min: 0,
+  now: 0,
+  text: 'Not rated',
+});
 
 const empty = createOpinionState(null, null);
 assert.equal(isOpinionDirty(empty), false);
