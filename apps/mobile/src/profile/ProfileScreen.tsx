@@ -12,7 +12,6 @@ import {
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { ProfileAuthCard } from '../auth/ProfileAuthCard';
 import { Button } from '../components/Button';
-import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
 import { ExpandableReviewText } from '../components/ExpandableReviewText';
 import { IconButton } from '../components/IconButton';
@@ -23,7 +22,7 @@ import { SectionHeader } from '../components/SectionHeader';
 import { StarRatingDisplay } from '../components/StarRatingDisplay';
 import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
-import { colors, radii, spacing, typography } from '../design/tokens';
+import { colors, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import {
   buildProfileModel,
@@ -202,7 +201,9 @@ const ProfileOpinionCard = memo(function ProfileOpinionCard({ item, onOpenConten
         />
         <View style={styles.cardCopy}>
           <View style={styles.metaRow}>
-            <Chip label={review ? 'Review' : 'Rating'} tone={review ? 'neutral' : 'rating'} />
+            <Text style={[styles.kind, review ? styles.reviewKind : styles.ratingKind]}>
+              {review ? 'Review' : 'Rating'}
+            </Text>
             <Text style={styles.date}>{formatDate(item.updatedAt)}</Text>
           </View>
           <Text numberOfLines={2} style={styles.contentTitle}>{contentTitle}</Text>
@@ -291,15 +292,14 @@ function formatDate(value: string) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    borderWidth: 1,
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     gap: spacing.md,
-    padding: spacing.md,
+    paddingVertical: spacing.lg,
   },
   cardCopy: {
     flex: 1,
+    justifyContent: 'center',
     minWidth: 0,
   },
   cardPressed: {
@@ -332,24 +332,33 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     justifyContent: 'space-between',
   },
+  kind: {
+    ...typography.meta,
+    textTransform: 'uppercase',
+  },
   mediaLink: {
+    alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.md,
   },
   opinionList: {
-    gap: spacing.md,
+    gap: 0,
   },
   opinionsSection: {
     gap: spacing.sm,
   },
   poster: {
-    height: 112,
-    width: 75,
+    height: 102,
+    width: 68,
+  },
+  ratingKind: {
+    color: colors.ratingText,
   },
   review: {
-    borderLeftColor: colors.borderStrong,
-    borderLeftWidth: 2,
-    paddingLeft: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  reviewKind: {
+    color: colors.textSubtle,
   },
   stack: {
     gap: spacing.lg,
