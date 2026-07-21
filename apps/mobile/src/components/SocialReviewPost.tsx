@@ -107,7 +107,7 @@ export const SocialReviewPost = memo(function SocialReviewPost({
       <ExpandableReviewText body={body} style={styles.review} />
       <View style={styles.actions}>
         <Pressable
-          accessibilityLabel={`${likeState.likedByViewer ? 'Unlike' : 'Like'} ${visibleAuthor}'s review`}
+          accessibilityLabel={`${likeState.likedByViewer ? 'Unlike' : 'Like'} ${visibleAuthor}'s review, ${likeState.likeCount} ${likeState.likeCount === 1 ? 'like' : 'likes'}`}
           accessibilityRole="button"
           accessibilityState={{
             busy: isLikePending,
@@ -131,15 +131,13 @@ export const SocialReviewPost = memo(function SocialReviewPost({
             size={19}
             strokeWidth={2.2}
           />
-          <Text style={[styles.likeLabel, likeState.likedByViewer ? styles.likeLabelActive : null]}>
-            {likeState.likedByViewer ? 'Liked' : 'Like'}
+          <Text
+            accessibilityLiveRegion="polite"
+            style={[styles.likeCount, likeState.likedByViewer ? styles.likeCountActive : null]}
+          >
+            {likeState.likeCount}
           </Text>
         </Pressable>
-        {likeState.likeCount > 0 ? (
-          <Text accessibilityLiveRegion="polite" style={styles.likeCount}>
-            {formatLikeCount(likeState.likeCount)}
-          </Text>
-        ) : null}
       </View>
     </View>
   );
@@ -157,10 +155,6 @@ function formatDate(value: string) {
   }
 
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-}
-
-function formatLikeCount(likeCount: number) {
-  return `${likeCount} ${likeCount === 1 ? 'like' : 'likes'}`;
 }
 
 const styles = StyleSheet.create({
@@ -221,13 +215,9 @@ const styles = StyleSheet.create({
   },
   likeCount: {
     ...typography.meta,
-    color: colors.textSubtle,
-  },
-  likeLabel: {
-    ...typography.meta,
     color: colors.textMuted,
   },
-  likeLabelActive: {
+  likeCountActive: {
     color: colors.accentText,
   },
   mediaCopy: {
