@@ -154,6 +154,14 @@ export class DevUiReviewService {
     );
 
     await this.prisma.withConnectionRetry(() =>
+      this.prisma.userMovieRating.upsert({
+        create: { scoreHalfSteps: 9, tmdbId: 603, userId: testUserId },
+        update: { scoreHalfSteps: 9 },
+        where: { userId_tmdbId: { tmdbId: 603, userId: testUserId } },
+      }),
+    );
+
+    await this.prisma.withConnectionRetry(() =>
       this.prisma.userMovieReview.upsert({
         create: {
           body: 'Matrix still feels sharp, stylish, and easy to revisit.',
