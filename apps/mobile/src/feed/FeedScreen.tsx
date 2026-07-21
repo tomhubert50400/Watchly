@@ -77,20 +77,22 @@ export function FeedScreen() {
   }, [loadFeed]);
   const openFeedItem = useCallback(
     (item: HydratedFeedItem) => {
-      if (item.content.contentType === 'movie') {
-        navigation.navigate('FilmDetail', {
-          title: item.contentTitle,
-          tmdbId: item.content.tmdbId,
-        });
-        return;
-      }
+      const target = item.content.contentType === 'movie'
+        ? item.content
+        : {
+            ...item.content,
+            seriesTitle: item.seriesTitle ?? `Series ${item.content.seriesTmdbId}`,
+          };
 
-      navigation.navigate('EpisodeDetail', {
-        episodeNumber: item.content.episodeNumber,
-        seasonNumber: item.content.seasonNumber,
-        seriesTitle: item.seriesTitle ?? `Series ${item.content.seriesTmdbId}`,
-        title: item.contentTitle,
-        tmdbId: item.content.seriesTmdbId,
+      navigation.navigate('ReviewDetail', {
+        authorDisplayName: item.author.displayName ?? 'Watchly member',
+        body: item.body,
+        contentImageUrl: item.contentImageUrl,
+        contentSubtitle: item.contentSubtitle,
+        contentTitle: item.contentTitle,
+        rating: null,
+        target,
+        updatedAt: item.updatedAt,
       });
     },
     [navigation],
@@ -159,7 +161,7 @@ const FeedReviewCard = memo(function FeedReviewCard({
 }) {
   return (
     <Pressable
-      accessibilityLabel={`Open ${item.contentTitle}`}
+      accessibilityLabel={`Read review of ${item.contentTitle}`}
       accessibilityRole="button"
       onPress={() => onPress(item)}
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
@@ -187,7 +189,7 @@ const FeedReviewCard = memo(function FeedReviewCard({
           <Text numberOfLines={2} style={styles.contentTitle}>
             {item.contentTitle}
           </Text>
-          <Text style={styles.openHint}>Open details</Text>
+          <Text style={styles.openHint}>Read review</Text>
         </View>
       </View>
       <View style={styles.reviewBody}>

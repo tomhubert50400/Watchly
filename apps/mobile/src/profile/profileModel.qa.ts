@@ -2,7 +2,7 @@
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import assert from 'node:assert/strict';
 import type { ProfileOpinion, ProfileOpinionsResponse, UserProfile } from '../api/profile';
-import { buildProfileModel } from './profileModel';
+import { buildProfileModel, getProfileOpinionTarget } from './profileModel';
 
 const movieRating: ProfileOpinion = {
   content: { contentType: 'movie', tmdbId: 603 },
@@ -44,6 +44,30 @@ assert.deepEqual(publicModel.stats, {
   followingCount: 3,
   ratingsCount: 2,
   reviewsCount: 1,
+});
+const presentation = {
+  authorDisplayName: 'Watchly UI Review',
+  contentImageUrl: 'https://image.example/matrix.jpg',
+  contentSubtitle: 'Movie',
+  contentTitle: 'The Matrix',
+  seriesTitle: null,
+};
+assert.deepEqual(getProfileOpinionTarget(movieReview, presentation), {
+  name: 'ReviewDetail',
+  params: {
+    authorDisplayName: 'Watchly UI Review',
+    body: 'A precise, stylish rewatch.',
+    contentImageUrl: 'https://image.example/matrix.jpg',
+    contentSubtitle: 'Movie',
+    contentTitle: 'The Matrix',
+    rating: 4.5,
+    target: { contentType: 'movie', tmdbId: 603 },
+    updatedAt: '2026-07-09T12:00:00.000Z',
+  },
+});
+assert.deepEqual(getProfileOpinionTarget(movieRating, presentation), {
+  name: 'FilmDetail',
+  params: { title: 'The Matrix', tmdbId: 603 },
 });
 
 const privateRatingsModel = buildProfileModel(

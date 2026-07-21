@@ -18,7 +18,7 @@ export function SocialActivityRail({ items, onOpen }: SocialActivityRailProps) {
     >
       {items.map((item) => (
         <Pressable
-          accessibilityLabel={`Open ${item.contentTitle}, reviewed by ${item.authorDisplayName ?? 'a profile you follow'}`}
+          accessibilityLabel={`Read review of ${item.contentTitle}, by ${item.authorDisplayName ?? 'a profile you follow'}`}
           accessibilityRole="button"
           key={item.id}
           onPress={() => onOpen(item)}

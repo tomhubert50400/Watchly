@@ -24,7 +24,12 @@ import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
-import { buildProfileModel, isReview, type ProfileModel } from './profileModel';
+import {
+  buildProfileModel,
+  getProfileOpinionTarget,
+  isReview,
+  type ProfileModel,
+} from './profileModel';
 import { ProfileSummaryCard } from './ProfileSummaryCard';
 
 type ProfileNavigation = NativeStackNavigationProp<RootStackParamList>;
@@ -157,7 +162,11 @@ export function ProfileScreen() {
             ) : (
               <View style={styles.opinionList}>
                 {profile.opinions.map((item) => (
-                  <ProfileOpinionCard item={item} key={`${item.type}-${item.id}`} onPress={(opinion) => openOpinion(navigation, opinion)} />
+                  <ProfileOpinionCard
+                    item={item}
+                    key={`${item.type}-${item.id}`}
+                    onPress={(opinion) => openOpinion(navigation, opinion, profile.displayName)}
+                  />
                 ))}
               </View>
             )}
@@ -179,7 +188,7 @@ const ProfileOpinionCard = memo(function ProfileOpinionCard({ item, onPress }: {
 
   return (
     <Pressable
-      accessibilityLabel={`Open ${item.contentTitle}`}
+      accessibilityLabel={review ? `Read review of ${item.contentTitle}` : `Open ${item.contentTitle}`}
       accessibilityRole="button"
       onPress={() => onPress(item)}
       style={({ pressed }) => [styles.card, pressed ? styles.cardPressed : null]}
@@ -203,18 +212,26 @@ const ProfileOpinionCard = memo(function ProfileOpinionCard({ item, onPress }: {
   );
 });
 
-function openOpinion(navigation: ProfileNavigation, item: HydratedProfileOpinion) {
-  if (item.content.contentType === 'movie') {
-    navigation.navigate('FilmDetail', { title: item.contentTitle, tmdbId: item.content.tmdbId });
-    return;
-  }
-  navigation.navigate('EpisodeDetail', {
-    episodeNumber: item.content.episodeNumber,
-    seasonNumber: item.content.seasonNumber,
-    seriesTitle: item.seriesTitle ?? `Series ${item.content.seriesTmdbId}`,
-    title: item.contentTitle,
-    tmdbId: item.content.seriesTmdbId,
+function openOpinion(
+  navigation: ProfileNavigation,
+  item: HydratedProfileOpinion,
+  authorDisplayName: string,
+) {
+  const target = getProfileOpinionTarget(item, {
+    authorDisplayName,
+    contentImageUrl: item.contentImageUrl,
+    contentSubtitle: item.contentSubtitle,
+    contentTitle: item.contentTitle,
+    seriesTitle: item.seriesTitle,
   });
+
+  if (target.name === 'ReviewDetail') {
+    navigation.navigate(target.name, target.params);
+  } else if (target.name === 'FilmDetail') {
+    navigation.navigate(target.name, target.params);
+  } else {
+    navigation.navigate(target.name, target.params);
+  }
 }
 
 async function hydrateProfileOpinion(
