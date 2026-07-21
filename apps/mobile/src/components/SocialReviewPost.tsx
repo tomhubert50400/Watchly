@@ -120,7 +120,6 @@ export const SocialReviewPost = memo(function SocialReviewPost({
           }}
           style={({ pressed }) => [
             styles.likeButton,
-            likeState.likedByViewer ? styles.likeButtonActive : null,
             pressed ? styles.likeButtonPressed : null,
             isLikePending ? styles.likeButtonPending : null,
           ]}
@@ -199,15 +198,11 @@ const styles = StyleSheet.create({
   },
   likeButton: {
     alignItems: 'center',
-    backgroundColor: colors.panelSoft,
     borderRadius: radii.md,
     flexDirection: 'row',
     gap: spacing.xs,
     minHeight: touchTargets.min,
     paddingHorizontal: spacing.sm,
-  },
-  likeButtonActive: {
-    backgroundColor: colors.accentSoft,
   },
   likeButtonPending: {
     opacity: 0.58,
