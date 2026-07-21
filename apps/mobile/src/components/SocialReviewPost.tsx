@@ -124,12 +124,6 @@ export const SocialReviewPost = memo(function SocialReviewPost({
             isLikePending ? styles.likeButtonPending : null,
           ]}
         >
-          <Heart
-            color={likeState.likedByViewer ? colors.accentText : colors.textMuted}
-            fill={likeState.likedByViewer ? colors.accent : 'transparent'}
-            size={19}
-            strokeWidth={2.2}
-          />
           {likeState.likeCount > 0 ? (
             <Text
               accessibilityLiveRegion="polite"
@@ -138,6 +132,12 @@ export const SocialReviewPost = memo(function SocialReviewPost({
               {likeState.likeCount}
             </Text>
           ) : null}
+          <Heart
+            color={likeState.likedByViewer ? colors.accentText : colors.textMuted}
+            fill={likeState.likedByViewer ? colors.accent : 'transparent'}
+            size={19}
+            strokeWidth={2.2}
+          />
         </Pressable>
       </View>
     </View>
