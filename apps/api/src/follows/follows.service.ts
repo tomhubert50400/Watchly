@@ -9,7 +9,7 @@ import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { assertUuid } from '../blocks/blocks.service';
 import { PrismaService } from '../database/prisma.service';
-import { PrivacyVisibility } from '../generated/prisma/enums';
+import { FollowStatus, PrivacyVisibility } from '../generated/prisma/enums';
 
 @Injectable()
 export class FollowsService {
@@ -31,15 +31,18 @@ export class FollowsService {
 
     assertUuid(targetUserId);
     assertNotSelf(followerId, targetUserId);
-    await this.assertFollowAllowed(followerId, targetUserId);
+    const requestedStatus = await this.getRequestedFollowStatus(followerId, targetUserId);
 
     const follow = await this.prisma.withConnectionRetry(() =>
       this.prisma.userFollow.upsert({
       create: {
         followedUserId: targetUserId,
         followerId,
+        status: requestedStatus,
       },
-      update: {},
+      update: requestedStatus === FollowStatus.ACCEPTED
+        ? { status: FollowStatus.ACCEPTED }
+        : {},
       where: {
         followerId_followedUserId: {
           followedUserId: targetUserId,
@@ -49,11 +52,7 @@ export class FollowsService {
       }),
     );
 
-    return {
-      followedAt: follow.createdAt.toISOString(),
-      following: true,
-      userId: targetUserId,
-    };
+    return toFollowState(targetUserId, follow);
   }
 
   async unfollowUser(identity: AuthenticatedIdentity, targetUserId: string) {
@@ -70,11 +69,85 @@ export class FollowsService {
       }),
     );
 
+    return toFollowState(targetUserId, null);
+  }
+
+  async listPendingRequests(identity: AuthenticatedIdentity) {
+    const userId = await this.getUserId(identity);
+    const requests = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userFollow.findMany({
+        include: {
+          follower: {
+            select: {
+              displayName: true,
+              id: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        where: {
+          followedUserId: userId,
+          status: FollowStatus.PENDING,
+        },
+      }),
+    );
+
     return {
-      followedAt: null,
-      following: false,
-      userId: targetUserId,
+      items: requests.map((request) => ({
+        displayName: request.follower.displayName,
+        requestedAt: request.createdAt.toISOString(),
+        userId: request.follower.id,
+      })),
     };
+  }
+
+  async acceptRequest(identity: AuthenticatedIdentity, followerId: string) {
+    const followedUserId = await this.getUserId(identity);
+
+    assertUuid(followerId);
+
+    const result = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userFollow.updateMany({
+        data: {
+          status: FollowStatus.ACCEPTED,
+        },
+        where: {
+          followedUserId,
+          followerId,
+          status: FollowStatus.PENDING,
+        },
+      }),
+    );
+
+    if (result.count === 0) {
+      throw new NotFoundException('Follow request not found.');
+    }
+
+    return { accepted: true, userId: followerId };
+  }
+
+  async rejectRequest(identity: AuthenticatedIdentity, followerId: string) {
+    const followedUserId = await this.getUserId(identity);
+
+    assertUuid(followerId);
+
+    const result = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userFollow.deleteMany({
+        where: {
+          followedUserId,
+          followerId,
+          status: FollowStatus.PENDING,
+        },
+      }),
+    );
+
+    if (result.count === 0) {
+      throw new NotFoundException('Follow request not found.');
+    }
+
+    return { rejected: true, userId: followerId };
   }
 
   private async getUserId(identity: AuthenticatedIdentity) {
@@ -95,14 +168,10 @@ export class FollowsService {
       }),
     );
 
-    return {
-      followedAt: follow?.createdAt.toISOString() ?? null,
-      following: Boolean(follow),
-      userId: followedUserId,
-    };
+    return toFollowState(followedUserId, follow);
   }
 
-  private async assertFollowAllowed(followerId: string, followedUserId: string) {
+  private async getRequestedFollowStatus(followerId: string, followedUserId: string) {
     const user = await this.prisma.withConnectionRetry(() =>
       this.prisma.user.findUnique({
       include: {
@@ -116,10 +185,6 @@ export class FollowsService {
 
     if (!user) {
       throw new NotFoundException('User not found.');
-    }
-
-    if (user.privacySettings?.profileVisibility === PrivacyVisibility.PRIVATE) {
-      throw new ForbiddenException('This profile is private.');
     }
 
     const block = await this.prisma.withConnectionRetry(() =>
@@ -142,7 +207,29 @@ export class FollowsService {
     if (block) {
       throw new ForbiddenException('This profile is unavailable.');
     }
+
+    return user.privacySettings?.profileVisibility === PrivacyVisibility.PRIVATE
+      ? FollowStatus.PENDING
+      : FollowStatus.ACCEPTED;
   }
+}
+
+function toFollowState(
+  userId: string,
+  follow: { createdAt: Date; status: FollowStatus } | null,
+) {
+  const status = follow?.status === FollowStatus.PENDING
+    ? 'pending' as const
+    : follow
+      ? 'following' as const
+      : 'none' as const;
+
+  return {
+    followedAt: follow?.createdAt.toISOString() ?? null,
+    following: status === 'following',
+    status,
+    userId,
+  };
 }
 
 function assertNotSelf(userId: string, targetUserId: string) {

@@ -4,11 +4,14 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { getAuth } from 'firebase-admin/auth';
 import {
   AuditAction,
   AuthProvider,
+  FollowStatus,
   PrivacyVisibility,
   SharedWatchlistVisibility,
 } from '../generated/prisma/enums';
@@ -122,6 +125,246 @@ export class ProfileService {
     return { items, stats: await this.getProfileStats(userId) };
   }
 
+  async exportAccountData(identity: AuthenticatedIdentity) {
+    const userId = await this.getUserId(identity);
+    const account = await this.prisma.withConnectionRetry(() =>
+      this.prisma.user.findUniqueOrThrow({
+        select: {
+          authIdentities: {
+            select: {
+              createdAt: true,
+              provider: true,
+              providerUserId: true,
+            },
+          },
+          blockedUsers: {
+            orderBy: { createdAt: 'desc' },
+            select: {
+              blockedUserId: true,
+              createdAt: true,
+            },
+          },
+          contentStates: {
+            orderBy: { updatedAt: 'desc' },
+            select: {
+              contentType: true,
+              favorite: true,
+              status: true,
+              tmdbId: true,
+              updatedAt: true,
+            },
+          },
+          createdAt: true,
+          displayName: true,
+          episodeProgress: {
+            orderBy: { watchedAt: 'desc' },
+            select: {
+              episodeNumber: true,
+              seasonNumber: true,
+              seriesTmdbId: true,
+              watchedAt: true,
+            },
+          },
+          episodeReviewLikes: {
+            orderBy: { createdAt: 'desc' },
+            select: {
+              createdAt: true,
+              reviewId: true,
+            },
+          },
+          episodeRatings: {
+            orderBy: { updatedAt: 'desc' },
+            select: {
+              episodeNumber: true,
+              scoreHalfSteps: true,
+              seasonNumber: true,
+              seriesTmdbId: true,
+              updatedAt: true,
+            },
+          },
+          episodeReviews: {
+            orderBy: { updatedAt: 'desc' },
+            select: {
+              body: true,
+              episodeNumber: true,
+              seasonNumber: true,
+              seriesTmdbId: true,
+              updatedAt: true,
+            },
+          },
+          following: {
+            orderBy: { createdAt: 'desc' },
+            select: {
+              createdAt: true,
+              followedUserId: true,
+            },
+          },
+          followers: {
+            orderBy: { createdAt: 'desc' },
+            select: {
+              createdAt: true,
+              followerId: true,
+            },
+          },
+          id: true,
+          movieRatings: {
+            orderBy: { updatedAt: 'desc' },
+            select: {
+              scoreHalfSteps: true,
+              tmdbId: true,
+              updatedAt: true,
+            },
+          },
+          movieReviews: {
+            orderBy: { updatedAt: 'desc' },
+            select: {
+              body: true,
+              tmdbId: true,
+              updatedAt: true,
+            },
+          },
+          movieReviewLikes: {
+            orderBy: { createdAt: 'desc' },
+            select: {
+              createdAt: true,
+              reviewId: true,
+            },
+          },
+          notifications: {
+            orderBy: { createdAt: 'desc' },
+            select: {
+              body: true,
+              contentType: true,
+              createdAt: true,
+              episodeNumber: true,
+              kind: true,
+              readAt: true,
+              releaseType: true,
+              routeMetadata: true,
+              seasonNumber: true,
+              title: true,
+              tmdbId: true,
+            },
+          },
+          onboardingCompleted: true,
+          ownedSharedWatchlists: {
+            orderBy: { updatedAt: 'desc' },
+            select: {
+              createdAt: true,
+              items: {
+                orderBy: { createdAt: 'desc' },
+                select: {
+                  contentType: true,
+                  createdAt: true,
+                  tmdbId: true,
+                },
+              },
+              name: true,
+              updatedAt: true,
+            },
+          },
+          personalWatchlists: {
+            orderBy: { updatedAt: 'desc' },
+            select: {
+              createdAt: true,
+              items: {
+                orderBy: { createdAt: 'desc' },
+                select: {
+                  contentType: true,
+                  createdAt: true,
+                  tmdbId: true,
+                },
+              },
+              name: true,
+              updatedAt: true,
+              visibility: true,
+            },
+          },
+          privacySettings: {
+            select: {
+              episodeProgressVisibility: true,
+              profileVisibility: true,
+              ratingsVisibility: true,
+              reviewsVisibility: true,
+              sharedWatchlistVisibility: true,
+              viewingHistoryVisibility: true,
+            },
+          },
+          releaseAlertSubscriptions: {
+            orderBy: { updatedAt: 'desc' },
+            select: {
+              contentType: true,
+              tmdbId: true,
+              updatedAt: true,
+            },
+          },
+          sharedWatchlistMemberships: {
+            orderBy: { createdAt: 'desc' },
+            select: {
+              createdAt: true,
+              watchlistId: true,
+            },
+          },
+          sharedVotingVotes: {
+            orderBy: { createdAt: 'desc' },
+            select: {
+              candidateId: true,
+              createdAt: true,
+            },
+          },
+          updatedAt: true,
+        },
+        where: { id: userId },
+      }),
+    );
+
+    return {
+      account,
+      exportedAt: new Date().toISOString(),
+      formatVersion: 1,
+    };
+  }
+
+  async deleteAccount(identity: AuthenticatedIdentity) {
+    const authIdentity = await this.prisma.withConnectionRetry(() =>
+      this.prisma.authIdentity.findUnique({
+        select: { userId: true },
+        where: {
+          provider_providerUserId: {
+            provider: identity.provider,
+            providerUserId: identity.providerUserId,
+          },
+        },
+      }),
+    );
+
+    if (authIdentity) {
+      await this.prisma.withConnectionRetry(() =>
+        this.prisma.$transaction([
+          this.prisma.auditLog.deleteMany({
+            where: {
+              OR: [
+                { actorUserId: authIdentity.userId },
+                { targetUserId: authIdentity.userId },
+              ],
+            },
+          }),
+          this.prisma.user.delete({ where: { id: authIdentity.userId } }),
+        ]),
+      );
+    }
+
+    try {
+      await getAuth().deleteUser(identity.providerUserId);
+    } catch (error) {
+      if (!isFirebaseUserNotFound(error)) {
+        throw new ServiceUnavailableException(
+          'Watchly data was deleted, but sign-in removal needs another attempt.',
+        );
+      }
+    }
+  }
+
   async getPublicProfile(identity: AuthenticatedIdentity, targetUserId: string) {
     assertUuid(targetUserId);
 
@@ -221,30 +464,36 @@ export class ProfileService {
       this.prisma.$transaction(async (tx) => {
       await tx.privacySettings.upsert({
         create: {
-          episodeProgressVisibility: input.episodeProgressVisibility
+          episodeProgressVisibility: profileVisibility ?? (input.episodeProgressVisibility
             ? toPrivacyVisibility(input.episodeProgressVisibility)
-            : undefined,
+            : undefined),
           profileVisibility,
-          ratingsVisibility: input.ratingsVisibility
+          ratingsVisibility: profileVisibility ?? (input.ratingsVisibility
             ? toPrivacyVisibility(input.ratingsVisibility)
-            : undefined,
+            : undefined),
           reviewsVisibility: profileVisibility,
           sharedWatchlistVisibility: input.sharedWatchlistVisibility
             ? toSharedWatchlistVisibility(input.sharedWatchlistVisibility)
             : undefined,
           userId,
-          viewingHistoryVisibility: input.viewingHistoryVisibility
+          viewingHistoryVisibility: profileVisibility ?? (input.viewingHistoryVisibility
             ? toPrivacyVisibility(input.viewingHistoryVisibility)
-            : undefined,
+            : undefined),
         },
         update: {
           ...(input.episodeProgressVisibility
             ? { episodeProgressVisibility: toPrivacyVisibility(input.episodeProgressVisibility) }
             : {}),
           ...(profileVisibility
-            ? { profileVisibility, reviewsVisibility: profileVisibility }
+            ? {
+                episodeProgressVisibility: profileVisibility,
+                profileVisibility,
+                ratingsVisibility: profileVisibility,
+                reviewsVisibility: profileVisibility,
+                viewingHistoryVisibility: profileVisibility,
+              }
             : {}),
-          ...(input.ratingsVisibility
+          ...(!profileVisibility && input.ratingsVisibility
             ? { ratingsVisibility: toPrivacyVisibility(input.ratingsVisibility) }
             : {}),
           ...(input.sharedWatchlistVisibility
@@ -254,7 +503,7 @@ export class ProfileService {
                 ),
               }
             : {}),
-          ...(input.viewingHistoryVisibility
+          ...(!profileVisibility && input.viewingHistoryVisibility
             ? { viewingHistoryVisibility: toPrivacyVisibility(input.viewingHistoryVisibility) }
             : {}),
         },
@@ -262,6 +511,18 @@ export class ProfileService {
           userId,
         },
       });
+
+      if (profileVisibility === PrivacyVisibility.PUBLIC) {
+        await tx.userFollow.updateMany({
+          data: {
+            status: FollowStatus.ACCEPTED,
+          },
+          where: {
+            followedUserId: userId,
+            status: FollowStatus.PENDING,
+          },
+        });
+      }
 
       await tx.auditLog.create({
         data: {
@@ -355,6 +616,24 @@ export class ProfileService {
       () =>
         this.prisma.user.findUnique({
           include: {
+            personalWatchlists: {
+              orderBy: {
+                updatedAt: 'desc',
+              },
+              select: {
+                _count: {
+                  select: {
+                    items: true,
+                  },
+                },
+                id: true,
+                name: true,
+                updatedAt: true,
+              },
+              where: {
+                visibility: PrivacyVisibility.PUBLIC,
+              },
+            },
             privacySettings: true,
           },
           where: {
@@ -367,24 +646,51 @@ export class ProfileService {
       throw new NotFoundException('Profile not found.');
     }
 
-    if (
-      !allowOwnerPrivateView &&
-      user.privacySettings?.profileVisibility === PrivacyVisibility.PRIVATE
-    ) {
-      throw new ForbiddenException('This profile is private.');
-    }
-
     if (!allowOwnerPrivateView && viewerId) {
       await this.assertNotBlockedByEitherUser(viewerId, userId);
     }
 
+    const profileIsPrivate =
+      user.privacySettings?.profileVisibility === PrivacyVisibility.PRIVATE;
+    const acceptedFollow = profileIsPrivate && !allowOwnerPrivateView && viewerId
+      ? await this.prisma.withConnectionRetry(() =>
+          this.prisma.userFollow.findFirst({
+            select: {
+              id: true,
+            },
+            where: {
+              followedUserId: userId,
+              followerId: viewerId,
+              status: FollowStatus.ACCEPTED,
+            },
+          }),
+        )
+      : null;
+    const canViewContent = !profileIsPrivate || allowOwnerPrivateView || Boolean(acceptedFollow);
+
     return {
-      displayName: user.displayName,
+      canViewContent,
+      displayName: canViewContent ? user.displayName : null,
       id: user.id,
       profileVisibility: fromPrivacyVisibility(
         user.privacySettings?.profileVisibility ?? PrivacyVisibility.PUBLIC,
       ),
-      stats: await this.getProfileStats(user.id),
+      stats: canViewContent
+        ? await this.getProfileStats(user.id)
+        : {
+            followersCount: 0,
+            followingCount: 0,
+            postsCount: 0,
+            reviewsCount: 0,
+          },
+      watchlists: canViewContent
+        ? user.personalWatchlists.map((watchlist) => ({
+            id: watchlist.id,
+            itemCount: watchlist._count.items,
+            name: watchlist.name,
+            updatedAt: watchlist.updatedAt.toISOString(),
+          }))
+        : [],
     };
   }
 
@@ -403,8 +709,12 @@ export class ProfileService {
           this.prisma.userEpisodeReview.count({ where: { userId } }),
           this.prisma.userMovieRating.count({ where: { userId } }),
           this.prisma.userEpisodeRating.count({ where: { userId } }),
-          this.prisma.userFollow.count({ where: { followedUserId: userId } }),
-          this.prisma.userFollow.count({ where: { followerId: userId } }),
+          this.prisma.userFollow.count({
+            where: { followedUserId: userId, status: FollowStatus.ACCEPTED },
+          }),
+          this.prisma.userFollow.count({
+            where: { followerId: userId, status: FollowStatus.ACCEPTED },
+          }),
         ]),
       );
 
@@ -656,10 +966,24 @@ function getPrivacyAuditFields(input: UpdatePrivacySettingsDto) {
   const fields = Object.keys(input);
 
   if (hasOwn(input, 'profileVisibility')) {
-    fields.push('reviewsVisibility');
+    fields.push(
+      'episodeProgressVisibility',
+      'ratingsVisibility',
+      'reviewsVisibility',
+      'viewingHistoryVisibility',
+    );
   }
 
   return Array.from(new Set(fields)).sort();
+}
+
+function isFirebaseUserNotFound(error: unknown) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'auth/user-not-found'
+  );
 }
 
 const DEV_TEST_REVIEW_TMDB_ID = 603;

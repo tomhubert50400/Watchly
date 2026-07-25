@@ -4,6 +4,7 @@ import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
 import {
   AuthProvider,
+  FollowStatus,
   NotificationKind,
   PrivacyVisibility,
   ReleaseNotificationType,
@@ -56,8 +57,8 @@ export class DevUiReviewService {
 
     await this.prisma.withConnectionRetry(() =>
       this.prisma.userFollow.upsert({
-        create: { followedUserId: testUser.id, followerId: user.id },
-        update: {},
+        create: { followedUserId: testUser.id, followerId: user.id, status: FollowStatus.ACCEPTED },
+        update: { status: FollowStatus.ACCEPTED },
         where: {
           followerId_followedUserId: {
             followedUserId: testUser.id,

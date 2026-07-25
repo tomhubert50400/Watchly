@@ -2,7 +2,7 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
-import { PrivacyVisibility } from '../generated/prisma/enums';
+import { FollowStatus, PrivacyVisibility } from '../generated/prisma/enums';
 
 type FeedAuthor = {
   displayName: string | null;
@@ -332,6 +332,7 @@ export class FeedService {
         },
         where: {
           followerId: viewerId,
+          status: FollowStatus.ACCEPTED,
         },
       }),
       this.prisma.userBlock.findMany({

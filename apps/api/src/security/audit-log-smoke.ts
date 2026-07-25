@@ -44,8 +44,11 @@ async function main() {
     assert(Boolean(privacyLog), 'Privacy update audit log was not created.');
     assert(
       changedFields.includes('profileVisibility') &&
-        changedFields.includes('reviewsVisibility'),
-      'Privacy audit log must include profile and review visibility fields.',
+        changedFields.includes('reviewsVisibility') &&
+        changedFields.includes('ratingsVisibility') &&
+        changedFields.includes('viewingHistoryVisibility') &&
+        changedFields.includes('episodeProgressVisibility'),
+      'Privacy audit log must include every field controlled by profile visibility.',
     );
     assert(blockLog?.targetUserId === target.id, 'Block audit log must target the blocked user.');
     assert(

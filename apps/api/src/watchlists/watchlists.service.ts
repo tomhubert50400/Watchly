@@ -2,8 +2,8 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
-import { TrackedContentType } from '../generated/prisma/enums';
-import { WatchlistContentType, WatchlistItemDto } from './watchlists.dto';
+import { PrivacyVisibility, TrackedContentType } from '../generated/prisma/enums';
+import { WatchlistContentType, WatchlistItemDto, WatchlistVisibility } from './watchlists.dto';
 
 @Injectable()
 export class WatchlistsService {
@@ -110,7 +110,37 @@ export class WatchlistsService {
       items: watchlist.items.map(toItem),
       name: watchlist.name,
       updatedAt: watchlist.updatedAt.toISOString(),
+      visibility: fromPrivacyVisibility(watchlist.visibility),
     };
+  }
+
+  async updateVisibility(
+    identity: AuthenticatedIdentity,
+    watchlistId: string,
+    visibility: WatchlistVisibility,
+  ) {
+    const userId = await this.getUserId(identity);
+    await this.assertOwnedWatchlist(userId, watchlistId);
+
+    const watchlist = await this.withConnectionRetry(() =>
+      this.prisma.personalWatchlist.update({
+        data: {
+          visibility: toPrivacyVisibility(visibility),
+        },
+        include: {
+          _count: {
+            select: {
+              items: true,
+            },
+          },
+        },
+        where: {
+          id: watchlistId,
+        },
+      }),
+    );
+
+    return toSummary(watchlist);
   }
 
   async deleteWatchlist(identity: AuthenticatedIdentity, watchlistId: string) {
@@ -229,6 +259,7 @@ type WatchlistSummaryRecord = {
   }[];
   name: string;
   updatedAt: Date;
+  visibility: PrivacyVisibility;
 };
 
 type WatchlistItemRecord = {
@@ -246,6 +277,7 @@ function toSummary(watchlist: WatchlistSummaryRecord, includeContainsTitle = fal
     itemCount: watchlist._count.items,
     name: watchlist.name,
     updatedAt: watchlist.updatedAt.toISOString(),
+    visibility: fromPrivacyVisibility(watchlist.visibility),
   };
 }
 
@@ -264,4 +296,12 @@ function toTrackedContentType(contentType: WatchlistContentType): TrackedContent
 
 function fromTrackedContentType(contentType: TrackedContentType): WatchlistContentType {
   return contentType === TrackedContentType.MOVIE ? 'movie' : 'series';
+}
+
+function toPrivacyVisibility(visibility: WatchlistVisibility) {
+  return visibility === 'public' ? PrivacyVisibility.PUBLIC : PrivacyVisibility.PRIVATE;
+}
+
+function fromPrivacyVisibility(visibility: PrivacyVisibility): WatchlistVisibility {
+  return visibility === PrivacyVisibility.PUBLIC ? 'public' : 'private';
 }

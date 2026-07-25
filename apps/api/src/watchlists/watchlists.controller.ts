@@ -17,6 +17,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { AuthenticatedRequest } from '../auth/auth.types';
 import {
   CreateWatchlistDto,
+  UpdateWatchlistVisibilityDto,
   WatchlistContentType,
   watchlistContentTypes,
   WatchlistItemDto,
@@ -57,6 +58,19 @@ export class WatchlistsController {
   @Get(':watchlistId')
   async get(@Req() request: AuthenticatedRequest, @Param('watchlistId') watchlistId: string) {
     return this.watchlists.getWatchlist(getIdentity(request), parseWatchlistId(watchlistId));
+  }
+
+  @Put(':watchlistId')
+  async updateVisibility(
+    @Req() request: AuthenticatedRequest,
+    @Param('watchlistId') watchlistId: string,
+    @Body() body: UpdateWatchlistVisibilityDto,
+  ) {
+    return this.watchlists.updateVisibility(
+      getIdentity(request),
+      parseWatchlistId(watchlistId),
+      body.visibility,
+    );
   }
 
   @Delete(':watchlistId')

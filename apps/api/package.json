@@ -10,6 +10,7 @@
     "dev:prepare-ui-review": "tsx src/dev/prepare-ui-review-data.ts",
     "prisma:generate": "prisma generate",
     "security:audit-smoke": "tsx src/security/audit-log-smoke.ts",
+    "security:account-deletion-smoke": "tsx src/security/account-deletion-smoke.ts",
     "security:backup-readiness": "tsx src/security/backup-readiness.ts",
     "security:deployment-smoke": "tsx src/security/deployment-smoke.ts",
     "security:env-secrets": "tsx src/security/environment-secrets-check.ts",

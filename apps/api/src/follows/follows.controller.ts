@@ -18,6 +18,21 @@ import { FollowsService } from './follows.service';
 export class FollowsController {
   constructor(@Inject(FollowsService) private readonly follows: FollowsService) {}
 
+  @Get('requests')
+  async requests(@Req() request: AuthenticatedRequest) {
+    return this.follows.listPendingRequests(getIdentity(request));
+  }
+
+  @Put('requests/:userId/accept')
+  async acceptRequest(@Req() request: AuthenticatedRequest, @Param('userId') userId: string) {
+    return this.follows.acceptRequest(getIdentity(request), userId);
+  }
+
+  @Delete('requests/:userId')
+  async rejectRequest(@Req() request: AuthenticatedRequest, @Param('userId') userId: string) {
+    return this.follows.rejectRequest(getIdentity(request), userId);
+  }
+
   @Get(':userId')
   async get(@Req() request: AuthenticatedRequest, @Param('userId') userId: string) {
     return this.follows.getFollowState(getIdentity(request), userId);

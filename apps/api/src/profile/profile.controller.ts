@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Inject,
   Param,
@@ -32,6 +33,18 @@ export class ProfileController {
   @Get('me/opinions')
   async opinions(@Req() request: AuthenticatedRequest) {
     return this.profile.listOwnOpinions(getIdentity(request));
+  }
+
+  @Get('me/export')
+  async exportAccountData(@Req() request: AuthenticatedRequest) {
+    return this.profile.exportAccountData(getIdentity(request));
+  }
+
+  @Delete('me')
+  async deleteAccount(@Req() request: AuthenticatedRequest) {
+    await this.profile.deleteAccount(getIdentity(request));
+
+    return { deleted: true };
   }
 
   @Put('dev-test-user')

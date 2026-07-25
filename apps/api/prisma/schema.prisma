@@ -19,6 +19,11 @@ enum PrivacyVisibility {
   PRIVATE
 }
 
+enum FollowStatus {
+  PENDING
+  ACCEPTED
+}
+
 enum SharedWatchlistVisibility {
   MEMBERS
   PRIVATE
@@ -105,10 +110,10 @@ model AuthIdentity {
 
 model PrivacySettings {
   userId                    String                    @id @db.Uuid
-  profileVisibility         PrivacyVisibility         @default(PUBLIC)
+  profileVisibility         PrivacyVisibility         @default(PRIVATE)
   viewingHistoryVisibility  PrivacyVisibility         @default(PRIVATE)
   episodeProgressVisibility PrivacyVisibility         @default(PRIVATE)
-  reviewsVisibility         PrivacyVisibility         @default(PUBLIC)
+  reviewsVisibility         PrivacyVisibility         @default(PRIVATE)
   ratingsVisibility         PrivacyVisibility         @default(PRIVATE)
   sharedWatchlistVisibility SharedWatchlistVisibility @default(MEMBERS)
   createdAt                 DateTime                  @default(now())
@@ -168,14 +173,14 @@ model UserEpisodeRating {
 }
 
 model UserMovieReview {
-  id        String   @id @default(uuid()) @db.Uuid
-  userId    String   @db.Uuid
+  id        String            @id @default(uuid()) @db.Uuid
+  userId    String            @db.Uuid
   tmdbId    Int
-  body      String   @db.VarChar(5000)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  body      String            @db.VarChar(5000)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
   likes     MovieReviewLike[]
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tmdbId])
   @@index([userId])
@@ -197,16 +202,16 @@ model MovieReviewLike {
 }
 
 model UserEpisodeReview {
-  id            String   @id @default(uuid()) @db.Uuid
-  userId        String   @db.Uuid
+  id            String              @id @default(uuid()) @db.Uuid
+  userId        String              @db.Uuid
   seriesTmdbId  Int
   seasonNumber  Int
   episodeNumber Int
-  body          String   @db.VarChar(5000)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  body          String              @db.VarChar(5000)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
   likes         EpisodeReviewLike[]
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, seriesTmdbId, seasonNumber, episodeNumber])
   @@index([userId])
@@ -258,26 +263,29 @@ model UserBlock {
 }
 
 model UserFollow {
-  id             String   @id @default(uuid()) @db.Uuid
-  followerId     String   @db.Uuid
-  followedUserId String   @db.Uuid
-  createdAt      DateTime @default(now())
-  followedUser   User     @relation("UserFollowsReceived", fields: [followedUserId], references: [id], onDelete: Cascade)
-  follower       User     @relation("UserFollowsMade", fields: [followerId], references: [id], onDelete: Cascade)
+  id             String       @id @default(uuid()) @db.Uuid
+  followerId     String       @db.Uuid
+  followedUserId String       @db.Uuid
+  status         FollowStatus @default(ACCEPTED)
+  createdAt      DateTime     @default(now())
+  followedUser   User         @relation("UserFollowsReceived", fields: [followedUserId], references: [id], onDelete: Cascade)
+  follower       User         @relation("UserFollowsMade", fields: [followerId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followedUserId])
   @@index([followedUserId])
+  @@index([followedUserId, status])
   @@map("user_follows")
 }
 
 model PersonalWatchlist {
-  id        String                  @id @default(uuid()) @db.Uuid
-  userId    String                  @db.Uuid
-  name      String                  @db.VarChar(80)
-  createdAt DateTime                @default(now())
-  updatedAt DateTime                @updatedAt
-  items     PersonalWatchlistItem[]
-  user      User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String                  @id @default(uuid()) @db.Uuid
+  userId     String                  @db.Uuid
+  name       String                  @db.VarChar(80)
+  visibility PrivacyVisibility       @default(PRIVATE)
+  createdAt  DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
+  items      PersonalWatchlistItem[]
+  user       User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("personal_watchlists")

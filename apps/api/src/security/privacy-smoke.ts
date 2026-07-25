@@ -37,13 +37,16 @@ async function main() {
     userIds = [actor.id, viewer.id];
 
     await assertDefaultPrivacy(profile, actorIdentity);
+    await profile.updatePrivacy(actorIdentity, { profileVisibility: 'public' });
     await assertPublicProfileProjection(profile, viewerIdentity, actor.id);
     await assertOwnerOnlyPersonalData(
+      profile,
       ratings,
       progress,
       watchlists,
       actorIdentity,
       viewerIdentity,
+      actor.id,
     );
     await assertFeedPrivacyAndBlocking(
       profile,
@@ -55,7 +58,9 @@ async function main() {
       actorIdentity,
       viewerIdentity,
       actor.id,
+      viewer.id,
     );
+    await assertAccountDataExport(profile, actorIdentity);
 
     console.log('Privacy smoke passed.');
   } finally {
@@ -64,10 +69,39 @@ async function main() {
   }
 }
 
+async function assertAccountDataExport(
+  profile: ProfileService,
+  identity: AuthenticatedIdentity,
+) {
+  const exported = await profile.exportAccountData(identity);
+
+  assert(exported.formatVersion === 1, 'Account exports should use a versioned format.');
+  assert(
+    exported.account.movieRatings.length > 0,
+    'Account exports should include the owner ratings.',
+  );
+  assert(
+    exported.account.episodeProgress.length > 0,
+    'Account exports should include the owner episode progress.',
+  );
+  assert(
+    exported.account.personalWatchlists.length > 0,
+    'Account exports should include personal watchlists and their items.',
+  );
+  assert(
+    exported.account.personalWatchlists.every((watchlist) => 'visibility' in watchlist),
+    'Account exports should include personal watchlist visibility.',
+  );
+  assert(
+    exported.account.authIdentities.length > 0,
+    'Account exports should identify the linked authentication provider.',
+  );
+}
+
 async function assertDefaultPrivacy(profile: ProfileService, identity: AuthenticatedIdentity) {
   const me = await profile.getProfile(identity);
 
-  assert(me.privacy.profileVisibility === 'public', 'Profiles should default to public.');
+  assert(me.privacy.profileVisibility === 'private', 'Profiles should default to private.');
   assert(
     me.privacy.viewingHistoryVisibility === 'private',
     'Viewing history should default to private.',
@@ -96,7 +130,7 @@ async function assertPublicProfileProjection(
   const keys = Object.keys(publicProfile).sort();
 
   assert(
-    keys.join(',') === 'displayName,id,profileVisibility,stats',
+    keys.join(',') === 'canViewContent,displayName,id,profileVisibility,stats,watchlists',
     `Public profile projection leaked unexpected fields: ${keys.join(',')}`,
   );
   const statsKeys = Object.keys(publicProfile.stats).sort();
@@ -107,16 +141,33 @@ async function assertPublicProfileProjection(
 }
 
 async function assertOwnerOnlyPersonalData(
+  profile: ProfileService,
   ratings: RatingsService,
   progress: ProgressService,
   watchlists: WatchlistsService,
   actorIdentity: AuthenticatedIdentity,
   viewerIdentity: AuthenticatedIdentity,
+  actorUserId: string,
 ) {
   await ratings.upsertMovieRating(actorIdentity, 603, 4.5);
   await progress.markEpisodeWatched(actorIdentity, 1399, 1, 2);
   const watchlist = await watchlists.createWatchlist(actorIdentity, 'Privacy smoke list');
   await watchlists.addItem(actorIdentity, watchlist.id, { contentType: 'movie', tmdbId: 603 });
+
+  assert(watchlist.visibility === 'private', 'Personal watchlists should default to private.');
+  assert(
+    (await profile.getPublicProfile(viewerIdentity, actorUserId)).watchlists.length === 0,
+    'Private personal watchlists must stay off the public profile.',
+  );
+
+  const publicWatchlist = await watchlists.updateVisibility(actorIdentity, watchlist.id, 'public');
+  assert(publicWatchlist.visibility === 'public', 'Owners should be able to publish a personal watchlist.');
+  assert(
+    (await profile.getPublicProfile(viewerIdentity, actorUserId)).watchlists.some(
+      (item) => item.id === watchlist.id,
+    ),
+    'A public personal watchlist should appear on the public profile.',
+  );
 
   assert(
     (await ratings.getMovieRating(viewerIdentity, 603)) === null,
@@ -146,6 +197,7 @@ async function assertFeedPrivacyAndBlocking(
   actorIdentity: AuthenticatedIdentity,
   viewerIdentity: AuthenticatedIdentity,
   actorUserId: string,
+  viewerUserId: string,
 ) {
   await ratings.upsertMovieRating(actorIdentity, 603, 4);
   await reviews.upsertMovieReview(actorIdentity, 603, 'Privacy smoke public review.');
@@ -173,6 +225,43 @@ async function assertFeedPrivacyAndBlocking(
   );
 
   await profile.updatePrivacy(actorIdentity, { profileVisibility: 'private' });
+  const acceptedPrivateProjection = await profile.getPublicProfile(viewerIdentity, actorUserId);
+  assert(
+    acceptedPrivateProjection.profileVisibility === 'private' && acceptedPrivateProjection.canViewContent,
+    'An accepted follower should retain access when a profile becomes private.',
+  );
+
+  await follows.unfollowUser(viewerIdentity, actorUserId);
+  const privateProjection = await profile.getPublicProfile(viewerIdentity, actorUserId);
+  assert(
+    privateProjection.profileVisibility === 'private' && !privateProjection.canViewContent,
+    'A private public projection should report its privacy state.',
+  );
+  assert(
+    privateProjection.displayName === null && privateProjection.watchlists.length === 0,
+    'A private public projection must hide identity details and watchlists.',
+  );
+  assert(
+    privateProjection.stats.postsCount === 0 && privateProjection.stats.reviewsCount === 0,
+    'A private public projection must not expose profile totals before follow approval.',
+  );
+
+  const pendingFollow = await follows.followUser(viewerIdentity, actorUserId);
+  assert(
+    pendingFollow.status === 'pending' && !pendingFollow.following,
+    'Following a private profile should create a pending request.',
+  );
+  const requests = await follows.listPendingRequests(actorIdentity);
+  assert(
+    requests.items.some((request) => request.userId === viewerUserId),
+    'The private profile owner should receive the follow request.',
+  );
+  await follows.acceptRequest(actorIdentity, viewerUserId);
+  const approvedProjection = await profile.getPublicProfile(viewerIdentity, actorUserId);
+  assert(
+    approvedProjection.canViewContent && approvedProjection.displayName !== null,
+    'An accepted requester should be able to view the private profile.',
+  );
   await assertFeedContainsAuthor(feed, viewerIdentity, actorUserId, false);
   await assertNotFound(
     () => feed.likeMovieReview(viewerIdentity, review.id),

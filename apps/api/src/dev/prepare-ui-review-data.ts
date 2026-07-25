@@ -3,6 +3,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client';
 import {
   AuthProvider,
+  FollowStatus,
   NotificationKind,
   PrivacyVisibility,
   ReleaseNotificationType,
@@ -48,8 +49,8 @@ async function main() {
   });
 
   await prisma.userFollow.upsert({
-    create: { followedUserId: testUser.id, followerId: user.id },
-    update: {},
+    create: { followedUserId: testUser.id, followerId: user.id, status: FollowStatus.ACCEPTED },
+    update: { status: FollowStatus.ACCEPTED },
     where: {
       followerId_followedUserId: {
         followedUserId: testUser.id,
