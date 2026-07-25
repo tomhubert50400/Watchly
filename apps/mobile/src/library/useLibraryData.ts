@@ -28,7 +28,7 @@ export type LibraryData = { items: LibraryMediaItem[]; lists: LibraryListItem[];
 
 export function useLibraryData() {
   const { currentUser, getFirebaseIdToken, trackingRevision } = useAuthSession();
-  const key = currentUser ? `watchly:user:${currentUser.id}:library:v1` : 'watchly:user:visitor:library-disabled';
+  const key = currentUser ? `watchly:user:${currentUser.id}:library:v3` : 'watchly:user:visitor:library-disabled';
   const load = useCallback(async (cached?: LibraryData): Promise<LibraryData> => {
     if (!currentUser) throw new Error('Sign in to load your library.');
     const token = await getFirebaseIdToken();
@@ -76,9 +76,10 @@ export function useLibraryData() {
       const loadPoster = createRequestCoalescer(async (mediaKey: string) => {
         const [contentType, rawTmdbId] = mediaKey.split(':');
         const tmdbId = Number(rawTmdbId);
-        return contentType === 'movie'
-          ? (await getMovieDetails(tmdbId)).item.posterUrl
-          : (await getSeriesDetails(tmdbId)).item.posterUrl;
+        const details = contentType === 'movie'
+          ? (await getMovieDetails(tmdbId)).item
+          : (await getSeriesDetails(tmdbId)).item;
+        return details.backdropUrl ?? details.posterUrl;
       });
       lists = await Promise.all(summaries.map(async (list) => {
         const fallback = previous?.lists.find((old) => old.key === list.key)?.posterUrls ?? [];
@@ -121,7 +122,7 @@ async function hydrateListPosters(
 ) {
   try {
     const details = list.kind === 'personal' ? await getWatchlist(token, list.id) : await getSharedWatchlist(token, list.id);
-    const urls = await Promise.all(details.items.slice(0, 3).map(async (item) => {
+    const urls = await Promise.all(details.items.slice(0, 4).map(async (item) => {
       try { return await loadPoster(`${item.contentType}:${item.tmdbId}`); }
       catch { return null; }
     }));

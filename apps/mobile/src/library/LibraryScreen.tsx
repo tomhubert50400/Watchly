@@ -3,9 +3,9 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BookOpen, Plus } from 'lucide-react-native';
 import { RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { createSharedWatchlist, deleteSharedWatchlist } from '../api/sharedWatchlists';
+import { createSharedWatchlist } from '../api/sharedWatchlists';
 import { disableReleaseAlert, enableReleaseAlert } from '../api/notifications';
-import { createWatchlist, deleteWatchlist } from '../api/watchlists';
+import { createWatchlist } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { writePersistedCache } from '../cache/persistedCache';
@@ -17,13 +17,14 @@ import { LoadingState } from '../components/LoadingState';
 import { Screen } from '../components/Screen';
 import { SectionHeader } from '../components/SectionHeader';
 import { SegmentedControl } from '../components/SegmentedControl';
+import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { TextInput } from '../components/TextInput';
 import { colors, spacing, typography } from '../design/tokens';
 import { hapticConfirm, hapticError, hapticSuccess } from '../feedback/haptics';
 import { RootStackParamList } from '../navigation/types';
 import { ContinueWatchingCard } from './ContinueWatchingCard';
-import { buildLibrarySummary } from './libraryModel';
-import { OwnerScopedData, replaceOwnedData, rollbackAlertValue, rollbackRemovedList, updateOwnedData } from './libraryState';
+import { buildLibrarySummary, getLastWatchedLibraryItem } from './libraryModel';
+import { OwnerScopedData, replaceOwnedData, rollbackAlertValue, updateOwnedData } from './libraryState';
 import { LibrarySummary } from './LibrarySummary';
 import { ReleaseAlertRow } from './ReleaseAlertRow';
 import { LibraryData, LibraryListItem, LibraryMediaItem, useLibraryData } from './useLibraryData';
@@ -71,6 +72,8 @@ export function LibraryScreen() {
   const summary = useMemo(() => buildLibrarySummary(data?.items ?? [], data?.lists.length ?? 0), [data]);
   const continueItems = (data?.items ?? []).filter((item) => item.contentType === 'series' && item.resumeEpisodeNumber !== null);
   const visibleItems = tab === 'progress' ? continueItems : data?.items ?? [];
+  const lastWatchedItem = getLastWatchedLibraryItem(data?.items ?? []);
+  const atmosphereUrl = lastWatchedItem?.posterUrl ?? lastWatchedItem?.backdropUrl ?? null;
 
   function openItem(item: LibraryMediaItem, resume = false) {
     if (resume && item.contentType === 'series' && item.resumeSeasonNumber && item.resumeEpisodeNumber) {
@@ -135,28 +138,6 @@ export function LibraryScreen() {
     finally { if (activeOwnerIdRef.current === ownerId) setBusyKey(null); }
   }
 
-  async function removeList(list: LibraryListItem) {
-    if (!currentUser || !data || busyKey) return;
-    const ownerId = currentUser.id; const cacheKey = resource.key; const previousIndex = data.lists.findIndex((item) => item.key === list.key);
-    const next = { ...data, lists: data.lists.filter((item) => item.key !== list.key) };
-    updateData(ownerId, () => next); setBusyKey(list.key); setActionError(null);
-    try {
-      const token = await getFirebaseIdToken(); if (!token) throw new Error('Sign in again to delete this list.');
-      if (list.kind === 'personal') await deleteWatchlist(token, list.id); else await deleteSharedWatchlist(token, list.id);
-      if (activeOwnerIdRef.current !== ownerId) return;
-      await persist(cacheKey, next);
-      if (activeOwnerIdRef.current === ownerId) hapticConfirm();
-    }
-    catch (error) {
-      updateData(ownerId, (current) => rollbackRemovedList(current, list, previousIndex));
-      if (activeOwnerIdRef.current === ownerId) {
-        setActionError(error instanceof Error ? error.message : 'Could not delete this list.');
-        hapticError();
-      }
-    }
-    finally { if (activeOwnerIdRef.current === ownerId) setBusyKey(null); }
-  }
-
   const banner = actionError ? <InlineStatusBanner detail={actionError} tone="error" title="Action failed" /> : null;
   const createListFooter = currentUser && data && tab === 'lists' ? (
     <Button
@@ -167,7 +148,7 @@ export function LibraryScreen() {
       onPress={() => void createList()}
     />
   ) : undefined;
-  return <Screen eyebrow={currentUser ? 'Your collection' : undefined} footer={createListFooter} refreshControl={currentUser ? <RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined} statusBanner={banner} tabBarPadding title="Library" trailing={currentUser ? <IconButton accessibilityLabel="Open Journal" icon={<BookOpen color={colors.text} size={21} />} onPress={() => navigation.navigate('Journal')} /> : null}>
+  return <Screen background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null} eyebrow={currentUser ? 'Your collection' : undefined} footer={createListFooter} refreshControl={currentUser ? <RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined} statusBanner={banner} tabBarPadding title="Library" trailing={currentUser ? <IconButton accessibilityLabel="Open Journal" icon={<BookOpen color={colors.text} size={21} />} onPress={() => navigation.navigate('Journal')} /> : null}>
     {!currentUser ? <SignInRequiredCard body="You need to be signed in to use this section. Sign in here to keep your progress, ratings, release alerts and lists together." title="Sign in to use Library" />
       : resource.isInitialLoading && !data ? <LoadingState label="Loading your library" />
       : resource.error && !data ? <EmptyState body={resource.error} title="Library unavailable"><Button label="Retry" onPress={resource.retry} /></EmptyState>
@@ -176,7 +157,7 @@ export function LibraryScreen() {
         <LibrarySummary summary={summary} />
         <SegmentedControl options={[{ label: 'All', value: 'all' }, { accessibilityLabel: 'In progress', label: 'Progress', value: 'progress' }, { label: 'Lists', value: 'lists' }]} value={tab} onChange={setTab} />
         {tab !== 'lists' && continueItems.length > 0 ? <View style={styles.section}><SectionHeader title="Continue watching" /><ContinueWatchingCard item={continueItems[0]!} onPress={() => openItem(continueItems[0]!, true)} /></View> : null}
-        {tab !== 'progress' ? <View style={styles.section}><SectionHeader actionLabel="Journal" onActionPress={() => navigation.navigate('Journal')} title="My lists" />{data.lists.length ? <WatchlistRail lists={data.lists} onDelete={(list) => void removeList(list)} onOpen={openList} /> : <Text style={styles.emptyInline}>No personal or shared lists yet.</Text>}</View> : null}
+        {tab !== 'progress' ? <View style={styles.section}><SectionHeader actionLabel="Journal" onActionPress={() => navigation.navigate('Journal')} title="My lists" />{data.lists.length ? <WatchlistRail lists={data.lists} onOpen={openList} /> : <Text style={styles.emptyInline}>No personal or shared lists yet.</Text>}</View> : null}
         {tab === 'lists' ? <View style={styles.create}><SegmentedControl buttonMinHeight={36} options={[{ label: 'Personal', value: 'personal' }, { label: 'Shared', value: 'shared' }]} value={newListKind} onChange={setNewListKind} /><TextInput label="New list" value={newListName} onChangeText={setNewListName} placeholder="Weekend ideas" /></View> : null}
         {tab !== 'lists' ? <View style={styles.section}><SectionHeader title={tab === 'progress' ? 'In progress' : 'Tracked titles & alerts'} />{visibleItems.map((item) => <ReleaseAlertRow busy={busyKey === item.key} item={item} key={item.key} onOpen={() => openItem(item)} onToggle={() => void toggleAlert(item)} />)}{visibleItems.length === 0 ? <Text style={styles.emptyInline}>Nothing in progress right now.</Text> : null}</View> : null}
       </View> : null}

@@ -4,13 +4,14 @@ import assert from 'node:assert/strict';
 import {
   buildLibrarySummary,
   calculateResumeEpisode,
+  getLastWatchedLibraryItem,
   mapLibrarySourceErrors,
   mergeLibraryItems,
   shouldShowTrackedTitle,
 } from './libraryModel';
 
 const states = [
-  { contentType: 'movie' as const, favorite: false, id: 'm', status: 'watching' as const, tmdbId: 1, updatedAt: '2026-07-08T00:00:00Z' },
+  { contentType: 'movie' as const, favorite: false, id: 'm', status: 'watched' as const, tmdbId: 1, updatedAt: '2026-07-08T00:00:00Z' },
   { contentType: 'series' as const, favorite: true, id: 's', status: 'watching' as const, tmdbId: 2, updatedAt: '2026-07-07T00:00:00Z' },
 ];
 const merged = mergeLibraryItems(
@@ -22,6 +23,10 @@ const merged = mergeLibraryItems(
 assert.deepEqual(merged.map((item) => item.key), ['series:2', 'movie:1', 'movie:3']);
 assert.equal(merged[1]?.ratingScore, 4.5);
 assert.equal(merged[2]?.hasReleaseAlert, true);
+assert.equal(merged[0]?.lastWatchedAt, '2026-07-10T00:00:00Z');
+assert.equal(merged[1]?.lastWatchedAt, '2026-07-08T00:00:00Z');
+assert.equal(merged[2]?.lastWatchedAt, null);
+assert.equal(getLastWatchedLibraryItem(merged)?.key, 'series:2');
 
 assert.deepEqual(calculateResumeEpisode([{ episodeCount: 6, seasonNumber: 1 }, { episodeCount: 8, seasonNumber: 2 }], 1, 5), { episodeNumber: 6, seasonNumber: 1 });
 assert.deepEqual(calculateResumeEpisode([{ episodeCount: 6, seasonNumber: 1 }, { episodeCount: 8, seasonNumber: 2 }], 1, 6), { episodeNumber: 1, seasonNumber: 2 });

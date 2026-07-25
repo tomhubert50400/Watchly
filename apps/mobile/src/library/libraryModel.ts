@@ -9,6 +9,7 @@ export type LibraryItemBase = {
   hasReleaseAlert: boolean;
   inferredWatchingFromProgress: boolean;
   key: string;
+  lastWatchedAt: string | null;
   ratingScore: number | null;
   resumeEpisodeNumber: number | null;
   resumeSeasonNumber: number | null;
@@ -39,7 +40,7 @@ export function mergeLibraryItems(
     if (existing) return existing;
     const item: LibraryItemBase = {
       contentType, favorite: false, hasReleaseAlert: false, inferredWatchingFromProgress: false,
-      key, ratingScore: null, resumeEpisodeNumber: null, resumeSeasonNumber: null,
+      key, lastWatchedAt: null, ratingScore: null, resumeEpisodeNumber: null, resumeSeasonNumber: null,
       status: null, tmdbId, updatedAt, watchedEpisodeCount: 0,
     };
     byContent.set(key, item);
@@ -48,7 +49,14 @@ export function mergeLibraryItems(
 
   states.forEach((state) => {
     const item = ensure(state.contentType, state.tmdbId, state.updatedAt);
-    Object.assign(item, { favorite: state.favorite, status: state.status, updatedAt: maxDate(item.updatedAt, state.updatedAt) });
+    Object.assign(item, {
+      favorite: state.favorite,
+      lastWatchedAt: state.status === 'watched'
+        ? maxOptionalDate(item.lastWatchedAt, state.updatedAt)
+        : item.lastWatchedAt,
+      status: state.status,
+      updatedAt: maxDate(item.updatedAt, state.updatedAt),
+    });
   });
   ratings.forEach((rating) => {
     const item = ensure('movie', rating.tmdbId, rating.updatedAt);
@@ -59,6 +67,9 @@ export function mergeLibraryItems(
     const hadExplicitState = byContent.has(item.key) && states.some((state) => `${state.contentType}:${state.tmdbId}` === item.key);
     Object.assign(item, {
       inferredWatchingFromProgress: !hadExplicitState,
+      lastWatchedAt: summary.watchedEpisodeCount > 0
+        ? maxOptionalDate(item.lastWatchedAt, summary.updatedAt)
+        : item.lastWatchedAt,
       resumeEpisodeNumber: summary.latestEpisodeNumber,
       resumeSeasonNumber: summary.latestSeasonNumber,
       status: item.status ?? 'watching',
@@ -71,6 +82,23 @@ export function mergeLibraryItems(
     Object.assign(item, { hasReleaseAlert: true, updatedAt: maxDate(item.updatedAt, alert.updatedAt) });
   });
   return [...byContent.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+export function getLastWatchedLibraryItem<T extends Pick<LibraryItemBase, 'lastWatchedAt'>>(
+  items: readonly T[],
+): T | null {
+  let latest: T | null = null;
+
+  for (const item of items) {
+    if (
+      item.lastWatchedAt
+      && (!latest?.lastWatchedAt || item.lastWatchedAt > latest.lastWatchedAt)
+    ) {
+      latest = item;
+    }
+  }
+
+  return latest;
 }
 
 export function calculateResumeEpisode(
@@ -117,4 +145,8 @@ export function mapLibrarySourceErrors(errors: Record<string, unknown | null | u
 
 function maxDate(left: string, right: string) {
   return left.localeCompare(right) >= 0 ? left : right;
+}
+
+function maxOptionalDate(left: string | null, right: string) {
+  return left ? maxDate(left, right) : right;
 }
