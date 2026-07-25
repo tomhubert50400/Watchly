@@ -6,6 +6,7 @@ import { getEpisodeDetails, getMovieDetails } from '../api/catalogue';
 import { FeedItem, getFeed, setFeedItemLiked } from '../api/feed';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
+import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
@@ -25,6 +26,7 @@ type HydratedFeedItem = FeedItem & {
 export function FeedScreen() {
   const navigation = useNavigation<FeedNavigation>();
   const { firebaseIdToken, socialRevision } = useAuthSession();
+  const { refreshSeries } = useCatalogueCache();
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<HydratedFeedItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -51,7 +53,13 @@ export function FeedScreen() {
 
     try {
       const response = await getFeed(firebaseIdToken);
-      const hydratedItems = await Promise.all(response.items.map(hydrateFeedItem));
+      const hydratedResults = await Promise.all(response.items.map((item) => {
+        const previous = itemsRef.current.find((candidate) => candidate.id === item.id);
+        return hydrateFeedItem(item, previous, refreshSeries);
+      }));
+      const hydratedItems = hydratedResults.filter(
+        (item): item is HydratedFeedItem => item !== null,
+      );
 
       setItems(hydratedItems);
       itemsRef.current = hydratedItems;
@@ -65,7 +73,7 @@ export function FeedScreen() {
       setIsLoading(false);
       if (!showLoading) setIsRefreshing(false);
     }
-  }, [firebaseIdToken]);
+  }, [firebaseIdToken, refreshSeries]);
 
   useEffect(() => {
     void loadFeed();
@@ -84,10 +92,12 @@ export function FeedScreen() {
         return;
       }
 
+      if (!item.seriesTitle) return;
+
       navigation.navigate('EpisodeDetail', {
         episodeNumber: item.content.episodeNumber,
         seasonNumber: item.content.seasonNumber,
-        seriesTitle: item.seriesTitle ?? `Series ${item.content.seriesTmdbId}`,
+        seriesTitle: item.seriesTitle,
         title: item.contentTitle,
         tmdbId: item.content.seriesTmdbId,
       });
@@ -162,7 +172,11 @@ export function FeedScreen() {
   );
 }
 
-async function hydrateFeedItem(item: FeedItem): Promise<HydratedFeedItem> {
+async function hydrateFeedItem(
+  item: FeedItem,
+  previous: HydratedFeedItem | undefined,
+  loadSeries: (tmdbId: number) => Promise<{ title: string }>,
+): Promise<HydratedFeedItem | null> {
   if (item.content.contentType === 'movie') {
     try {
       const response = await getMovieDetails(item.content.tmdbId);
@@ -186,28 +200,33 @@ async function hydrateFeedItem(item: FeedItem): Promise<HydratedFeedItem> {
   }
 
   try {
-    const response = await getEpisodeDetails(
-      item.content.seriesTmdbId,
-      item.content.seasonNumber,
-      item.content.episodeNumber,
-    );
+    const [episodeResponse, series] = await Promise.all([
+      getEpisodeDetails(
+        item.content.seriesTmdbId,
+        item.content.seasonNumber,
+        item.content.episodeNumber,
+      ),
+      loadSeries(item.content.seriesTmdbId),
+    ]);
 
     return {
       ...item,
-      contentImageUrl: response.item.stillUrl,
+      contentImageUrl: episodeResponse.item.stillUrl,
       contentSubtitle: `Episode review / S${item.content.seasonNumber} E${item.content.episodeNumber}`,
-      contentTitle: response.item.title,
-      seriesTitle: `Series ${item.content.seriesTmdbId}`,
+      contentTitle: episodeResponse.item.title,
+      seriesTitle: series.title,
     };
   } catch {
-    return {
-      ...item,
-      contentImageUrl: null,
-      contentSubtitle: `Episode review / S${item.content.seasonNumber} E${item.content.episodeNumber}`,
-      contentTitle: `Episode S${item.content.seasonNumber} E${item.content.episodeNumber}`,
-      seriesTitle: `Series ${item.content.seriesTmdbId}`,
-    };
+    return hasRealSeriesTitle(previous) ? { ...previous, ...item } : null;
   }
+}
+
+function hasRealSeriesTitle(
+  item: HydratedFeedItem | undefined,
+): item is HydratedFeedItem & { seriesTitle: string } {
+  return Boolean(
+    item?.seriesTitle?.trim() && !/^Series\s+\d+$/i.test(item.seriesTitle.trim()),
+  );
 }
 
 const styles = StyleSheet.create({
