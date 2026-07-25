@@ -31,13 +31,7 @@ export function buildProfileModel(
   profile: UserProfile,
   response: ProfileOpinionsResponse,
 ): ProfileModel {
-  const opinions = response.items.filter((opinion) => {
-    if (isReview(opinion)) {
-      return profile.privacy.profileVisibility === 'public';
-    }
-
-    return profile.privacy.ratingsVisibility === 'public';
-  });
+  const opinions = response.items;
 
   return {
     displayName: profile.displayName?.trim() || 'Watchly member',
@@ -46,8 +40,8 @@ export function buildProfileModel(
     stats: {
       followersCount: response.stats.followersCount,
       followingCount: response.stats.followingCount,
-      ratingsCount: opinions.length,
-      reviewsCount: opinions.filter(isReview).length,
+      ratingsCount: response.stats.postsCount,
+      reviewsCount: response.stats.reviewsCount,
     },
     userId: profile.id,
   };
@@ -68,12 +62,18 @@ export function getProfileOpinionTarget(
     };
   }
 
+  const seriesTitle = presentation.seriesTitle?.trim();
+
+  if (!seriesTitle) {
+    throw new Error('Episode navigation requires the real series title.');
+  }
+
   return {
     name: 'EpisodeDetail',
     params: {
       episodeNumber: opinion.content.episodeNumber,
       seasonNumber: opinion.content.seasonNumber,
-      seriesTitle: presentation.seriesTitle ?? `Series ${opinion.content.seriesTmdbId}`,
+      seriesTitle,
       title: presentation.contentTitle,
       tmdbId: opinion.content.seriesTmdbId,
     },

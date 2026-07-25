@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { RouteProp, useRoute } from '@react-navigation/native';
 import { StyleSheet, Text, View } from 'react-native';
+import { ListVideo } from 'lucide-react-native';
 import {
   blockUser,
   BlockState,
@@ -31,7 +32,7 @@ import { SignInRequiredCard } from '../auth/SignInRequired';
 import { ProfileSummaryCard } from './ProfileSummaryCard';
 
 type PublicProfileRoute = RouteProp<RootStackParamList, 'PublicProfile'>;
-type LoadStatus = 'blocked' | 'error' | 'loading' | 'private' | 'ready' | 'unavailable';
+type LoadStatus = 'blocked' | 'error' | 'loading' | 'ready' | 'unavailable';
 
 export function PublicProfileScreen() {
   const { firebaseIdToken, notifySocialChanged } = useAuthSession();
@@ -75,6 +76,7 @@ export function PublicProfileScreen() {
           setFollowState({
             followedAt: null,
             following: false,
+            status: 'none',
             userId: route.params.userId,
           });
           setStatus('blocked');
@@ -117,12 +119,6 @@ export function PublicProfileScreen() {
         }
 
         if (error instanceof ApiError && error.status === 403) {
-          if (error.serverMessage?.toLowerCase().includes('private')) {
-            setStatus('private');
-            setMessage('This profile is private.');
-            return;
-          }
-
           setStatus('unavailable');
           setMessage(error.serverMessage ?? 'A blocking rule prevents this profile from being shown.');
           return;
@@ -157,6 +153,7 @@ export function PublicProfileScreen() {
         setFollowState({
           followedAt: null,
           following: false,
+          status: 'none',
           userId: route.params.userId,
         });
         setStatus('blocked');
@@ -185,7 +182,7 @@ export function PublicProfileScreen() {
     setMessage(null);
 
     try {
-      const nextFollowState = followState?.following
+      const nextFollowState = followState?.status === 'following' || followState?.status === 'pending'
         ? await unfollowUser(firebaseIdToken, route.params.userId)
         : await followUser(firebaseIdToken, route.params.userId);
 
@@ -200,7 +197,7 @@ export function PublicProfileScreen() {
 
   if (!firebaseIdToken) {
     return (
-      <Screen eyebrow="Profile" title="Public profile">
+      <Screen eyebrow="Profile" title="">
         <SignInRequiredCard
           body="You need to be signed in to view profiles and follow people. Sign in here to continue."
           title="Sign in to view profiles"
@@ -210,21 +207,9 @@ export function PublicProfileScreen() {
   }
 
   return (
-    <Screen eyebrow="Profile" title="Public profile">
+    <Screen eyebrow="Profile" title="">
       {status === 'loading' ? (
         <LoadingState label="Loading profile" />
-      ) : null}
-
-      {status === 'private' ? (
-        <View style={styles.stack}>
-          <ProfileSummaryCard
-            displayName="Private profile"
-            followersCount={0}
-            postsCount={0}
-            reviewsCount={0}
-          />
-          <Text style={styles.body}>Only the profile owner can see private profile content.</Text>
-        </View>
       ) : null}
 
       {status === 'unavailable' ? (
@@ -257,41 +242,78 @@ export function PublicProfileScreen() {
 
       {status === 'ready' && profile ? (
         <View style={styles.stack}>
-          <ProfileSummaryCard
-            displayName={profile.displayName}
-            followersCount={profile.stats.followersCount}
-            postsCount={profile.stats.postsCount}
-            reviewsCount={profile.stats.reviewsCount}
-          />
-          <View style={styles.socialPanel}>
-            <Chip label={isOwnPreview ? 'Preview' : 'Public'} tone="success" />
-            <Text style={styles.socialTitle}>
-              {isOwnPreview ? 'This is how followers see you' : 'Follow for written reviews'}
-            </Text>
-            <Text style={styles.body}>
-              Public written reviews from this profile can appear in followers' feeds.
-            </Text>
-            {!isOwnPreview ? (
-              <Text style={styles.socialState}>
-                {followState?.following
-                  ? 'Following. New public reviews can appear in your Feed.'
-                  : 'Not following yet.'}
+          {!profile.canViewContent ? (
+            <View style={styles.privateState}>
+              <Text style={styles.privateTitle}>This profile is private</Text>
+              <Text style={styles.body}>
+                {isOwnPreview
+                  ? 'Other members need to send a follow request before you can choose to let them see your profile.'
+                  : 'This user needs to accept your follow request before you can see their profile.'}
               </Text>
-            ) : null}
-          </View>
-          {!isOwnPreview ? (
+              {!isOwnPreview ? (
+                <Button
+                  accessibilityHint={followState?.status === 'pending' ? 'Cancels your follow request.' : undefined}
+                  disabled={isUpdatingFollow || isUpdatingBlock}
+                  label={
+                    isUpdatingFollow
+                      ? 'Updating...'
+                      : followState?.status === 'pending'
+                        ? 'Request sent'
+                        : 'Request to follow'
+                  }
+                  onPress={toggleFollow}
+                  variant={followState?.status === 'pending' ? 'secondary' : 'primary'}
+                />
+              ) : null}
+            </View>
+          ) : (
+            <ProfileSummaryCard
+              displayName={profile.displayName}
+              followersCount={profile.stats.followersCount}
+              postsCount={profile.stats.postsCount}
+              reviewsCount={profile.stats.reviewsCount}
+            />
+          )}
+          {profile.canViewContent && profile.watchlists.length > 0 ? (
+            <View style={styles.watchlistsPanel}>
+              <View style={styles.watchlistsHeading}>
+                <Text style={styles.socialTitle}>Watchlists</Text>
+                <Text style={styles.watchlistsCount}>{profile.watchlists.length}</Text>
+              </View>
+              {profile.watchlists.map((watchlist, index) => (
+                <View
+                  key={watchlist.id}
+                  style={[
+                    styles.watchlistRow,
+                    index === profile.watchlists.length - 1 ? styles.watchlistRowLast : null,
+                  ]}
+                >
+                  <View style={styles.watchlistIcon}>
+                    <ListVideo color={colors.textMuted} size={18} strokeWidth={2} />
+                  </View>
+                  <View style={styles.watchlistCopy}>
+                    <Text numberOfLines={1} style={styles.watchlistName}>{watchlist.name}</Text>
+                    <Text style={styles.watchlistMeta}>
+                      {watchlist.itemCount === 1 ? '1 title' : `${watchlist.itemCount} titles`}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          {!isOwnPreview && profile.canViewContent ? (
             <>
               <Button
                 disabled={isUpdatingFollow || isUpdatingBlock}
                 label={
                   isUpdatingFollow
                     ? 'Updating...'
-                    : followState?.following
+                    : followState?.status === 'following'
                       ? 'Following'
                       : 'Follow profile'
                 }
                 onPress={toggleFollow}
-                variant={followState?.following ? 'secondary' : 'primary'}
+                variant={followState?.status === 'following' ? 'secondary' : 'primary'}
               />
               <Button
                 disabled={isUpdatingBlock || isUpdatingFollow}
@@ -304,6 +326,17 @@ export function PublicProfileScreen() {
                 }
                 onPress={toggleBlock}
                 variant={blockState?.blocked ? 'secondary' : 'danger'}
+              />
+              {message ? <Text style={styles.errorText}>{message}</Text> : null}
+            </>
+          ) : null}
+          {!isOwnPreview && !profile.canViewContent ? (
+            <>
+              <Button
+                disabled={isUpdatingBlock || isUpdatingFollow}
+                label={isUpdatingBlock ? 'Updating...' : 'Block profile'}
+                onPress={toggleBlock}
+                variant="danger"
               />
               {message ? <Text style={styles.errorText}>{message}</Text> : null}
             </>
@@ -341,19 +374,13 @@ const styles = StyleSheet.create({
     ...typography.title,
     color: colors.text,
   },
-  socialState: {
-    color: colors.accentText,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0,
+  privateState: {
+    gap: spacing.md,
+    paddingVertical: spacing.xxl,
   },
-  socialPanel: {
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    gap: spacing.sm,
-    padding: spacing.lg,
+  privateTitle: {
+    ...typography.title,
+    color: colors.text,
   },
   socialTitle: {
     ...typography.title,
@@ -367,5 +394,59 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0,
+  },
+  watchlistCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  watchlistIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.panelElevated,
+    borderColor: colors.border,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    height: 38,
+    justifyContent: 'center',
+    width: 38,
+  },
+  watchlistMeta: {
+    ...typography.meta,
+    color: colors.textSubtle,
+    marginTop: 2,
+  },
+  watchlistName: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  watchlistRow: {
+    alignItems: 'center',
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    gap: spacing.md,
+    minHeight: 68,
+    paddingVertical: spacing.sm,
+  },
+  watchlistRowLast: {
+    borderBottomWidth: 0,
+  },
+  watchlistsCount: {
+    color: colors.accentText,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  watchlistsHeading: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  watchlistsPanel: {
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
   },
 });

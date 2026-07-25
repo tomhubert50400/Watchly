@@ -1,6 +1,7 @@
 import { apiDelete, apiGet, apiPost, apiPut } from './client';
 
 export type WatchlistContentType = 'movie' | 'series';
+export type PersonalWatchlistVisibility = 'public' | 'private';
 
 export type PersonalWatchlistSummary = {
   containsTitle?: boolean;
@@ -9,6 +10,7 @@ export type PersonalWatchlistSummary = {
   itemCount: number;
   name: string;
   updatedAt: string;
+  visibility: PersonalWatchlistVisibility;
 };
 
 export type PersonalWatchlistItem = {
@@ -24,6 +26,7 @@ export type PersonalWatchlist = {
   items: PersonalWatchlistItem[];
   name: string;
   updatedAt: string;
+  visibility: PersonalWatchlistVisibility;
 };
 
 export function listWatchlists(
@@ -54,6 +57,18 @@ export function getWatchlist(token: string, watchlistId: string) {
 
 export function deleteWatchlist(token: string, watchlistId: string) {
   return apiDelete<{ deleted: true }>(`/watchlists/${watchlistId}`, { token });
+}
+
+export function updateWatchlistVisibility(
+  token: string,
+  watchlistId: string,
+  visibility: PersonalWatchlistVisibility,
+) {
+  return apiPut<PersonalWatchlistSummary>(
+    `/watchlists/${watchlistId}`,
+    { visibility },
+    { token },
+  );
 }
 
 export function addWatchlistItem(

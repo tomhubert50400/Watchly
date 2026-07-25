@@ -1,6 +1,8 @@
 // Node types are intentionally not part of the Expo runtime TypeScript configuration.
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import assert from 'node:assert/strict';
+// @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
+import { readFileSync } from 'node:fs';
 import type { ProfileOpinion, ProfileOpinionsResponse, UserProfile } from '../api/profile';
 import { buildProfileModel, getProfileOpinionTarget } from './profileModel';
 
@@ -78,28 +80,42 @@ assert.deepEqual(
     },
   },
 );
+assert.throws(
+  () => getProfileOpinionTarget(episodeReview, { contentTitle: 'Better Call Saul', seriesTitle: null }),
+  /real series title/,
+);
+
+for (const sourceUrl of [new URL('./ProfileScreen.tsx', import.meta.url), new URL('../feed/FeedScreen.tsx', import.meta.url)]) {
+  const source = readFileSync(sourceUrl, 'utf8');
+  assert.equal(
+    source.includes('Series ${'),
+    false,
+    `${sourceUrl.pathname} must never render a series TMDB id as its title`,
+  );
+}
 
 const privateRatingsModel = buildProfileModel(
   { ...publicProfile, privacy: { ...publicProfile.privacy, ratingsVisibility: 'private' } },
   response,
 );
 assert.deepEqual(
-  privateRatingsModel.opinions.map((opinion) => opinion.type),
-  ['movieReview'],
-  'private standalone ratings must not be presented as public activity',
+  privateRatingsModel.opinions,
+  [movieRating, movieReview],
+  'legacy sub-settings must not split the single profile visibility choice',
 );
-assert.equal(privateRatingsModel.stats.ratingsCount, 1, 'the public review still carries its published rating');
 
 const privateProfileModel = buildProfileModel(
   { ...publicProfile, privacy: { ...publicProfile.privacy, profileVisibility: 'private' } },
   response,
 );
 assert.deepEqual(
-  privateProfileModel.opinions.map((opinion) => opinion.type),
-  ['movieRating'],
-  'private written reviews must stay off the public-facing profile',
+  privateProfileModel.opinions,
+  [movieRating, movieReview],
+  'owners must keep seeing every opinion when their profile is private',
 );
-assert.equal(privateProfileModel.stats.reviewsCount, 0);
+assert.equal(privateProfileModel.stats.reviewsCount, 1);
+assert.equal(privateProfileModel.stats.ratingsCount, 2);
+assert.equal(privateProfileModel.isPublic, false);
 
 const fullyPrivateModel = buildProfileModel(
   {
@@ -112,7 +128,7 @@ const fullyPrivateModel = buildProfileModel(
   },
   response,
 );
-assert.deepEqual(fullyPrivateModel.opinions, []);
+assert.deepEqual(fullyPrivateModel.opinions, [movieRating, movieReview]);
 assert.equal(fullyPrivateModel.stats.followersCount, 7, 'real social stats remain available without exposing opinions');
 
 console.log('Profile model QA passed.');

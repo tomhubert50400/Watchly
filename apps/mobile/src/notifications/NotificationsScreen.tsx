@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { BellRing, CalendarDays, ListPlus, Vote } from 'lucide-react-native';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import {
+  acceptFollowRequest,
+  type FollowRequest,
+  listFollowRequests,
+  rejectFollowRequest,
+} from '../api/follows';
 import {
   listNotifications,
   markAllNotificationsRead,
@@ -43,7 +50,7 @@ const filters: Array<{ label: string; value: NotificationFilter }> = [
 ];
 
 export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
-  const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
+  const { currentUser, firebaseIdToken, getFirebaseIdToken, notifySocialChanged } = useAuthSession();
   const ownerId = currentUser?.id ?? null;
   const ownerIdRef = useRef(ownerId);
   ownerIdRef.current = ownerId;
@@ -55,6 +62,11 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
   const ownedInboxRef = useRef(ownedInbox);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
+  const [followRequests, setFollowRequests] = useState<FollowRequest[]>([]);
+  const [followRequestsOwnerId, setFollowRequestsOwnerId] = useState<string | null>(null);
+  const [followRequestError, setFollowRequestError] = useState<string | null>(null);
+  const [followRequestPendingIds, setFollowRequestPendingIds] = useState<ReadonlySet<string>>(new Set());
+  const [isLoadingFollowRequests, setIsLoadingFollowRequests] = useState(false);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
   const load = useCallback(async () => {
     const requestedOwnerId = ownerId;
@@ -75,6 +87,45 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
     load,
   });
 
+  const loadPendingFollowRequests = useCallback(async () => {
+    const expectedOwnerId = ownerIdRef.current;
+
+    if (!expectedOwnerId) {
+      setFollowRequests([]);
+      return;
+    }
+
+    setIsLoadingFollowRequests(true);
+    setFollowRequestError(null);
+
+    try {
+      const token = await getFirebaseIdToken();
+
+      if (!token || ownerIdRef.current !== expectedOwnerId) {
+        return;
+      }
+
+      const response = await listFollowRequests(token);
+
+      if (ownerIdRef.current === expectedOwnerId) {
+        setFollowRequests(response.items);
+        setFollowRequestsOwnerId(expectedOwnerId);
+      }
+    } catch (error) {
+      if (ownerIdRef.current === expectedOwnerId) {
+        setFollowRequestError(error instanceof Error ? error.message : 'Follow requests could not load.');
+      }
+    } finally {
+      if (ownerIdRef.current === expectedOwnerId) {
+        setIsLoadingFollowRequests(false);
+      }
+    }
+  }, [getFirebaseIdToken]);
+
+  useFocusEffect(useCallback(() => {
+    void loadPendingFollowRequests();
+  }, [loadPendingFollowRequests, ownerId]));
+
   useEffect(() => {
     if (!ownerId) {
       const signedOut = { items: [], ownerId: null };
@@ -83,6 +134,10 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
       setPendingIds(new Set());
       setIsMarkingAll(false);
       setMutationError(null);
+      setFollowRequests([]);
+      setFollowRequestsOwnerId(null);
+      setFollowRequestError(null);
+      setFollowRequestPendingIds(new Set());
       return;
     }
 
@@ -93,7 +148,50 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
     }
   }, [ownerId, resource.data]);
 
+  const resolveFollowRequest = useCallback(async (requesterId: string, accept: boolean) => {
+    const expectedOwnerId = ownerIdRef.current;
+
+    if (!expectedOwnerId || followRequestPendingIds.has(requesterId)) {
+      return;
+    }
+
+    setFollowRequestError(null);
+    setFollowRequestPendingIds((current) => new Set(current).add(requesterId));
+
+    try {
+      const token = await getFirebaseIdToken();
+
+      if (!token || ownerIdRef.current !== expectedOwnerId) {
+        throw new Error('Sign in again to manage follow requests.');
+      }
+
+      if (accept) {
+        await acceptFollowRequest(token, requesterId);
+      } else {
+        await rejectFollowRequest(token, requesterId);
+      }
+
+      if (ownerIdRef.current === expectedOwnerId) {
+        setFollowRequests((current) => current.filter((request) => request.userId !== requesterId));
+        notifySocialChanged();
+      }
+    } catch (error) {
+      if (ownerIdRef.current === expectedOwnerId) {
+        setFollowRequestError(error instanceof Error ? error.message : 'Follow request could not be updated.');
+      }
+    } finally {
+      if (ownerIdRef.current === expectedOwnerId) {
+        setFollowRequestPendingIds((current) => {
+          const next = new Set(current);
+          next.delete(requesterId);
+          return next;
+        });
+      }
+    }
+  }, [followRequestPendingIds, getFirebaseIdToken, notifySocialChanged]);
+
   const items = ownedInbox.ownerId === ownerId ? ownedInbox.items : [];
+  const visibleFollowRequests = followRequestsOwnerId === ownerId ? followRequests : [];
   const unreadCount = countUnreadNotifications(items);
   const groups = useMemo(
     () => groupNotifications(filterNotifications(items, filter)),
@@ -259,14 +357,14 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
     return (
       <Screen title="">
         <SignInRequiredCard
-          body="You need to be signed in to use this section. Sign in here to see release and shared-list alerts."
+          body="You need to be signed in to use this section. Sign in here to see follow requests, releases, and shared-list alerts."
           title="Sign in to view Alerts"
         />
       </Screen>
     );
   }
 
-  if (resource.isInitialLoading && items.length === 0) {
+  if (resource.isInitialLoading && items.length === 0 && visibleFollowRequests.length === 0) {
     return (
       <Screen title="">
         <InlineStatusBanner detail="Loading your private alert inbox." tone="updating" />
@@ -274,7 +372,7 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
     );
   }
 
-  if (resource.error && items.length === 0) {
+  if (resource.error && items.length === 0 && visibleFollowRequests.length === 0) {
     return (
       <Screen title="">
         <EmptyState body={resource.error} title="Alerts are unavailable">
@@ -289,23 +387,42 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
       horizontalPadding={spacing.md}
       refreshControl={
         <RefreshControl
-          onRefresh={resource.retry}
-          refreshing={resource.isRefreshing}
+          onRefresh={() => {
+            resource.retry();
+            void loadPendingFollowRequests();
+          }}
+          refreshing={resource.isRefreshing || isLoadingFollowRequests}
           tintColor={colors.accent}
         />
       }
       statusBanner={
-        mutationError ? (
-          <InlineStatusBanner detail={mutationError} tone="error" />
+        mutationError || followRequestError ? (
+          <InlineStatusBanner detail={mutationError ?? followRequestError ?? ''} tone="error" />
         ) : undefined
       }
       title=""
     >
+      {visibleFollowRequests.length > 0 && filter === 'all' ? (
+        <View style={styles.requestsSection}>
+          <Text style={styles.groupLabel}>Follow requests</Text>
+          <View style={styles.groupItems}>
+            {visibleFollowRequests.map((request) => (
+              <FollowRequestRow
+                key={request.userId}
+                onAccept={() => resolveFollowRequest(request.userId, true)}
+                onReject={() => resolveFollowRequest(request.userId, false)}
+                pending={followRequestPendingIds.has(request.userId)}
+                request={request}
+              />
+            ))}
+          </View>
+        </View>
+      ) : null}
       <SegmentedControl onChange={setFilter} options={filters} value={filter} />
-      {groups.length === 0 ? (
+      {groups.length === 0 && !(visibleFollowRequests.length > 0 && filter === 'all') ? (
         <View style={styles.empty}>
           <EmptyState
-            body={items.length === 0 ? 'Release and shared-list updates will appear here.' : 'No alerts match this filter.'}
+            body={items.length === 0 ? 'Follow requests, release updates, and shared-list activity will appear here.' : 'No alerts match this filter.'}
             title={items.length === 0 ? 'You are all caught up' : 'No matching alerts'}
           />
         </View>
@@ -329,6 +446,33 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
         </View>
       )}
     </Screen>
+  );
+}
+
+function FollowRequestRow({
+  onAccept,
+  onReject,
+  pending,
+  request,
+}: {
+  onAccept: () => void;
+  onReject: () => void;
+  pending: boolean;
+  request: FollowRequest;
+}) {
+  const name = request.displayName?.trim() || 'A Watchly member';
+
+  return (
+    <View style={styles.requestRow}>
+      <View style={styles.requestCopy}>
+        <Text numberOfLines={2} style={styles.rowTitle}>{name}</Text>
+        <Text style={styles.rowBody}>Wants to follow you and see your private profile.</Text>
+      </View>
+      <View style={styles.requestActions}>
+        <Button compact disabled={pending} label="Decline" onPress={onReject} variant="secondary" />
+        <Button compact disabled={pending} label="Accept" onPress={onAccept} />
+      </View>
+    </View>
   );
 }
 
@@ -429,6 +573,24 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.76,
+  },
+  requestActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  requestCopy: {
+    gap: spacing.xs,
+  },
+  requestRow: {
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md,
+  },
+  requestsSection: {
+    gap: spacing.sm,
   },
   row: {
     backgroundColor: colors.panel,

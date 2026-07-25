@@ -1,4 +1,4 @@
-import { apiGet, apiPut } from './client';
+import { apiDelete, apiGet, apiPut } from './client';
 
 export type PrivacyVisibility = 'public' | 'private';
 export type SharedWatchlistVisibility = 'members' | 'private';
@@ -25,6 +25,7 @@ export type OnboardingCompletion = {
 };
 
 export type PublicProfile = {
+  canViewContent: boolean;
   displayName: string | null;
   id: string;
   profileVisibility: PrivacyVisibility;
@@ -34,6 +35,12 @@ export type PublicProfile = {
     postsCount: number;
     reviewsCount: number;
   };
+  watchlists: Array<{
+    id: string;
+    itemCount: number;
+    name: string;
+    updatedAt: string;
+  }>;
 };
 
 type ProfileMovieRatingOpinion = {
@@ -153,6 +160,14 @@ export function updatePrivacy(
   input: UpdatePrivacyInput,
 ): Promise<UserProfile> {
   return apiPut<UserProfile>('/profile/privacy', input, { token: firebaseIdToken });
+}
+
+export function exportAccountData(firebaseIdToken: string): Promise<unknown> {
+  return apiGet<unknown>('/profile/me/export', { token: firebaseIdToken });
+}
+
+export function deleteAccount(firebaseIdToken: string) {
+  return apiDelete<{ deleted: true }>('/profile/me', { token: firebaseIdToken });
 }
 
 export function completeOnboarding(firebaseIdToken: string): Promise<OnboardingCompletion> {
