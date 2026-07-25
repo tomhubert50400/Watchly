@@ -1,7 +1,13 @@
 // Node types are intentionally not part of the Expo runtime TypeScript configuration.
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import assert from 'node:assert/strict';
-import { buildJournal, filterJournalEntries, groupJournalEntriesByMonth } from './journalModel';
+import {
+  buildJournal,
+  filterJournalEntries,
+  filterJournalEntriesByDate,
+  getJournalMonthKeys,
+  groupJournalEntriesByMonth,
+} from './journalModel';
 
 const journal = buildJournal({
   movieRatings: [{ id: 'mr', score: 4.5, tmdbId: 10, updatedAt: '2026-07-10T12:00:00Z' }],
@@ -25,4 +31,9 @@ assert.deepEqual(groupJournalEntriesByMonth(journal.entries).map((group) => grou
 assert.equal(filterJournalEntries(journal.entries, 'movies').length, 1);
 assert.equal(filterJournalEntries(journal.entries, 'series').length, 1);
 assert.equal(filterJournalEntries(journal.entries, 'reviews').length, 1);
+assert.deepEqual(getJournalMonthKeys(journal.entries), ['2026-07']);
+assert.equal(filterJournalEntriesByDate(journal.entries, '2026-07-10').length, 1);
+assert.equal(filterJournalEntriesByDate(journal.entries, '2026-07-09').length, 1);
+assert.equal(filterJournalEntriesByDate(journal.entries, '2026-07-08').length, 0);
+assert.equal(filterJournalEntriesByDate(journal.entries, null).length, 2);
 console.log('Journal model QA passed.');

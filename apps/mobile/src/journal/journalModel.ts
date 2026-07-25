@@ -77,6 +77,15 @@ export function filterJournalEntries(entries: JournalEntry[], filter: JournalFil
   return entries;
 }
 
+export function filterJournalEntriesByDate(entries: JournalEntry[], dateKey: string | null) {
+  if (!dateKey) return entries;
+  return entries.filter((entry) => entry.date.slice(0, 10) === dateKey);
+}
+
+export function getJournalMonthKeys(entries: JournalEntry[]) {
+  return [...new Set(entries.map((entry) => entry.date.slice(0, 7)))].sort((a, b) => b.localeCompare(a));
+}
+
 export function groupJournalEntriesByMonth(entries: JournalEntry[]): JournalMonth[] {
   const groups = new Map<string, JournalEntry[]>();
   entries.forEach((entry) => {
