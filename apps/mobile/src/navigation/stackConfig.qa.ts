@@ -1,3 +1,6 @@
+// Node types are intentionally not part of the Expo runtime TypeScript configuration.
+// @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
+import { readFileSync } from 'node:fs';
 import { detailBackOptions, resolvePreviousPageLabel, rootStackScreenOptions } from './stackConfig';
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -27,6 +30,20 @@ assert(
 assert(
   resolvePreviousPageLabel([{ name: 'PersonalWatchlist', params: { title: 'Weekend Queue' } }, { name: 'FilmDetail' }]) === 'Weekend Queue',
   'A detail opened from a titled page must use that visible page title.',
+);
+
+const appSource = readFileSync(new URL('../../App.tsx', import.meta.url), 'utf8');
+assert(
+  appSource.includes('theme={watchlyNavigationTheme}'),
+  'NavigationContainer must use the Watchly dark theme so native back transitions cannot expose the light default theme.',
+);
+assert(
+  appSource.includes('background: colors.background,') && appSource.includes('card: colors.background,'),
+  'The navigation theme background and card layers must both use the Watchly app background.',
+);
+assert(
+  appSource.includes('<SafeAreaProvider style={styles.appRoot}>'),
+  'The app root must remain dark behind rounded native transition corners.',
 );
 
 console.log('Stack config QA passed.');

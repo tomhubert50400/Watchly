@@ -1,3 +1,6 @@
+// Node types are intentionally not part of the Expo runtime TypeScript configuration.
+// @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
+import { readFileSync } from 'node:fs';
 import { ApiError, apiGet } from './client';
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -7,6 +10,29 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 async function main() {
+  const appConfig = JSON.parse(
+    readFileSync(new URL('../../app.json', import.meta.url), 'utf8'),
+  ) as {
+    expo: {
+      ios: {
+        infoPlist: {
+          NSAppTransportSecurity?: { NSAllowsLocalNetworking?: boolean };
+          NSLocalNetworkUsageDescription?: string;
+        };
+      };
+    };
+  };
+  const infoPlist = appConfig.expo.ios.infoPlist;
+
+  assert(
+    infoPlist.NSAppTransportSecurity?.NSAllowsLocalNetworking === true,
+    'The iOS development build must allow its local HTTP API.',
+  );
+  assert(
+    Boolean(infoPlist.NSLocalNetworkUsageDescription?.trim()),
+    'The iOS development build must explain why it accesses the local network.',
+  );
+
   const originalFetch = globalThis.fetch;
 
   try {

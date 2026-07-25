@@ -1,9 +1,12 @@
-import { NavigationContainer, useIsFocused } from '@react-navigation/native';
+import { DarkTheme, NavigationContainer, useIsFocused } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeBottomTabNavigator } from '@react-navigation/bottom-tabs/unstable';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { BlurView } from 'expo-blur';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { StatusBar } from 'expo-status-bar';
 import { Compass, House, Library, UserCircle } from 'lucide-react-native';
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthSessionProvider, useAuthSession } from './src/auth/AuthSessionContext';
 import { CatalogueCacheProvider } from './src/catalogue/CatalogueCacheContext';
@@ -15,6 +18,9 @@ import { SeriesDetailScreen } from './src/catalogue/SeriesDetailScreen';
 import { colors } from './src/design/tokens';
 import { HomeScreen } from './src/home/HomeScreen';
 import { JournalScreen } from './src/journal/JournalScreen';
+import { WatchlyLaunchGate } from './src/launch/WatchlyLaunchGate';
+import { LegalDocumentScreen } from './src/legal/LegalDocumentScreen';
+import { legalDocuments } from './src/legal/legalDocuments';
 import { LibraryScreen } from './src/library/LibraryScreen';
 import { appLinking } from './src/navigation/linking';
 import { detailBackOptions, resolvePreviousPageLabel, rootStackScreenOptions } from './src/navigation/stackConfig';
@@ -34,6 +40,19 @@ import { WatchlistCacheProvider } from './src/watchlists/WatchlistCacheContext';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tabs = createBottomTabNavigator<RootTabParamList>();
+const NativeTabs = createNativeBottomTabNavigator<RootTabParamList>();
+const watchlyNavigationTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: colors.background,
+    border: colors.border,
+    card: colors.background,
+    notification: colors.accent,
+    primary: colors.accent,
+    text: colors.text,
+  },
+};
 
 const tabIcons: Record<MainTabName, typeof House> = {
   Explore: Compass,
@@ -41,6 +60,12 @@ const tabIcons: Record<MainTabName, typeof House> = {
   Library,
   Profile: UserCircle,
 };
+const nativeTabIcons = {
+  Explore: { default: 'safari', selected: 'safari.fill' },
+  Home: { default: 'house', selected: 'house.fill' },
+  Library: { default: 'books.vertical', selected: 'books.vertical.fill' },
+  Profile: { default: 'person.crop.circle', selected: 'person.crop.circle.fill' },
+} as const;
 
 function ExploreTabScreen() {
   const isFocused = useIsFocused();
@@ -48,7 +73,44 @@ function ExploreTabScreen() {
   return <ExploreScreen isActive={isFocused} />;
 }
 
-function MainTabs() {
+function FallbackTabBarBackground() {
+  return (
+    <BlurView
+      experimentalBlurMethod="dimezisBlurView"
+      intensity={45}
+      style={StyleSheet.absoluteFill}
+      tint="systemThinMaterialDark"
+    />
+  );
+}
+
+function NativeMainTabs() {
+  return (
+    <NativeTabs.Navigator
+      screenOptions={({ route }) => {
+        const config = mainTabs.find((tab) => tab.name === route.name);
+        const icon = nativeTabIcons[route.name];
+
+        return {
+          headerShown: false,
+          tabBarActiveTintColor: colors.accent,
+          tabBarIcon: ({ focused }) => ({
+            name: focused ? icon.selected : icon.default,
+            type: 'sfSymbol',
+          }),
+          tabBarLabel: config?.label ?? route.name,
+        };
+      }}
+    >
+      <NativeTabs.Screen component={HomeScreen} name="Home" />
+      <NativeTabs.Screen component={ExploreTabScreen} name="Explore" />
+      <NativeTabs.Screen component={LibraryScreen} name="Library" />
+      <NativeTabs.Screen component={ProfileScreen} name="Profile" />
+    </NativeTabs.Navigator>
+  );
+}
+
+function FallbackMainTabs() {
   return (
     <Tabs.Navigator
       screenOptions={({ route }) => {
@@ -59,6 +121,7 @@ function MainTabs() {
           headerShown: false,
           tabBarAccessibilityLabel: config?.label ?? route.name,
           tabBarActiveTintColor: colors.accent,
+          tabBarBackground: () => <FallbackTabBarBackground />,
           tabBarHideOnKeyboard: true,
           tabBarIcon: ({ color, size }) => <Icon color={color} size={size} strokeWidth={2} />,
           tabBarInactiveTintColor: colors.muted,
@@ -77,20 +140,30 @@ function MainTabs() {
   );
 }
 
+function MainTabs() {
+  const canUseNativeTabs =
+    Platform.OS === 'ios' &&
+    Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
+
+  return canUseNativeTabs ? <NativeMainTabs /> : <FallbackMainTabs />;
+}
+
 export default function App() {
   return (
-    <SafeAreaProvider>
-      <AuthSessionProvider>
-        <NavigationContainer linking={appLinking}>
-          <ToastProvider>
-            <CatalogueCacheProvider>
-              <WatchlistCacheProvider>
-                <AppNavigator />
-              </WatchlistCacheProvider>
-            </CatalogueCacheProvider>
-          </ToastProvider>
-        </NavigationContainer>
-      </AuthSessionProvider>
+    <SafeAreaProvider style={styles.appRoot}>
+      <WatchlyLaunchGate>
+        <AuthSessionProvider>
+          <NavigationContainer linking={appLinking} theme={watchlyNavigationTheme}>
+            <ToastProvider>
+              <CatalogueCacheProvider>
+                <WatchlistCacheProvider>
+                  <AppNavigator />
+                </WatchlistCacheProvider>
+              </CatalogueCacheProvider>
+            </ToastProvider>
+          </NavigationContainer>
+        </AuthSessionProvider>
+      </WatchlyLaunchGate>
     </SafeAreaProvider>
   );
 }
@@ -123,6 +196,11 @@ function AppNavigator() {
           <>
             <Stack.Screen component={MainTabs} name="MainTabs" options={{ headerShown: false }} />
             <Stack.Screen component={JournalScreen} name="Journal" options={{ title: 'Journal' }} />
+            <Stack.Screen
+              component={LegalDocumentScreen}
+              name="LegalDocument"
+              options={({ route }) => ({ title: legalDocuments[route.params.document].title })}
+            />
             <Stack.Screen component={NotificationsScreen} name="Notifications" options={{ title: 'Alerts' }} />
             <Stack.Screen component={SettingsScreen} name="Settings" options={{ title: 'Settings' }} />
             <Stack.Screen
@@ -165,6 +243,10 @@ function AppNavigator() {
 }
 
 const styles = StyleSheet.create({
+  appRoot: {
+    backgroundColor: colors.background,
+    flex: 1,
+  },
   stackHeaderTitle: {
     color: colors.text,
     fontSize: 17,
@@ -172,11 +254,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   tabBar: {
-    backgroundColor: colors.panel,
-    borderTopColor: colors.border,
+    backgroundColor: 'transparent',
+    borderTopWidth: 0,
+    elevation: 0,
     height: 82,
     paddingBottom: 14,
     paddingTop: 10,
+    position: 'absolute',
+    shadowOpacity: 0,
   },
   tabBarItem: {
     minHeight: 58,

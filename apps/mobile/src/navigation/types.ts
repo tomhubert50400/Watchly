@@ -1,4 +1,5 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
+import type { LegalDocumentId } from '../legal/legalDocuments';
 
 export type RootTabParamList = {
   Explore: undefined;
@@ -20,6 +21,9 @@ export type RootStackParamList = {
     tmdbId: number;
   };
   Journal: undefined;
+  LegalDocument: {
+    document: LegalDocumentId;
+  };
   MainTabs: NavigatorScreenParams<RootTabParamList> | undefined;
   Notifications: undefined;
   Onboarding: undefined;

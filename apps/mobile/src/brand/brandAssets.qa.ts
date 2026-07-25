@@ -10,7 +10,7 @@ const appConfig = JSON.parse(readFileSync(appConfigUrl, 'utf8')).expo;
 assert.equal(appConfig.icon, './assets/icon.png');
 assert.deepEqual(appConfig.splash, {
   backgroundColor: '#090C13',
-  image: './assets/splash-icon.png',
+  image: './assets/splash-icon-w.png',
   resizeMode: 'contain',
 });
 assert.equal(appConfig.android.adaptiveIcon.backgroundColor, '#090C13');
@@ -22,10 +22,14 @@ assert.equal(appConfig.web.favicon, './assets/favicon.png');
 for (const [file, width, height] of [
   ['../../assets/watchly-logo-transparent.png', 1254, 1254],
   ['../../assets/watchly-logo-ui.png', 256, 256],
+  ['../../assets/watchly-w-ui.png', 256, 256],
+  ['../../assets/watchly-popcorn-ui.png', 256, 256],
   ['../../assets/watchly-wordmark-transparent.png', 1774, 887],
   ['../../assets/watchly-wordmark-ui.png', 512, 189],
+  ['../../assets/watchly-letters-ui.png', 512, 189],
   ['../../assets/icon.png', 1024, 1024],
   ['../../assets/splash-icon.png', 1024, 1024],
+  ['../../assets/splash-icon-w.png', 1024, 1024],
   ['../../assets/favicon.png', 48, 48],
   ['../../assets/android-icon-foreground.png', 512, 512],
   ['../../assets/android-icon-background.png', 512, 512],

@@ -116,7 +116,11 @@ assert.match(
 assert.match(opinionSheet, /footer=\{sheetFooter\}/, 'opinion save actions must use the sheet footer');
 assert.match(addToWatchlist, /<BottomActionSheet footer=\{footer\}/, 'watchlist actions must use the sheet footer');
 assert.match(library, /footer=\{createListFooter\}/, 'list creation must use the screen footer');
-assert.match(settings, /footer=\{\([\s\S]*label="Save settings"/, 'settings save must use the screen footer');
+assert.match(
+  settings,
+  /footer=\{isDirty \|\| status === 'saving' \? \([\s\S]*label="Save changes"/,
+  'settings save must use the screen footer only while changes are pending',
+);
 assert.match(onboarding, /footer=\{\([\s\S]*Continue onboarding/, 'onboarding actions must use the screen footer');
 assert.match(explore, /automaticallyAdjustKeyboardInsets/, 'catalogue search must adjust around the keyboard');
 

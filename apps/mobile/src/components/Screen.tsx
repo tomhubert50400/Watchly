@@ -1,4 +1,5 @@
-import { PropsWithChildren, ReactNode } from 'react';
+import { useScrollToTop } from '@react-navigation/native';
+import { PropsWithChildren, ReactNode, useRef } from 'react';
 import {
   GestureResponderHandlers,
   KeyboardAvoidingView,
@@ -13,6 +14,7 @@ import { colors, spacing } from '../design/tokens';
 import { AppHeader } from './AppHeader';
 
 type ScreenProps = PropsWithChildren<{
+  background?: ReactNode;
   eyebrow?: string;
   footer?: ReactNode;
   gestureHandlers?: GestureResponderHandlers;
@@ -27,6 +29,7 @@ type ScreenProps = PropsWithChildren<{
 }>;
 
 export function Screen({
+  background,
   children,
   eyebrow,
   footer,
@@ -40,6 +43,7 @@ export function Screen({
   title,
   trailing,
 }: ScreenProps) {
+  const scrollViewRef = useRef<ScrollView>(null);
   const insets = useSafeAreaInsets();
   const sidePadding = typeof horizontalPadding === 'number'
     ? horizontalPadding
@@ -58,9 +62,11 @@ export function Screen({
       ? 72
       : spacing.md;
   const hasHeader = Boolean(title || eyebrow || leading || trailing);
+  useScrollToTop(scrollViewRef);
 
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea} {...gestureHandlers}>
+      {background ? <View pointerEvents="none" style={styles.background}>{background}</View> : null}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardAvoider}
@@ -74,12 +80,20 @@ export function Screen({
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
           refreshControl={refreshControl}
+          ref={scrollViewRef}
           showsVerticalScrollIndicator={false}
           stickyHeaderIndices={headerMode === 'sticky' && hasHeader ? [0] : undefined}
           style={styles.container}
         >
           {hasHeader ? (
-            <View style={[styles.headerShell, headerMode === 'sticky' ? styles.stickyHeader : null, { paddingHorizontal: chromePadding }]}>
+            <View
+              style={[
+                styles.headerShell,
+                background ? styles.transparentHeader : null,
+                headerMode === 'sticky' ? styles.stickyHeader : null,
+                { paddingHorizontal: chromePadding },
+              ]}
+            >
               <AppHeader eyebrow={eyebrow} leading={leading} title={title} trailing={trailing} />
             </View>
           ) : null}
@@ -105,6 +119,9 @@ export function Screen({
 }
 
 const styles = StyleSheet.create({
+  background: {
+    ...StyleSheet.absoluteFillObject,
+  },
   banner: {
     marginBottom: spacing.md,
   },
@@ -140,5 +157,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingBottom: spacing.sm,
     paddingTop: spacing.sm,
+  },
+  transparentHeader: {
+    backgroundColor: 'transparent',
   },
 });

@@ -9,7 +9,7 @@
     "icon": "./assets/icon.png",
     "splash": {
       "backgroundColor": "#090C13",
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/splash-icon-w.png",
       "resizeMode": "contain"
     },
     "userInterfaceStyle": "light",
@@ -17,7 +17,11 @@
       "bundleIdentifier": "com.tom.tvapp.dev",
       "supportsTablet": true,
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        },
+        "NSLocalNetworkUsageDescription": "Watchly connects to your local development server to load app data."
       }
     },
     "android": {
