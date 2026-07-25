@@ -18,9 +18,14 @@ export type CatalogueSearchResponse = {
   provider: 'tmdb';
 };
 
+export type CatalogueSpotlightItem = CatalogueSearchItem & {
+  backdropUrl: string;
+};
+
 export type CatalogueMovieSectionsResponse = {
   announced: CatalogueSearchItem[];
   provider: 'tmdb';
+  spotlight: CatalogueSpotlightItem | null;
   trending: CatalogueSearchItem[];
 };
 

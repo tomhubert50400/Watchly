@@ -8,15 +8,22 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service';
 import { isPrismaConnectionError } from '../database/prisma-retry';
+import {
+  chooseWeeklySpotlight,
+  getSpotlightExpiry,
+  isSpotlightActive,
+} from './catalogue-spotlight';
 
 export type CatalogueSearchType = 'all' | 'movie' | 'series';
 
 type TmdbSearchResult = {
+  backdrop_path?: string | null;
   first_air_date?: string;
   id: number;
   media_type?: string;
   name?: string;
   overview?: string;
+  popularity?: number;
   poster_path?: string | null;
   release_date?: string;
   title?: string;
@@ -132,6 +139,24 @@ export type CatalogueSearchItem = {
   releaseDate: string | null;
   title: string;
   tmdbId: number;
+  voteAverage: number | null;
+};
+
+export type CatalogueSpotlightItem = CatalogueSearchItem & {
+  backdropUrl: string;
+};
+
+type StoredCatalogueSpotlight = {
+  backdropUrl: string;
+  expiresAt: Date;
+  id: string;
+  overview: string;
+  posterUrl: string | null;
+  releaseDate: string | null;
+  selectedAt: Date;
+  title: string;
+  tmdbId: number;
+  updatedAt: Date;
   voteAverage: number | null;
 };
 
@@ -321,12 +346,18 @@ export class TmdbCatalogueService {
   async movieSections() {
     const accessToken = this.getAccessToken();
     const trendingParams = new URLSearchParams({ language: 'fr-FR', page: '1' });
+    const weeklyTrendingParams = new URLSearchParams({ language: 'fr-FR', page: '1' });
     const upcomingPages = [1, 2, 3, 4, 5];
-    const [trendingPayload, ...upcomingPayloads] = await Promise.all([
+    const [trendingPayload, weeklyTrendingPayload, ...upcomingPayloads] = await Promise.all([
       this.fetchTmdb<TmdbSearchResponse>(
         `${this.tmdbBaseUrl}/trending/movie/day?${trendingParams.toString()}`,
         accessToken,
         'trending movies',
+      ),
+      this.fetchTmdb<TmdbSearchResponse>(
+        `${this.tmdbBaseUrl}/trending/movie/week?${weeklyTrendingParams.toString()}`,
+        accessToken,
+        'weekly trending movies',
       ),
       ...upcomingPages.map((page) =>
         this.fetchTmdb<TmdbSearchResponse>(
@@ -339,21 +370,23 @@ export class TmdbCatalogueService {
         ),
       ),
     ]);
+    const spotlight = await this.resolveWeeklySpotlight(weeklyTrendingPayload.results ?? []);
 
     return {
       announced: upcomingPayloads
         .flatMap((payload) => payload.results ?? [])
+        .filter((item) => isAnnouncedReleaseDate(item.release_date))
+        .sort(compareAnnouncedCandidates)
         .map((item) => this.toCatalogueItem(item, 'movie'))
         .filter((item): item is CatalogueSearchItem => Boolean(item))
-        .filter((item) => isAfterMinimumAnnouncedDate(item.releaseDate))
-        .sort((left, right) => getDateSortValue(left.releaseDate) - getDateSortValue(right.releaseDate))
         .slice(0, 10),
       provider: 'tmdb',
+      spotlight,
       trending: (trendingPayload.results ?? [])
         .map((item) => this.toCatalogueItem(item, 'movie'))
         .filter((item): item is CatalogueSearchItem => Boolean(item))
         .filter((item) => isReleasedDate(item.releaseDate))
-        .sort((left, right) => getDateSortValue(right.releaseDate) - getDateSortValue(left.releaseDate))
+        .filter((item) => item.tmdbId !== spotlight?.tmdbId)
         .slice(0, 10),
     };
   }
@@ -504,6 +537,111 @@ export class TmdbCatalogueService {
     }
 
     return accessToken;
+  }
+
+  private async resolveWeeklySpotlight(
+    candidates: readonly TmdbSearchResult[],
+  ): Promise<CatalogueSpotlightItem | null> {
+    const now = new Date();
+    const stored = await this.getStoredSpotlight();
+
+    if (stored && isSpotlightActive(stored.expiresAt, now)) {
+      return this.toStoredSpotlightItem(stored);
+    }
+
+    const candidate = chooseWeeklySpotlight(candidates, now);
+    const spotlight = candidate ? this.toSpotlightItem(candidate) : null;
+
+    if (!spotlight) {
+      return stored ? this.toStoredSpotlightItem(stored) : null;
+    }
+
+    await this.storeSpotlight(spotlight, now);
+    return spotlight;
+  }
+
+  private async getStoredSpotlight(): Promise<StoredCatalogueSpotlight | null> {
+    try {
+      return await this.prisma.withConnectionRetry(() =>
+        this.prisma.catalogueSpotlight.findUnique({
+          where: {
+            id: 'home',
+          },
+        }),
+      );
+    } catch (error) {
+      if (isPrismaConnectionError(error)) {
+        return null;
+      }
+
+      throw error;
+    }
+  }
+
+  private async storeSpotlight(spotlight: CatalogueSpotlightItem, selectedAt: Date) {
+    try {
+      await this.prisma.withConnectionRetry(() =>
+        this.prisma.catalogueSpotlight.upsert({
+          create: {
+            backdropUrl: spotlight.backdropUrl,
+            expiresAt: getSpotlightExpiry(selectedAt),
+            id: 'home',
+            overview: spotlight.overview,
+            posterUrl: spotlight.posterUrl,
+            releaseDate: spotlight.releaseDate,
+            selectedAt,
+            title: spotlight.title,
+            tmdbId: spotlight.tmdbId,
+            voteAverage: spotlight.voteAverage,
+          },
+          update: {
+            backdropUrl: spotlight.backdropUrl,
+            expiresAt: getSpotlightExpiry(selectedAt),
+            overview: spotlight.overview,
+            posterUrl: spotlight.posterUrl,
+            releaseDate: spotlight.releaseDate,
+            selectedAt,
+            title: spotlight.title,
+            tmdbId: spotlight.tmdbId,
+            voteAverage: spotlight.voteAverage,
+          },
+          where: {
+            id: 'home',
+          },
+        }),
+      );
+    } catch (error) {
+      if (!isPrismaConnectionError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  private toSpotlightItem(item: TmdbSearchResult): CatalogueSpotlightItem | null {
+    const catalogueItem = this.toCatalogueItem(item, 'movie');
+
+    if (!catalogueItem || !item.backdrop_path) {
+      return null;
+    }
+
+    return {
+      ...catalogueItem,
+      backdropUrl: `${this.backdropBaseUrl}${item.backdrop_path}`,
+    };
+  }
+
+  private toStoredSpotlightItem(item: StoredCatalogueSpotlight): CatalogueSpotlightItem {
+    return {
+      backdropUrl: item.backdropUrl,
+      id: `movie:${item.tmdbId}`,
+      mediaType: 'movie',
+      overview: item.overview,
+      posterUrl: item.posterUrl,
+      releaseDate: item.releaseDate,
+      title: item.title,
+      tmdbId: item.tmdbId,
+      voteAverage: item.voteAverage,
+    };
   }
 
   private toCatalogueItem(
@@ -779,18 +917,40 @@ function isFutureDate(value: string | null) {
   return typeof value === 'string' && value > getTodayDateKey();
 }
 
-function isAfterMinimumAnnouncedDate(value: string | null) {
-  return typeof value === 'string' && value > getDateKeyFromNow(3);
+type AnnouncedSortCandidate = {
+  popularity?: number;
+  release_date?: string;
+};
+
+const ANNOUNCED_RELEASE_GRACE_MS = 6 * 60 * 60 * 1000;
+
+export function isAnnouncedReleaseDate(
+  value: string | null | undefined,
+  now = new Date(),
+) {
+  if (typeof value !== 'string') {
+    return false;
+  }
+
+  const cutoff = new Date(now.getTime() - ANNOUNCED_RELEASE_GRACE_MS)
+    .toISOString()
+    .slice(0, 10);
+
+  return value >= cutoff;
+}
+
+export function compareAnnouncedCandidates(
+  left: AnnouncedSortCandidate,
+  right: AnnouncedSortCandidate,
+) {
+  return getPopularitySortValue(right.popularity) - getPopularitySortValue(left.popularity)
+    || getDateSortValue(left.release_date ?? null) - getDateSortValue(right.release_date ?? null);
 }
 
 function getTodayDateKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function getDateKeyFromNow(days: number) {
-  const date = new Date();
-
-  date.setUTCDate(date.getUTCDate() + days);
-
-  return date.toISOString().slice(0, 10);
+function getPopularitySortValue(value: number | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }

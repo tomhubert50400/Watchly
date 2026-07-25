@@ -27,6 +27,7 @@ import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { SegmentedControl } from '../components/SegmentedControl';
+import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { hapticSelection } from '../feedback/haptics';
 import { RootStackParamList } from '../navigation/types';
@@ -88,6 +89,7 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
     [searchItems, searchItemsQuery, searchType, trimmedQuery],
   );
   const visibleItems = isSearching ? visibleSearchItems : sectionItems[activeSection];
+  const atmosphereUrl = visibleItems[0]?.posterUrl ?? null;
   const visibleError = isSearching ? searchError : sections.error;
   const isVisibleLoading = isSearching
     ? isSearchLoading
@@ -175,6 +177,7 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
 
   return (
     <SafeAreaView edges={['top']} style={styles.safeArea}>
+      <SpotlightAtmosphere imageUrl={atmosphereUrl} />
       <ScrollView
         automaticallyAdjustKeyboardInsets
         contentContainerStyle={styles.scrollContent}

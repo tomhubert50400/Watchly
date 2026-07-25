@@ -27,7 +27,9 @@ import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { MediaPoster } from '../components/MediaPoster';
 import { Screen } from '../components/Screen';
 import { SectionHeader } from '../components/SectionHeader';
+import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { colors, spacing, typography } from '../design/tokens';
+import { useHomeLaunchReadiness } from '../launch/WatchlyLaunchGate';
 import { RootStackParamList, RootTabParamList } from '../navigation/types';
 import { countUnreadNotifications } from '../notifications/notificationModel';
 import { ContinueWatchingRail } from './ContinueWatchingRail';
@@ -49,7 +51,7 @@ type HomeNavigation = CompositeNavigationProp<
   NativeStackNavigationProp<RootStackParamList>
 >;
 
-const PUBLIC_HOME_KEY = getPublicCacheKey('home:catalogue:v1');
+const PUBLIC_HOME_KEY = getPublicCacheKey('home:catalogue:v2');
 
 export function HomeScreen() {
   const navigation = useNavigation<HomeNavigation>();
@@ -98,6 +100,10 @@ export function HomeScreen() {
     load: loadNotifications,
   });
   const unreadNotificationCount = countUnreadNotifications(notifications.data ?? []);
+  const atmosphereUrl = catalogue.data?.hero?.posterUrl ?? catalogue.data?.hero?.backdropUrl ?? null;
+  useHomeLaunchReadiness(
+    Boolean(catalogue.data || catalogue.error || !catalogue.isInitialLoading),
+  );
 
   useFocusEffect(useCallback(() => {
     if (isSignedIn) {
@@ -146,6 +152,7 @@ export function HomeScreen() {
 
   return (
     <Screen
+      background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null}
       horizontalPadding={false}
       refreshControl={
         <RefreshControl
@@ -321,10 +328,10 @@ function TrendingRail({
 
 async function loadHomeCatalogue(): Promise<HomeCatalogueData> {
   const response = await ensureCatalogueSections();
-  const featured = response.trending[0] ?? null;
+  const featured = response.spotlight;
 
   if (!featured) {
-    return { hero: null, trending: [] };
+    return { hero: null, trending: response.trending.map(toTrendingItem) };
   }
 
   let details = null;
@@ -342,7 +349,7 @@ async function loadHomeCatalogue(): Promise<HomeCatalogueData> {
 
   return {
     hero: {
-      backdropUrl: details?.backdropUrl ?? null,
+      backdropUrl: details?.backdropUrl ?? featured.backdropUrl,
       genres: details?.genres ?? [],
       posterUrl: details?.posterUrl ?? featured.posterUrl,
       releaseDate: details?.releaseDate ?? featured.releaseDate,
@@ -350,7 +357,7 @@ async function loadHomeCatalogue(): Promise<HomeCatalogueData> {
       title: details?.title ?? featured.title,
       tmdbId: featured.tmdbId,
     },
-    trending: response.trending.slice(1).map(toTrendingItem),
+    trending: response.trending.map(toTrendingItem),
   };
 }
 

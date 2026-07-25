@@ -1,9 +1,22 @@
 import assert from 'node:assert/strict';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service';
-import { TmdbCatalogueService } from './tmdb-catalogue.service';
+import {
+  chooseWeeklySpotlight,
+  getSpotlightExpiry,
+  isSpotlightActive,
+  SPOTLIGHT_DURATION_MS,
+} from './catalogue-spotlight';
+import {
+  compareAnnouncedCandidates,
+  isAnnouncedReleaseDate,
+  TmdbCatalogueService,
+} from './tmdb-catalogue.service';
 
 async function main() {
+  testAnnouncedSelection();
+  testWeeklySpotlightSelection();
+
   const requestedUrls: string[] = [];
   const originalFetch = globalThis.fetch;
 
@@ -74,6 +87,89 @@ async function main() {
   }
 
   console.log('Catalogue search QA passed.');
+}
+
+function testAnnouncedSelection() {
+  const duringGrace = new Date('2026-07-26T04:00:00.000Z');
+  const afterGrace = new Date('2026-07-26T07:00:00.000Z');
+
+  assert.equal(
+    isAnnouncedReleaseDate('2026-07-25', duringGrace),
+    true,
+    'a release from the previous UTC date remains announced during the six-hour grace period',
+  );
+  assert.equal(
+    isAnnouncedReleaseDate('2026-07-25', afterGrace),
+    false,
+    'the previous release date leaves Coming soon after the six-hour grace period',
+  );
+  assert.equal(
+    isAnnouncedReleaseDate('2026-07-26', afterGrace),
+    true,
+    'a release from the current UTC date remains in Coming soon',
+  );
+
+  const candidates = [
+    { id: 1, popularity: 5, release_date: '2026-07-26' },
+    { id: 2, popularity: 300, release_date: '2026-08-10' },
+    { id: 3, popularity: 300, release_date: '2026-08-01' },
+  ];
+
+  assert.deepEqual(
+    candidates.sort(compareAnnouncedCandidates).map((candidate) => candidate.id),
+    [3, 2, 1],
+    'Coming soon ranks by popularity before using the nearest release date as a tie-breaker',
+  );
+}
+
+function testWeeklySpotlightSelection() {
+  const selectedAt = new Date('2026-07-25T05:00:00.000Z');
+  const candidates = [
+    {
+      backdrop_path: '/future.jpg',
+      id: 1,
+      release_date: '2026-07-28',
+      title: 'Future release',
+    },
+    {
+      backdrop_path: null,
+      id: 2,
+      release_date: '2026-07-24',
+      title: 'Missing backdrop',
+    },
+    {
+      backdrop_path: '/weekly-number-one.jpg',
+      id: 3,
+      release_date: '2026-07-15',
+      title: 'Weekly number one',
+    },
+    {
+      backdrop_path: '/lower-ranked.jpg',
+      id: 4,
+      release_date: '2026-06-10',
+      title: 'Lower ranked',
+    },
+  ];
+
+  assert.equal(
+    chooseWeeklySpotlight(candidates, selectedAt)?.id,
+    3,
+    'the first released weekly trend with a backdrop becomes the spotlight',
+  );
+
+  const expiresAt = getSpotlightExpiry(selectedAt);
+
+  assert.equal(expiresAt.getTime() - selectedAt.getTime(), SPOTLIGHT_DURATION_MS);
+  assert.equal(
+    isSpotlightActive(expiresAt, new Date(expiresAt.getTime() - 1)),
+    true,
+    'the spotlight stays active before its expiry',
+  );
+  assert.equal(
+    isSpotlightActive(expiresAt, expiresAt),
+    false,
+    'the spotlight can be replaced once its full seven-day window has elapsed',
+  );
 }
 
 function jsonResponse(body: unknown) {

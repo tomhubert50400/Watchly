@@ -38,7 +38,7 @@ export function HomeHero({ item, onOpen }: HomeHeroProps) {
 function HeroCopy({ item, metadata, onOpen }: HomeHeroProps & { metadata: string[] }) {
   return (
     <View style={styles.copy}>
-      <Text style={styles.eyebrow}>In the spotlight</Text>
+      <Text style={styles.eyebrow}>Spotlight of the week</Text>
       <Text accessibilityRole="header" numberOfLines={2} style={styles.title}>
         {item.title}
       </Text>

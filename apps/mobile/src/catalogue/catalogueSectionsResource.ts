@@ -10,7 +10,7 @@ import {
 } from '../cache/memoryResourceCache';
 import { getPublicCacheKey } from '../cache/persistedCache';
 
-export const PUBLIC_CATALOGUE_SECTIONS_KEY = getPublicCacheKey('catalogue:movie-sections:v1');
+export const PUBLIC_CATALOGUE_SECTIONS_KEY = getPublicCacheKey('catalogue:movie-sections:v3');
 const CATALOGUE_SECTIONS_STALE_TIME_MS = 15 * 60 * 1000;
 
 export function loadCatalogueSections(): Promise<CatalogueMovieSectionsResponse> {
