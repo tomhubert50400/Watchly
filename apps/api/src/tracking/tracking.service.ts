@@ -1,15 +1,17 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
 import { TrackedContentType, UserContentStatus } from '../generated/prisma/enums';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
 import { TrackingContentType, TrackingStatus, UpsertContentStateDto } from './tracking.dto';
+import { ViewingsService } from '../viewings/viewings.service';
 
 @Injectable()
 export class TrackingService {
   constructor(
     @Inject(AuthService) private readonly authService: AuthService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Optional() @Inject(ViewingsService) private readonly viewings?: ViewingsService,
   ) {}
 
   async listStates(identity: AuthenticatedIdentity, contentType?: TrackingContentType) {
@@ -93,6 +95,10 @@ export class TrackingService {
       },
       }),
     );
+
+    if (input.contentType === 'movie' && input.status === 'watched') {
+      await this.viewings?.ensureInitialMovieViewing(userId, input.tmdbId);
+    }
 
     return toApiState(state);
   }

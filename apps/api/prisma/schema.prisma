@@ -46,6 +46,35 @@ enum UserContentStatus {
   DROPPED
 }
 
+enum ViewingContentType {
+  MOVIE
+  EPISODE
+}
+
+enum ReportTargetType {
+  PROFILE
+  MOVIE_REVIEW
+  EPISODE_REVIEW
+}
+
+enum ReportReason {
+  SPAM
+  HARASSMENT
+  HATE
+  SEXUAL_CONTENT
+  VIOLENCE
+  IMPERSONATION
+  INTELLECTUAL_PROPERTY
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
 enum ReleaseNotificationType {
   MOVIE_RELEASE
   SEASON_RELEASE
@@ -64,14 +93,29 @@ enum AuditAction {
   USER_UNBLOCKED
 }
 
+enum DataImportSource {
+  LETTERBOXD
+  IMDB
+}
+
+enum DataImportStatus {
+  PREVIEWED
+  COMPLETED
+}
+
 model User {
   id                         String                     @id @default(uuid()) @db.Uuid
+  avatarObjectKey            String?
+  profileBackdropContentType TrackedContentType?
+  profileBackdropTmdbId      Int?
   displayName                String?
+  handle                     String?                    @unique @db.VarChar(20)
   onboardingCompleted        Boolean                    @default(false)
   createdAt                  DateTime                   @default(now())
   updatedAt                  DateTime                   @updatedAt
   authIdentities             AuthIdentity[]
   contentStates              UserContentState[]
+  dataImports                DataImport[]
   episodeProgress            UserEpisodeProgress[]
   episodeRatings             UserEpisodeRating[]
   episodeReviewLikes         EpisodeReviewLike[]
@@ -79,6 +123,8 @@ model User {
   movieRatings               UserMovieRating[]
   movieReviewLikes           MovieReviewLike[]
   movieReviews               UserMovieReview[]
+  reportsReceived            ContentReport[]            @relation("ReportedUser")
+  reportsSubmitted           ContentReport[]            @relation("ReportReporter")
   releaseAlertSubscriptions  ReleaseAlertSubscription[]
   notifications              Notification[]             @relation("NotificationRecipient")
   actedNotifications         Notification[]             @relation("NotificationActor")
@@ -91,6 +137,7 @@ model User {
   ownedSharedWatchlists      SharedWatchlist[]          @relation("SharedWatchlistOwner")
   sharedWatchlistMemberships SharedWatchlistMember[]
   sharedVotingVotes          SharedVotingVote[]
+  viewingEvents              ViewingEvent[]
 
   @@map("users")
 }
@@ -176,7 +223,7 @@ model UserMovieReview {
   id        String            @id @default(uuid()) @db.Uuid
   userId    String            @db.Uuid
   tmdbId    Int
-  body      String            @db.VarChar(5000)
+  body      String            @db.Text
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
   likes     MovieReviewLike[]
@@ -207,7 +254,7 @@ model UserEpisodeReview {
   seriesTmdbId  Int
   seasonNumber  Int
   episodeNumber Int
-  body          String              @db.VarChar(5000)
+  body          String              @db.Text
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
   likes         EpisodeReviewLike[]
@@ -247,6 +294,65 @@ model UserEpisodeProgress {
   @@index([userId])
   @@index([seriesTmdbId, seasonNumber])
   @@map("user_episode_progress")
+}
+
+model ViewingEvent {
+  id             String             @id @default(uuid()) @db.Uuid
+  userId         String             @db.Uuid
+  contentType    ViewingContentType
+  tmdbId         Int
+  seasonNumber   Int?
+  episodeNumber  Int?
+  title          String?
+  subtitle       String?
+  artworkUrl     String?
+  genres         String[]           @default([])
+  runtimeMinutes Int?
+  watchedAt      DateTime?
+  createdAt      DateTime           @default(now())
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, watchedAt])
+  @@index([userId, contentType, tmdbId])
+  @@index([userId, contentType, tmdbId, seasonNumber, episodeNumber])
+  @@map("viewing_events")
+}
+
+model DataImport {
+  id          String           @id @default(uuid()) @db.Uuid
+  userId      String           @db.Uuid
+  source      DataImportSource
+  status      DataImportStatus @default(PREVIEWED)
+  fileName    String           @db.VarChar(255)
+  preview     Json
+  createdAt   DateTime         @default(now())
+  completedAt DateTime?
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("data_imports")
+}
+
+model ContentReport {
+  id               String           @id @default(uuid()) @db.Uuid
+  reporterId       String           @db.Uuid
+  reportedUserId   String           @db.Uuid
+  targetType       ReportTargetType
+  targetId         String           @db.Uuid
+  reason           ReportReason
+  details          String?          @db.VarChar(500)
+  status           ReportStatus     @default(PENDING)
+  targetSnapshot   Json
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  resolvedAt       DateTime?
+  reporter         User             @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUser     User             @relation("ReportedUser", fields: [reportedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([reporterId, targetType, targetId])
+  @@index([reportedUserId])
+  @@index([status, createdAt])
+  @@map("content_reports")
 }
 
 model UserBlock {

@@ -8,6 +8,7 @@ import { PrismaService } from '../database/prisma.service';
 import { FeedService } from '../feed/feed.service';
 import { FollowsService } from '../follows/follows.service';
 import { AuthProvider } from '../generated/prisma/enums';
+import { AvatarStorageService } from '../media/avatar-storage.service';
 import { ProfileService } from '../profile/profile.service';
 import { ProgressService } from '../progress/progress.service';
 import { RatingsService } from '../ratings/ratings.service';
@@ -21,13 +22,14 @@ async function main() {
   const config = new ConfigService(process.env);
   const prisma = new PrismaService(config);
   const auth = new AuthService(prisma);
-  const profile = new ProfileService(auth, config, prisma);
+  const avatarStorage = new AvatarStorageService(config);
+  const profile = new ProfileService(auth, config, prisma, avatarStorage);
   const follows = new FollowsService(auth, prisma);
-  const feed = new FeedService(auth, prisma);
+  const feed = new FeedService(auth, prisma, avatarStorage);
   const blocks = new BlocksService(auth, prisma);
   const ratings = new RatingsService(auth, prisma);
   const progress = new ProgressService(auth, prisma);
-  const reviews = new ReviewsService(auth, prisma);
+  const reviews = new ReviewsService(auth, prisma, avatarStorage);
   const watchlists = new WatchlistsService(auth, prisma);
   let userIds: string[] = [];
 
@@ -130,13 +132,18 @@ async function assertPublicProfileProjection(
   const keys = Object.keys(publicProfile).sort();
 
   assert(
-    keys.join(',') === 'canViewContent,displayName,id,profileVisibility,stats,watchlists',
+    keys.join(',') === 'avatarUrl,canViewContent,displayName,handle,id,media,opinions,profileBackdrop,profileVisibility,stats,viewingStats,watchlists',
     `Public profile projection leaked unexpected fields: ${keys.join(',')}`,
   );
   const statsKeys = Object.keys(publicProfile.stats).sort();
   assert(
     statsKeys.join(',') === 'followersCount,followingCount,postsCount,reviewsCount',
     `Public profile stats leaked unexpected fields: ${statsKeys.join(',')}`,
+  );
+  const mediaKeys = Object.keys(publicProfile.media).sort();
+  assert(
+    mediaKeys.join(',') === 'movieRatings,releaseAlerts,seriesProgress,trackingStates',
+    `Public profile media leaked unexpected fields: ${mediaKeys.join(',')}`,
   );
 }
 
@@ -238,12 +245,25 @@ async function assertFeedPrivacyAndBlocking(
     'A private public projection should report its privacy state.',
   );
   assert(
-    privateProjection.displayName === null && privateProjection.watchlists.length === 0,
-    'A private public projection must hide identity details and watchlists.',
+    privateProjection.avatarUrl === acceptedPrivateProjection.avatarUrl &&
+      privateProjection.displayName === acceptedPrivateProjection.displayName &&
+      privateProjection.handle === acceptedPrivateProjection.handle &&
+      privateProjection.media.movieRatings.length === 0 &&
+      privateProjection.media.releaseAlerts.length === 0 &&
+      privateProjection.media.seriesProgress.length === 0 &&
+      privateProjection.media.trackingStates.length === 0 &&
+      privateProjection.opinions.length === 0 &&
+      privateProjection.profileBackdrop === null &&
+      privateProjection.viewingStats === null &&
+      privateProjection.watchlists.length === 0,
+    'A private public projection must retain identity while hiding media, opinions, viewing stats, and watchlists.',
   );
   assert(
-    privateProjection.stats.postsCount === 0 && privateProjection.stats.reviewsCount === 0,
-    'A private public projection must not expose profile totals before follow approval.',
+    privateProjection.stats.followersCount === 0 &&
+      privateProjection.stats.followingCount === 0 &&
+      privateProjection.stats.postsCount === 0 &&
+      privateProjection.stats.reviewsCount === 0,
+    'A private public projection must retain social counts without exposing activity totals.',
   );
 
   const pendingFollow = await follows.followUser(viewerIdentity, actorUserId);

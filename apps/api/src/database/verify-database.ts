@@ -17,6 +17,7 @@ async function main() {
     await prisma.$queryRaw`SELECT 1`;
     await prisma.user.count();
     await prisma.authIdentity.count();
+    await prisma.contentReport.count();
     await prisma.privacySettings.count();
     await prisma.userContentState.count();
     await prisma.userEpisodeProgress.count();

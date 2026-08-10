@@ -18,6 +18,7 @@ const prisma = new PrismaClient({
 });
 
 const sampleFriendName = 'Maya Chen';
+const sampleFriendHandle = 'maya_chen_ui';
 const samplePersonalWatchlistName = 'Weekend Queue';
 const sampleSharedWatchlistName = 'Friday Shared Night';
 
@@ -28,6 +29,7 @@ async function main() {
   await prisma.user.update({
     data: {
       displayName: user.displayName ?? 'Tom HUb',
+      handle: user.handle ?? `review_${user.id.replace(/-/g, '').slice(0, 10)}`,
       onboardingCompleted: true,
       privacySettings: {
         upsert: {
@@ -124,6 +126,7 @@ async function getOrCreateTestUser() {
     return prisma.user.update({
       data: {
         displayName: sampleFriendName,
+        handle: sampleFriendHandle,
         onboardingCompleted: true,
         privacySettings: {
           upsert: {
@@ -140,6 +143,7 @@ async function getOrCreateTestUser() {
     data: {
       authIdentities: { create: identityKey },
       displayName: sampleFriendName,
+      handle: sampleFriendHandle,
       onboardingCompleted: true,
       privacySettings: { create: publicReviewPrivacy() },
     },

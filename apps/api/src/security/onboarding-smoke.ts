@@ -4,6 +4,7 @@ import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
 import { AuthProvider } from '../generated/prisma/enums';
+import { AvatarStorageService } from '../media/avatar-storage.service';
 import { ProfileService } from '../profile/profile.service';
 
 async function main() {
@@ -11,7 +12,7 @@ async function main() {
   const config = new ConfigService(process.env);
   const prisma = new PrismaService(config);
   const auth = new AuthService(prisma);
-  const profile = new ProfileService(auth, config, prisma);
+  const profile = new ProfileService(auth, config, prisma, new AvatarStorageService(config));
   let userId: string | null = null;
 
   try {
@@ -20,13 +21,16 @@ async function main() {
 
     assert(created.onboardingCompleted === false, 'New users should start onboarding incomplete.');
 
-    const completed = await profile.completeOnboarding(identity);
+    const handle = `onboard_${Date.now().toString(36)}`;
+    const completed = await profile.completeOnboarding(identity, handle);
 
     assert(completed.onboardingCompleted === true, 'Completion route should mark onboarding complete.');
+    assert(completed.handle === handle, 'Completion route should claim the normalized handle.');
 
     const reloaded = await auth.getOrCreateUser(identity);
 
     assert(reloaded.onboardingCompleted === true, 'Auth user should expose completed onboarding.');
+    assert(reloaded.handle === handle, 'Auth user should expose the permanent handle.');
 
     console.log('Onboarding smoke passed.');
   } finally {

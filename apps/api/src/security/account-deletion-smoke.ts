@@ -6,6 +6,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../database/prisma.service';
 import { AuthProvider } from '../generated/prisma/enums';
+import { AvatarStorageService } from '../media/avatar-storage.service';
 import { ProfileService } from '../profile/profile.service';
 
 async function main() {
@@ -14,7 +15,7 @@ async function main() {
   const config = new ConfigService(process.env);
   const prisma = new PrismaService(config);
   const auth = new AuthService(prisma);
-  const profile = new ProfileService(auth, config, prisma);
+  const profile = new ProfileService(auth, config, prisma, new AvatarStorageService(config));
   const uid = `account-deletion-smoke-${Date.now()}`;
   const identity = {
     displayName: 'Deletion smoke user',

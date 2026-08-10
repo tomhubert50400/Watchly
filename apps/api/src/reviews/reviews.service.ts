@@ -3,12 +3,14 @@ import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
 import { PrivacyVisibility } from '../generated/prisma/enums';
+import { AvatarStorageService } from '../media/avatar-storage.service';
 
 @Injectable()
 export class ReviewsService {
   constructor(
     @Inject(AuthService) private readonly authService: AuthService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(AvatarStorageService) private readonly avatarStorage: AvatarStorageService,
   ) {}
 
   async getMovieReview(identity: AuthenticatedIdentity, tmdbId: number) {
@@ -214,6 +216,7 @@ export class ReviewsService {
           include: {
             user: {
               select: {
+                avatarObjectKey: true,
                 displayName: true,
                 id: true,
               },
@@ -259,6 +262,7 @@ export class ReviewsService {
             ? []
             : [{
                 author: {
+                  avatarUrl: this.avatarStorage.getPublicUrl(review.user.avatarObjectKey),
                   displayName: review.user.displayName,
                   id: review.user.id,
                 },

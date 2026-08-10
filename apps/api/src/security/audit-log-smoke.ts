@@ -5,6 +5,7 @@ import { AuthenticatedIdentity } from '../auth/auth.types';
 import { BlocksService } from '../blocks/blocks.service';
 import { PrismaService } from '../database/prisma.service';
 import { AuditAction, AuthProvider } from '../generated/prisma/enums';
+import { AvatarStorageService } from '../media/avatar-storage.service';
 import { ProfileService } from '../profile/profile.service';
 
 async function main() {
@@ -14,7 +15,7 @@ async function main() {
   const config = new ConfigService(process.env);
   const prisma = new PrismaService(config);
   const auth = new AuthService(prisma);
-  const profile = new ProfileService(auth, config, prisma);
+  const profile = new ProfileService(auth, config, prisma, new AvatarStorageService(config));
   const blocks = new BlocksService(auth, prisma);
   let userIds: string[] = [];
 

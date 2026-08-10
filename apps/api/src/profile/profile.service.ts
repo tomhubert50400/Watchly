@@ -1,9 +1,11 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -14,17 +16,28 @@ import {
   FollowStatus,
   PrivacyVisibility,
   SharedWatchlistVisibility,
+  TrackedContentType,
+  UserContentStatus,
 } from '../generated/prisma/enums';
 import { assertUuid } from '../blocks/blocks.service';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
+import { AvatarStorageService } from '../media/avatar-storage.service';
+import { ViewingsService } from '../viewings/viewings.service';
 import {
   PrivacyVisibilityValue,
   SharedWatchlistVisibilityValue,
+  UpdateProfileBackdropDto,
   UpdatePrivacySettingsDto,
   UpdateProfileDto,
 } from './profile.dto';
+import {
+  isProfileBackdropEligible,
+  normalizeProfileBackdropInput,
+  toApiProfileBackdrop,
+} from './profile-backdrop';
+import { isUniqueHandleError, normalizeProfileHandle } from './profile-handle';
 
 @Injectable()
 export class ProfileService {
@@ -32,6 +45,8 @@ export class ProfileService {
     @Inject(AuthService) private readonly authService: AuthService,
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(AvatarStorageService) private readonly avatarStorage: AvatarStorageService,
+    @Optional() @Inject(ViewingsService) private readonly viewings?: ViewingsService,
   ) {}
 
   async getProfile(identity: AuthenticatedIdentity) {
@@ -49,80 +64,7 @@ export class ProfileService {
   async listOwnOpinions(identity: AuthenticatedIdentity) {
     const userId = await this.getUserId(identity);
 
-    const movieRatings = await this.prisma.withConnectionRetry(() =>
-      this.prisma.userMovieRating.findMany({
-          orderBy: {
-            updatedAt: 'desc',
-          },
-          take: PROFILE_OPINION_LIMIT,
-          where: {
-            userId,
-          },
-        }),
-    );
-    const episodeRatings = await this.prisma.withConnectionRetry(() =>
-      this.prisma.userEpisodeRating.findMany({
-          orderBy: {
-            updatedAt: 'desc',
-          },
-          take: PROFILE_OPINION_LIMIT,
-          where: {
-            userId,
-          },
-        }),
-    );
-    const movieReviews = await this.prisma.withConnectionRetry(() =>
-      this.prisma.userMovieReview.findMany({
-          orderBy: {
-            updatedAt: 'desc',
-          },
-          take: PROFILE_OPINION_LIMIT,
-          where: {
-            userId,
-          },
-        }),
-    );
-    const episodeReviews = await this.prisma.withConnectionRetry(() =>
-      this.prisma.userEpisodeReview.findMany({
-          orderBy: {
-            updatedAt: 'desc',
-          },
-          take: PROFILE_OPINION_LIMIT,
-          where: {
-            userId,
-          },
-        }),
-    );
-    const movieReviewTmdbIds = new Set(movieReviews.map((review) => review.tmdbId));
-    const episodeReviewKeys = new Set(episodeReviews.map(getEpisodeOpinionKey));
-    const movieRatingByTmdbId = new Map(
-      movieRatings.map((rating) => [rating.tmdbId, rating.scoreHalfSteps / 2]),
-    );
-    const episodeRatingByKey = new Map(
-      episodeRatings.map((rating) => [getEpisodeOpinionKey(rating), rating.scoreHalfSteps / 2]),
-    );
-    const items = [
-      ...movieRatings
-        .filter((rating) => !movieReviewTmdbIds.has(rating.tmdbId))
-        .map(toMovieRatingOpinion),
-      ...episodeRatings
-        .filter((rating) => !episodeReviewKeys.has(getEpisodeOpinionKey(rating)))
-        .map(toEpisodeRatingOpinion),
-      ...movieReviews.flatMap((review) => {
-        const score = movieRatingByTmdbId.get(review.tmdbId);
-
-        return score === undefined ? [] : [toMovieReviewOpinion(review, score)];
-      }),
-      ...episodeReviews.flatMap((review) => {
-        const score = episodeRatingByKey.get(getEpisodeOpinionKey(review));
-
-        return score === undefined ? [] : [toEpisodeReviewOpinion(review, score)];
-      }),
-    ]
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-      .slice(0, PROFILE_OPINION_LIMIT);
-
-    return { items, stats: await this.getProfileStats(userId) };
+    return this.listOpinionsForUser(userId);
   }
 
   async exportAccountData(identity: AuthenticatedIdentity) {
@@ -137,6 +79,7 @@ export class ProfileService {
               providerUserId: true,
             },
           },
+          avatarObjectKey: true,
           blockedUsers: {
             orderBy: { createdAt: 'desc' },
             select: {
@@ -156,6 +99,7 @@ export class ProfileService {
           },
           createdAt: true,
           displayName: true,
+          handle: true,
           episodeProgress: {
             orderBy: { watchedAt: 'desc' },
             select: {
@@ -247,6 +191,8 @@ export class ProfileService {
             },
           },
           onboardingCompleted: true,
+          profileBackdropContentType: true,
+          profileBackdropTmdbId: true,
           ownedSharedWatchlists: {
             orderBy: { updatedAt: 'desc' },
             select: {
@@ -313,6 +259,22 @@ export class ProfileService {
             },
           },
           updatedAt: true,
+          viewingEvents: {
+            orderBy: [{ watchedAt: 'desc' }, { createdAt: 'desc' }],
+            select: {
+              artworkUrl: true,
+              contentType: true,
+              createdAt: true,
+              episodeNumber: true,
+              genres: true,
+              runtimeMinutes: true,
+              seasonNumber: true,
+              subtitle: true,
+              title: true,
+              tmdbId: true,
+              watchedAt: true,
+            },
+          },
         },
         where: { id: userId },
       }),
@@ -328,7 +290,10 @@ export class ProfileService {
   async deleteAccount(identity: AuthenticatedIdentity) {
     const authIdentity = await this.prisma.withConnectionRetry(() =>
       this.prisma.authIdentity.findUnique({
-        select: { userId: true },
+        select: {
+          user: { select: { avatarObjectKey: true } },
+          userId: true,
+        },
         where: {
           provider_providerUserId: {
             provider: identity.provider,
@@ -352,6 +317,7 @@ export class ProfileService {
           this.prisma.user.delete({ where: { id: authIdentity.userId } }),
         ]),
       );
+      await this.avatarStorage.deleteObjectBestEffort(authIdentity.user.avatarObjectKey);
     }
 
     try {
@@ -371,6 +337,93 @@ export class ProfileService {
     const viewerId = await this.getUserId(identity);
 
     return this.getPublicProfileByUserId(targetUserId, viewerId === targetUserId, viewerId);
+  }
+
+  async searchProfiles(identity: AuthenticatedIdentity, value?: string) {
+    const query = (value?.trim() ?? '').replace(/^@/, '');
+
+    if (query.length < 2) {
+      throw new BadRequestException('Profile search requires at least 2 characters.');
+    }
+
+    if (query.length > PROFILE_SEARCH_QUERY_MAX_LENGTH) {
+      throw new BadRequestException(
+        `Profile search must be ${PROFILE_SEARCH_QUERY_MAX_LENGTH} characters or fewer.`,
+      );
+    }
+
+    const viewerId = await this.getUserId(identity);
+    const users = await this.prisma.withConnectionRetry(() =>
+      this.prisma.user.findMany({
+        orderBy: {
+          displayName: 'asc',
+        },
+        select: {
+          avatarObjectKey: true,
+          displayName: true,
+          handle: true,
+          id: true,
+        },
+        take: PROFILE_SEARCH_LIMIT,
+        where: {
+          blockedBy: {
+            none: {
+              blockerId: viewerId,
+            },
+          },
+          blockedUsers: {
+            none: {
+              blockedUserId: viewerId,
+            },
+          },
+          handle: { not: null },
+          onboardingCompleted: true,
+          OR: [
+            {
+              displayName: {
+                contains: query,
+                mode: 'insensitive',
+              },
+            },
+            {
+              handle: {
+                contains: query,
+                mode: 'insensitive',
+              },
+            },
+          ],
+        },
+      }),
+    );
+
+    return {
+      items: users.map((user) => ({
+        avatarUrl: this.avatarStorage.getPublicUrl(user.avatarObjectKey),
+        displayName: user.displayName ?? 'Watchly member',
+        handle: user.handle,
+        id: user.id,
+      })),
+    };
+  }
+
+  async getHandleAvailability(identity: AuthenticatedIdentity, value: string) {
+    const handle = normalizeProfileHandle(value);
+    const viewerId = await this.getUserId(identity);
+    const existing = await this.prisma.withConnectionRetry(() =>
+      this.prisma.user.findUnique({
+        select: {
+          id: true,
+        },
+        where: {
+          handle,
+        },
+      }),
+    );
+
+    return {
+      available: !existing || existing.id === viewerId,
+      handle,
+    };
   }
 
   async getOrCreateDevTestUser(identity: AuthenticatedIdentity) {
@@ -413,6 +466,7 @@ export class ProfileService {
           create: identityKey,
         },
         displayName: 'Test profile',
+        handle: 'watchly_test',
         privacySettings: {
           create: {
             profileVisibility: PrivacyVisibility.PUBLIC,
@@ -444,6 +498,123 @@ export class ProfileService {
       where: {
         id: userId,
       },
+      }),
+    );
+
+    return this.getProfileByUserId(userId);
+  }
+
+  async createAvatarUpload(identity: AuthenticatedIdentity) {
+    const userId = await this.getUserId(identity);
+
+    return this.avatarStorage.createUpload(userId);
+  }
+
+  async confirmAvatarUpload(identity: AuthenticatedIdentity, objectKey: string) {
+    const userId = await this.getUserId(identity);
+    await this.avatarStorage.verifyUpload(userId, objectKey);
+    const current = await this.prisma.withConnectionRetry(() =>
+      this.prisma.user.findUniqueOrThrow({
+        select: { avatarObjectKey: true },
+        where: { id: userId },
+      }),
+    );
+
+    try {
+      await this.prisma.withConnectionRetry(() =>
+        this.prisma.user.update({
+          data: { avatarObjectKey: objectKey },
+          where: { id: userId },
+        }),
+      );
+    } catch (error) {
+      await this.avatarStorage.deleteObjectBestEffort(objectKey);
+      throw error;
+    }
+
+    if (current.avatarObjectKey !== objectKey) {
+      await this.avatarStorage.deleteObjectBestEffort(current.avatarObjectKey);
+    }
+
+    return this.getProfileByUserId(userId);
+  }
+
+  async removeAvatar(identity: AuthenticatedIdentity) {
+    const userId = await this.getUserId(identity);
+    const current = await this.prisma.withConnectionRetry(() =>
+      this.prisma.user.findUniqueOrThrow({
+        select: { avatarObjectKey: true },
+        where: { id: userId },
+      }),
+    );
+
+    await this.prisma.withConnectionRetry(() =>
+      this.prisma.user.update({
+        data: { avatarObjectKey: null },
+        where: { id: userId },
+      }),
+    );
+    await this.avatarStorage.deleteObjectBestEffort(current.avatarObjectKey);
+
+    return this.getProfileByUserId(userId);
+  }
+
+  async updateProfileBackdrop(
+    identity: AuthenticatedIdentity,
+    input: UpdateProfileBackdropDto,
+  ) {
+    const selection = normalizeProfileBackdropInput(input);
+    const userId = await this.getUserId(identity);
+
+    if (selection) {
+      const [contentState, releaseAlert, episodeProgressCount] =
+        await this.prisma.withConnectionRetry(() => Promise.all([
+          this.prisma.userContentState.findUnique({
+            select: { favorite: true, status: true },
+            where: {
+              userId_contentType_tmdbId: {
+                contentType: selection.contentType,
+                tmdbId: selection.tmdbId,
+                userId,
+              },
+            },
+          }),
+          this.prisma.releaseAlertSubscription.findUnique({
+            select: { id: true },
+            where: {
+              userId_contentType_tmdbId: {
+                contentType: selection.contentType,
+                tmdbId: selection.tmdbId,
+                userId,
+              },
+            },
+          }),
+          this.prisma.userEpisodeProgress.count({
+            where: {
+              seriesTmdbId: selection.tmdbId,
+              userId,
+            },
+          }),
+        ]));
+
+      if (!isProfileBackdropEligible({
+        favorite: contentState?.favorite ?? false,
+        hasEpisodeProgress: episodeProgressCount > 0,
+        hasReleaseAlert: Boolean(releaseAlert),
+        selection,
+        status: contentState?.status ?? null,
+      })) {
+        throw new BadRequestException('Choose a movie or series from your profile.');
+      }
+    }
+
+    await this.prisma.withConnectionRetry(() =>
+      this.prisma.user.update({
+        data: {
+          profileBackdropContentType: selection?.contentType ?? null,
+          profileBackdropTmdbId: selection?.tmdbId ?? null,
+        },
+        where: { id: userId },
       }),
     );
 
@@ -539,21 +710,75 @@ export class ProfileService {
     return this.getProfileByUserId(userId);
   }
 
-  async completeOnboarding(identity: AuthenticatedIdentity) {
+  async completeOnboarding(identity: AuthenticatedIdentity, value: string) {
+    const handle = normalizeProfileHandle(value);
     const userId = await this.getUserId(identity);
-    const user = await this.prisma.withConnectionRetry(() =>
-      this.prisma.user.update({
-      data: {
-        onboardingCompleted: true,
-      },
-      where: {
-        id: userId,
-      },
-      }),
-    );
+    let user;
+
+    try {
+      user = await this.prisma.withConnectionRetry(() =>
+        this.prisma.$transaction(async (tx) => {
+          const current = await tx.user.findUniqueOrThrow({
+            select: {
+              handle: true,
+            },
+            where: {
+              id: userId,
+            },
+          });
+
+          if (current.handle && current.handle !== handle) {
+            throw new BadRequestException('Your handle cannot be changed.');
+          }
+
+          if (!current.handle) {
+            const claim = await tx.user.updateMany({
+              data: {
+                handle,
+              },
+              where: {
+                handle: null,
+                id: userId,
+              },
+            });
+
+            if (claim.count === 0) {
+              const claimedUser = await tx.user.findUniqueOrThrow({
+                select: {
+                  handle: true,
+                },
+                where: {
+                  id: userId,
+                },
+              });
+
+              if (claimedUser.handle !== handle) {
+                throw new BadRequestException('Your handle cannot be changed.');
+              }
+            }
+          }
+
+          return tx.user.update({
+            data: {
+              onboardingCompleted: true,
+            },
+            where: {
+              id: userId,
+            },
+          });
+        }),
+      );
+    } catch (error) {
+      if (isUniqueHandleError(error)) {
+        throw new ConflictException('This handle is already taken.');
+      }
+
+      throw error;
+    }
 
     return {
       displayName: user.displayName,
+      handle: user.handle,
       id: user.id,
       onboardingCompleted: user.onboardingCompleted,
     };
@@ -588,8 +813,15 @@ export class ProfileService {
     });
 
     return {
+      avatarUploadsEnabled: this.avatarStorage.uploadsEnabled,
+      avatarUrl: this.avatarStorage.getPublicUrl(user.avatarObjectKey),
       displayName: user.displayName,
+      handle: user.handle,
       id: user.id,
+      profileBackdrop: toApiProfileBackdrop(
+        user.profileBackdropContentType,
+        user.profileBackdropTmdbId,
+      ),
       privacy: {
         episodeProgressVisibility: fromPrivacyVisibility(
           privacySettings.episodeProgressVisibility,
@@ -667,22 +899,47 @@ export class ProfileService {
         )
       : null;
     const canViewContent = !profileIsPrivate || allowOwnerPrivateView || Boolean(acceptedFollow);
+    const profileContent = canViewContent
+      ? await Promise.all([
+          this.listOpinionsForUser(user.id),
+          this.getPublicProfileMedia(user.id),
+          this.viewings?.getStatsForUser(user.id) ?? Promise.resolve(EMPTY_VIEWING_STATS),
+        ] as const)
+      : null;
+    const [opinions, media, viewingStats] = profileContent ?? [];
+    const socialStats = canViewContent
+      ? opinions?.stats
+      : await this.getProfileSocialStats(user.id);
 
     return {
+      avatarUrl: this.avatarStorage.getPublicUrl(user.avatarObjectKey),
       canViewContent,
-      displayName: canViewContent ? user.displayName : null,
+      displayName: user.displayName,
+      handle: user.handle,
       id: user.id,
+      media: media ?? {
+        movieRatings: [],
+        releaseAlerts: [],
+        seriesProgress: [],
+        trackingStates: [],
+      },
+      opinions: opinions?.items ?? [],
+      profileBackdrop: canViewContent
+        ? toApiProfileBackdrop(
+            user.profileBackdropContentType,
+            user.profileBackdropTmdbId,
+          )
+        : null,
       profileVisibility: fromPrivacyVisibility(
         user.privacySettings?.profileVisibility ?? PrivacyVisibility.PUBLIC,
       ),
-      stats: canViewContent
-        ? await this.getProfileStats(user.id)
-        : {
-            followersCount: 0,
-            followingCount: 0,
-            postsCount: 0,
-            reviewsCount: 0,
-          },
+      stats: {
+        followersCount: socialStats?.followersCount ?? 0,
+        followingCount: socialStats?.followingCount ?? 0,
+        postsCount: canViewContent ? socialStats?.postsCount ?? 0 : 0,
+        reviewsCount: canViewContent ? socialStats?.reviewsCount ?? 0 : 0,
+      },
+      viewingStats: viewingStats ?? null,
       watchlists: canViewContent
         ? user.personalWatchlists.map((watchlist) => ({
             id: watchlist.id,
@@ -694,35 +951,220 @@ export class ProfileService {
     };
   }
 
-  private async getProfileStats(userId: string) {
-    const [
-      movieReviews,
-      episodeReviews,
-      movieRatings,
-      episodeRatings,
-      followersCount,
-      followingCount,
-    ] =
-      await this.prisma.withConnectionRetry(() =>
-        this.prisma.$transaction([
-          this.prisma.userMovieReview.count({ where: { userId } }),
-          this.prisma.userEpisodeReview.count({ where: { userId } }),
-          this.prisma.userMovieRating.count({ where: { userId } }),
-          this.prisma.userEpisodeRating.count({ where: { userId } }),
-          this.prisma.userFollow.count({
-            where: { followedUserId: userId, status: FollowStatus.ACCEPTED },
+  private async listOpinionsForUser(userId: string) {
+    const [[movieRatings, episodeRatings, movieReviews, episodeReviews], stats] =
+      await Promise.all([
+        this.prisma.withConnectionRetry(() => Promise.all([
+          this.prisma.userMovieRating.findMany({
+            orderBy: { updatedAt: 'desc' },
+            take: PROFILE_OPINION_LIMIT,
+            where: { userId },
           }),
-          this.prisma.userFollow.count({
-            where: { followerId: userId, status: FollowStatus.ACCEPTED },
+          this.prisma.userEpisodeRating.findMany({
+            orderBy: { updatedAt: 'desc' },
+            take: PROFILE_OPINION_LIMIT,
+            where: { userId },
           }),
-        ]),
-      );
+          this.prisma.userMovieReview.findMany({
+            orderBy: { updatedAt: 'desc' },
+            take: PROFILE_OPINION_LIMIT,
+            where: { userId },
+          }),
+          this.prisma.userEpisodeReview.findMany({
+            orderBy: { updatedAt: 'desc' },
+            take: PROFILE_OPINION_LIMIT,
+            where: { userId },
+          }),
+        ] as const)),
+        this.getProfileStats(userId),
+      ] as const);
+    const movieReviewTmdbIds = new Set(movieReviews.map((review) => review.tmdbId));
+    const episodeReviewKeys = new Set(episodeReviews.map(getEpisodeOpinionKey));
+    const movieRatingByTmdbId = new Map(
+      movieRatings.map((rating) => [rating.tmdbId, rating.scoreHalfSteps / 2]),
+    );
+    const episodeRatingByKey = new Map(
+      episodeRatings.map((rating) => [getEpisodeOpinionKey(rating), rating.scoreHalfSteps / 2]),
+    );
+    const items = [
+      ...movieRatings
+        .filter((rating) => !movieReviewTmdbIds.has(rating.tmdbId))
+        .map(toMovieRatingOpinion),
+      ...episodeRatings
+        .filter((rating) => !episodeReviewKeys.has(getEpisodeOpinionKey(rating)))
+        .map(toEpisodeRatingOpinion),
+      ...movieReviews.map((review) =>
+        toMovieReviewOpinion(review, movieRatingByTmdbId.get(review.tmdbId) ?? null),
+      ),
+      ...episodeReviews.map((review) =>
+        toEpisodeReviewOpinion(review, episodeRatingByKey.get(getEpisodeOpinionKey(review)) ?? null),
+      ),
+    ]
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .slice(0, PROFILE_OPINION_LIMIT);
+
+    return { items, stats };
+  }
+
+  private async getPublicProfileMedia(userId: string) {
+    const [trackingStates, movieRatings, progress, releaseAlerts] =
+      await this.prisma.withConnectionRetry(() => Promise.all([
+        this.prisma.userContentState.findMany({
+          orderBy: { updatedAt: 'desc' },
+          select: {
+            contentType: true,
+            favorite: true,
+            id: true,
+            status: true,
+            tmdbId: true,
+            updatedAt: true,
+          },
+          where: { userId },
+        }),
+        this.prisma.userMovieRating.findMany({
+          orderBy: { updatedAt: 'desc' },
+          select: {
+            id: true,
+            scoreHalfSteps: true,
+            tmdbId: true,
+            updatedAt: true,
+          },
+          where: { userId },
+        }),
+        this.prisma.userEpisodeProgress.findMany({
+          orderBy: [
+            { seriesTmdbId: 'asc' },
+            { seasonNumber: 'asc' },
+            { episodeNumber: 'asc' },
+          ],
+          select: {
+            episodeNumber: true,
+            seasonNumber: true,
+            seriesTmdbId: true,
+            updatedAt: true,
+          },
+          where: { userId },
+        }),
+        this.prisma.releaseAlertSubscription.findMany({
+          orderBy: { updatedAt: 'desc' },
+          select: {
+            contentType: true,
+            tmdbId: true,
+            updatedAt: true,
+          },
+          where: { userId },
+        }),
+      ] as const));
+    const progressBySeries = new Map<number, PublicSeriesProgressAccumulator>();
+
+    progress.forEach((episode) => {
+      const existing = progressBySeries.get(episode.seriesTmdbId);
+
+      if (!existing) {
+        progressBySeries.set(episode.seriesTmdbId, {
+          latestEpisodeNumber: episode.episodeNumber,
+          latestSeasonNumber: episode.seasonNumber,
+          seriesTmdbId: episode.seriesTmdbId,
+          updatedAt: episode.updatedAt,
+          watchedEpisodeCount: 1,
+        });
+        return;
+      }
+
+      existing.watchedEpisodeCount += 1;
+
+      if (
+        episode.seasonNumber > existing.latestSeasonNumber
+        || (
+          episode.seasonNumber === existing.latestSeasonNumber
+          && episode.episodeNumber > existing.latestEpisodeNumber
+        )
+      ) {
+        existing.latestEpisodeNumber = episode.episodeNumber;
+        existing.latestSeasonNumber = episode.seasonNumber;
+      }
+
+      if (episode.updatedAt > existing.updatedAt) {
+        existing.updatedAt = episode.updatedAt;
+      }
+    });
 
     return {
-      followersCount,
-      followingCount,
-      postsCount: movieRatings + episodeRatings,
-      reviewsCount: movieReviews + episodeReviews,
+      movieRatings: movieRatings.map((rating) => ({
+        id: rating.id,
+        score: rating.scoreHalfSteps / 2,
+        tmdbId: rating.tmdbId,
+        updatedAt: rating.updatedAt.toISOString(),
+      })),
+      releaseAlerts: releaseAlerts.map((alert) => ({
+        contentType: fromTrackedContentType(alert.contentType),
+        tmdbId: alert.tmdbId,
+        updatedAt: alert.updatedAt.toISOString(),
+      })),
+      seriesProgress: Array.from(progressBySeries.values())
+        .map((summary) => ({
+          ...summary,
+          updatedAt: summary.updatedAt.toISOString(),
+        }))
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+      trackingStates: trackingStates.map((state) => ({
+        contentType: fromTrackedContentType(state.contentType),
+        favorite: state.favorite,
+        id: state.id,
+        status: fromUserContentStatus(state.status),
+        tmdbId: state.tmdbId,
+        updatedAt: state.updatedAt.toISOString(),
+      })),
+    };
+  }
+
+  private async getProfileStats(userId: string) {
+    const stats = await this.prisma.withConnectionRetry(() =>
+      this.prisma.user.findUniqueOrThrow({
+        select: {
+          _count: {
+            select: {
+              episodeRatings: true,
+              episodeReviews: true,
+              followers: { where: { status: FollowStatus.ACCEPTED } },
+              following: { where: { status: FollowStatus.ACCEPTED } },
+              movieRatings: true,
+              movieReviews: true,
+            },
+          },
+        },
+        where: { id: userId },
+      }),
+    );
+
+    return {
+      followersCount: stats._count.followers,
+      followingCount: stats._count.following,
+      postsCount: stats._count.movieRatings + stats._count.episodeRatings,
+      reviewsCount: stats._count.movieReviews + stats._count.episodeReviews,
+    };
+  }
+
+  private async getProfileSocialStats(userId: string) {
+    const stats = await this.prisma.withConnectionRetry(() =>
+      this.prisma.user.findUniqueOrThrow({
+        select: {
+          _count: {
+            select: {
+              followers: { where: { status: FollowStatus.ACCEPTED } },
+              following: { where: { status: FollowStatus.ACCEPTED } },
+            },
+          },
+        },
+        where: { id: userId },
+      }),
+    );
+
+    return {
+      followersCount: stats._count.followers,
+      followingCount: stats._count.following,
+      postsCount: 0,
+      reviewsCount: 0,
     };
   }
 
@@ -732,6 +1174,8 @@ export class ProfileService {
         this.prisma.user.update({
           data: {
             displayName: 'Test profile',
+            handle: 'watchly_test',
+            onboardingCompleted: true,
             privacySettings: {
               upsert: {
                 create: {
@@ -832,6 +1276,9 @@ export class ProfileService {
   }
 }
 
+const PROFILE_SEARCH_LIMIT = 20;
+const PROFILE_SEARCH_QUERY_MAX_LENGTH = 80;
+
 function normalizeDisplayName(value: string | null | undefined) {
   if (value === undefined || value === null) {
     return null;
@@ -865,6 +1312,33 @@ function fromSharedWatchlistVisibility(
 ): SharedWatchlistVisibilityValue {
   return value === SharedWatchlistVisibility.MEMBERS ? 'members' : 'private';
 }
+
+function fromTrackedContentType(contentType: TrackedContentType) {
+  return contentType === TrackedContentType.MOVIE ? 'movie' as const : 'series' as const;
+}
+
+function fromUserContentStatus(status: UserContentStatus | null) {
+  switch (status) {
+    case UserContentStatus.WATCHLISTED:
+      return 'watchlisted' as const;
+    case UserContentStatus.WATCHING:
+      return 'watching' as const;
+    case UserContentStatus.WATCHED:
+      return 'watched' as const;
+    case UserContentStatus.DROPPED:
+      return 'dropped' as const;
+    default:
+      return null;
+  }
+}
+
+type PublicSeriesProgressAccumulator = {
+  latestEpisodeNumber: number;
+  latestSeasonNumber: number;
+  seriesTmdbId: number;
+  updatedAt: Date;
+  watchedEpisodeCount: number;
+};
 
 type MovieRatingOpinionRecord = {
   id: string;
@@ -926,7 +1400,7 @@ function toEpisodeRatingOpinion(rating: EpisodeRatingOpinionRecord) {
   };
 }
 
-function toMovieReviewOpinion(review: MovieReviewOpinionRecord, score: number) {
+function toMovieReviewOpinion(review: MovieReviewOpinionRecord, score: number | null) {
   return {
     body: review.body,
     content: {
@@ -940,7 +1414,7 @@ function toMovieReviewOpinion(review: MovieReviewOpinionRecord, score: number) {
   };
 }
 
-function toEpisodeReviewOpinion(review: EpisodeReviewOpinionRecord, score: number) {
+function toEpisodeReviewOpinion(review: EpisodeReviewOpinionRecord, score: number | null) {
   return {
     body: review.body,
     content: {
@@ -990,3 +1464,22 @@ const DEV_TEST_REVIEW_TMDB_ID = 603;
 const DEV_TEST_REVIEW_BODY =
   'Dev feed test review. This public written review should appear in Feed.';
 const PROFILE_OPINION_LIMIT = 50;
+const EMPTY_VIEWING_STATS = {
+  highlights: [],
+  more: {
+    averageRating: null,
+    favoriteWatchDay: null,
+    mostUsedRating: null,
+    ratingCount: 0,
+    rewatchCount: 0,
+  },
+  summary: {
+    episodeCount: 0,
+    movieCount: 0,
+    seriesCount: 0,
+    totalViewCount: 0,
+    watchMinutes: 0,
+    watchTimeIsEstimated: false,
+  },
+  taste: [],
+};

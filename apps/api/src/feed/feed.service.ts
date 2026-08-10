@@ -3,8 +3,10 @@ import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
 import { FollowStatus, PrivacyVisibility } from '../generated/prisma/enums';
+import { AvatarStorageService } from '../media/avatar-storage.service';
 
 type FeedAuthor = {
+  avatarObjectKey: string | null;
   displayName: string | null;
   id: string;
 };
@@ -66,6 +68,7 @@ export class FeedService {
   constructor(
     @Inject(AuthService) private readonly authService: AuthService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(AvatarStorageService) private readonly avatarStorage: AvatarStorageService,
   ) {}
 
   async listFeed(identity: AuthenticatedIdentity) {
@@ -96,6 +99,7 @@ export class FeedService {
             },
             user: {
               select: {
+                avatarObjectKey: true,
                 displayName: true,
                 id: true,
               },
@@ -128,6 +132,7 @@ export class FeedService {
             },
             user: {
               select: {
+                avatarObjectKey: true,
                 displayName: true,
                 id: true,
               },
@@ -181,14 +186,18 @@ export class FeedService {
       );
 
       const items = [
-        ...movieReviews.flatMap((review) => {
-          const score = movieScores.get(getMovieRatingKey(review));
-          return score === undefined ? [] : [toMovieFeedItem(review, score)];
-        }),
-        ...episodeReviews.flatMap((review) => {
-          const score = episodeScores.get(getEpisodeRatingKey(review));
-          return score === undefined ? [] : [toEpisodeFeedItem(review, score)];
-        }),
+        ...movieReviews.map((review) =>
+          toMovieFeedItem(
+            review,
+            movieScores.get(getMovieRatingKey(review)) ?? null,
+            this.avatarStorage,
+          )),
+        ...episodeReviews.map((review) =>
+          toEpisodeFeedItem(
+            review,
+            episodeScores.get(getEpisodeRatingKey(review)) ?? null,
+            this.avatarStorage,
+          )),
       ]
         .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
         .slice(0, FEED_LIMIT);
@@ -365,9 +374,13 @@ export class FeedService {
 
 const FEED_LIMIT = 30;
 
-function toMovieFeedItem(review: FeedMovieReview, score: number) {
+function toMovieFeedItem(
+  review: FeedMovieReview,
+  score: number | null,
+  avatarStorage: AvatarStorageService,
+) {
   return {
-    author: toAuthor(review.user),
+    author: toAuthor(review.user, avatarStorage),
     body: review.body,
     content: {
       contentType: 'movie' as const,
@@ -382,9 +395,13 @@ function toMovieFeedItem(review: FeedMovieReview, score: number) {
   };
 }
 
-function toEpisodeFeedItem(review: FeedEpisodeReview, score: number) {
+function toEpisodeFeedItem(
+  review: FeedEpisodeReview,
+  score: number | null,
+  avatarStorage: AvatarStorageService,
+) {
   return {
-    author: toAuthor(review.user),
+    author: toAuthor(review.user, avatarStorage),
     body: review.body,
     content: {
       contentType: 'episode' as const,
@@ -401,8 +418,9 @@ function toEpisodeFeedItem(review: FeedEpisodeReview, score: number) {
   };
 }
 
-function toAuthor(author: FeedAuthor) {
+function toAuthor(author: FeedAuthor, avatarStorage: AvatarStorageService) {
   return {
+    avatarUrl: avatarStorage.getPublicUrl(author.avatarObjectKey),
     displayName: author.displayName,
     id: author.id,
   };

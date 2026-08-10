@@ -10,14 +10,18 @@ import { DevModule } from './dev/dev.module';
 import { FeedModule } from './feed/feed.module';
 import { FollowsModule } from './follows/follows.module';
 import { HealthController } from './health.controller';
+import { ImportsModule } from './imports/imports.module';
+import { MediaModule } from './media/media.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ProgressModule } from './progress/progress.module';
 import { ProfileModule } from './profile/profile.module';
 import { RatingsModule } from './ratings/ratings.module';
+import { ReportsModule } from './reports/reports.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { SharedWatchlistsModule } from './shared-watchlists/shared-watchlists.module';
 import { TrackingModule } from './tracking/tracking.module';
 import { WatchlistsModule } from './watchlists/watchlists.module';
+import { ViewingsModule } from './viewings/viewings.module';
 
 @Module({
   controllers: [HealthController],
@@ -33,6 +37,11 @@ import { WatchlistsModule } from './watchlists/watchlists.module';
         PORT: Joi.number().integer().min(1).max(65535).default(3000),
         RATE_LIMIT_MAX_REQUESTS: Joi.number().integer().min(1).default(100),
         RATE_LIMIT_TTL_MS: Joi.number().integer().min(1000).default(60000),
+        R2_ACCESS_KEY_ID: Joi.string().allow('').optional(),
+        R2_ACCOUNT_ID: Joi.string().allow('').optional(),
+        R2_BUCKET_NAME: Joi.string().allow('').optional(),
+        R2_PUBLIC_BASE_URL: Joi.string().uri().allow('').optional(),
+        R2_SECRET_ACCESS_KEY: Joi.string().allow('').optional(),
         TMDB_ACCESS_TOKEN: Joi.string().allow('').optional(),
       }),
     }),
@@ -51,13 +60,17 @@ import { WatchlistsModule } from './watchlists/watchlists.module';
     DevModule,
     FeedModule,
     FollowsModule,
+    ImportsModule,
+    MediaModule,
     NotificationsModule,
     ProgressModule,
     ProfileModule,
     RatingsModule,
+    ReportsModule,
     ReviewsModule,
     SharedWatchlistsModule,
     TrackingModule,
+    ViewingsModule,
     WatchlistsModule,
   ],
   providers: [

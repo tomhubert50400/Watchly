@@ -16,6 +16,7 @@ import {
 @Injectable()
 export class DevUiReviewService {
   private readonly sampleFriendName = 'Maya Chen';
+  private readonly sampleFriendHandle = 'maya_chen_ui';
   private readonly samplePersonalWatchlistName = 'Weekend Queue';
   private readonly sampleSharedWatchlistName = 'Friday Shared Night';
 
@@ -32,6 +33,7 @@ export class DevUiReviewService {
       this.prisma.user.update({
         data: {
           displayName: user.displayName ?? identity.displayName ?? 'UI review user',
+          handle: user.handle ?? `review_${user.id.replace(/-/g, '').slice(0, 10)}`,
           onboardingCompleted: true,
           privacySettings: {
             upsert: {
@@ -114,6 +116,7 @@ export class DevUiReviewService {
         this.prisma.user.update({
         data: {
             displayName: this.sampleFriendName,
+            handle: this.sampleFriendHandle,
             onboardingCompleted: true,
             privacySettings: {
               upsert: {
@@ -132,6 +135,7 @@ export class DevUiReviewService {
         data: {
           authIdentities: { create: identityKey },
           displayName: this.sampleFriendName,
+          handle: this.sampleFriendHandle,
           onboardingCompleted: true,
           privacySettings: { create: publicReviewPrivacy() },
         },

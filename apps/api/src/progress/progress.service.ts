@@ -1,13 +1,15 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
+import { ViewingsService } from '../viewings/viewings.service';
 
 @Injectable()
 export class ProgressService {
   constructor(
     @Inject(AuthService) private readonly authService: AuthService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Optional() @Inject(ViewingsService) private readonly viewings?: ViewingsService,
   ) {}
 
   async getEpisodeProgress(
@@ -187,6 +189,14 @@ export class ProgressService {
         },
       });
       }),
+    );
+
+    await this.viewings?.ensureInitialEpisodeViewings(
+      userId,
+      seriesTmdbId,
+      seasonNumber,
+      episodeNumbers,
+      watchedAt,
     );
 
     return toApiEpisodeProgress(progress);

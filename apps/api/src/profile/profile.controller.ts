@@ -5,14 +5,22 @@ import {
   Get,
   Inject,
   Param,
+  Post,
   Put,
+  Query,
   Req,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { AuthenticatedRequest } from '../auth/auth.types';
-import { UpdatePrivacySettingsDto, UpdateProfileDto } from './profile.dto';
+import {
+  CompleteOnboardingDto,
+  ConfirmAvatarUploadDto,
+  UpdateProfileBackdropDto,
+  UpdatePrivacySettingsDto,
+  UpdateProfileDto,
+} from './profile.dto';
 import { ProfileService } from './profile.service';
 
 @Controller('profile')
@@ -40,6 +48,32 @@ export class ProfileController {
     return this.profile.exportAccountData(getIdentity(request));
   }
 
+  @Post('me/avatar-upload')
+  async createAvatarUpload(@Req() request: AuthenticatedRequest) {
+    return this.profile.createAvatarUpload(getIdentity(request));
+  }
+
+  @Put('me/avatar')
+  async confirmAvatarUpload(
+    @Req() request: AuthenticatedRequest,
+    @Body() body: ConfirmAvatarUploadDto,
+  ) {
+    return this.profile.confirmAvatarUpload(getIdentity(request), body.objectKey);
+  }
+
+  @Delete('me/avatar')
+  async removeAvatar(@Req() request: AuthenticatedRequest) {
+    return this.profile.removeAvatar(getIdentity(request));
+  }
+
+  @Put('me/backdrop')
+  async updateBackdrop(
+    @Req() request: AuthenticatedRequest,
+    @Body() body: UpdateProfileBackdropDto,
+  ) {
+    return this.profile.updateProfileBackdrop(getIdentity(request), body);
+  }
+
   @Delete('me')
   async deleteAccount(@Req() request: AuthenticatedRequest) {
     await this.profile.deleteAccount(getIdentity(request));
@@ -50,6 +84,22 @@ export class ProfileController {
   @Put('dev-test-user')
   async devTestUser(@Req() request: AuthenticatedRequest) {
     return this.profile.getOrCreateDevTestUser(getIdentity(request));
+  }
+
+  @Get('search')
+  async searchProfiles(
+    @Req() request: AuthenticatedRequest,
+    @Query('query') query?: string,
+  ) {
+    return this.profile.searchProfiles(getIdentity(request), query);
+  }
+
+  @Get('handle-availability')
+  async handleAvailability(
+    @Req() request: AuthenticatedRequest,
+    @Query('handle') handle?: string,
+  ) {
+    return this.profile.getHandleAvailability(getIdentity(request), handle ?? '');
   }
 
   @Get('users/:userId')
@@ -74,8 +124,11 @@ export class ProfileController {
   }
 
   @Put('me/onboarding-completed')
-  async completeOnboarding(@Req() request: AuthenticatedRequest) {
-    return this.profile.completeOnboarding(getIdentity(request));
+  async completeOnboarding(
+    @Req() request: AuthenticatedRequest,
+    @Body() body: CompleteOnboardingDto,
+  ) {
+    return this.profile.completeOnboarding(getIdentity(request), body.handle);
   }
 }
 

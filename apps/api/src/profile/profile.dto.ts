@@ -1,4 +1,8 @@
-import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, Min, ValidateIf } from 'class-validator';
+import {
+  PROFILE_HANDLE_INPUT_MAX_LENGTH,
+  PROFILE_HANDLE_INPUT_PATTERN,
+} from './profile-handle';
 
 const privacyVisibilities = ['public', 'private'] as const;
 const sharedWatchlistVisibilities = ['members', 'private'] as const;
@@ -11,6 +15,31 @@ export class UpdateProfileDto {
   @IsString()
   @MaxLength(80)
   displayName?: string | null;
+}
+
+export class ConfirmAvatarUploadDto {
+  @IsString()
+  @MaxLength(200)
+  objectKey!: string;
+}
+
+export class CompleteOnboardingDto {
+  @IsString()
+  @MaxLength(PROFILE_HANDLE_INPUT_MAX_LENGTH)
+  @Matches(PROFILE_HANDLE_INPUT_PATTERN, {
+    message: 'handle must use 3 to 20 letters, numbers, or underscores',
+  })
+  handle!: string;
+}
+
+export class UpdateProfileBackdropDto {
+  @IsIn(['movie', 'series', null])
+  contentType!: 'movie' | 'series' | null;
+
+  @ValidateIf((_, value) => value !== null)
+  @IsInt()
+  @Min(1)
+  tmdbId!: number | null;
 }
 
 export class UpdatePrivacySettingsDto {

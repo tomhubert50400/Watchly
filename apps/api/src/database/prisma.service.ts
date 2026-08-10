@@ -32,6 +32,14 @@ export class PrismaService implements OnModuleDestroy {
     return this.client.catalogueSpotlight;
   }
 
+  get contentReport() {
+    return this.client.contentReport;
+  }
+
+  get dataImport() {
+    return this.client.dataImport;
+  }
+
   get episodeReviewLike() {
     return this.client.episodeReviewLike;
   }
@@ -122,6 +130,10 @@ export class PrismaService implements OnModuleDestroy {
 
   get userMovieReview() {
     return this.client.userMovieReview;
+  }
+
+  get viewingEvent() {
+    return this.client.viewingEvent;
   }
 
   $queryRaw: PrismaClient['$queryRaw'] = ((...args: Parameters<PrismaClient['$queryRaw']>) =>

@@ -66,6 +66,7 @@ async function run() {
   const service = new FeedService(
     { getOrCreateUser: async () => ({ id: 'viewer' }) } as never,
     prisma as never,
+    { getPublicUrl: () => null } as never,
   );
   const identity = { firebaseUid: 'viewer' } as never;
 

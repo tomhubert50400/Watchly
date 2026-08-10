@@ -7,6 +7,8 @@ import { PrismaClient } from '../generated/prisma/client';
 const requiredTables = [
   'audit_logs',
   'auth_identities',
+  'content_reports',
+  'data_imports',
   'personal_watchlist_items',
   'personal_watchlists',
   'privacy_settings',
@@ -21,6 +23,7 @@ const requiredTables = [
   'user_movie_ratings',
   'user_movie_reviews',
   'users',
+  'viewing_events',
 ];
 
 const requiredMigrations = [
@@ -36,6 +39,10 @@ const requiredMigrations = [
   '20260614100000_add_release_notifications',
   '20260614113000_add_audit_logs',
   '20260615100000_add_release_alert_subscriptions',
+  '20260804120000_add_viewing_events',
+  '20260804150000_add_content_reports',
+  '20260804170000_add_profile_avatars',
+  '20260805120000_add_data_import_batches',
 ];
 
 async function main() {
