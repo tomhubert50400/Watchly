@@ -17,7 +17,7 @@ const CATALOGUE_DETAIL_STALE_TIME_MS = 6 * 60 * 60 * 1000;
 export function getSeasonResourceKey(tmdbId: number, seasonNumber: number) {
   assertPositiveInteger(tmdbId, 'TMDB ID');
   assertNonNegativeInteger(seasonNumber, 'Season number');
-  return getPublicCacheKey(`catalogue:series:${tmdbId}:season:${seasonNumber}`);
+  return getPublicCacheKey(`catalogue:series:${tmdbId}:season:${seasonNumber}:v2`);
 }
 
 export function getEpisodeResourceKey(tmdbId: number, seasonNumber: number, episodeNumber: number) {
@@ -25,7 +25,7 @@ export function getEpisodeResourceKey(tmdbId: number, seasonNumber: number, epis
   assertNonNegativeInteger(seasonNumber, 'Season number');
   assertPositiveInteger(episodeNumber, 'Episode number');
   return getPublicCacheKey(
-    `catalogue:series:${tmdbId}:season:${seasonNumber}:episode:${episodeNumber}`,
+    `catalogue:series:${tmdbId}:season:${seasonNumber}:episode:${episodeNumber}:v2`,
   );
 }
 

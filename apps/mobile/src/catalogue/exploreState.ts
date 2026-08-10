@@ -1,8 +1,14 @@
-import type { CatalogueSearchItem, CatalogueSearchType } from '../api/catalogue';
+import type {
+  CatalogueDiscoveryItem,
+  CatalogueMovieSectionsResponse,
+  CatalogueSearchItem,
+  CatalogueSearchType,
+} from '../api/catalogue';
 
 export type ExploreSection = 'trending' | 'announced';
+export type ExploreMediaType = CatalogueSearchItem['mediaType'];
 
-export type ExploreSections = Record<ExploreSection, CatalogueSearchItem[]>;
+export type ExploreSections = Record<ExploreSection, Record<ExploreMediaType, CatalogueSearchItem[]>>;
 
 type ExploreViewStateInput = {
   activeSection: ExploreSection;
@@ -25,7 +31,7 @@ function mediaKey(item: CatalogueSearchItem) {
   return `${item.mediaType}:${item.tmdbId}`;
 }
 
-export function deduplicateMediaItems(items: readonly CatalogueSearchItem[]) {
+export function deduplicateMediaItems<T extends CatalogueSearchItem>(items: readonly T[]) {
   const seen = new Set<string>();
 
   return items.filter((item) => {
@@ -40,11 +46,55 @@ export function deduplicateMediaItems(items: readonly CatalogueSearchItem[]) {
   });
 }
 
-export function buildExploreSections(sections: ExploreSections): ExploreSections {
+export function buildExploreSections(
+  sections: Pick<
+    CatalogueMovieSectionsResponse,
+    'announced' | 'announcedSeries' | 'trending' | 'trendingSeries'
+  >,
+): ExploreSections {
   return {
-    announced: deduplicateMediaItems(sections.announced),
-    trending: deduplicateMediaItems(sections.trending),
+    announced: {
+      movie: deduplicateMediaItems(sections.announced),
+      series: deduplicateMediaItems(sections.announcedSeries),
+    },
+    trending: {
+      movie: deduplicateMediaItems(sections.trending),
+      series: deduplicateMediaItems(sections.trendingSeries),
+    },
   };
+}
+
+export function interleaveMediaItems<T extends CatalogueSearchItem>(
+  movies: readonly T[],
+  series: readonly T[],
+) {
+  const items: T[] = [];
+  const itemCount = Math.max(movies.length, series.length);
+
+  for (let index = 0; index < itemCount; index += 1) {
+    if (movies[index]) items.push(movies[index]);
+    if (series[index]) items.push(series[index]);
+  }
+
+  return deduplicateMediaItems(items);
+}
+
+export function groupDiscoveryItemsByGenre(items: readonly CatalogueDiscoveryItem[]) {
+  const groups = new Map<string, CatalogueDiscoveryItem[]>();
+
+  deduplicateMediaItems(items).forEach((item) => {
+    const genres = item.genres.length > 0 ? [...new Set(item.genres)] : ['Other'];
+
+    genres.forEach((genre) => {
+      const group = groups.get(genre) ?? [];
+      group.push(item);
+      groups.set(genre, group);
+    });
+  });
+
+  return [...groups.entries()]
+    .map(([genre, genreItems]) => ({ genre, items: genreItems }))
+    .sort((left, right) => right.items.length - left.items.length || left.genre.localeCompare(right.genre));
 }
 
 export function groupSearchResults(items: readonly CatalogueSearchItem[]) {
@@ -69,7 +119,7 @@ export function getExploreViewState({ activeSection, query }: ExploreViewStateIn
 
   if (isSearching) {
     return {
-      emptyBody: 'Try another film or series title.',
+      emptyBody: 'Try another movie, TV show or person.',
       emptyTitle: `No results for “${normalizedQuery}”`,
       errorTitle: 'Search could not be completed',
       isSearching: true,

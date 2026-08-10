@@ -18,8 +18,6 @@ import {
   StreamingAvailability,
   StreamingProvider,
 } from '../api/catalogue';
-import { Button } from '../components/Button';
-import { LoadingState } from '../components/LoadingState';
 import { colors, radii, spacing, typography } from '../design/tokens';
 
 type StreamingAvailabilityPanelProps = {
@@ -43,53 +41,53 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 export function StreamingAvailabilityPanel({ contentType, tmdbId }: StreamingAvailabilityPanelProps) {
-  const [availability, setAvailability] = useState<StreamingAvailability | null>(null);
+  const requestScope = `${contentType}:${tmdbId}`;
+  const requestScopeRef = useRef(requestScope);
+  requestScopeRef.current = requestScope;
+  const [availabilityState, setAvailabilityState] = useState<{
+    scope: string;
+    value: StreamingAvailability | null;
+  } | null>(null);
   const [expandedGroups, setExpandedGroups] =
     useState<Record<ProviderGroupKey, boolean>>(defaultExpandedGroups);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
 
   const loadAvailability = useCallback(async () => {
-    setError(null);
-    setIsLoading(true);
-
     try {
       const response =
         contentType === 'movie'
           ? await getMovieStreamingAvailability(tmdbId)
           : await getSeriesStreamingAvailability(tmdbId);
 
-      setAvailability(response.availability);
-    } catch (loadError) {
-      setAvailability(null);
-      setError(
-        loadError instanceof Error ? loadError.message : 'Could not load streaming availability.',
-      );
-    } finally {
-      setIsLoading(false);
+      if (requestScopeRef.current === requestScope) {
+        setAvailabilityState({ scope: requestScope, value: response.availability });
+      }
+    } catch {
+      if (requestScopeRef.current === requestScope) {
+        setAvailabilityState({ scope: requestScope, value: null });
+      }
     }
-  }, [contentType, tmdbId]);
+  }, [contentType, requestScope, tmdbId]);
 
   useEffect(() => {
     void loadAvailability();
   }, [loadAvailability]);
 
+  const availability = availabilityState?.scope === requestScope
+    ? availabilityState.value
+    : null;
   const providerGroups = availability ? getProviderGroups(availability) : [];
   const hasProviders = providerGroups.length > 0;
+
+  if (!availability) {
+    return null;
+  }
 
   return (
     <View style={styles.panel}>
       <View>
         <Text style={styles.sectionTitle}>Where to watch</Text>
       </View>
-      {isLoading ? (
-        <LoadingState label="Checking providers" />
-      ) : error ? (
-        <View style={styles.errorBlock}>
-          <Text style={styles.warning}>{error}</Text>
-          <Button label="Retry" onPress={loadAvailability} variant="secondary" />
-        </View>
-      ) : availability && hasProviders ? (
+      {hasProviders ? (
         <View style={styles.availabilityGroups}>
           {providerGroups.map((group) => {
             const isStreamingGroup = group.key === 'streaming';
@@ -251,9 +249,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textMuted,
   },
-  errorBlock: {
-    gap: spacing.sm,
-  },
   availabilityGroup: {
     borderTopColor: colors.border,
     borderTopWidth: StyleSheet.hairlineWidth,
@@ -326,9 +321,5 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...typography.title,
     color: colors.text,
-  },
-  warning: {
-    ...typography.body,
-    color: colors.danger,
   },
 });

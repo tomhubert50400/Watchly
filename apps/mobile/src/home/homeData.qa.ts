@@ -7,6 +7,8 @@ const catalogue = {
   hero: {
     backdropUrl: 'https://image.test/hero.jpg',
     genres: ['Adventure'],
+    logoAspectRatio: 4,
+    logoUrl: 'https://image.test/logo.png',
     posterUrl: 'https://image.test/poster.jpg',
     releaseDate: '2026-07-01',
     runtimeMinutes: 101,
@@ -37,6 +39,7 @@ const progress = [
 ];
 const feed = [
   {
+    authorAvatarUrl: null,
     authorDisplayName: 'A real person',
     authorId: 'person-1',
     body: 'A real review from the API.',

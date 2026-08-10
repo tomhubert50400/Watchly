@@ -1,5 +1,10 @@
 import { BadRequestException, Controller, Get, Inject, Param, ParseIntPipe, Query } from '@nestjs/common';
-import { CatalogueSearchType, TmdbCatalogueService } from './tmdb-catalogue.service';
+import {
+  CatalogueDiscoveryMediaType,
+  CatalogueDiscoverySection,
+  CatalogueSearchType,
+  TmdbCatalogueService,
+} from './tmdb-catalogue.service';
 
 @Controller('catalog')
 export class CatalogueController {
@@ -31,6 +36,22 @@ export class CatalogueController {
   @Get('movie-sections')
   async movieSections() {
     return this.catalogue.movieSections();
+  }
+
+  @Get('discovery')
+  async discovery(@Query('section') section?: string, @Query('type') type?: string) {
+    if (section !== 'trending' && section !== 'announced') {
+      throw new BadRequestException('Discovery section must be trending or announced.');
+    }
+
+    if (type !== 'movie' && type !== 'series') {
+      throw new BadRequestException('Discovery type must be movie or series.');
+    }
+
+    return this.catalogue.discovery(
+      section as CatalogueDiscoverySection,
+      type as CatalogueDiscoveryMediaType,
+    );
   }
 
   @Get('movies/:tmdbId')

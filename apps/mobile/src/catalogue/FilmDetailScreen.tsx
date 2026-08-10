@@ -2,21 +2,37 @@ import { useCallback, useLayoutEffect } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { DisplayRating, MovieDetails } from '../api/catalogue';
+import { CatalogueRelatedItem, DisplayRating, MovieDetails } from '../api/catalogue';
 import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { resolveDetailMetadataLayout } from '../components/dynamicTypeLayout';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
 import { MediaHero } from '../components/MediaHero';
+import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { colors, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 import { MovieReviewEditor } from '../reviews/MovieReviewEditor';
 import { TrackingControls } from '../tracking/TrackingControls';
+import { ViewingCountControl } from '../viewings/ViewingCountControl';
 import { AddToWatchlistControl } from '../watchlists/AddToWatchlistControl';
+import {
+  CatalogueCastRail,
+  CatalogueKeywordList,
+  CatalogueRelatedRail,
+  CatalogueVideoRail,
+} from './CatalogueDetailSections';
 import { useCatalogueCache } from './CatalogueCacheContext';
-import { formatFivePointRating, formatRuntime, getDetailRenderMode } from './detailModel';
+import { DetailFacts } from './DetailFacts';
+import {
+  formatDetailDate,
+  formatFivePointRating,
+  formatMoney,
+  formatRuntime,
+  getDistinctOriginalTitle,
+  getDetailRenderMode,
+} from './detailModel';
 import { HeaderInfoItem, HeaderInfoPills } from './HeaderInfoPills';
 import { isReleasedDate } from './releaseDates';
 import { StreamingAvailabilityPanel } from './StreamingAvailabilityPanel';
@@ -29,7 +45,7 @@ export function FilmDetailScreen({ navigation, route }: FilmDetailScreenProps) {
   const { getCachedMovie, refreshMovie } = useCatalogueCache();
   const load = useCallback(() => refreshMovie(tmdbId), [refreshMovie, tmdbId]);
   const resource = useCachedResource<MovieDetails>({
-    key: `watchly:public:catalogue:movie:${tmdbId}`,
+    key: `watchly:public:catalogue:movie:${tmdbId}:v3`,
     load,
   });
   const movie = resource.data ?? getCachedMovie(tmdbId);
@@ -38,6 +54,7 @@ export function FilmDetailScreen({ navigation, route }: FilmDetailScreenProps) {
     hasError: Boolean(resource.error),
     isInitialLoading: resource.isInitialLoading,
   });
+  const atmosphereUrl = movie?.posterUrl ?? movie?.backdropUrl ?? null;
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -50,6 +67,7 @@ export function FilmDetailScreen({ navigation, route }: FilmDetailScreenProps) {
 
   return (
     <SafeAreaView edges={[]} style={styles.safeArea}>
+      {atmosphereUrl ? <SpotlightAtmosphere blurRadius={28} imageUrl={atmosphereUrl} /> : null}
       <ScrollView
         contentContainerStyle={styles.content}
         contentInsetAdjustmentBehavior="never"
@@ -68,6 +86,7 @@ export function FilmDetailScreen({ navigation, route }: FilmDetailScreenProps) {
         ) : movie ? (
           <MovieDetailContent
             movie={movie}
+            onOpenRelated={(item) => openRelatedMovie(navigation, item)}
           />
         ) : null}
       </ScrollView>
@@ -77,17 +96,30 @@ export function FilmDetailScreen({ navigation, route }: FilmDetailScreenProps) {
 
 function MovieDetailContent({
   movie,
+  onOpenRelated,
 }: {
   movie: MovieDetails;
+  onOpenRelated: (item: CatalogueRelatedItem) => void;
 }) {
   const { fontScale } = useWindowDimensions();
   const metadataLayout = resolveDetailMetadataLayout(fontScale);
   const isReleased = isReleasedDate(movie.releaseDate);
   const releaseYear = movie.releaseDate ? movie.releaseDate.slice(0, 4) : null;
   const runtime = formatRuntime(movie.runtimeMinutes);
-  const infoItems = [releaseYear, runtime, isReleased ? formatDisplayRating(movie.displayRating) : null]
+  const infoItems = ['Film', releaseYear, runtime, isReleased ? formatDisplayRating(movie.displayRating) : null]
     .filter(Boolean)
     .map((item) => item as HeaderInfoItem);
+  const detailFacts = [
+    { label: 'Original title', value: getDistinctOriginalTitle(movie.originalTitle, movie.title) },
+    { label: 'Director', value: movie.directors?.join(', ') || null },
+    { label: 'Writers', value: movie.writers?.join(', ') || null },
+    { label: 'Release date', value: formatDetailDate(movie.releaseDate) },
+    { label: 'Runtime', value: runtime },
+    { label: 'Status', value: movie.status },
+    { label: 'Budget', value: formatMoney(movie.budget) },
+    { label: 'Revenue', value: formatMoney(movie.revenue) },
+    { label: 'Production', value: movie.productionCompanies?.map((company) => company.name).join(', ') || null },
+  ];
 
   return (
     <View>
@@ -95,36 +127,50 @@ function MovieDetailContent({
         actionAccessory={<ReleaseAlertControl contentType="movie" tmdbId={movie.tmdbId} />}
         actions={<AddToWatchlistControl contentType="movie" tmdbId={movie.tmdbId} />}
         backdropUrl={movie.backdropUrl}
-        eyebrow="Film"
-        posterAccessibilityLabel={`${movie.title} poster`}
+        logoAspectRatio={movie.logoAspectRatio}
+        logoUrl={movie.logoUrl}
         posterUrl={movie.posterUrl}
         title={movie.title}
       >
-        <HeaderInfoPills items={infoItems} />
         {movie.genres.length > 0 ? (
           <Text numberOfLines={metadataLayout.genreNumberOfLines} style={styles.genres}>
             {movie.genres.join(' · ')}
           </Text>
         ) : null}
-        {movie.tagline ? (
-          <Text numberOfLines={2} style={styles.tagline}>
-            {movie.tagline}
-          </Text>
-        ) : null}
+        <HeaderInfoPills items={infoItems} />
       </MediaHero>
       <View style={styles.bodyStack}>
+        {movie.tagline ? <Text style={styles.tagline}>{movie.tagline}</Text> : null}
+        <SynopsisPanel overview={movie.overview} />
         <View style={styles.personalSection}>
           <Text style={styles.personalEyebrow}>Your activity</Text>
           <TrackingControls contentType="movie" tmdbId={movie.tmdbId} />
+          <ViewingCountControl contentType="movie" tmdbId={movie.tmdbId} />
           {isReleased ? (
             <MovieReviewEditor mediaTitle={movie.title} posterUrl={movie.posterUrl} tmdbId={movie.tmdbId} />
           ) : null}
         </View>
-        <SynopsisPanel overview={movie.overview} />
+        <DetailFacts items={detailFacts} />
+        <CatalogueVideoRail videos={movie.videos ?? []} />
         <StreamingAvailabilityPanel contentType="movie" tmdbId={movie.tmdbId} />
+        <CatalogueCastRail cast={movie.cast ?? []} />
+        <CatalogueKeywordList keywords={movie.keywords ?? []} />
+        <CatalogueRelatedRail items={movie.recommendations ?? []} onOpen={onOpenRelated} />
       </View>
     </View>
   );
+}
+
+function openRelatedMovie(
+  navigation: FilmDetailScreenProps['navigation'],
+  item: CatalogueRelatedItem,
+) {
+  if (item.mediaType === 'movie') {
+    navigation.push('FilmDetail', { title: item.title, tmdbId: item.tmdbId });
+    return;
+  }
+
+  navigation.push('SeriesDetail', { title: item.title, tmdbId: item.tmdbId });
 }
 
 function formatDisplayRating(rating: DisplayRating | null) {
@@ -140,6 +186,7 @@ function formatDisplayRating(rating: DisplayRating | null) {
 
 const styles = StyleSheet.create({
   bodyStack: {
+    paddingBottom: spacing.xxl,
     paddingHorizontal: spacing.xl,
   },
 
@@ -150,7 +197,8 @@ const styles = StyleSheet.create({
   genres: {
     ...typography.meta,
     color: colors.textMuted,
-    marginTop: spacing.xs,
+    marginTop: spacing.sm,
+    textAlign: 'center',
   },
   personalEyebrow: {
     ...typography.eyebrow,
@@ -160,7 +208,7 @@ const styles = StyleSheet.create({
   personalSection: {
     borderBottomColor: colors.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingTop: spacing.md,
+    paddingTop: spacing.xl,
   },
   safeArea: {
     backgroundColor: colors.background,
@@ -173,9 +221,12 @@ const styles = StyleSheet.create({
     paddingTop: 120,
   },
   tagline: {
-    ...typography.meta,
-    color: colors.text,
+    color: colors.accentText,
+    fontSize: 16,
+    fontWeight: '700',
     fontStyle: 'italic',
-    marginTop: spacing.xs,
+    lineHeight: 23,
+    paddingTop: spacing.lg,
+    textAlign: 'center',
   },
 });

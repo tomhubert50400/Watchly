@@ -24,9 +24,20 @@ export type CatalogueSpotlightItem = CatalogueSearchItem & {
 
 export type CatalogueMovieSectionsResponse = {
   announced: CatalogueSearchItem[];
+  announcedSeries: CatalogueSearchItem[];
   provider: 'tmdb';
   spotlight: CatalogueSpotlightItem | null;
   trending: CatalogueSearchItem[];
+  trendingSeries: CatalogueSearchItem[];
+};
+
+export type CatalogueDiscoveryItem = CatalogueSearchItem & {
+  genres: string[];
+};
+
+export type CatalogueDiscoveryResponse = {
+  items: CatalogueDiscoveryItem[];
+  provider: 'tmdb';
 };
 
 export type DisplayRating = {
@@ -36,21 +47,62 @@ export type DisplayRating = {
   source: 'watchly' | 'tmdb';
 };
 
+export type CatalogueCastMember = {
+  character: string | null;
+  id: number;
+  name: string;
+  profileUrl: string | null;
+};
+
+export type CatalogueCompany = {
+  id: number;
+  logoUrl: string | null;
+  name: string;
+};
+
+export type CatalogueRelatedItem = {
+  mediaType: 'movie' | 'series';
+  posterUrl: string | null;
+  releaseDate: string | null;
+  title: string;
+  tmdbId: number;
+};
+
+export type CatalogueVideo = {
+  id: string;
+  key: string;
+  name: string;
+  publishedAt: string | null;
+  type: string;
+};
+
 export type MovieDetails = {
   backdropUrl: string | null;
+  budget: number | null;
+  cast: CatalogueCastMember[];
+  directors: string[];
   displayRating: DisplayRating | null;
   genres: string[];
   id: string;
+  logoAspectRatio: number | null;
+  logoUrl: string | null;
   mediaType: 'movie';
+  keywords: string[];
+  originalTitle: string | null;
   overview: string;
   posterUrl: string | null;
+  productionCompanies: CatalogueCompany[];
+  recommendations: CatalogueRelatedItem[];
   releaseDate: string | null;
+  revenue: number | null;
   runtimeMinutes: number | null;
   status: string | null;
   tagline: string | null;
   title: string;
   tmdbId: number;
+  videos: CatalogueVideo[];
   voteAverage: number | null;
+  writers: string[];
 };
 
 export type MovieDetailsResponse = {
@@ -60,15 +112,25 @@ export type MovieDetailsResponse = {
 
 export type SeriesDetails = {
   backdropUrl: string | null;
+  cast: CatalogueCastMember[];
+  createdBy: string[];
   firstAirDate: string | null;
   genres: string[];
   id: string;
   inProduction: boolean;
+  logoAspectRatio: number | null;
+  logoUrl: string | null;
   mediaType: 'series';
+  keywords: string[];
+  lastAirDate: string | null;
+  networks: CatalogueCompany[];
   numberOfEpisodes: number | null;
   numberOfSeasons: number | null;
+  originalTitle: string | null;
   overview: string;
   posterUrl: string | null;
+  productionCompanies: CatalogueCompany[];
+  recommendations: CatalogueRelatedItem[];
   seasons: {
     airDate: string | null;
     episodeCount: number | null;
@@ -81,6 +143,7 @@ export type SeriesDetails = {
   tagline: string | null;
   title: string;
   tmdbId: number;
+  videos: CatalogueVideo[];
   voteAverage: number | null;
 };
 
@@ -120,6 +183,18 @@ export type SeasonDetailsResponse = {
 
 export type EpisodeDetails = {
   airDate: string | null;
+  cast: {
+    character: string | null;
+    id: number;
+    name: string;
+    profileUrl: string | null;
+  }[];
+  crew: {
+    id: number;
+    jobs: string[];
+    name: string;
+    profileUrl: string | null;
+  }[];
   episodeNumber: number;
   id: string;
   mediaType: 'episode';
@@ -168,6 +243,15 @@ export function searchCatalogue(query: string, type: CatalogueSearchType) {
 
 export function getCatalogueMovieSections() {
   return apiGet<CatalogueMovieSectionsResponse>('/catalog/movie-sections');
+}
+
+export function getCatalogueDiscovery(
+  section: 'announced' | 'trending',
+  mediaType: 'movie' | 'series',
+) {
+  const params = new URLSearchParams({ section, type: mediaType });
+
+  return apiGet<CatalogueDiscoveryResponse>(`/catalog/discovery?${params.toString()}`);
 }
 
 export function getMovieDetails(tmdbId: number) {

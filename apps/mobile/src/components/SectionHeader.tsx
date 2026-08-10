@@ -2,13 +2,20 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, spacing, touchTargets, typography } from '../design/tokens';
 
 type SectionHeaderProps = {
+  actionAccessibilityLabel?: string;
   actionLabel?: string;
   onActionPress?: () => void;
   subtitle?: string;
   title: string;
 };
 
-export function SectionHeader({ actionLabel, onActionPress, subtitle, title }: SectionHeaderProps) {
+export function SectionHeader({
+  actionAccessibilityLabel,
+  actionLabel,
+  onActionPress,
+  subtitle,
+  title,
+}: SectionHeaderProps) {
   return (
     <View style={styles.container}>
       <View style={styles.copy}>
@@ -17,6 +24,7 @@ export function SectionHeader({ actionLabel, onActionPress, subtitle, title }: S
       </View>
       {actionLabel && onActionPress ? (
         <Pressable
+          accessibilityLabel={actionAccessibilityLabel}
           accessibilityRole="button"
           hitSlop={4}
           onPress={onActionPress}

@@ -1,12 +1,16 @@
 // Node types are intentionally not part of the Expo runtime TypeScript configuration.
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import assert from 'node:assert/strict';
-import type { CatalogueSearchItem } from '../api/catalogue';
+// @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
+import { readFileSync } from 'node:fs';
+import type { CatalogueDiscoveryItem, CatalogueSearchItem } from '../api/catalogue';
 import {
   buildExploreSections,
   filterSearchResults,
   getExploreViewState,
+  groupDiscoveryItemsByGenre,
   groupSearchResults,
+  interleaveMediaItems,
 } from './exploreState';
 
 function item(
@@ -29,17 +33,69 @@ function item(
 const duplicatedMovie = item(1, 'movie', 'First title wins');
 const duplicateMovie = { ...item(1, 'movie', 'Duplicate'), id: 'different-api-id' };
 const seriesWithSameTmdbId = item(1, 'series', 'Different media type');
+const exploreScreenSource = readFileSync(new URL('./ExploreScreen.tsx', import.meta.url), 'utf8');
+
+assert.match(
+  exploreScreenSource,
+  /placeholder="Search for Movies, TV Shows or People"/,
+  'Explore search must tell users that profiles are searchable',
+);
+assert.match(
+  exploreScreenSource,
+  /searchProfiles\(firebaseIdToken, trimmedQuery\)/,
+  'the All search must request matching Watchly profiles',
+);
+assert.match(
+  exploreScreenSource,
+  /navigation\.navigate\('PublicProfile'/,
+  'people results must open the existing public profile route',
+);
+assert.match(
+  exploreScreenSource,
+  /profilePreview: \{[\s\S]*avatarUrl: person\.avatarUrl[\s\S]*displayName: person\.displayName[\s\S]*handle: person\.handle/,
+  'people results must pass their visible identity into the public profile route',
+);
+
+const sections = buildExploreSections({
+    announced: [duplicatedMovie, duplicateMovie],
+    announcedSeries: [seriesWithSameTmdbId],
+    trending: [duplicatedMovie, duplicateMovie],
+    trendingSeries: [seriesWithSameTmdbId],
+  });
 
 assert.deepEqual(
-  buildExploreSections({
-    announced: [duplicatedMovie, duplicateMovie],
-    trending: [duplicatedMovie, duplicateMovie, seriesWithSameTmdbId],
-  }),
+  sections,
   {
-    announced: [duplicatedMovie],
-    trending: [duplicatedMovie, seriesWithSameTmdbId],
+    announced: {
+      movie: [duplicatedMovie],
+      series: [seriesWithSameTmdbId],
+    },
+    trending: {
+      movie: [duplicatedMovie],
+      series: [seriesWithSameTmdbId],
+    },
   },
   'section composition deduplicates by media type and TMDB id while preserving API order',
+);
+
+assert.deepEqual(
+  interleaveMediaItems([duplicatedMovie], [seriesWithSameTmdbId]),
+  [duplicatedMovie, seriesWithSameTmdbId],
+  'the selected section can pick one featured title across movies and TV shows',
+);
+
+const dramaMovie = { ...duplicatedMovie, genres: ['Drama', 'Thriller'] } satisfies CatalogueDiscoveryItem;
+const dramaSeries = { ...seriesWithSameTmdbId, genres: ['Drama'] } satisfies CatalogueDiscoveryItem;
+const unclassifiedMovie = { ...item(2, 'movie', 'Unclassified'), genres: [] } satisfies CatalogueDiscoveryItem;
+
+assert.deepEqual(
+  groupDiscoveryItemsByGenre([dramaMovie, dramaSeries, unclassifiedMovie]),
+  [
+    { genre: 'Drama', items: [dramaMovie, dramaSeries] },
+    { genre: 'Other', items: [unclassifiedMovie] },
+    { genre: 'Thriller', items: [dramaMovie] },
+  ],
+  'extended discovery groups real titles by genre and keeps uncategorized titles visible',
 );
 
 assert.deepEqual(
@@ -96,7 +152,7 @@ assert.deepEqual(
 assert.deepEqual(
   getExploreViewState({ activeSection: 'trending', error: null, isLoading: true, itemCount: 0, query: ' dune ' }),
   {
-    emptyBody: 'Try another film or series title.',
+    emptyBody: 'Try another movie, TV show or person.',
     emptyTitle: 'No results for “dune”',
     errorTitle: 'Search could not be completed',
     isSearching: true,

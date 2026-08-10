@@ -1,6 +1,8 @@
 export type HomeHeroItem = {
   backdropUrl: string | null;
   genres: string[];
+  logoAspectRatio: number | null;
+  logoUrl: string | null;
   posterUrl: string | null;
   releaseDate: string | null;
   runtimeMinutes: number | null;
@@ -43,6 +45,7 @@ export type HomeFeedTarget =
     };
 
 export type HomeFeedItem = {
+  authorAvatarUrl: string | null;
   authorDisplayName: string | null;
   authorId: string;
   body: string;
@@ -51,7 +54,7 @@ export type HomeFeedItem = {
   id: string;
   likeCount: number;
   likedByViewer: boolean;
-  rating: number;
+  rating: number | null;
   target: HomeFeedTarget;
   type: 'episodeReview' | 'movieReview';
   updatedAt: string;

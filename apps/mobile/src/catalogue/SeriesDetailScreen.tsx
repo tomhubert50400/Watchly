@@ -3,26 +3,40 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ChevronDown } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { SeriesDetails } from '../api/catalogue';
+import { CatalogueRelatedItem, SeriesDetails } from '../api/catalogue';
 import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
 import { MediaHero } from '../components/MediaHero';
 import { SegmentedControl } from '../components/SegmentedControl';
+import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { SeasonEpisodeList } from '../episodes/SeasonEpisodeList';
 import { RootStackParamList } from '../navigation/types';
 import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 import { SeriesProgressSummary } from '../tracking/SeriesProgressSummary';
 import { TrackingControls } from '../tracking/TrackingControls';
+import { ViewingCountControl } from '../viewings/ViewingCountControl';
 import { AddToWatchlistControl } from '../watchlists/AddToWatchlistControl';
+import {
+  CatalogueCastRail,
+  CatalogueKeywordList,
+  CatalogueRelatedRail,
+  CatalogueVideoRail,
+} from './CatalogueDetailSections';
 import { HeaderInfoItem, HeaderInfoPills } from './HeaderInfoPills';
+import { DetailFacts } from './DetailFacts';
 import { StreamingAvailabilityPanel } from './StreamingAvailabilityPanel';
 import { SynopsisPanel } from './SynopsisPanel';
 import { useCatalogueCache } from './CatalogueCacheContext';
 import { ensureSeasonDetails } from './cataloguePrefetch';
-import { formatFivePointRating, getDetailRenderMode } from './detailModel';
+import {
+  formatDetailDate,
+  formatFivePointRating,
+  getDetailRenderMode,
+  getDistinctOriginalTitle,
+} from './detailModel';
 import { isReleasedDate } from './releaseDates';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SeriesDetail'>;
@@ -32,7 +46,7 @@ export function SeriesDetailScreen({ navigation, route }: Props) {
   const { getCachedSeries, refreshSeries } = useCatalogueCache();
   const load = useCallback(() => refreshSeries(tmdbId), [refreshSeries, tmdbId]);
   const resource = useCachedResource<SeriesDetails>({
-    key: `watchly:public:catalogue:series:${tmdbId}`,
+    key: `watchly:public:catalogue:series:${tmdbId}:v3`,
     load,
   });
   const series = resource.data ?? getCachedSeries(tmdbId);
@@ -41,6 +55,7 @@ export function SeriesDetailScreen({ navigation, route }: Props) {
     hasError: Boolean(resource.error),
     isInitialLoading: resource.isInitialLoading,
   });
+  const atmosphereUrl = series?.posterUrl ?? series?.backdropUrl ?? null;
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -63,6 +78,7 @@ export function SeriesDetailScreen({ navigation, route }: Props) {
 
   return (
     <SafeAreaView edges={[]} style={styles.safeArea}>
+      {atmosphereUrl ? <SpotlightAtmosphere blurRadius={28} imageUrl={atmosphereUrl} /> : null}
       <ScrollView contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="never" showsVerticalScrollIndicator={false}>
         {renderMode === 'loading' ? (
           <View style={styles.stateFrame}><LoadingState label="Loading series details" /></View>
@@ -74,6 +90,7 @@ export function SeriesDetailScreen({ navigation, route }: Props) {
           </View>
         ) : series ? (
           <SeriesDetailContent
+            onOpenRelated={(item) => openRelatedSeries(navigation, item)}
             series={series}
           />
         ) : null}
@@ -82,17 +99,30 @@ export function SeriesDetailScreen({ navigation, route }: Props) {
   );
 }
 
-function SeriesDetailContent({ series }: {
+function SeriesDetailContent({ onOpenRelated, series }: {
+  onOpenRelated: (item: CatalogueRelatedItem) => void;
   series: SeriesDetails;
 }) {
   const [activeView, setActiveView] = useState<'details' | 'episodes'>('details');
   const isReleased = isReleasedDate(series.firstAirDate);
   const infoItems = [
+    'Series',
     series.firstAirDate ? series.firstAirDate.slice(0, 4) : null,
     series.numberOfSeasons ? `${series.numberOfSeasons} seasons` : null,
     series.numberOfEpisodes ? `${series.numberOfEpisodes} episodes` : null,
     isReleased ? formatTmdbRating(series.voteAverage) : null,
   ].filter(Boolean).map((item) => item as HeaderInfoItem);
+  const detailFacts = [
+    { label: 'Original title', value: getDistinctOriginalTitle(series.originalTitle, series.title) },
+    { label: 'Created by', value: series.createdBy?.join(', ') || null },
+    { label: 'First aired', value: formatDetailDate(series.firstAirDate) },
+    { label: 'Last aired', value: formatDetailDate(series.lastAirDate) },
+    { label: 'Seasons', value: series.numberOfSeasons ? String(series.numberOfSeasons) : null },
+    { label: 'Episodes', value: series.numberOfEpisodes ? String(series.numberOfEpisodes) : null },
+    { label: 'Status', value: series.status },
+    { label: 'Networks', value: series.networks?.map((network) => network.name).join(', ') || null },
+    { label: 'Production', value: series.productionCompanies?.map((company) => company.name).join(', ') || null },
+  ];
 
   return (
     <View>
@@ -100,14 +130,13 @@ function SeriesDetailContent({ series }: {
         actionAccessory={<ReleaseAlertControl contentType="series" tmdbId={series.tmdbId} />}
         actions={<AddToWatchlistControl contentType="series" tmdbId={series.tmdbId} />}
         backdropUrl={series.backdropUrl}
-        eyebrow="Series"
-        posterAccessibilityLabel={`${series.title} poster`}
+        logoAspectRatio={series.logoAspectRatio}
+        logoUrl={series.logoUrl}
         posterUrl={series.posterUrl}
         title={series.title}
       >
-        <HeaderInfoPills items={infoItems} />
         {series.genres.length > 0 ? <Text numberOfLines={1} style={styles.genres}>{series.genres.join(' · ')}</Text> : null}
-        {series.tagline ? <Text numberOfLines={2} style={styles.tagline}>{series.tagline}</Text> : null}
+        <HeaderInfoPills items={infoItems} />
       </MediaHero>
       <View style={styles.bodyStack}>
         <SegmentedControl
@@ -123,15 +152,34 @@ function SeriesDetailContent({ series }: {
           <SeriesEpisodesPanel seasons={series.seasons} seriesTitle={series.title} seriesTmdbId={series.tmdbId} />
         ) : (
           <>
-            <TrackingControls contentType="series" tmdbId={series.tmdbId} />
-            <SeriesProgressSummary seasons={series.seasons} seriesTitle={series.title} seriesTmdbId={series.tmdbId} />
+            {series.tagline ? <Text style={styles.tagline}>{series.tagline}</Text> : null}
             <SynopsisPanel overview={series.overview} />
+            <View style={styles.personalSection}>
+              <Text style={styles.personalEyebrow}>Your activity</Text>
+              <TrackingControls contentType="series" tmdbId={series.tmdbId} />
+              <SeriesProgressSummary seasons={series.seasons} seriesTitle={series.title} seriesTmdbId={series.tmdbId} />
+              <ViewingCountControl contentType="series" seriesTmdbId={series.tmdbId} />
+            </View>
+            <DetailFacts items={detailFacts} />
+            <CatalogueVideoRail videos={series.videos ?? []} />
             <StreamingAvailabilityPanel contentType="series" tmdbId={series.tmdbId} />
+            <CatalogueCastRail cast={series.cast ?? []} />
+            <CatalogueKeywordList keywords={series.keywords ?? []} />
+            <CatalogueRelatedRail items={series.recommendations ?? []} onOpen={onOpenRelated} />
           </>
         )}
       </View>
     </View>
   );
+}
+
+function openRelatedSeries(navigation: Props['navigation'], item: CatalogueRelatedItem) {
+  if (item.mediaType === 'movie') {
+    navigation.push('FilmDetail', { title: item.title, tmdbId: item.tmdbId });
+    return;
+  }
+
+  navigation.push('SeriesDetail', { title: item.title, tmdbId: item.tmdbId });
 }
 
 function SeriesEpisodesPanel({ seasons, seriesTitle, seriesTmdbId }: {
@@ -195,11 +243,13 @@ function formatTmdbRating(voteAverage: number | null) {
 
 const styles = StyleSheet.create({
   body: { ...typography.body, color: colors.muted, marginTop: spacing.sm },
-  bodyStack: { paddingHorizontal: spacing.xl },
+  bodyStack: { paddingBottom: spacing.xxl, paddingHorizontal: spacing.xl },
   chevronOpen: { transform: [{ rotate: '180deg' }] },
   content: { flexGrow: 1, paddingBottom: spacing.xxxl },
   episodesPanel: { gap: spacing.sm, marginTop: spacing.sm },
-  genres: { ...typography.body, color: colors.textMuted, marginTop: spacing.sm },
+  genres: { ...typography.meta, color: colors.textMuted, marginTop: spacing.sm, textAlign: 'center' },
+  personalEyebrow: { ...typography.eyebrow, color: colors.textSubtle, marginBottom: spacing.sm },
+  personalSection: { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, paddingTop: spacing.xl },
   picker: { backgroundColor: colors.panelSoft, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, overflow: 'hidden' },
   pickerMeta: { ...typography.meta, color: colors.muted, marginTop: 2 },
   pickerRow: { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, padding: spacing.md },
@@ -210,6 +260,6 @@ const styles = StyleSheet.create({
   seasonButton: { alignItems: 'center', backgroundColor: colors.panelSoft, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', justifyContent: 'space-between', minHeight: 44, paddingHorizontal: spacing.md },
   seasonButtonText: { ...typography.body, color: colors.text, fontWeight: '900' },
   stateFrame: { flex: 1, paddingHorizontal: spacing.xl, paddingTop: 120 },
-  tagline: { ...typography.meta, color: colors.text, fontStyle: 'italic', marginTop: spacing.xs },
-  viewSwitchControl: { marginBottom: spacing.md, marginTop: spacing.md },
+  tagline: { color: colors.accentText, fontSize: 16, fontStyle: 'italic', fontWeight: '700', lineHeight: 23, paddingTop: spacing.lg, textAlign: 'center' },
+  viewSwitchControl: { backgroundColor: colors.interactiveSurface, marginBottom: spacing.md, marginTop: spacing.md },
 });

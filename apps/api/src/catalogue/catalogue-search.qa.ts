@@ -8,13 +8,17 @@ import {
   SPOTLIGHT_DURATION_MS,
 } from './catalogue-spotlight';
 import {
+  buildDiscoveryEndpoint,
   compareAnnouncedCandidates,
   isAnnouncedReleaseDate,
+  selectTmdbLogoAsset,
   TmdbCatalogueService,
 } from './tmdb-catalogue.service';
 
 async function main() {
   testAnnouncedSelection();
+  testDiscoveryEndpoints();
+  testLogoSelection();
   testWeeklySpotlightSelection();
 
   const requestedUrls: string[] = [];
@@ -42,13 +46,221 @@ async function main() {
       });
     }
 
+    if (url.includes('/genre/movie/list?')) {
+      return jsonResponse({ genres: [{ id: 18, name: 'Drama' }] });
+    }
+
+    if (url.includes('/genre/tv/list?')) {
+      return jsonResponse({
+        genres: [
+          { id: 18, name: 'Drama' },
+          { id: 35, name: 'Comedy' },
+        ],
+      });
+    }
+
+    if (url.includes('/trending/movie/day?')) {
+      return jsonResponse({
+        results: [{ genre_ids: [18], id: 10, release_date: '2020-01-01', title: 'Trending Film' }],
+      });
+    }
+
+    if (url.includes('/trending/movie/week?')) {
+      return jsonResponse({
+        results: [{ backdrop_path: '/spotlight.jpg', id: 11, release_date: '2020-01-01', title: 'Spotlight Film' }],
+      });
+    }
+
+    if (url.includes('/trending/tv/day?')) {
+      return jsonResponse({
+        results: [{ first_air_date: '2025-01-01', genre_ids: [18, 35], id: 12, name: 'Trending Series' }],
+      });
+    }
+
+    if (url.includes('/discover/tv?')) {
+      return jsonResponse({
+        results: [{ first_air_date: '2099-01-01', genre_ids: [18], id: 13, name: 'Upcoming Series' }],
+      });
+    }
+
+    if (url.includes('/discover/movie?')) {
+      return jsonResponse({
+        results: [{ genre_ids: [18], id: 14, release_date: '2099-01-01', title: 'Upcoming Film' }],
+      });
+    }
+
+    if (url.includes('/movie/upcoming?')) {
+      return jsonResponse({
+        results: [{ genre_ids: [18], id: 14, release_date: '2099-01-01', title: 'Upcoming Film' }],
+      });
+    }
+
+    if (url.includes('/tv/1396/season/1/episode/2?')) {
+      return jsonResponse({
+        credits: {
+          cast: [
+            {
+              character: 'Second actor',
+              id: 2,
+              name: 'Actor Two',
+              order: 1,
+              profile_path: null,
+            },
+            {
+              character: 'Lead',
+              id: 1,
+              name: 'Actor One',
+              order: 0,
+              profile_path: '/actor-one.jpg',
+            },
+          ],
+          crew: [
+            {
+              department: 'Production',
+              id: 13,
+              job: 'Producer',
+              name: 'Crew Three',
+              profile_path: null,
+            },
+            {
+              department: 'Writing',
+              id: 12,
+              job: 'Writer',
+              name: 'Crew Two',
+              profile_path: '/crew-two.jpg',
+            },
+            {
+              department: 'Directing',
+              id: 11,
+              job: 'Director',
+              name: 'Crew One',
+              profile_path: '/crew-one.jpg',
+            },
+            {
+              department: 'Writing',
+              id: 11,
+              job: 'Writer',
+              name: 'Crew One',
+              profile_path: '/crew-one.jpg',
+            },
+          ],
+          guest_stars: [
+            {
+              character: 'Duplicate guest credit',
+              id: 2,
+              name: 'Actor Two',
+              order: 500,
+              profile_path: null,
+            },
+            {
+              character: 'Guest',
+              id: 3,
+              name: 'Actor Three',
+              order: 501,
+              profile_path: '/actor-three.jpg',
+            },
+            {
+              character: 'Unknown',
+              id: 4,
+              order: 502,
+              profile_path: null,
+            },
+          ],
+        },
+        episode_number: 2,
+        id: 102,
+        name: 'Cat in the Bag...',
+        season_number: 1,
+      });
+    }
+
+    if (url.includes('/tv/1396/season/1?')) {
+      return jsonResponse({
+        episodes: [],
+        id: 101,
+        name: 'Season 1',
+        season_number: 1,
+      });
+    }
+
+    if (url.includes('/movie/603?')) {
+      return jsonResponse({
+        budget: 63000000,
+        credits: {
+          cast: [
+            { character: 'Neo', id: 1, name: 'Keanu Reeves', order: 0, profile_path: '/neo.jpg' },
+          ],
+          crew: [
+            { department: 'Directing', id: 2, job: 'Director', name: 'Lana Wachowski' },
+            { department: 'Writing', id: 3, job: 'Screenplay', name: 'Lilly Wachowski' },
+          ],
+        },
+        id: 603,
+        images: { logos: [] },
+        keywords: { keywords: [{ id: 4, name: 'artificial reality' }] },
+        original_title: 'The Matrix',
+        production_companies: [{ id: 5, logo_path: '/warner.png', name: 'Warner Bros.' }],
+        recommendations: {
+          results: [{ id: 604, poster_path: '/matrix-reloaded.jpg', release_date: '2003-05-15', title: 'The Matrix Reloaded' }],
+        },
+        revenue: 463517383,
+        title: 'The Matrix',
+        videos: {
+          results: [{ id: 'trailer-1', key: 'vKQi3bBA1y8', name: 'Official Trailer', official: true, published_at: '1999-01-01T00:00:00.000Z', site: 'YouTube', type: 'Trailer' }],
+        },
+      });
+    }
+
+    if (url.includes('/tv/1396?')) {
+      return jsonResponse({
+        created_by: [{ id: 1, name: 'Vince Gilligan', profile_path: '/vince.jpg' }],
+        credits: {
+          cast: [{ character: 'Walter White', id: 2, name: 'Bryan Cranston', order: 0, profile_path: '/bryan.jpg' }],
+        },
+        id: 1396,
+        images: {
+          logos: [
+            {
+              file_path: '/breaking-bad.png',
+              height: 300,
+              iso_639_1: 'en',
+              vote_average: 8,
+              width: 900,
+            },
+          ],
+        },
+        keywords: { results: [{ id: 3, name: 'new mexico' }] },
+        last_air_date: '2013-09-29',
+        name: 'Breaking Bad',
+        networks: [{ id: 4, logo_path: '/amc.png', name: 'AMC' }],
+        original_name: 'Breaking Bad',
+        production_companies: [{ id: 5, logo_path: null, name: 'Sony Pictures Television' }],
+        recommendations: {
+          results: [{ first_air_date: '2015-02-08', id: 60059, name: 'Better Call Saul', poster_path: '/saul.jpg' }],
+        },
+        videos: {
+          results: [{ id: 'tv-trailer-1', key: 'HhesaQXLuRY', name: 'Series Trailer', official: true, site: 'YouTube', type: 'Trailer' }],
+        },
+      });
+    }
+
     return jsonResponse({
       results: [{ id: 5, media_type: 'tv', name: 'New School Breakin' }],
     });
   }) as typeof fetch;
 
   const config = { get: () => 'test-token' } as unknown as ConfigService;
-  const service = new TmdbCatalogueService(config, {} as PrismaService);
+  const prisma = {
+    catalogueSpotlight: {
+      findUnique: async () => null,
+      upsert: async () => null,
+    },
+    userMovieRating: {
+      aggregate: async () => ({ _avg: { scoreHalfSteps: null }, _count: { _all: 0 } }),
+    },
+    withConnectionRetry: async <T>(operation: () => Promise<T>) => operation(),
+  } as unknown as PrismaService;
+  const service = new TmdbCatalogueService(config, prisma);
 
   try {
     const series = await service.search('breakin', 'series');
@@ -82,11 +294,186 @@ async function main() {
       requestedUrls.every((url) => new URL(url).searchParams.get('query') === 'breakin'),
       'each specialized search receives the complete query',
     );
+    assertEnglishTmdbRequests(requestedUrls, 'catalogue search');
+
+    requestedUrls.length = 0;
+    await service.trending();
+    assertEnglishTmdbRequests(requestedUrls, 'daily trending');
+
+    requestedUrls.length = 0;
+    const sections = await service.movieSections();
+    assert.equal(requestedUrls.length, 9);
+    assert.deepEqual(sections.trendingSeries.map((item) => item.title), ['Trending Series']);
+    assert.deepEqual(sections.announcedSeries.map((item) => item.title), ['Upcoming Series']);
+    assertEnglishTmdbRequests(requestedUrls, 'movie sections');
+
+    requestedUrls.length = 0;
+    const discovery = await service.discovery('trending', 'series');
+    assert.equal(requestedUrls.length, 4);
+    assert.deepEqual(discovery.items, [
+      {
+        genres: ['Drama', 'Comedy'],
+        id: 'series:12',
+        mediaType: 'series',
+        overview: '',
+        posterUrl: null,
+        releaseDate: '2025-01-01',
+        title: 'Trending Series',
+        tmdbId: 12,
+        voteAverage: null,
+      },
+    ]);
+    assertEnglishTmdbRequests(requestedUrls, 'extended catalogue discovery');
+
+    requestedUrls.length = 0;
+    const movieDetails = await service.getMovie(603);
+    assert.equal(movieDetails.item.budget, 63000000);
+    assert.deepEqual(movieDetails.item.directors, ['Lana Wachowski']);
+    assert.deepEqual(movieDetails.item.writers, ['Lilly Wachowski']);
+    assert.equal(movieDetails.item.cast[0]?.character, 'Neo');
+    assert.equal(movieDetails.item.videos[0]?.key, 'vKQi3bBA1y8');
+    assert.equal(movieDetails.item.recommendations[0]?.title, 'The Matrix Reloaded');
+    assertEnglishTmdbRequests(requestedUrls, 'movie details');
+    assertEnglishLogoRequest(requestedUrls[0]!, 'movie details');
+    assert.equal(
+      new URL(requestedUrls[0]!).searchParams.get('append_to_response'),
+      'images,credits,videos,keywords,recommendations',
+      'movie details must append its lower-page catalogue data in one TMDB request',
+    );
+
+    requestedUrls.length = 0;
+    await service.getSeason(1396, 1);
+    assertEnglishTmdbRequests(requestedUrls, 'season details');
+
+    requestedUrls.length = 0;
+    const episode = await service.getEpisode(1396, 1, 2);
+
+    assert.deepEqual(episode.item.cast, [
+      {
+        character: 'Lead',
+        id: 1,
+        name: 'Actor One',
+        profileUrl: 'https://image.tmdb.org/t/p/w342/actor-one.jpg',
+      },
+      {
+        character: 'Second actor',
+        id: 2,
+        name: 'Actor Two',
+        profileUrl: null,
+      },
+      {
+        character: 'Guest',
+        id: 3,
+        name: 'Actor Three',
+        profileUrl: 'https://image.tmdb.org/t/p/w342/actor-three.jpg',
+      },
+    ]);
+    assert.deepEqual(episode.item.crew, [
+      {
+        id: 11,
+        jobs: ['Director', 'Writer'],
+        name: 'Crew One',
+        profileUrl: 'https://image.tmdb.org/t/p/w342/crew-one.jpg',
+      },
+      {
+        id: 12,
+        jobs: ['Writer'],
+        name: 'Crew Two',
+        profileUrl: 'https://image.tmdb.org/t/p/w342/crew-two.jpg',
+      },
+      {
+        id: 13,
+        jobs: ['Producer'],
+        name: 'Crew Three',
+        profileUrl: null,
+      },
+    ]);
+    assert.equal(requestedUrls.length, 1);
+    assert.equal(
+      new URL(requestedUrls[0]!).searchParams.get('append_to_response'),
+      'credits',
+      'episode details must append credits without a second TMDB request',
+    );
+    assertEnglishTmdbRequests(requestedUrls, 'episode details');
+
+    requestedUrls.length = 0;
+    const seriesDetails = await service.getSeries(1396);
+
+    assert.equal(
+      seriesDetails.item.logoUrl,
+      'https://image.tmdb.org/t/p/w500/breaking-bad.png',
+      'series details must expose the selected TMDB title logo',
+    );
+    assert.equal(seriesDetails.item.logoAspectRatio, 3);
+    assert.deepEqual(seriesDetails.item.createdBy, ['Vince Gilligan']);
+    assert.equal(seriesDetails.item.cast[0]?.name, 'Bryan Cranston');
+    assert.equal(seriesDetails.item.videos[0]?.type, 'Trailer');
+    assert.equal(seriesDetails.item.recommendations[0]?.title, 'Better Call Saul');
+    assert.equal(requestedUrls.length, 1);
+    assert.equal(
+      new URL(requestedUrls[0]!).searchParams.get('append_to_response'),
+      'images,credits,videos,keywords,recommendations',
+      'series details must append title artwork and lower-page data without a second TMDB request',
+    );
+    assert.equal(
+      new URL(requestedUrls[0]!).searchParams.get('include_image_language'),
+      'en,null',
+      'series details must request English and language-neutral artwork',
+    );
+    assertEnglishTmdbRequests(requestedUrls, 'series details');
   } finally {
     globalThis.fetch = originalFetch;
   }
 
   console.log('Catalogue search QA passed.');
+}
+
+function testLogoSelection() {
+  assert.deepEqual(
+    selectTmdbLogoAsset([
+      { file_path: '/english.png', height: 300, iso_639_1: 'en', vote_average: 5, width: 1200 },
+      { file_path: '/neutral.png', height: 300, iso_639_1: null, vote_average: 10, width: 900 },
+      { file_path: '/french.png', height: 300, iso_639_1: 'fr', vote_average: 10, width: 900 },
+    ]),
+    { aspectRatio: 4, path: '/english.png' },
+    'English title artwork wins before language-neutral artwork',
+  );
+  assert.deepEqual(
+    selectTmdbLogoAsset([
+      { file_path: '/french.png', height: 200, iso_639_1: 'fr', vote_average: 10, width: 800 },
+      { file_path: '/neutral.png', height: 200, iso_639_1: null, vote_average: 7, width: 600 },
+    ]),
+    { aspectRatio: 3, path: '/neutral.png' },
+    'language-neutral artwork is used instead of unsupported localized artwork',
+  );
+  assert.equal(
+    selectTmdbLogoAsset([
+      { file_path: '/french.png', iso_639_1: 'fr' },
+      { file_path: '/spanish.png', iso_639_1: 'es' },
+    ]),
+    null,
+    'unsupported localized artwork is omitted',
+  );
+  assert.equal(selectTmdbLogoAsset([{ file_path: null, iso_639_1: 'en' }]), null);
+}
+
+function assertEnglishTmdbRequests(urls: readonly string[], label: string) {
+  assert(urls.length > 0, `${label} must issue at least one TMDB request`);
+  urls.forEach((url) => {
+    assert.equal(
+      new URL(url).searchParams.get('language'),
+      'en-US',
+      `${label} must request English metadata`,
+    );
+  });
+}
+
+function assertEnglishLogoRequest(url: string, label: string) {
+  assert.equal(
+    new URL(url).searchParams.get('include_image_language'),
+    'en,null',
+    `${label} must request English and language-neutral artwork`,
+  );
 }
 
 function testAnnouncedSelection() {
@@ -120,6 +507,23 @@ function testAnnouncedSelection() {
     [3, 2, 1],
     'Coming soon ranks by popularity before using the nearest release date as a tie-breaker',
   );
+}
+
+function testDiscoveryEndpoints() {
+  const baseUrl = 'https://api.themoviedb.org/3';
+  const trendingSeries = new URL(buildDiscoveryEndpoint(baseUrl, 'trending', 'series', 2));
+  const upcomingMovies = new URL(buildDiscoveryEndpoint(baseUrl, 'announced', 'movie', 3));
+  const upcomingSeries = new URL(buildDiscoveryEndpoint(baseUrl, 'announced', 'series', 1));
+
+  assert.equal(trendingSeries.pathname, '/3/trending/tv/day');
+  assert.equal(trendingSeries.searchParams.get('page'), '2');
+  assert.equal(upcomingMovies.pathname, '/3/discover/movie');
+  assert.equal(upcomingMovies.searchParams.get('page'), '3');
+  assert.equal(upcomingMovies.searchParams.get('sort_by'), 'popularity.desc');
+  assert(upcomingMovies.searchParams.get('primary_release_date.gte'));
+  assert.equal(upcomingSeries.pathname, '/3/discover/tv');
+  assert.equal(upcomingSeries.searchParams.get('sort_by'), 'first_air_date.asc');
+  assert(upcomingSeries.searchParams.get('first_air_date.gte'));
 }
 
 function testWeeklySpotlightSelection() {

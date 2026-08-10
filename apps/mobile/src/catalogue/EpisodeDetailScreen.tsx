@@ -12,6 +12,7 @@ import { colors, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { EpisodeReviewEditor } from '../reviews/EpisodeReviewEditor';
 import { EpisodeProgressControl } from '../tracking/EpisodeProgressControl';
+import { ViewingCountControl } from '../viewings/ViewingCountControl';
 import { isReleasedDate } from './releaseDates';
 import { ensureEpisodeDetails, getEpisodeResourceKey } from './cataloguePrefetch';
 import { EpisodeCommunityPanel } from './EpisodeCommunityPanel';
@@ -74,6 +75,8 @@ function EpisodeDetailContent({
   seriesTitle: string;
 }) {
   const runtime = episode.runtimeMinutes ? `${episode.runtimeMinutes}m` : null;
+  const cast = episode.cast ?? [];
+  const crew = episode.crew ?? [];
   const isReleased = isReleasedDate(episode.airDate);
   const episodeCode = `S${episode.seasonNumber} E${episode.episodeNumber}`;
   const rating = isReleased && episode.voteAverage ? (episode.voteAverage / 2).toFixed(1) : null;
@@ -123,6 +126,12 @@ function EpisodeDetailContent({
             seasonNumber={episode.seasonNumber}
             seriesTmdbId={episode.seriesTmdbId}
           />
+          <ViewingCountControl
+            contentType="episode"
+            episodeNumber={episode.episodeNumber}
+            seasonNumber={episode.seasonNumber}
+            seriesTmdbId={episode.seriesTmdbId}
+          />
           {isReleased ? (
             <EpisodeReviewEditor
               episodeNumber={episode.episodeNumber}
@@ -140,6 +149,26 @@ function EpisodeDetailContent({
           seriesTmdbId={episode.seriesTmdbId}
         />
 
+        <EpisodeCreditRail
+          items={cast.map((actor) => ({
+            id: actor.id,
+            name: actor.name,
+            profileUrl: actor.profileUrl,
+            subtitle: actor.character,
+          }))}
+          title="Cast"
+        />
+
+        <EpisodeCreditRail
+          items={crew.map((member) => ({
+            id: member.id,
+            name: member.name,
+            profileUrl: member.profileUrl,
+            subtitle: member.jobs.join(' · '),
+          }))}
+          title="Crew"
+        />
+
         <View style={styles.detailsSection}>
           <Text style={styles.sectionTitle}>Details</Text>
           <Text style={styles.detailSummary}>{detailItems.join(' · ')}</Text>
@@ -149,7 +178,109 @@ function EpisodeDetailContent({
   );
 }
 
+type EpisodeCreditRailItem = {
+  id: number;
+  name: string;
+  profileUrl: string | null;
+  subtitle: string | null;
+};
+
+function EpisodeCreditRail({
+  items,
+  title,
+}: {
+  items: EpisodeCreditRailItem[];
+  title: string;
+}) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <View style={styles.creditSection}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      <ScrollView
+        contentContainerStyle={styles.creditRail}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+      >
+        {items.map((person) => (
+          <View
+            accessibilityLabel={person.subtitle
+              ? `${person.name}, ${person.subtitle}`
+              : person.name}
+            accessible
+            key={person.id}
+            style={styles.creditCard}
+          >
+            {person.profileUrl ? (
+              <Image
+                accessibilityIgnoresInvertColors
+                accessible={false}
+                source={{ uri: person.profileUrl }}
+                style={styles.creditPortrait}
+              />
+            ) : (
+              <View style={[styles.creditPortrait, styles.creditPlaceholder]}>
+                <Text style={styles.creditInitial}>{getPersonInitial(person.name)}</Text>
+              </View>
+            )}
+            <Text numberOfLines={2} style={styles.creditName}>{person.name}</Text>
+            {person.subtitle ? (
+              <Text numberOfLines={2} style={styles.creditSubtitle}>{person.subtitle}</Text>
+            ) : null}
+          </View>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+function getPersonInitial(name: string) {
+  return name.trim().slice(0, 1).toUpperCase();
+}
+
 const styles = StyleSheet.create({
+  creditCard: {
+    width: 92,
+  },
+  creditInitial: {
+    ...typography.title,
+    color: colors.accentText,
+  },
+  creditName: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 17,
+    marginTop: spacing.xs,
+  },
+  creditPlaceholder: {
+    alignItems: 'center',
+    backgroundColor: colors.panelSoft,
+    justifyContent: 'center',
+  },
+  creditPortrait: {
+    borderRadius: 14,
+    height: 118,
+    width: 92,
+  },
+  creditRail: {
+    gap: spacing.md,
+  },
+  creditSection: {
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: spacing.md,
+    paddingVertical: spacing.xl,
+  },
+  creditSubtitle: {
+    ...typography.meta,
+    color: colors.textSubtle,
+    fontSize: 12,
+    lineHeight: 15,
+    marginTop: 2,
+  },
   content: {
     flexGrow: 1,
     paddingBottom: spacing.xxxl,

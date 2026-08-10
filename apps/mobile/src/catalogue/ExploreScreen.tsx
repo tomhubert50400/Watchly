@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { CalendarDays, Search, X } from 'lucide-react-native';
+import { CalendarDays, ChevronRight, Search, X } from 'lucide-react-native';
 import {
+  Image,
   ImageBackground,
   InputAccessoryView,
   Keyboard,
@@ -21,13 +22,17 @@ import {
   CatalogueSearchType,
   searchCatalogue,
 } from '../api/catalogue';
+import { ProfileSearchItem, searchProfiles } from '../api/profile';
+import { useAuthSession } from '../auth/AuthSessionContext';
 import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
+import { SectionHeader } from '../components/SectionHeader';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
+import { UserAvatar } from '../components/UserAvatar';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { hapticSelection } from '../feedback/haptics';
 import { RootStackParamList } from '../navigation/types';
@@ -39,21 +44,26 @@ import { ExploreMediaCard } from './ExploreMediaCard';
 import {
   buildExploreSections,
   deduplicateMediaItems,
+  ExploreMediaType,
   ExploreSection,
   filterSearchResults,
   getExploreViewState,
+  interleaveMediaItems,
 } from './exploreState';
 
 const SEARCH_INPUT_ACCESSORY_ID = 'explore-search-keyboard-accessory';
-const EMPTY_SECTIONS: Record<ExploreSection, CatalogueSearchItem[]> = { announced: [], trending: [] };
+const EMPTY_SECTIONS: Record<ExploreSection, Record<ExploreMediaType, CatalogueSearchItem[]>> = {
+  announced: { movie: [], series: [] },
+  trending: { movie: [], series: [] },
+};
 const SEARCH_TYPE_OPTIONS: {
   accessibilityLabel: string;
   label: string;
   value: CatalogueSearchType;
 }[] = [
   { accessibilityLabel: 'Show all results', label: 'All', value: 'all' },
-  { accessibilityLabel: 'Show films only', label: 'Films', value: 'movie' },
-  { accessibilityLabel: 'Show series only', label: 'Series', value: 'series' },
+  { accessibilityLabel: 'Show movies only', label: 'Movies', value: 'movie' },
+  { accessibilityLabel: 'Show TV shows only', label: 'TV Shows', value: 'series' },
 ];
 
 type ExploreScreenProps = {
@@ -62,12 +72,14 @@ type ExploreScreenProps = {
 
 export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { currentUser, firebaseIdToken } = useAuthSession();
   const { preloadCatalogueItems } = useCatalogueCache();
   const [query, setQuery] = useState('');
   const [searchType, setSearchType] = useState<CatalogueSearchType>('all');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [activeSection, setActiveSection] = useState<ExploreSection>('trending');
   const [searchItems, setSearchItems] = useState<CatalogueSearchItem[]>([]);
+  const [searchPeople, setSearchPeople] = useState<ProfileSearchItem[]>([]);
   const [searchItemsQuery, setSearchItemsQuery] = useState('');
   const [searchError, setSearchError] = useState<string | null>(null);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
@@ -84,12 +96,25 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
     () => sections.data ? buildExploreSections(sections.data) : EMPTY_SECTIONS,
     [sections.data],
   );
+  const discoveryItems = useMemo(
+    () => interleaveMediaItems(
+      sectionItems[activeSection].movie,
+      sectionItems[activeSection].series,
+    ),
+    [activeSection, sectionItems],
+  );
   const visibleSearchItems = useMemo(
     () => searchItemsQuery === trimmedQuery ? filterSearchResults(searchItems, searchType) : [],
     [searchItems, searchItemsQuery, searchType, trimmedQuery],
   );
-  const visibleItems = isSearching ? visibleSearchItems : sectionItems[activeSection];
-  const atmosphereUrl = visibleItems[0]?.posterUrl ?? null;
+  const visibleSearchPeople = useMemo(
+    () => searchItemsQuery === trimmedQuery && searchType === 'all' ? searchPeople : [],
+    [searchItemsQuery, searchPeople, searchType, trimmedQuery],
+  );
+  const visibleItems = isSearching
+    ? visibleSearchItems
+    : discoveryItems;
+  const atmosphereUrl = discoveryItems[0]?.posterUrl ?? null;
   const visibleError = isSearching ? searchError : sections.error;
   const isVisibleLoading = isSearching
     ? isSearchLoading
@@ -130,18 +155,24 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
     setIsSearchLoading(true);
 
     const handle = setTimeout(() => {
-      searchCatalogue(trimmedQuery, searchType)
-        .then((response) => {
+      Promise.all([
+        searchCatalogue(trimmedQuery, searchType),
+        firebaseIdToken && searchType === 'all'
+          ? searchProfiles(firebaseIdToken, trimmedQuery)
+          : Promise.resolve({ items: [] }),
+      ])
+        .then(([catalogueResponse, profileResponse]) => {
           if (!isCurrent) {
             return;
           }
 
-          setSearchItems(deduplicateMediaItems(response.items));
+          setSearchItems(deduplicateMediaItems(catalogueResponse.items));
+          setSearchPeople(profileResponse.items);
           setSearchItemsQuery(trimmedQuery);
         })
         .catch((error) => {
           if (isCurrent) {
-            setSearchError(error instanceof Error ? error.message : 'Catalogue search failed.');
+            setSearchError(error instanceof Error ? error.message : 'Search failed.');
           }
         })
         .finally(() => {
@@ -155,12 +186,29 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
       isCurrent = false;
       clearTimeout(handle);
     };
-  }, [isSearching, searchRevision, searchType, trimmedQuery]);
+  }, [firebaseIdToken, isSearching, searchRevision, searchType, trimmedQuery]);
 
   const openItem = useCallback((item: CatalogueSearchItem) => {
     navigation.navigate(item.mediaType === 'movie' ? 'FilmDetail' : 'SeriesDetail', {
       title: item.title,
       tmdbId: item.tmdbId,
+    });
+  }, [navigation]);
+  const openPerson = useCallback((person: ProfileSearchItem) => {
+    navigation.navigate('PublicProfile', {
+      profilePreview: {
+        avatarUrl: person.avatarUrl,
+        displayName: person.displayName,
+        handle: person.handle,
+      },
+      previewOwnProfile: person.id === currentUser?.id,
+      userId: person.id,
+    });
+  }, [currentUser?.id, navigation]);
+  const openDiscovery = useCallback((section: ExploreSection, mediaType: ExploreMediaType) => {
+    navigation.navigate('ExploreDiscovery', {
+      mediaType,
+      section,
     });
   }, [navigation]);
   const retryVisible = useCallback(() => {
@@ -209,11 +257,12 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
               onChangeText={setQuery}
               onFocus={() => setIsSearchFocused(true)}
               onSubmitEditing={Keyboard.dismiss}
-              placeholder="Search a film or series"
+              placeholder="Search for Movies, TV Shows or People"
               placeholderTextColor={colors.muted}
               returnKeyType="search"
               spellCheck={false}
               style={styles.searchInput}
+              textAlignVertical="center"
               value={query}
             />
             {query.length > 0 ? (
@@ -269,8 +318,8 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
               containerStyle={styles.sectionControl}
               onChange={setActiveSection}
               options={[
-                { label: 'Tendances', value: 'trending' },
-                { label: 'À venir', value: 'announced' },
+                { label: 'Trending', value: 'trending' },
+                { label: 'Coming soon', value: 'announced' },
               ]}
               value={activeSection}
             />
@@ -284,7 +333,9 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
               isLoading={isSearchLoading}
               items={visibleSearchItems}
               onOpen={openItem}
+              onOpenPerson={openPerson}
               onRetry={retryVisible}
+              people={visibleSearchPeople}
               searchType={searchType}
               viewState={viewState}
             />
@@ -293,9 +344,11 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
               activeSection={activeSection}
               error={sections.error}
               isInitialLoading={isVisibleLoading}
-              items={sectionItems[activeSection]}
+              movies={sectionItems[activeSection].movie}
               onOpen={openItem}
               onRetry={sections.retry}
+              onViewMore={openDiscovery}
+              series={sectionItems[activeSection].series}
               viewState={viewState}
             />
           )}
@@ -324,24 +377,37 @@ function DiscoveryComposition({
   activeSection,
   error,
   isInitialLoading,
-  items,
+  movies,
   onOpen,
   onRetry,
+  onViewMore,
+  series,
   viewState,
 }: {
   activeSection: ExploreSection;
   error: string | null;
   isInitialLoading: boolean;
-  items: CatalogueSearchItem[];
+  movies: readonly CatalogueSearchItem[];
   onOpen: (item: CatalogueSearchItem) => void;
   onRetry: () => void;
+  onViewMore: (section: ExploreSection, mediaType: ExploreMediaType) => void;
+  series: readonly CatalogueSearchItem[];
   viewState: ReturnType<typeof getExploreViewState>;
 }) {
+  const { getCachedMovie, getCachedSeries } = useCatalogueCache();
+  const featured = interleaveMediaItems(movies, series)[0];
+  const featuredDetails = featured
+    ? featured.mediaType === 'movie'
+      ? getCachedMovie(featured.tmdbId)
+      : getCachedSeries(featured.tmdbId)
+    : null;
+  const itemCount = movies.length + series.length;
+
   if (isInitialLoading) {
     return <InlineStatusBanner detail="Fetching current discovery picks." title={viewState.loadingLabel} tone="updating" />;
   }
 
-  if (error && items.length === 0) {
+  if (error && itemCount === 0) {
     return (
       <EmptyState body={error} title={viewState.errorTitle}>
         <Button label="Retry" onPress={onRetry} />
@@ -349,40 +415,81 @@ function DiscoveryComposition({
     );
   }
 
-  if (items.length === 0) {
+  if (!featured) {
     return <EmptyState body={viewState.emptyBody} title={viewState.emptyTitle} />;
   }
-
-  const featured = items[0];
-  const railItems = items.slice(1);
 
   return (
     <View style={styles.composition}>
       <ExploreFeature
         item={featured}
+        logoAspectRatio={featuredDetails?.logoAspectRatio ?? null}
+        logoUrl={featuredDetails?.logoUrl ?? null}
         onPress={() => onOpen(featured)}
-        showReleaseAlert={activeSection === 'announced'}
+        section={activeSection}
       />
-      {railItems.length > 0 ? (
-        <View style={styles.section}>
-          <Text accessibilityRole="header" style={styles.sectionTitle}>{viewState.title}</Text>
-          <ScrollView
-            contentContainerStyle={styles.rail}
-            horizontal
-            nestedScrollEnabled
-            showsHorizontalScrollIndicator={false}
-          >
-            {railItems.map((item) => (
-              <ExploreMediaCard
-                item={item}
-                key={`${item.mediaType}:${item.tmdbId}`}
-                onPress={() => onOpen(item)}
-                showReleaseAlert={activeSection === 'announced'}
-              />
-            ))}
-          </ScrollView>
-        </View>
-      ) : null}
+      <DiscoveryRail
+        items={movies.filter((item) => item !== featured)}
+        mediaType="movie"
+        onOpen={onOpen}
+        onViewMore={() => onViewMore(activeSection, 'movie')}
+        showReleaseAlert={activeSection === 'announced'}
+        title="Movies"
+      />
+      <DiscoveryRail
+        items={series.filter((item) => item !== featured)}
+        mediaType="series"
+        onOpen={onOpen}
+        onViewMore={() => onViewMore(activeSection, 'series')}
+        showReleaseAlert={activeSection === 'announced'}
+        title="TV Shows"
+      />
+    </View>
+  );
+}
+
+function DiscoveryRail({
+  items,
+  mediaType,
+  onOpen,
+  onViewMore,
+  showReleaseAlert,
+  title,
+}: {
+  items: readonly CatalogueSearchItem[];
+  mediaType: ExploreMediaType;
+  onOpen: (item: CatalogueSearchItem) => void;
+  onViewMore: () => void;
+  showReleaseAlert: boolean;
+  title: string;
+}) {
+  return (
+    <View style={styles.section}>
+      <SectionHeader
+        actionAccessibilityLabel={`View more ${title.toLowerCase()}`}
+        actionLabel="View more"
+        onActionPress={onViewMore}
+        title={title}
+      />
+      {items.length > 0 ? (
+        <ScrollView
+          contentContainerStyle={styles.rail}
+          horizontal
+          nestedScrollEnabled
+          showsHorizontalScrollIndicator={false}
+        >
+          {items.map((item) => (
+            <ExploreMediaCard
+              item={item}
+              key={`${item.mediaType}:${item.tmdbId}`}
+              onPress={() => onOpen(item)}
+              showReleaseAlert={showReleaseAlert}
+            />
+          ))}
+        </ScrollView>
+      ) : (
+        <Text style={styles.emptySection}>No {mediaType === 'movie' ? 'movies' : 'TV shows'} available.</Text>
+      )}
     </View>
   );
 }
@@ -392,7 +499,9 @@ function SearchComposition({
   isLoading,
   items,
   onOpen,
+  onOpenPerson,
   onRetry,
+  people,
   searchType,
   viewState,
 }: {
@@ -400,17 +509,20 @@ function SearchComposition({
   isLoading: boolean;
   items: readonly CatalogueSearchItem[];
   onOpen: (item: CatalogueSearchItem) => void;
+  onOpenPerson: (person: ProfileSearchItem) => void;
   onRetry: () => void;
+  people: readonly ProfileSearchItem[];
   searchType: CatalogueSearchType;
   viewState: ReturnType<typeof getExploreViewState>;
 }) {
-  const title = searchType === 'movie' ? 'Films' : searchType === 'series' ? 'Series' : 'Results';
+  const title = searchType === 'movie' ? 'Movies' : searchType === 'series' ? 'TV Shows' : 'Results';
+  const resultCount = items.length + people.length;
 
-  if (isLoading && items.length === 0) {
+  if (isLoading && resultCount === 0) {
     return <InlineStatusBanner title={viewState.loadingLabel} tone="updating" />;
   }
 
-  if (error && items.length === 0) {
+  if (error && resultCount === 0) {
     return (
       <EmptyState body={error} title={viewState.errorTitle}>
         <Button label="Retry search" onPress={onRetry} />
@@ -418,13 +530,14 @@ function SearchComposition({
     );
   }
 
-  if (items.length === 0) {
+  if (resultCount === 0) {
     return <EmptyState body={viewState.emptyBody} title={viewState.emptyTitle} />;
   }
 
   return (
     <View style={styles.composition}>
       <SearchGroup items={items} onOpen={onOpen} title={title} />
+      <PeopleSearchGroup items={people} onOpen={onOpenPerson} />
     </View>
   );
 }
@@ -461,13 +574,18 @@ function SearchGroup({
 
 function ExploreFeature({
   item,
+  logoAspectRatio,
+  logoUrl,
   onPress,
-  showReleaseAlert,
+  section,
 }: {
   item: CatalogueSearchItem;
+  logoAspectRatio: number | null;
+  logoUrl: string | null;
   onPress: () => void;
-  showReleaseAlert: boolean;
+  section: ExploreSection;
 }) {
+  const showReleaseAlert = section === 'announced';
   const releaseDate = formatFeatureDate(item.releaseDate);
   const mediaTypeLabel = item.mediaType === 'movie' ? 'Film' : 'Series';
   const hasSecondaryMetadata = showReleaseAlert ? releaseDate !== null : item.voteAverage !== null;
@@ -475,8 +593,27 @@ function ExploreFeature({
     <>
       <View style={styles.featureScrim} />
       <View style={styles.featureCopy}>
-        <Text style={styles.featureEyebrow}>{showReleaseAlert ? 'Coming soon' : 'Watchly discovery'}</Text>
-        <Text accessibilityRole="header" numberOfLines={2} style={styles.featureTitle}>{item.title}</Text>
+        <Text style={styles.featureEyebrow}>{showReleaseAlert ? 'Coming soon' : 'Trending now'}</Text>
+        {logoUrl ? (
+          <View
+            accessibilityLabel={item.title}
+            accessibilityRole="header"
+            accessible
+            style={styles.featureLogoFrame}
+          >
+            <Image
+              accessibilityIgnoresInvertColors
+              accessible={false}
+              resizeMode="contain"
+              source={{ uri: logoUrl }}
+              style={[styles.featureLogo, { aspectRatio: logoAspectRatio ?? 3 }]}
+            />
+          </View>
+        ) : (
+          <Text accessibilityRole="header" numberOfLines={2} style={styles.featureTitle}>
+            {item.title}
+          </Text>
+        )}
         <View style={styles.featureMetaRow}>
           {showReleaseAlert ? <CalendarDays color={colors.textMuted} size={14} strokeWidth={2} /> : null}
           <Text style={styles.featureMeta}>{mediaTypeLabel}</Text>
@@ -523,6 +660,47 @@ function ExploreFeature({
   );
 }
 
+function PeopleSearchGroup({
+  items,
+  onOpen,
+}: {
+  items: readonly ProfileSearchItem[];
+  onOpen: (item: ProfileSearchItem) => void;
+}) {
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <View style={styles.section}>
+      <Text accessibilityRole="header" style={styles.sectionTitle}>People</Text>
+      <View>
+        {items.map((item, index) => (
+          <Pressable
+            accessibilityHint="Opens this Watchly profile."
+            accessibilityLabel={`Open ${item.displayName}, @${item.handle}`}
+            accessibilityRole="button"
+            key={item.id}
+            onPress={() => onOpen(item)}
+            style={({ pressed }) => [
+              styles.personRow,
+              index < items.length - 1 ? styles.personRowDivider : null,
+              pressed ? styles.pressed : null,
+            ]}
+          >
+            <UserAvatar avatarUrl={item.avatarUrl} displayName={item.displayName} size={48} />
+            <View style={styles.personCopy}>
+              <Text numberOfLines={1} style={styles.personName}>{item.displayName}</Text>
+              <Text numberOfLines={1} style={styles.personMeta}>@{item.handle}</Text>
+            </View>
+            <ChevronRight color={colors.textSubtle} size={19} strokeWidth={2} />
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function formatFeatureDate(value: string | null) {
   if (!value) {
     return 'Date to be announced';
@@ -549,6 +727,11 @@ const styles = StyleSheet.create({
     paddingBottom: 110,
     paddingHorizontal: spacing.xl,
   },
+  emptySection: {
+    ...typography.body,
+    color: colors.textSubtle,
+    paddingVertical: spacing.lg,
+  },
   featureAlert: {
     position: 'absolute',
     right: spacing.sm,
@@ -573,6 +756,15 @@ const styles = StyleSheet.create({
   },
   featureImageBackground: {
     minHeight: 184,
+  },
+  featureLogo: {
+    height: '100%',
+    maxWidth: '100%',
+  },
+  featureLogoFrame: {
+    alignItems: 'flex-start',
+    height: 48,
+    width: '80%',
   },
   featureMeta: {
     ...typography.meta,
@@ -648,6 +840,31 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
   },
+  personCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  personMeta: {
+    ...typography.meta,
+    color: colors.textSubtle,
+    marginTop: 2,
+  },
+  personName: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  personRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.md,
+    minHeight: 68,
+    paddingVertical: spacing.sm,
+  },
+  personRowDivider: {
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
   pressed: {
     opacity: 0.76,
   },
@@ -688,9 +905,10 @@ const styles = StyleSheet.create({
     width: 24,
   },
   searchInput: {
-    ...typography.body,
     color: colors.text,
     flex: 1,
+    fontSize: typography.body.fontSize,
+    letterSpacing: typography.body.letterSpacing,
     minWidth: 0,
     paddingVertical: spacing.sm,
   },

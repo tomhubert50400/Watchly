@@ -6,7 +6,7 @@ import { setMemoryResource } from '../cache/memoryResourceCache';
 type CatalogueCacheContextValue = {
   getCachedMovie: (tmdbId: number) => MovieDetails | null;
   getCachedSeries: (tmdbId: number) => SeriesDetails | null;
-  preloadCatalogueItems: (items: { contentType: WatchlistContentType; tmdbId: number }[]) => void;
+  preloadCatalogueItems: (items: { contentType: WatchlistContentType; tmdbId: number }[]) => Promise<void>;
   refreshMovie: (tmdbId: number) => Promise<MovieDetails>;
   refreshSeries: (tmdbId: number) => Promise<SeriesDetails>;
 };
@@ -30,7 +30,7 @@ export function CatalogueCacheProvider({ children }: PropsWithChildren) {
     const request = getMovieDetails(tmdbId)
       .then((response) => {
         setMemoryResource(
-          `watchly:public:catalogue:movie:${tmdbId}`,
+          `watchly:public:catalogue:movie:${tmdbId}:v3`,
           response.item,
           new Date().toISOString(),
         );
@@ -57,7 +57,7 @@ export function CatalogueCacheProvider({ children }: PropsWithChildren) {
     const request = getSeriesDetails(tmdbId)
       .then((response) => {
         setMemoryResource(
-          `watchly:public:catalogue:series:${tmdbId}`,
+          `watchly:public:catalogue:series:${tmdbId}:v3`,
           response.item,
           new Date().toISOString(),
         );
@@ -75,17 +75,16 @@ export function CatalogueCacheProvider({ children }: PropsWithChildren) {
   }, []);
 
   const preloadCatalogueItems = useCallback(
-    (items: { contentType: WatchlistContentType; tmdbId: number }[]) => {
+    async (items: { contentType: WatchlistContentType; tmdbId: number }[]) => {
       const uniqueItems = dedupeCatalogueItems(items).slice(0, MAX_PRELOAD_ITEMS);
 
-      uniqueItems.forEach((item) => {
+      await Promise.all(uniqueItems.map((item) => {
         if (item.contentType === 'movie') {
-          void refreshMovie(item.tmdbId).catch(() => undefined);
-          return;
+          return refreshMovie(item.tmdbId).catch(() => undefined);
         }
 
-        void refreshSeries(item.tmdbId).catch(() => undefined);
-      });
+        return refreshSeries(item.tmdbId).catch(() => undefined);
+      }));
     },
     [refreshMovie, refreshSeries],
   );

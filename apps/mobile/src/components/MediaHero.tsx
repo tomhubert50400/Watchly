@@ -1,16 +1,21 @@
 import { ReactNode } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
-import { colors, shadows, spacing, typography } from '../design/tokens';
-import { mediaHeroFadeColors } from './mediaHeroGradient';
-import { MediaPoster } from './MediaPoster';
+import { Image, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import Svg, {
+  Defs,
+  LinearGradient as SvgLinearGradient,
+  Rect,
+  Stop,
+} from 'react-native-svg';
+import { colors, spacing } from '../design/tokens';
+import { mediaHeroGradientStops } from './mediaHeroGradient';
 
 type MediaHeroProps = {
   actionAccessory?: ReactNode;
   actions?: ReactNode;
   backdropUrl: string | null;
   children?: ReactNode;
-  eyebrow?: string;
-  posterAccessibilityLabel?: string;
+  logoAspectRatio?: number | null;
+  logoUrl?: string | null;
   posterUrl: string | null;
   title: string;
 };
@@ -20,45 +25,93 @@ export function MediaHero({
   actions,
   backdropUrl,
   children,
-  eyebrow,
-  posterAccessibilityLabel,
+  logoAspectRatio,
+  logoUrl,
   posterUrl,
   title,
 }: MediaHeroProps) {
+  const { width } = useWindowDimensions();
+  const artworkUrl = backdropUrl ?? posterUrl;
+  const heroHeight = Math.min(Math.max(width * 1.08, 390), 480);
+
   return (
     <View style={styles.container}>
-      <View style={styles.backdropFrame}>
-        {backdropUrl ? (
+      <View style={[styles.backdropFrame, { height: heroHeight }]}>
+        {artworkUrl ? (
           <Image
             accessibilityIgnoresInvertColors
-            accessibilityLabel={`${title} backdrop`}
-            source={{ uri: backdropUrl }}
+            accessibilityLabel={`${title} artwork`}
+            resizeMode="cover"
+            source={{ uri: artworkUrl }}
             style={styles.backdrop}
           />
         ) : (
           <View style={styles.backdropPlaceholder} />
         )}
         <View style={styles.scrim} />
+        <View style={styles.tint} />
         <View pointerEvents="none" style={styles.backdropFade}>
-          {mediaHeroFadeColors.map((backgroundColor) => (
-            <View key={backgroundColor} style={[styles.fadeBand, { backgroundColor }]} />
-          ))}
+          <Svg height="100%" preserveAspectRatio="none" viewBox="0 0 1 1" width="100%">
+            <Defs>
+              <SvgLinearGradient id="mediaHeroFade" x1="0" x2="0" y1="0" y2="1">
+                {mediaHeroGradientStops.map(({ offset, opacity }) => (
+                  <Stop
+                    key={offset}
+                    offset={offset}
+                    stopColor={colors.background}
+                    stopOpacity={opacity}
+                  />
+                ))}
+              </SvgLinearGradient>
+            </Defs>
+            <Rect fill="url(#mediaHeroFade)" height="1" width="1" />
+          </Svg>
         </View>
-      </View>
-      <View style={styles.identityRow}>
-        <MediaPoster
-          accessibilityLabel={posterAccessibilityLabel}
-          posterUrl={posterUrl}
-          style={styles.poster}
-        />
-        <View style={styles.copy}>
-          {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
-          <Text style={styles.title}>{title}</Text>
-          {children}
+        <View style={styles.identity}>
+          <View style={styles.copy}>
+            {logoUrl ? (
+              <View
+                accessibilityLabel={title}
+                accessibilityRole="header"
+                accessible
+                style={styles.logoFrame}
+              >
+                <Image
+                  accessibilityIgnoresInvertColors
+                  accessible={false}
+                  resizeMode="contain"
+                  source={{ uri: logoUrl }}
+                  style={[styles.logo, { aspectRatio: logoAspectRatio ?? 3 }]}
+                />
+              </View>
+            ) : (
+              <Text
+                accessibilityRole="header"
+                minimumFontScale={0.72}
+                numberOfLines={2}
+                style={styles.title}
+              >
+                {title}
+              </Text>
+            )}
+            {children}
+          </View>
         </View>
       </View>
       {actions || actionAccessory ? (
         <View style={styles.actionBar}>
+          <View pointerEvents="none" style={styles.actionBarFade}>
+            <Svg height="100%" preserveAspectRatio="none" viewBox="0 0 1 1" width="100%">
+              <Defs>
+                <SvgLinearGradient id="mediaHeroActionFade" x1="0" x2="0" y1="0" y2="1">
+                  <Stop offset="0" stopColor={colors.background} stopOpacity={1} />
+                  <Stop offset="0.48" stopColor={colors.background} stopOpacity={0.72} />
+                  <Stop offset="1" stopColor={colors.background} stopOpacity={0} />
+                </SvgLinearGradient>
+              </Defs>
+              <Rect fill="url(#mediaHeroActionFade)" height="1" width="1" />
+            </Svg>
+          </View>
           <View style={styles.actions}>{actions}</View>
           {actionAccessory ? <View style={styles.accessory}>{actionAccessory}</View> : null}
         </View>
@@ -71,14 +124,20 @@ const styles = StyleSheet.create({
   accessory: {
     alignItems: 'center',
     alignSelf: 'stretch',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
   },
   actionBar: {
     alignItems: 'center',
+    backgroundColor: 'transparent',
     flexDirection: 'row',
     gap: spacing.sm,
-    minHeight: 54,
+    minHeight: 60,
+    paddingBottom: spacing.sm,
     paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+  },
+  actionBarFade: {
+    ...StyleSheet.absoluteFillObject,
   },
   actions: {
     alignItems: 'center',
@@ -93,7 +152,6 @@ const styles = StyleSheet.create({
   },
   backdropFrame: {
     backgroundColor: colors.panelSoft,
-    height: 238,
     overflow: 'hidden',
   },
   backdropPlaceholder: {
@@ -101,50 +159,54 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   backdropFade: {
-    bottom: 0,
-    height: 158,
+    bottom: -1,
+    height: 260,
     left: 0,
     position: 'absolute',
     right: 0,
   },
   container: {
-    marginBottom: spacing.sm,
-  },
-  copy: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    minWidth: 0,
-    paddingBottom: spacing.sm,
-  },
-  eyebrow: {
-    ...typography.eyebrow,
-    color: colors.accentText,
+    backgroundColor: 'transparent',
     marginBottom: spacing.xs,
   },
-  fadeBand: {
-    flex: 1,
+  copy: {
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    minWidth: 0,
+    width: '100%',
   },
-  identityRow: {
-    alignItems: 'flex-end',
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: -55,
-    paddingHorizontal: spacing.xl,
+  identity: {
+    alignItems: 'center',
+    bottom: spacing.lg,
+    left: spacing.xl,
+    position: 'absolute',
+    right: spacing.xl,
   },
-  poster: {
-    ...shadows.raised,
-    height: 156,
-    width: 104,
+  logo: {
+    height: '100%',
+    maxWidth: '100%',
+  },
+  logoFrame: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    height: 86,
+    maxWidth: 330,
+    width: '100%',
   },
   scrim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlay,
+    backgroundColor: 'rgba(9, 12, 19, 0.24)',
+  },
+  tint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.accentSoft,
   },
   title: {
     color: colors.text,
-    fontSize: 29,
-    fontWeight: '800',
-    letterSpacing: -0.6,
-    lineHeight: 33,
+    fontSize: 40,
+    fontWeight: '900',
+    letterSpacing: -1.1,
+    lineHeight: 44,
+    textAlign: 'center',
   },
 });

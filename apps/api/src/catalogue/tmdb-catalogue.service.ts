@@ -14,11 +14,16 @@ import {
   isSpotlightActive,
 } from './catalogue-spotlight';
 
+const TMDB_LANGUAGE = 'en-US';
+const TMDB_IMAGE_LANGUAGES = 'en,null';
+const CATALOGUE_SPOTLIGHT_ID = 'home-en-v1';
+
 export type CatalogueSearchType = 'all' | 'movie' | 'series';
 
 type TmdbSearchResult = {
   backdrop_path?: string | null;
   first_air_date?: string;
+  genre_ids?: number[];
   id: number;
   media_type?: string;
   name?: string;
@@ -34,31 +39,81 @@ type TmdbSearchResponse = {
   results?: TmdbSearchResult[];
 };
 
+type TmdbGenreResponse = {
+  genres?: { id: number; name: string }[];
+};
+
+type TmdbFindResponse = {
+  movie_results?: TmdbSearchResult[];
+  tv_results?: TmdbSearchResult[];
+};
+
+type TmdbLogoImage = {
+  file_path?: string | null;
+  height?: number;
+  iso_639_1?: string | null;
+  vote_average?: number;
+  vote_count?: number;
+  width?: number;
+};
+
 type TmdbMovieDetailsResponse = {
   backdrop_path?: string | null;
+  budget?: number;
+  credits?: {
+    cast?: TmdbCredit[];
+    crew?: TmdbCredit[];
+  };
   genres?: { id: number; name: string }[];
   id: number;
+  images?: {
+    logos?: TmdbLogoImage[];
+  };
+  keywords?: { keywords?: TmdbKeyword[] };
+  original_title?: string;
   overview?: string;
   poster_path?: string | null;
+  production_companies?: TmdbProductionCompany[];
+  recommendations?: { results?: TmdbSearchResult[] };
   release_date?: string;
+  revenue?: number;
   runtime?: number | null;
   status?: string;
   tagline?: string;
   title?: string;
+  videos?: { results?: TmdbVideo[] };
   vote_average?: number;
 };
 
 type TmdbSeriesDetailsResponse = {
   backdrop_path?: string | null;
+  created_by?: {
+    id: number;
+    name?: string;
+    profile_path?: string | null;
+  }[];
+  credits?: {
+    cast?: TmdbCredit[];
+    crew?: TmdbCredit[];
+  };
   first_air_date?: string;
   genres?: { id: number; name: string }[];
   id: number;
+  images?: {
+    logos?: TmdbLogoImage[];
+  };
   in_production?: boolean;
+  keywords?: { results?: TmdbKeyword[] };
+  last_air_date?: string;
   name?: string;
+  networks?: TmdbProductionCompany[];
   number_of_episodes?: number;
   number_of_seasons?: number;
+  original_name?: string;
   overview?: string;
   poster_path?: string | null;
+  production_companies?: TmdbProductionCompany[];
+  recommendations?: { results?: TmdbSearchResult[] };
   seasons?: {
     air_date?: string | null;
     episode_count?: number;
@@ -69,6 +124,7 @@ type TmdbSeriesDetailsResponse = {
   }[];
   status?: string;
   tagline?: string;
+  videos?: { results?: TmdbVideo[] };
   vote_average?: number;
 };
 
@@ -94,6 +150,11 @@ type TmdbSeasonDetailsResponse = {
 
 type TmdbEpisodeDetailsResponse = {
   air_date?: string | null;
+  credits?: {
+    cast?: TmdbEpisodeCredit[];
+    crew?: TmdbEpisodeCrewCredit[];
+    guest_stars?: TmdbEpisodeCredit[];
+  };
   episode_number: number;
   id: number;
   name?: string;
@@ -102,6 +163,55 @@ type TmdbEpisodeDetailsResponse = {
   season_number: number;
   still_path?: string | null;
   vote_average?: number;
+};
+
+type TmdbCredit = {
+  character?: string;
+  department?: string;
+  id: number;
+  job?: string;
+  name?: string;
+  order?: number;
+  profile_path?: string | null;
+};
+
+type TmdbKeyword = {
+  id: number;
+  name?: string;
+};
+
+type TmdbProductionCompany = {
+  id: number;
+  logo_path?: string | null;
+  name?: string;
+};
+
+type TmdbVideo = {
+  id: string;
+  key?: string;
+  name?: string;
+  official?: boolean;
+  published_at?: string;
+  site?: string;
+  type?: string;
+};
+
+type TmdbEpisodeCredit = {
+  character?: string;
+  id: number;
+  name?: string;
+  order?: number;
+  original_name?: string;
+  profile_path?: string | null;
+};
+
+type TmdbEpisodeCrewCredit = {
+  department?: string;
+  id: number;
+  job?: string;
+  name?: string;
+  original_name?: string;
+  profile_path?: string | null;
 };
 
 type TmdbWatchProvider = {
@@ -146,6 +256,13 @@ export type CatalogueSpotlightItem = CatalogueSearchItem & {
   backdropUrl: string;
 };
 
+export type CatalogueDiscoveryItem = CatalogueSearchItem & {
+  genres: string[];
+};
+
+export type CatalogueDiscoveryMediaType = 'movie' | 'series';
+export type CatalogueDiscoverySection = 'announced' | 'trending';
+
 type StoredCatalogueSpotlight = {
   backdropUrl: string;
   expiresAt: Date;
@@ -160,34 +277,85 @@ type StoredCatalogueSpotlight = {
   voteAverage: number | null;
 };
 
+export type CatalogueCastMember = {
+  character: string | null;
+  id: number;
+  name: string;
+  profileUrl: string | null;
+};
+
+export type CatalogueCompany = {
+  id: number;
+  logoUrl: string | null;
+  name: string;
+};
+
+export type CatalogueRelatedItem = {
+  mediaType: 'movie' | 'series';
+  posterUrl: string | null;
+  releaseDate: string | null;
+  title: string;
+  tmdbId: number;
+};
+
+export type CatalogueVideo = {
+  id: string;
+  key: string;
+  name: string;
+  publishedAt: string | null;
+  type: string;
+};
+
 export type MovieDetails = {
   backdropUrl: string | null;
+  budget: number | null;
+  cast: CatalogueCastMember[];
+  directors: string[];
   displayRating: DisplayRating | null;
   genres: string[];
   id: string;
+  logoAspectRatio: number | null;
+  logoUrl: string | null;
   mediaType: 'movie';
+  keywords: string[];
+  originalTitle: string | null;
   overview: string;
   posterUrl: string | null;
+  productionCompanies: CatalogueCompany[];
+  recommendations: CatalogueRelatedItem[];
   releaseDate: string | null;
+  revenue: number | null;
   runtimeMinutes: number | null;
   status: string | null;
   tagline: string | null;
   title: string;
   tmdbId: number;
+  videos: CatalogueVideo[];
   voteAverage: number | null;
+  writers: string[];
 };
 
 export type SeriesDetails = {
   backdropUrl: string | null;
+  cast: CatalogueCastMember[];
+  createdBy: string[];
   firstAirDate: string | null;
   genres: string[];
   id: string;
   inProduction: boolean;
+  logoAspectRatio: number | null;
+  logoUrl: string | null;
   mediaType: 'series';
+  keywords: string[];
+  lastAirDate: string | null;
+  networks: CatalogueCompany[];
   numberOfEpisodes: number | null;
   numberOfSeasons: number | null;
+  originalTitle: string | null;
   overview: string;
   posterUrl: string | null;
+  productionCompanies: CatalogueCompany[];
+  recommendations: CatalogueRelatedItem[];
   seasons: {
     airDate: string | null;
     episodeCount: number | null;
@@ -200,6 +368,7 @@ export type SeriesDetails = {
   tagline: string | null;
   title: string;
   tmdbId: number;
+  videos: CatalogueVideo[];
   voteAverage: number | null;
 };
 
@@ -229,6 +398,8 @@ export type SeasonDetails = {
 
 export type EpisodeDetails = {
   airDate: string | null;
+  cast: EpisodeCastMember[];
+  crew: EpisodeCrewMember[];
   episodeNumber: number;
   id: string;
   mediaType: 'episode';
@@ -240,6 +411,20 @@ export type EpisodeDetails = {
   title: string;
   tmdbId: number;
   voteAverage: number | null;
+};
+
+export type EpisodeCastMember = {
+  character: string | null;
+  id: number;
+  name: string;
+  profileUrl: string | null;
+};
+
+export type EpisodeCrewMember = {
+  id: number;
+  jobs: string[];
+  name: string;
+  profileUrl: string | null;
 };
 
 export type StreamingAvailability = {
@@ -264,12 +449,58 @@ export class TmdbCatalogueService {
   private readonly watchlyRatingThreshold = 100;
   private readonly imageBaseUrl = 'https://image.tmdb.org/t/p/w342';
   private readonly backdropBaseUrl = 'https://image.tmdb.org/t/p/w780';
+  private readonly logoBaseUrl = 'https://image.tmdb.org/t/p/w500';
   private readonly tmdbBaseUrl = 'https://api.themoviedb.org/3';
 
   constructor(
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
   ) {}
+
+  async findByImdbId(imdbId: string) {
+    const accessToken = this.config.get<string>('TMDB_ACCESS_TOKEN');
+
+    if (!accessToken) {
+      throw new ServiceUnavailableException('TMDB_ACCESS_TOKEN is not configured.');
+    }
+
+    const endpoint = new URL(`${this.tmdbBaseUrl}/find/${encodeURIComponent(imdbId)}`);
+    endpoint.searchParams.set('external_source', 'imdb_id');
+    endpoint.searchParams.set('language', TMDB_LANGUAGE);
+
+    try {
+      const payload = await fetchWithTimeout(
+        endpoint,
+        {
+          headers: {
+            accept: 'application/json',
+            authorization: ['Bearer', accessToken].join(' '),
+          },
+        },
+        async (response) => {
+          if (!response.ok) {
+            throw new BadGatewayException('TMDB external ID request failed.');
+          }
+
+          return response.json() as Promise<TmdbFindResponse>;
+        },
+      );
+
+      return {
+        items: [
+          ...(payload.movie_results ?? []).map((item) => this.toCatalogueItem(item, 'movie')),
+          ...(payload.tv_results ?? []).map((item) => this.toCatalogueItem(item, 'series')),
+        ].filter((item): item is CatalogueSearchItem => Boolean(item)),
+        provider: 'tmdb' as const,
+      };
+    } catch (error) {
+      if (error instanceof BadGatewayException) {
+        throw error;
+      }
+
+      throw new BadGatewayException('Could not reach TMDB.');
+    }
+  }
 
   async search(query: string, type: CatalogueSearchType) {
     const accessToken = this.config.get<string>('TMDB_ACCESS_TOKEN');
@@ -328,7 +559,7 @@ export class TmdbCatalogueService {
 
   async trending() {
     const accessToken = this.getAccessToken();
-    const params = new URLSearchParams({ language: 'fr-FR' });
+    const params = new URLSearchParams({ language: TMDB_LANGUAGE });
     const endpoint = `${this.tmdbBaseUrl}/trending/movie/day?${params.toString()}`;
     const payload = await this.fetchTmdb<TmdbSearchResponse>(endpoint, accessToken, 'trending');
 
@@ -345,10 +576,18 @@ export class TmdbCatalogueService {
 
   async movieSections() {
     const accessToken = this.getAccessToken();
-    const trendingParams = new URLSearchParams({ language: 'fr-FR', page: '1' });
-    const weeklyTrendingParams = new URLSearchParams({ language: 'fr-FR', page: '1' });
+    const trendingParams = new URLSearchParams({ language: TMDB_LANGUAGE, page: '1' });
+    const weeklyTrendingParams = new URLSearchParams({ language: TMDB_LANGUAGE, page: '1' });
+    const seriesTrendingParams = new URLSearchParams({ language: TMDB_LANGUAGE, page: '1' });
+    const announcedSeriesParams = buildAnnouncedSeriesParams(1);
     const upcomingPages = [1, 2, 3, 4, 5];
-    const [trendingPayload, weeklyTrendingPayload, ...upcomingPayloads] = await Promise.all([
+    const [
+      trendingPayload,
+      weeklyTrendingPayload,
+      seriesTrendingPayload,
+      announcedSeriesPayload,
+      ...upcomingPayloads
+    ] = await Promise.all([
       this.fetchTmdb<TmdbSearchResponse>(
         `${this.tmdbBaseUrl}/trending/movie/day?${trendingParams.toString()}`,
         accessToken,
@@ -359,10 +598,20 @@ export class TmdbCatalogueService {
         accessToken,
         'weekly trending movies',
       ),
+      this.fetchTmdb<TmdbSearchResponse>(
+        `${this.tmdbBaseUrl}/trending/tv/day?${seriesTrendingParams.toString()}`,
+        accessToken,
+        'trending series',
+      ),
+      this.fetchTmdb<TmdbSearchResponse>(
+        `${this.tmdbBaseUrl}/discover/tv?${announcedSeriesParams.toString()}`,
+        accessToken,
+        'announced series',
+      ),
       ...upcomingPages.map((page) =>
         this.fetchTmdb<TmdbSearchResponse>(
           `${this.tmdbBaseUrl}/movie/upcoming?${new URLSearchParams({
-            language: 'fr-FR',
+            language: TMDB_LANGUAGE,
             page: String(page),
           }).toString()}`,
           accessToken,
@@ -380,6 +629,12 @@ export class TmdbCatalogueService {
         .map((item) => this.toCatalogueItem(item, 'movie'))
         .filter((item): item is CatalogueSearchItem => Boolean(item))
         .slice(0, 10),
+      announcedSeries: (announcedSeriesPayload.results ?? [])
+        .filter((item) => isAnnouncedReleaseDate(item.first_air_date))
+        .sort(compareAnnouncedCandidates)
+        .map((item) => this.toCatalogueItem(item, 'series'))
+        .filter((item): item is CatalogueSearchItem => Boolean(item))
+        .slice(0, 10),
       provider: 'tmdb',
       spotlight,
       trending: (trendingPayload.results ?? [])
@@ -388,12 +643,54 @@ export class TmdbCatalogueService {
         .filter((item) => isReleasedDate(item.releaseDate))
         .filter((item) => item.tmdbId !== spotlight?.tmdbId)
         .slice(0, 10),
+      trendingSeries: (seriesTrendingPayload.results ?? [])
+        .map((item) => this.toCatalogueItem(item, 'series'))
+        .filter((item): item is CatalogueSearchItem => Boolean(item))
+        .slice(0, 10),
+    };
+  }
+
+  async discovery(section: CatalogueDiscoverySection, mediaType: CatalogueDiscoveryMediaType) {
+    const accessToken = this.getAccessToken();
+    const tmdbMediaType = mediaType === 'series' ? 'tv' : 'movie';
+    const pages = [1, 2, 3];
+    const [genrePayload, ...pagePayloads] = await Promise.all([
+      this.fetchTmdb<TmdbGenreResponse>(
+        `${this.tmdbBaseUrl}/genre/${tmdbMediaType}/list?${new URLSearchParams({
+          language: TMDB_LANGUAGE,
+        }).toString()}`,
+        accessToken,
+        `${mediaType} genres`,
+      ),
+      ...pages.map((page) => this.fetchTmdb<TmdbSearchResponse>(
+        buildDiscoveryEndpoint(this.tmdbBaseUrl, section, mediaType, page),
+        accessToken,
+        `${section} ${mediaType}`,
+      )),
+    ]);
+    const genreNames = new Map((genrePayload.genres ?? []).map((genre) => [genre.id, genre.name]));
+    const candidates = deduplicateTmdbResults(pagePayloads.flatMap((payload) => payload.results ?? []));
+    const selectedCandidates = section === 'announced'
+      ? candidates
+          .filter((item) => isAnnouncedReleaseDate(item.release_date ?? item.first_air_date))
+          .sort(compareAnnouncedCandidates)
+      : candidates;
+
+    return {
+      items: selectedCandidates
+        .map((item) => this.toDiscoveryItem(item, mediaType, genreNames))
+        .filter((item): item is CatalogueDiscoveryItem => Boolean(item)),
+      provider: 'tmdb' as const,
     };
   }
 
   async getMovie(tmdbId: number) {
     const accessToken = this.getAccessToken();
-    const params = new URLSearchParams({ language: 'fr-FR' });
+    const params = new URLSearchParams({
+      append_to_response: 'images,credits,videos,keywords,recommendations',
+      include_image_language: TMDB_IMAGE_LANGUAGES,
+      language: TMDB_LANGUAGE,
+    });
     const endpoint = `${this.tmdbBaseUrl}/movie/${tmdbId}?${params.toString()}`;
     const payload = await this.fetchTmdb<TmdbMovieDetailsResponse>(endpoint, accessToken, 'movie details');
 
@@ -409,7 +706,11 @@ export class TmdbCatalogueService {
 
   async getSeries(tmdbId: number) {
     const accessToken = this.getAccessToken();
-    const params = new URLSearchParams({ language: 'fr-FR' });
+    const params = new URLSearchParams({
+      append_to_response: 'images,credits,videos,keywords,recommendations',
+      include_image_language: TMDB_IMAGE_LANGUAGES,
+      language: TMDB_LANGUAGE,
+    });
     const endpoint = `${this.tmdbBaseUrl}/tv/${tmdbId}?${params.toString()}`;
     const payload = await this.fetchTmdb<TmdbSeriesDetailsResponse>(endpoint, accessToken, 'series details');
 
@@ -425,7 +726,7 @@ export class TmdbCatalogueService {
 
   async getSeason(tmdbId: number, seasonNumber: number) {
     const accessToken = this.getAccessToken();
-    const params = new URLSearchParams({ language: 'fr-FR' });
+    const params = new URLSearchParams({ language: TMDB_LANGUAGE });
     const endpoint = `${this.tmdbBaseUrl}/tv/${tmdbId}/season/${seasonNumber}?${params.toString()}`;
     const payload = await this.fetchTmdb<TmdbSeasonDetailsResponse>(endpoint, accessToken, 'season details');
 
@@ -441,7 +742,10 @@ export class TmdbCatalogueService {
 
   async getEpisode(tmdbId: number, seasonNumber: number, episodeNumber: number) {
     const accessToken = this.getAccessToken();
-    const params = new URLSearchParams({ language: 'fr-FR' });
+    const params = new URLSearchParams({
+      append_to_response: 'credits',
+      language: TMDB_LANGUAGE,
+    });
     const endpoint = `${this.tmdbBaseUrl}/tv/${tmdbId}/season/${seasonNumber}/episode/${episodeNumber}?${params.toString()}`;
     const payload = await this.fetchTmdb<TmdbEpisodeDetailsResponse>(endpoint, accessToken, 'episode details');
 
@@ -488,7 +792,7 @@ export class TmdbCatalogueService {
   private buildSearchEndpoint(query: string, mediaType: 'movie' | 'series') {
     const params = new URLSearchParams({
       include_adult: 'false',
-      language: 'fr-FR',
+      language: TMDB_LANGUAGE,
       page: '1',
       query,
     });
@@ -565,7 +869,7 @@ export class TmdbCatalogueService {
       return await this.prisma.withConnectionRetry(() =>
         this.prisma.catalogueSpotlight.findUnique({
           where: {
-            id: 'home',
+            id: CATALOGUE_SPOTLIGHT_ID,
           },
         }),
       );
@@ -585,7 +889,7 @@ export class TmdbCatalogueService {
           create: {
             backdropUrl: spotlight.backdropUrl,
             expiresAt: getSpotlightExpiry(selectedAt),
-            id: 'home',
+            id: CATALOGUE_SPOTLIGHT_ID,
             overview: spotlight.overview,
             posterUrl: spotlight.posterUrl,
             releaseDate: spotlight.releaseDate,
@@ -606,7 +910,7 @@ export class TmdbCatalogueService {
             voteAverage: spotlight.voteAverage,
           },
           where: {
-            id: 'home',
+            id: CATALOGUE_SPOTLIGHT_ID,
           },
         }),
       );
@@ -733,36 +1037,62 @@ export class TmdbCatalogueService {
   }
 
   private toMovieDetails(item: TmdbMovieDetailsResponse, displayRating: DisplayRating | null): MovieDetails {
+    const logo = selectTmdbLogoAsset(item.images?.logos);
+
     return {
       backdropUrl: item.backdrop_path ? `${this.backdropBaseUrl}${item.backdrop_path}` : null,
+      budget: toPositiveNumber(item.budget),
+      cast: buildCatalogueCast(item.credits?.cast, this.imageBaseUrl),
+      directors: buildCrewNames(item.credits?.crew, ['Director']),
       displayRating,
       genres: item.genres?.map((genre) => genre.name).filter(Boolean) ?? [],
       id: `movie:${item.id}`,
+      logoAspectRatio: logo?.aspectRatio ?? null,
+      logoUrl: logo ? `${this.logoBaseUrl}${logo.path}` : null,
       mediaType: 'movie',
+      keywords: buildKeywords(item.keywords?.keywords),
+      originalTitle: item.original_title || null,
       overview: item.overview ?? '',
       posterUrl: item.poster_path ? `${this.imageBaseUrl}${item.poster_path}` : null,
+      productionCompanies: buildCompanies(item.production_companies, this.imageBaseUrl),
+      recommendations: buildRecommendations(item.recommendations?.results, 'movie', this.imageBaseUrl),
       releaseDate: item.release_date ?? null,
+      revenue: toPositiveNumber(item.revenue),
       runtimeMinutes: typeof item.runtime === 'number' ? item.runtime : null,
       status: item.status ?? null,
       tagline: item.tagline || null,
       title: item.title ?? '',
       tmdbId: item.id,
+      videos: buildVideos(item.videos?.results),
       voteAverage: typeof item.vote_average === 'number' ? item.vote_average : null,
+      writers: buildCrewNames(item.credits?.crew, ['Screenplay', 'Story', 'Writer']),
     };
   }
 
   private toSeriesDetails(item: TmdbSeriesDetailsResponse): SeriesDetails {
+    const logo = selectTmdbLogoAsset(item.images?.logos);
+
     return {
       backdropUrl: item.backdrop_path ? `${this.backdropBaseUrl}${item.backdrop_path}` : null,
+      cast: buildCatalogueCast(item.credits?.cast, this.imageBaseUrl),
+      createdBy: uniqueNames(item.created_by),
       firstAirDate: item.first_air_date ?? null,
       genres: item.genres?.map((genre) => genre.name).filter(Boolean) ?? [],
       id: `series:${item.id}`,
       inProduction: Boolean(item.in_production),
+      logoAspectRatio: logo?.aspectRatio ?? null,
+      logoUrl: logo ? `${this.logoBaseUrl}${logo.path}` : null,
       mediaType: 'series',
+      keywords: buildKeywords(item.keywords?.results),
+      lastAirDate: item.last_air_date ?? null,
+      networks: buildCompanies(item.networks, this.imageBaseUrl),
       numberOfEpisodes: typeof item.number_of_episodes === 'number' ? item.number_of_episodes : null,
       numberOfSeasons: typeof item.number_of_seasons === 'number' ? item.number_of_seasons : null,
+      originalTitle: item.original_name || null,
       overview: item.overview ?? '',
       posterUrl: item.poster_path ? `${this.imageBaseUrl}${item.poster_path}` : null,
+      productionCompanies: buildCompanies(item.production_companies, this.imageBaseUrl),
+      recommendations: buildRecommendations(item.recommendations?.results, 'series', this.imageBaseUrl),
       seasons:
         item.seasons?.map((season) => ({
           airDate: season.air_date ?? null,
@@ -776,6 +1106,7 @@ export class TmdbCatalogueService {
       tagline: item.tagline || null,
       title: item.name ?? '',
       tmdbId: item.id,
+      videos: buildVideos(item.videos?.results),
       voteAverage: typeof item.vote_average === 'number' ? item.vote_average : null,
     };
   }
@@ -810,6 +1141,8 @@ export class TmdbCatalogueService {
   private toEpisodeDetails(seriesTmdbId: number, item: TmdbEpisodeDetailsResponse): EpisodeDetails {
     return {
       airDate: item.air_date ?? null,
+      cast: buildEpisodeCast(item.credits, this.imageBaseUrl),
+      crew: buildEpisodeCrew(item.credits, this.imageBaseUrl),
       episodeNumber: item.episode_number,
       id: `series:${seriesTmdbId}:season:${item.season_number}:episode:${item.episode_number}`,
       mediaType: 'episode',
@@ -853,6 +1186,168 @@ export class TmdbCatalogueService {
         name: provider.provider_name ?? `Provider ${provider.provider_id}`,
       }));
   }
+
+  private toDiscoveryItem(
+    item: TmdbSearchResult,
+    mediaType: CatalogueDiscoveryMediaType,
+    genreNames: ReadonlyMap<number, string>,
+  ): CatalogueDiscoveryItem | null {
+    const catalogueItem = this.toCatalogueItem(item, mediaType);
+
+    if (!catalogueItem) {
+      return null;
+    }
+
+    return {
+      ...catalogueItem,
+      genres: [...new Set(item.genre_ids ?? [])]
+        .map((genreId) => genreNames.get(genreId))
+        .filter((genre): genre is string => Boolean(genre)),
+    };
+  }
+}
+
+function buildCatalogueCast(
+  credits: TmdbCredit[] | undefined,
+  imageBaseUrl: string,
+): CatalogueCastMember[] {
+  return (credits ?? [])
+    .filter((credit) => credit.name)
+    .sort((left, right) => (left.order ?? Number.MAX_SAFE_INTEGER) - (right.order ?? Number.MAX_SAFE_INTEGER))
+    .slice(0, 12)
+    .map((credit) => ({
+      character: credit.character || null,
+      id: credit.id,
+      name: credit.name ?? '',
+      profileUrl: credit.profile_path ? `${imageBaseUrl}${credit.profile_path}` : null,
+    }));
+}
+
+function buildCompanies(
+  companies: TmdbProductionCompany[] | undefined,
+  imageBaseUrl: string,
+): CatalogueCompany[] {
+  const seen = new Set<number>();
+
+  return (companies ?? []).flatMap((company) => {
+    if (!company.name || seen.has(company.id)) {
+      return [];
+    }
+
+    seen.add(company.id);
+    return [{
+      id: company.id,
+      logoUrl: company.logo_path ? `${imageBaseUrl}${company.logo_path}` : null,
+      name: company.name,
+    }];
+  }).slice(0, 6);
+}
+
+function buildCrewNames(credits: TmdbCredit[] | undefined, jobs: string[]) {
+  const acceptedJobs = new Set(jobs);
+  const seen = new Set<string>();
+
+  return (credits ?? []).flatMap((credit) => {
+    const name = credit.name?.trim();
+
+    if (!name || !credit.job || !acceptedJobs.has(credit.job) || seen.has(name)) {
+      return [];
+    }
+
+    seen.add(name);
+    return [name];
+  }).slice(0, 4);
+}
+
+function buildKeywords(keywords: TmdbKeyword[] | undefined) {
+  const seen = new Set<string>();
+
+  return (keywords ?? []).flatMap((keyword) => {
+    const name = keyword.name?.trim();
+    const key = name?.toLocaleLowerCase('en-US');
+
+    if (!name || !key || seen.has(key)) {
+      return [];
+    }
+
+    seen.add(key);
+    return [name];
+  }).slice(0, 12);
+}
+
+function buildRecommendations(
+  items: TmdbSearchResult[] | undefined,
+  mediaType: 'movie' | 'series',
+  imageBaseUrl: string,
+): CatalogueRelatedItem[] {
+  const seen = new Set<number>();
+
+  return (items ?? []).flatMap((item) => {
+    const title = mediaType === 'movie' ? item.title : item.name;
+
+    if (!title || seen.has(item.id)) {
+      return [];
+    }
+
+    seen.add(item.id);
+    return [{
+      mediaType,
+      posterUrl: item.poster_path ? `${imageBaseUrl}${item.poster_path}` : null,
+      releaseDate: (mediaType === 'movie' ? item.release_date : item.first_air_date) ?? null,
+      title,
+      tmdbId: item.id,
+    }];
+  }).slice(0, 12);
+}
+
+function buildVideos(videos: TmdbVideo[] | undefined): CatalogueVideo[] {
+  const seen = new Set<string>();
+
+  return (videos ?? [])
+    .filter((video) => video.site === 'YouTube' && (video.type === 'Trailer' || video.type === 'Teaser'))
+    .sort((left, right) => {
+      const officialDifference = Number(Boolean(right.official)) - Number(Boolean(left.official));
+
+      if (officialDifference !== 0) {
+        return officialDifference;
+      }
+
+      return Number(right.type === 'Trailer') - Number(left.type === 'Trailer');
+    })
+    .flatMap((video) => {
+      if (!video.key || !video.name || seen.has(video.key)) {
+        return [];
+      }
+
+      seen.add(video.key);
+      return [{
+        id: video.id,
+        key: video.key,
+        name: video.name,
+        publishedAt: video.published_at ?? null,
+        type: video.type ?? 'Video',
+      }];
+    })
+    .slice(0, 6);
+}
+
+function toPositiveNumber(value: number | undefined) {
+  return typeof value === 'number' && value > 0 ? value : null;
+}
+
+function uniqueNames(items: { name?: string }[] | undefined) {
+  const seen = new Set<string>();
+
+  return (items ?? []).flatMap((item) => {
+    const name = item.name?.trim();
+
+    if (!name || seen.has(name)) {
+      return [];
+    }
+
+    seen.add(name);
+    return [name];
+  }).slice(0, 4);
 }
 
 const DEFAULT_TMDB_TIMEOUT_MS = 10_000;
@@ -918,6 +1413,7 @@ function isFutureDate(value: string | null) {
 }
 
 type AnnouncedSortCandidate = {
+  first_air_date?: string;
   popularity?: number;
   release_date?: string;
 };
@@ -944,13 +1440,204 @@ export function compareAnnouncedCandidates(
   right: AnnouncedSortCandidate,
 ) {
   return getPopularitySortValue(right.popularity) - getPopularitySortValue(left.popularity)
-    || getDateSortValue(left.release_date ?? null) - getDateSortValue(right.release_date ?? null);
+    || getDateSortValue(left.release_date ?? left.first_air_date ?? null)
+      - getDateSortValue(right.release_date ?? right.first_air_date ?? null);
 }
 
 function getTodayDateKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function buildAnnouncedSeriesParams(page: number) {
+  const latestPremiere = new Date();
+  latestPremiere.setUTCFullYear(latestPremiere.getUTCFullYear() + 1);
+
+  return new URLSearchParams({
+    'first_air_date.gte': getTodayDateKey(),
+    'first_air_date.lte': latestPremiere.toISOString().slice(0, 10),
+    include_adult: 'false',
+    include_null_first_air_dates: 'false',
+    language: TMDB_LANGUAGE,
+    page: String(page),
+    sort_by: 'first_air_date.asc',
+  });
+}
+
+function buildAnnouncedMovieParams(page: number) {
+  const latestRelease = new Date();
+  latestRelease.setUTCFullYear(latestRelease.getUTCFullYear() + 1);
+
+  return new URLSearchParams({
+    include_adult: 'false',
+    language: TMDB_LANGUAGE,
+    page: String(page),
+    'primary_release_date.gte': getTodayDateKey(),
+    'primary_release_date.lte': latestRelease.toISOString().slice(0, 10),
+    sort_by: 'popularity.desc',
+  });
+}
+
+export function buildDiscoveryEndpoint(
+  tmdbBaseUrl: string,
+  section: CatalogueDiscoverySection,
+  mediaType: CatalogueDiscoveryMediaType,
+  page: number,
+) {
+  if (section === 'trending') {
+    const tmdbMediaType = mediaType === 'series' ? 'tv' : 'movie';
+    const params = new URLSearchParams({ language: TMDB_LANGUAGE, page: String(page) });
+
+    return `${tmdbBaseUrl}/trending/${tmdbMediaType}/day?${params.toString()}`;
+  }
+
+  if (mediaType === 'series') {
+    return `${tmdbBaseUrl}/discover/tv?${buildAnnouncedSeriesParams(page).toString()}`;
+  }
+
+  return `${tmdbBaseUrl}/discover/movie?${buildAnnouncedMovieParams(page).toString()}`;
+}
+
+function deduplicateTmdbResults(items: readonly TmdbSearchResult[]) {
+  const seen = new Set<number>();
+
+  return items.filter((item) => {
+    if (seen.has(item.id)) {
+      return false;
+    }
+
+    seen.add(item.id);
+    return true;
+  });
+}
+
 function getPopularitySortValue(value: number | undefined) {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+export function selectTmdbLogoAsset(logos: readonly TmdbLogoImage[] | undefined) {
+  const languagePriority = new Map<string | null, number>([
+    ['en', 0],
+    [null, 1],
+  ]);
+  const candidates = (logos ?? [])
+    .filter((logo): logo is TmdbLogoImage & { file_path: string } =>
+      Boolean(logo.file_path) && languagePriority.has(logo.iso_639_1 ?? null))
+    .sort((left, right) => {
+      const languageDifference =
+        languagePriority.get(left.iso_639_1 ?? null)!
+        - languagePriority.get(right.iso_639_1 ?? null)!;
+
+      return languageDifference
+        || (right.vote_average ?? 0) - (left.vote_average ?? 0)
+        || (right.vote_count ?? 0) - (left.vote_count ?? 0);
+    });
+
+  const logo = candidates[0];
+
+  if (!logo) {
+    return null;
+  }
+
+  const height = logo.height;
+  const width = logo.width;
+  const hasValidDimensions =
+    typeof width === 'number'
+    && Number.isFinite(width)
+    && width > 0
+    && typeof height === 'number'
+    && Number.isFinite(height)
+    && height > 0;
+
+  return {
+    aspectRatio: hasValidDimensions ? width / height : null,
+    path: logo.file_path,
+  };
+}
+
+export function buildEpisodeCast(
+  credits: TmdbEpisodeDetailsResponse['credits'],
+  imageBaseUrl: string,
+): EpisodeCastMember[] {
+  const seenIds = new Set<number>();
+  const orderedCredits = [
+    ...[...(credits?.cast ?? [])].sort(compareEpisodeCredits),
+    ...[...(credits?.guest_stars ?? [])].sort(compareEpisodeCredits),
+  ];
+
+  return orderedCredits.flatMap((credit) => {
+    const name = credit.name?.trim() || credit.original_name?.trim();
+
+    if (!name || seenIds.has(credit.id)) {
+      return [];
+    }
+
+    seenIds.add(credit.id);
+
+    return [{
+      character: credit.character?.trim() || null,
+      id: credit.id,
+      name,
+      profileUrl: credit.profile_path ? `${imageBaseUrl}${credit.profile_path}` : null,
+    }];
+  });
+}
+
+function compareEpisodeCredits(left: TmdbEpisodeCredit, right: TmdbEpisodeCredit) {
+  return (left.order ?? Number.MAX_SAFE_INTEGER) - (right.order ?? Number.MAX_SAFE_INTEGER);
+}
+
+export function buildEpisodeCrew(
+  credits: TmdbEpisodeDetailsResponse['credits'],
+  imageBaseUrl: string,
+): EpisodeCrewMember[] {
+  const members = new Map<number, EpisodeCrewMember>();
+  const orderedCredits = [...(credits?.crew ?? [])].sort(compareEpisodeCrewCredits);
+
+  orderedCredits.forEach((credit) => {
+    const name = credit.name?.trim() || credit.original_name?.trim();
+    const job = credit.job?.trim() || credit.department?.trim();
+
+    if (!name || !job) {
+      return;
+    }
+
+    const existing = members.get(credit.id);
+
+    if (existing) {
+      if (!existing.jobs.includes(job)) {
+        existing.jobs.push(job);
+      }
+      return;
+    }
+
+    members.set(credit.id, {
+      id: credit.id,
+      jobs: [job],
+      name,
+      profileUrl: credit.profile_path ? `${imageBaseUrl}${credit.profile_path}` : null,
+    });
+  });
+
+  return [...members.values()];
+}
+
+function compareEpisodeCrewCredits(
+  left: TmdbEpisodeCrewCredit,
+  right: TmdbEpisodeCrewCredit,
+) {
+  return getCrewDepartmentPriority(left.department) - getCrewDepartmentPriority(right.department)
+    || (left.name ?? left.original_name ?? '').localeCompare(
+      right.name ?? right.original_name ?? '',
+    );
+}
+
+function getCrewDepartmentPriority(department: string | undefined) {
+  if (department === 'Directing') return 0;
+  if (department === 'Writing') return 1;
+  if (department === 'Production') return 2;
+  if (department === 'Camera') return 3;
+  if (department === 'Editing') return 4;
+  if (department === 'Sound') return 5;
+
+  return 6;
 }

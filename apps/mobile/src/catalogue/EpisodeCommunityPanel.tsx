@@ -1,10 +1,14 @@
-import { useCallback } from 'react';
+import { Flag } from 'lucide-react-native';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import type { ReportTarget } from '../api/reports';
 import { EpisodeCommunityResponse, getEpisodeCommunity } from '../api/reviews';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { useCachedResource } from '../cache/useCachedResource';
 import { StarRatingDisplay } from '../components/StarRatingDisplay';
+import { UserAvatar } from '../components/UserAvatar';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
+import { ReportSheet } from '../reports/ReportSheet';
 
 type EpisodeCommunityPanelProps = {
   episodeNumber: number;
@@ -23,6 +27,7 @@ export function EpisodeCommunityPanel({
     getFirebaseIdToken,
     trackingRevision,
   } = useAuthSession();
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const loadCommunity = useCallback(async () => {
     const token = firebaseIdToken ? await getFirebaseIdToken() : null;
 
@@ -42,30 +47,36 @@ export function EpisodeCommunityPanel({
   });
   const community = resource.data;
 
+  if (!community) {
+    return null;
+  }
+
   return (
     <View style={styles.panel}>
       <Text style={styles.sectionTitle}>Ratings & reviews</Text>
-      {!community && resource.isInitialLoading ? (
-        <Text style={styles.status}>Loading community opinions…</Text>
-      ) : !community && resource.error ? (
-        <View style={styles.errorRow}>
-          <Text style={styles.errorText}>Could not load ratings and reviews.</Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={resource.retry}
-            style={({ pressed }) => [styles.retryButton, pressed && styles.retryButtonPressed]}
-          >
-            <Text style={styles.retryLabel}>Retry</Text>
-          </Pressable>
-        </View>
-      ) : community ? (
-        <CommunityContent community={community} />
-      ) : null}
+      <CommunityContent
+        community={community}
+        onReport={(review) => setReportTarget({
+          id: review.id,
+          label: `Review by ${review.author.displayName?.trim() || 'Watchly member'}`,
+          type: 'episodeReview',
+        })}
+        viewerUserId={currentUser?.id ?? null}
+      />
+      <ReportSheet onClose={() => setReportTarget(null)} target={reportTarget} />
     </View>
   );
 }
 
-function CommunityContent({ community }: { community: EpisodeCommunityResponse }) {
+function CommunityContent({
+  community,
+  onReport,
+  viewerUserId,
+}: {
+  community: EpisodeCommunityResponse;
+  onReport: (review: EpisodeCommunityResponse['reviews'][number]) => void;
+  viewerUserId: string | null;
+}) {
   const hasRatings = community.averageScore !== null && community.ratingCount > 0;
 
   if (!hasRatings && community.reviews.length === 0) {
@@ -85,13 +96,26 @@ function CommunityContent({ community }: { community: EpisodeCommunityResponse }
           {community.reviews.map((review, index) => (
             <View key={review.id} style={[styles.review, index > 0 && styles.reviewBorder]}>
               <View style={styles.reviewHeader}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{getAuthorInitial(review.author.displayName)}</Text>
-                </View>
+                <UserAvatar
+                  avatarUrl={review.author.avatarUrl}
+                  displayName={review.author.displayName}
+                  size={32}
+                />
                 <Text numberOfLines={1} style={styles.author}>
                   {review.author.displayName ?? 'Unnamed profile'}
                 </Text>
                 <StarRatingDisplay rating={review.score} showValue size={13} />
+                {viewerUserId && viewerUserId !== review.author.id ? (
+                  <Pressable
+                    accessibilityLabel={`Report ${review.author.displayName?.trim() || 'Watchly member'}'s review`}
+                    accessibilityRole="button"
+                    hitSlop={4}
+                    onPress={() => onReport(review)}
+                    style={({ pressed }) => [styles.reportButton, pressed ? styles.reportButtonPressed : null]}
+                  >
+                    <Flag color={colors.textMuted} size={17} strokeWidth={2} />
+                  </Pressable>
+                ) : null}
               </View>
               <Text numberOfLines={4} style={styles.reviewBody}>{review.body}</Text>
             </View>
@@ -108,10 +132,6 @@ function formatRatingCount(count: number) {
   return `${count} ${count === 1 ? 'rating' : 'ratings'}`;
 }
 
-function getAuthorInitial(displayName: string | null) {
-  return (displayName ?? '?').trim().slice(0, 1).toUpperCase() || '?';
-}
-
 const styles = StyleSheet.create({
   author: {
     color: colors.text,
@@ -119,29 +139,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     minWidth: 0,
-  },
-  avatar: {
-    alignItems: 'center',
-    backgroundColor: colors.panelSoft,
-    borderRadius: radii.sm,
-    height: 32,
-    justifyContent: 'center',
-    width: 32,
-  },
-  avatarText: {
-    color: colors.accentText,
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  errorRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  errorText: {
-    ...typography.meta,
-    color: colors.textSubtle,
-    flex: 1,
   },
   panel: {
     borderBottomColor: colors.border,
@@ -153,20 +150,16 @@ const styles = StyleSheet.create({
     ...typography.meta,
     color: colors.textSubtle,
   },
-  retryButton: {
+  reportButton: {
     alignItems: 'center',
+    borderRadius: radii.sm,
+    height: touchTargets.min,
     justifyContent: 'center',
-    minHeight: touchTargets.min,
-    paddingHorizontal: spacing.sm,
+    marginVertical: -6,
+    width: touchTargets.min,
   },
-  retryButtonPressed: {
-    opacity: 0.76,
-    transform: [{ scale: 0.98 }],
-  },
-  retryLabel: {
-    color: colors.accentText,
-    fontSize: 13,
-    fontWeight: '800',
+  reportButtonPressed: {
+    opacity: 0.72,
   },
   review: {
     gap: spacing.sm,

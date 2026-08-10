@@ -61,7 +61,7 @@ export function useSeasonEpisodes({
   );
   const seasonResource = useCachedResource({
     enabled: loadSeason && !initialSeason,
-    key: getPublicCacheKey(`catalogue:series:${seriesTmdbId}:season:${seasonNumber}`),
+    key: getPublicCacheKey(`catalogue:series:${seriesTmdbId}:season:${seasonNumber}:v2`),
     load: loadSeasonDetails,
   });
   const privateCacheKey = currentUser

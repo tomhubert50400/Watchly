@@ -1,5 +1,4 @@
-import { ImageBackground, StyleSheet, Text, View } from 'react-native';
-import { Button } from '../components/Button';
+import { Image, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import type { HomeHeroItem } from './homeData';
 
@@ -14,38 +13,58 @@ export function HomeHero({ item, onOpen }: HomeHeroProps) {
     .filter((value): value is string => Boolean(value));
 
   return (
-    <View style={styles.shell}>
+    <Pressable
+      accessibilityHint="Opens the film details"
+      accessibilityLabel={`Open ${item.title} details`}
+      accessibilityRole="button"
+      onPress={onOpen}
+      style={({ pressed }) => [styles.shell, pressed ? styles.pressed : null]}
+    >
       {imageUrl ? (
         <ImageBackground
           accessibilityIgnoresInvertColors
-          accessibilityLabel={`${item.title} artwork`}
+          accessible={false}
           imageStyle={styles.image}
           source={{ uri: imageUrl }}
           style={styles.imageBackground}
         >
           <View style={styles.scrim} />
-          <HeroCopy item={item} metadata={metadata} onOpen={onOpen} />
+          <HeroCopy item={item} metadata={metadata} />
         </ImageBackground>
       ) : (
         <View style={[styles.imageBackground, styles.placeholder]}>
-          <HeroCopy item={item} metadata={metadata} onOpen={onOpen} />
+          <HeroCopy item={item} metadata={metadata} />
         </View>
       )}
-    </View>
+    </Pressable>
   );
 }
 
-function HeroCopy({ item, metadata, onOpen }: HomeHeroProps & { metadata: string[] }) {
+function HeroCopy({ item, metadata }: { item: HomeHeroItem; metadata: string[] }) {
   return (
     <View style={styles.copy}>
-      <Text style={styles.eyebrow}>Spotlight of the week</Text>
-      <Text accessibilityRole="header" numberOfLines={2} style={styles.title}>
-        {item.title}
-      </Text>
+      <Text style={styles.eyebrow}>SPOTLIGHT OF THE WEEK</Text>
+      {item.logoUrl ? (
+        <View
+          accessibilityLabel={item.title}
+          accessibilityRole="header"
+          accessible
+          style={styles.logoFrame}
+        >
+          <Image
+            accessibilityIgnoresInvertColors
+            accessible={false}
+            resizeMode="contain"
+            source={{ uri: item.logoUrl }}
+            style={[styles.logo, { aspectRatio: item.logoAspectRatio ?? 3 }]}
+          />
+        </View>
+      ) : (
+        <Text accessibilityRole="header" numberOfLines={2} style={styles.title}>
+          {item.title}
+        </Text>
+      )}
       {metadata.length > 0 ? <Text style={styles.meta}>{metadata.join('  ·  ')}</Text> : null}
-      <View style={styles.actions}>
-        <Button accessibilityLabel={`Open ${item.title}`} label="View details" onPress={onOpen} />
-      </View>
     </View>
   );
 }
@@ -70,21 +89,21 @@ function formatRuntime(runtimeMinutes: number | null) {
 }
 
 const styles = StyleSheet.create({
-  actions: {
-    alignItems: 'flex-start',
-    marginTop: spacing.md,
-  },
   copy: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'flex-end',
     minHeight: 330,
     padding: spacing.lg,
-    paddingTop: 120,
   },
   eyebrow: {
     ...typography.eyebrow,
     color: colors.accentText,
-    marginBottom: spacing.xs,
+    fontSize: 14,
+    fontWeight: '900',
+    left: spacing.lg,
+    letterSpacing: 1.1,
+    position: 'absolute',
+    top: spacing.lg,
   },
   image: {
     borderRadius: radii.lg,
@@ -92,13 +111,28 @@ const styles = StyleSheet.create({
   imageBackground: {
     minHeight: 330,
   },
+  logo: {
+    height: '100%',
+    maxWidth: '100%',
+  },
+  logoFrame: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    height: 58,
+    width: '82%',
+  },
   meta: {
     ...typography.meta,
     color: colors.textMuted,
     marginTop: spacing.xs,
+    textAlign: 'center',
   },
   placeholder: {
     backgroundColor: colors.panelElevated,
+  },
+  pressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.99 }],
   },
   scrim: {
     backgroundColor: 'rgba(5, 7, 12, 0.48)',
@@ -118,5 +152,6 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: -0.6,
     lineHeight: 34,
+    textAlign: 'center',
   },
 });
