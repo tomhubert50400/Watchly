@@ -13,7 +13,11 @@ import { SignInSheet } from '../auth/SignInRequired';
 import { colors, radii } from '../design/tokens';
 import { hapticConfirm, hapticError } from '../feedback/haptics';
 import { useToast } from './ToastContext';
-import { getReleaseAlertControlPresentation, ReleaseAlertLoadStatus } from './releaseAlertControlState';
+import {
+  getReleaseAlertControlPresentation,
+  getReleaseAlertControlSession,
+  ReleaseAlertLoadStatus,
+} from './releaseAlertControlState';
 
 type ReleaseAlertControlProps = {
   contentType: ReleaseAlertContentType;
@@ -23,7 +27,12 @@ type ReleaseAlertControlProps = {
 export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControlProps) {
   const { currentUser, firebaseIdToken, getFirebaseIdToken, notifyTrackingChanged } = useAuthSession();
   const { showToast } = useToast();
-  const requestScope = JSON.stringify([currentUser?.id ?? null, contentType, tmdbId]);
+  const { isSignedIn, requestScope } = getReleaseAlertControlSession({
+    contentType,
+    firebaseIdToken,
+    tmdbId,
+    userId: currentUser?.id ?? null,
+  });
   const [loadStatus, setLoadStatus] = useState<ReleaseAlertLoadStatus>('loading');
   const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [state, setState] = useState<ReleaseAlertState | null>(null);
@@ -42,7 +51,7 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
     requestRef.current = { scope, version };
     const isCurrent = () => requestRef.current.scope === scope && requestRef.current.version === version;
 
-    if (!firebaseIdToken || !currentUser) {
+    if (!isSignedIn) {
       setState(null);
       setStateScope(scope);
       setLoadStatus('ready');
@@ -65,7 +74,7 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
       if (!isCurrent()) return;
       setLoadStatus('error');
     }
-  }, [contentType, currentUser, firebaseIdToken, getFirebaseIdToken, requestScope, tmdbId]);
+  }, [contentType, getFirebaseIdToken, isSignedIn, requestScope, tmdbId]);
 
   useEffect(() => {
     setState(null);
@@ -75,7 +84,7 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
   }, [loadAlert, requestScope]);
 
   async function toggleAlert() {
-    if (!firebaseIdToken || !currentUser) {
+    if (!isSignedIn) {
       setIsSignInOpen(true);
       return;
     }
@@ -115,7 +124,7 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
 
   const presentation = getReleaseAlertControlPresentation(loadStatus, visibleState);
   const { enabled } = presentation;
-  const requiresSignIn = !firebaseIdToken || !currentUser;
+  const requiresSignIn = !isSignedIn;
 
   return (
     <>

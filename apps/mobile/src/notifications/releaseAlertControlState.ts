@@ -4,6 +4,23 @@ type ReleaseAlertStateLike = {
   enabled: boolean;
 };
 
+export function getReleaseAlertControlSession({
+  contentType,
+  firebaseIdToken,
+  tmdbId,
+  userId,
+}: {
+  contentType: 'movie' | 'series';
+  firebaseIdToken: string | null;
+  tmdbId: number;
+  userId: string | null;
+}) {
+  return {
+    isSignedIn: Boolean(userId && firebaseIdToken),
+    requestScope: JSON.stringify([userId, contentType, tmdbId]),
+  };
+}
+
 export function getReleaseAlertControlPresentation(
   status: ReleaseAlertLoadStatus,
   state: ReleaseAlertStateLike | null,

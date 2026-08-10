@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import { Heart } from 'lucide-react-native';
+import { Flag, Heart } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
 import { hapticError, hapticSelection } from '../feedback/haptics';
@@ -13,8 +13,10 @@ import { useToast } from '../notifications/ToastContext';
 import { ExpandableReviewText } from './ExpandableReviewText';
 import { MediaPoster } from './MediaPoster';
 import { StarRatingDisplay } from './StarRatingDisplay';
+import { UserAvatar } from './UserAvatar';
 
 type SocialReviewPostProps = {
+  authorAvatarUrl: string | null;
   authorDisplayName: string | null;
   body: string;
   contentImageUrl: string | null;
@@ -23,12 +25,14 @@ type SocialReviewPostProps = {
   likeCount: number;
   likedByViewer: boolean;
   onOpenContent: () => void;
+  onReport?: () => void;
   onSetLiked: (liked: boolean) => Promise<FeedLikeState>;
-  rating: number;
+  rating: number | null;
   updatedAt: string;
 };
 
 export const SocialReviewPost = memo(function SocialReviewPost({
+  authorAvatarUrl,
   authorDisplayName,
   body,
   contentImageUrl,
@@ -37,6 +41,7 @@ export const SocialReviewPost = memo(function SocialReviewPost({
   likeCount,
   likedByViewer,
   onOpenContent,
+  onReport,
   onSetLiked,
   rating,
   updatedAt,
@@ -78,9 +83,7 @@ export const SocialReviewPost = memo(function SocialReviewPost({
   return (
     <View style={styles.post}>
       <View style={styles.byline}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{getInitial(visibleAuthor)}</Text>
-        </View>
+        <UserAvatar avatarUrl={authorAvatarUrl} displayName={visibleAuthor} size={42} />
         <Text numberOfLines={1} style={styles.author}>{visibleAuthor}</Text>
         <Text style={styles.date}>{formatDate(updatedAt)}</Text>
       </View>
@@ -101,11 +104,23 @@ export const SocialReviewPost = memo(function SocialReviewPost({
           <Text style={styles.openLabel}>Open content</Text>
         </View>
       </Pressable>
-      <View style={styles.rating}>
-        <StarRatingDisplay rating={rating} showValue size={17} />
-      </View>
+      {rating !== null ? (
+        <View style={styles.rating}>
+          <StarRatingDisplay rating={rating} showValue size={17} />
+        </View>
+      ) : null}
       <ExpandableReviewText body={body} style={styles.review} />
       <View style={styles.actions}>
+        {onReport ? (
+          <Pressable
+            accessibilityLabel={`Report ${visibleAuthor}'s review`}
+            accessibilityRole="button"
+            onPress={onReport}
+            style={({ pressed }) => [styles.actionButton, pressed ? styles.actionButtonPressed : null]}
+          >
+            <Flag color={colors.textMuted} size={18} strokeWidth={2} />
+          </Pressable>
+        ) : null}
         <Pressable
           accessibilityLabel={`${likeState.likedByViewer ? 'Unlike' : 'Like'} ${visibleAuthor}'s review, ${likeState.likeCount} ${likeState.likeCount === 1 ? 'like' : 'likes'}`}
           accessibilityRole="button"
@@ -144,10 +159,6 @@ export const SocialReviewPost = memo(function SocialReviewPost({
   );
 });
 
-function getInitial(displayName: string) {
-  return displayName.slice(0, 1).toUpperCase() || '?';
-}
-
 function formatDate(value: string) {
   const date = new Date(value);
 
@@ -155,7 +166,7 @@ function formatDate(value: string) {
     return '';
   }
 
-  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
 }
 
 const styles = StyleSheet.create({
@@ -166,27 +177,22 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     marginTop: spacing.md,
   },
+  actionButton: {
+    alignItems: 'center',
+    borderRadius: radii.md,
+    justifyContent: 'center',
+    minHeight: touchTargets.min,
+    minWidth: touchTargets.min,
+  },
+  actionButtonPressed: {
+    opacity: 0.72,
+  },
   author: {
     color: colors.text,
     flex: 1,
     fontSize: 15,
     fontWeight: '800',
     lineHeight: 20,
-  },
-  avatar: {
-    alignItems: 'center',
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    height: 42,
-    justifyContent: 'center',
-    width: 42,
-  },
-  avatarText: {
-    color: colors.accent,
-    fontSize: 17,
-    fontWeight: '900',
   },
   byline: {
     alignItems: 'center',

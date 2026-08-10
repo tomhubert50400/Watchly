@@ -253,8 +253,22 @@ export class NotificationsService {
   private async createNotifications(userId: string, candidates: NotificationCandidate[]) {
     if (candidates.length === 0) return 0;
 
-    const created = await this.prisma.withConnectionRetry(() =>
-      this.prisma.notification.createMany({
+    const created = await this.prisma.withConnectionRetry(async () => {
+      await Promise.all(candidates.map((candidate) =>
+        this.prisma.notification.updateMany({
+          data: {
+            body: candidate.body,
+            title: candidate.title,
+          },
+          where: {
+            dedupeKey: candidate.generatedKey,
+            kind: NotificationKind.RELEASE,
+            userId,
+          },
+        }),
+      ));
+
+      return this.prisma.notification.createMany({
         data: candidates.map((candidate) => ({
           body: candidate.body,
           contentType: candidate.contentType,
@@ -269,8 +283,8 @@ export class NotificationsService {
           userId,
         })),
         skipDuplicates: true,
-      }),
-    );
+      });
+    });
 
     return created.count;
   }

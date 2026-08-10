@@ -1,7 +1,38 @@
 // Node types are intentionally not part of the Expo runtime TypeScript configuration.
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import assert from 'node:assert/strict';
-import { getReleaseAlertControlPresentation } from './releaseAlertControlState';
+import {
+  getReleaseAlertControlPresentation,
+  getReleaseAlertControlSession,
+} from './releaseAlertControlState';
+
+const initialSession = getReleaseAlertControlSession({
+  contentType: 'movie',
+  firebaseIdToken: 'token-a',
+  tmdbId: 550,
+  userId: 'user-a',
+});
+const refreshedTokenSession = getReleaseAlertControlSession({
+  contentType: 'movie',
+  firebaseIdToken: 'token-b',
+  tmdbId: 550,
+  userId: 'user-a',
+});
+assert.deepEqual(
+  refreshedTokenSession,
+  initialSession,
+  'refreshing the Firebase token must not restart the release-alert control session',
+);
+assert.notEqual(
+  getReleaseAlertControlSession({
+    contentType: 'movie',
+    firebaseIdToken: 'token-b',
+    tmdbId: 551,
+    userId: 'user-a',
+  }).requestScope,
+  initialSession.requestScope,
+  'changing the title must start a new release-alert control session',
+);
 
 assert.deepEqual(
   getReleaseAlertControlPresentation('error', null),

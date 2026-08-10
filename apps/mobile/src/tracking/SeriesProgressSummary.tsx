@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   },
   panel: {
     ...shadows.panel,
-    backgroundColor: colors.panelElevated,
+    backgroundColor: colors.interactiveSurface,
     borderColor: colors.border,
     borderRadius: radii.md,
     borderWidth: 1,

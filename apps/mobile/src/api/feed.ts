@@ -11,6 +11,7 @@ export type FeedReviewTarget = {
 };
 
 type FeedAuthor = {
+  avatarUrl: string | null;
   displayName: string | null;
   id: string;
 };
@@ -25,7 +26,7 @@ type FeedMovieReviewItem = {
   id: string;
   likeCount: number;
   likedByViewer: boolean;
-  score: number;
+  score: number | null;
   type: 'movieReview';
   updatedAt: string;
 };
@@ -42,7 +43,7 @@ type FeedEpisodeReviewItem = {
   id: string;
   likeCount: number;
   likedByViewer: boolean;
-  score: number;
+  score: number | null;
   type: 'episodeReview';
   updatedAt: string;
 };

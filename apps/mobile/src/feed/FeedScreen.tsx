@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { getEpisodeDetails, getMovieDetails } from '../api/catalogue';
+import type { MovieDetails } from '../api/catalogue';
+import { getEpisodeDetails } from '../api/catalogue';
 import { FeedItem, getFeed, setFeedItemLiked } from '../api/feed';
-import { useAuthSession } from '../auth/AuthSessionContext';
+import type { ReportTarget } from '../api/reports';
+import { useAuthSession, useSocialRevision } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
+import { useCachedResource } from '../cache/useCachedResource';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -14,74 +17,54 @@ import { Screen } from '../components/Screen';
 import { SocialReviewPost } from '../components/SocialReviewPost';
 import { colors, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
+import { ReportSheet } from '../reports/ReportSheet';
 
 type FeedNavigation = NativeStackNavigationProp<RootStackParamList>;
-type HydratedFeedItem = FeedItem & {
+export type HydratedFeedItem = FeedItem & {
   contentImageUrl: string | null;
   contentSubtitle: string;
   contentTitle: string;
   seriesTitle: string | null;
 };
 
+export function getCommunityFeedKey(userId: string) {
+  return `watchly:user:${userId}:community-feed:v1`;
+}
+
+export async function loadCommunityFeed(
+  token: string,
+  loadMovie: (tmdbId: number) => Promise<MovieDetails>,
+  loadSeries: (tmdbId: number) => Promise<{ title: string }>,
+  previous: HydratedFeedItem[] = [],
+) {
+  const response = await getFeed(token);
+  const hydratedResults = await Promise.all(response.items.map((item) => {
+    const cached = previous.find((candidate) => candidate.id === item.id);
+    return hydrateFeedItem(item, cached, loadMovie, loadSeries);
+  }));
+
+  return hydratedResults.filter((item): item is HydratedFeedItem => item !== null);
+}
+
 export function FeedScreen() {
   const navigation = useNavigation<FeedNavigation>();
-  const { firebaseIdToken, socialRevision } = useAuthSession();
-  const { refreshSeries } = useCatalogueCache();
-  const [error, setError] = useState<string | null>(null);
-  const [items, setItems] = useState<HydratedFeedItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const itemsRef = useRef(items);
-  itemsRef.current = items;
-
-  const loadFeed = useCallback(async (showLoading = true) => {
-    if (!firebaseIdToken) {
-      setError(null);
-      setItems([]);
-      itemsRef.current = [];
-      return;
-    }
-
-    const hasVisibleItems = itemsRef.current.length > 0;
-    setError(null);
-    if (showLoading && !hasVisibleItems) {
-      setIsLoading(true);
-    } else {
-      setIsLoading(false);
-      if (!showLoading) setIsRefreshing(true);
-    }
-
-    try {
-      const response = await getFeed(firebaseIdToken);
-      const hydratedResults = await Promise.all(response.items.map((item) => {
-        const previous = itemsRef.current.find((candidate) => candidate.id === item.id);
-        return hydrateFeedItem(item, previous, refreshSeries);
-      }));
-      const hydratedItems = hydratedResults.filter(
-        (item): item is HydratedFeedItem => item !== null,
-      );
-
-      setItems(hydratedItems);
-      itemsRef.current = hydratedItems;
-    } catch (loadError) {
-      if (!hasVisibleItems) {
-        setItems([]);
-        itemsRef.current = [];
-        setError(loadError instanceof Error ? loadError.message : 'Could not load your feed.');
-      }
-    } finally {
-      setIsLoading(false);
-      if (!showLoading) setIsRefreshing(false);
-    }
-  }, [firebaseIdToken, refreshSeries]);
-
-  useEffect(() => {
-    void loadFeed();
-  }, [loadFeed, socialRevision]);
-
-  const refreshFeed = useCallback(() => {
-    void loadFeed(false);
-  }, [loadFeed]);
+  const { currentUser, firebaseIdToken } = useAuthSession();
+  const socialRevision = useSocialRevision();
+  const { refreshMovie, refreshSeries } = useCatalogueCache();
+  const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
+  const resourceKey = getCommunityFeedKey(currentUser?.id ?? 'signed-out');
+  const loadFeed = useCallback(
+    (cached?: HydratedFeedItem[]) => firebaseIdToken
+      ? loadCommunityFeed(firebaseIdToken, refreshMovie, refreshSeries, cached)
+      : Promise.resolve([]),
+    [firebaseIdToken, refreshMovie, refreshSeries, socialRevision],
+  );
+  const resource = useCachedResource<HydratedFeedItem[]>({
+    enabled: Boolean(currentUser && firebaseIdToken),
+    key: resourceKey,
+    load: loadFeed,
+  });
+  const items = resource.data ?? [];
   const openContent = useCallback(
     (item: HydratedFeedItem) => {
       if (item.content.contentType === 'movie') {
@@ -111,47 +94,46 @@ export function FeedScreen() {
         firebaseIdToken ? (
           <RefreshControl
             colors={[colors.accent]}
-            onRefresh={refreshFeed}
-            refreshing={isRefreshing}
+            onRefresh={resource.revalidate}
+            refreshing={resource.isRefreshing}
             tintColor={colors.accent}
           />
         ) : undefined
       }
-      title="Feed"
+      title="Community"
     >
       {!firebaseIdToken ? (
         <SignInRequiredCard
-          body="You need to be signed in to use your social feed. Sign in here, then follow public profiles to see their written reviews."
-          title="Sign in to see your Feed"
+          body="Sign in here, then follow public profiles to see their public ratings and reviews in one place."
+          title="Sign in to join Community"
         />
-      ) : isLoading && items.length === 0 ? (
+      ) : resource.isInitialLoading && items.length === 0 ? (
         <LoadingState label="Loading feed" />
-      ) : error ? (
-        <EmptyState body={error} title="Feed failed">
+      ) : resource.error && items.length === 0 ? (
+        <EmptyState body={resource.error} title="Community failed">
           <Button
             label="Retry"
-            onPress={() => {
-              void loadFeed();
-            }}
+            onPress={resource.retry}
           />
         </EmptyState>
       ) : items.length === 0 ? (
         <EmptyState
           body="Follow public profiles to see their written reviews. Pull down to refresh after new activity."
-          title="No reviews from followed profiles yet"
+          title="No community activity yet"
         >
-          <Button label="Refresh" onPress={refreshFeed} variant="secondary" />
+          <Button label="Refresh" onPress={resource.revalidate} variant="secondary" />
         </EmptyState>
       ) : (
         <View style={styles.list}>
           <View style={styles.feedIntro}>
             <Text style={styles.feedIntroTitle}>Reviews from people you follow</Text>
             <Text style={styles.feedIntroBody}>
-              Fresh public notes, ratings, and film diary entries land here.
+              Fresh public ratings and reviews appear here.
             </Text>
           </View>
           {items.map((item) => (
             <SocialReviewPost
+              authorAvatarUrl={item.author.avatarUrl}
               authorDisplayName={item.author.displayName}
               body={item.body}
               contentImageUrl={item.contentImageUrl}
@@ -161,6 +143,11 @@ export function FeedScreen() {
               likeCount={item.likeCount}
               likedByViewer={item.likedByViewer}
               onOpenContent={() => openContent(item)}
+              onReport={currentUser?.id === item.author.id ? undefined : () => setReportTarget({
+                id: item.id,
+                label: `Review by ${item.author.displayName?.trim() || 'Watchly member'}`,
+                type: item.type,
+              })}
               onSetLiked={(liked) => setFeedItemLiked(firebaseIdToken, item, liked)}
               rating={item.score}
               updatedAt={item.updatedAt}
@@ -168,6 +155,7 @@ export function FeedScreen() {
           ))}
         </View>
       )}
+      <ReportSheet onClose={() => setReportTarget(null)} target={reportTarget} />
     </Screen>
   );
 }
@@ -175,17 +163,18 @@ export function FeedScreen() {
 async function hydrateFeedItem(
   item: FeedItem,
   previous: HydratedFeedItem | undefined,
+  loadMovie: (tmdbId: number) => Promise<MovieDetails>,
   loadSeries: (tmdbId: number) => Promise<{ title: string }>,
 ): Promise<HydratedFeedItem | null> {
   if (item.content.contentType === 'movie') {
     try {
-      const response = await getMovieDetails(item.content.tmdbId);
+      const movie = await loadMovie(item.content.tmdbId);
 
       return {
         ...item,
-        contentImageUrl: response.item.posterUrl,
+        contentImageUrl: movie.posterUrl,
         contentSubtitle: 'Movie review',
-        contentTitle: response.item.title,
+        contentTitle: movie.title,
         seriesTitle: null,
       };
     } catch {

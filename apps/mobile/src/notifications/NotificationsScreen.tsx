@@ -55,8 +55,8 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
   const ownerIdRef = useRef(ownerId);
   ownerIdRef.current = ownerId;
   const cacheKey = ownerId
-    ? getPrivateCacheKey(ownerId, 'notifications:inbox:v1')
-    : getPrivateCacheKey('visitor', 'notifications:inbox:v1');
+    ? getPrivateCacheKey(ownerId, 'notifications:inbox:v2')
+    : getPrivateCacheKey('visitor', 'notifications:inbox:v2');
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [ownedInbox, setOwnedInbox] = useState<OwnedInbox>({ items: [], ownerId: null });
   const ownedInboxRef = useRef(ownedInbox);
@@ -66,7 +66,7 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
   const [followRequestsOwnerId, setFollowRequestsOwnerId] = useState<string | null>(null);
   const [followRequestError, setFollowRequestError] = useState<string | null>(null);
   const [followRequestPendingIds, setFollowRequestPendingIds] = useState<ReadonlySet<string>>(new Set());
-  const [isLoadingFollowRequests, setIsLoadingFollowRequests] = useState(false);
+  const [isRefreshingFollowRequests, setIsRefreshingFollowRequests] = useState(false);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
   const load = useCallback(async () => {
     const requestedOwnerId = ownerId;
@@ -87,7 +87,7 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
     load,
   });
 
-  const loadPendingFollowRequests = useCallback(async () => {
+  const loadPendingFollowRequests = useCallback(async (showRefresh = false) => {
     const expectedOwnerId = ownerIdRef.current;
 
     if (!expectedOwnerId) {
@@ -95,8 +95,10 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
       return;
     }
 
-    setIsLoadingFollowRequests(true);
-    setFollowRequestError(null);
+    if (showRefresh) {
+      setIsRefreshingFollowRequests(true);
+      setFollowRequestError(null);
+    }
 
     try {
       const token = await getFirebaseIdToken();
@@ -110,14 +112,15 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
       if (ownerIdRef.current === expectedOwnerId) {
         setFollowRequests(response.items);
         setFollowRequestsOwnerId(expectedOwnerId);
+        setFollowRequestError(null);
       }
     } catch (error) {
-      if (ownerIdRef.current === expectedOwnerId) {
+      if (showRefresh && ownerIdRef.current === expectedOwnerId) {
         setFollowRequestError(error instanceof Error ? error.message : 'Follow requests could not load.');
       }
     } finally {
-      if (ownerIdRef.current === expectedOwnerId) {
-        setIsLoadingFollowRequests(false);
+      if (showRefresh && ownerIdRef.current === expectedOwnerId) {
+        setIsRefreshingFollowRequests(false);
       }
     }
   }, [getFirebaseIdToken]);
@@ -208,7 +211,7 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
     ownedInboxRef.current = next;
     setOwnedInbox(next);
     void writePersistedCache(
-      getPrivateCacheKey(expectedOwnerId, 'notifications:inbox:v1'),
+      getPrivateCacheKey(expectedOwnerId, 'notifications:inbox:v2'),
       nextItems,
     ).catch(() => undefined);
   }, []);
@@ -389,9 +392,9 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
         <RefreshControl
           onRefresh={() => {
             resource.retry();
-            void loadPendingFollowRequests();
+            void loadPendingFollowRequests(true);
           }}
-          refreshing={resource.isRefreshing || isLoadingFollowRequests}
+          refreshing={resource.isRefreshing || isRefreshingFollowRequests}
           tintColor={colors.accent}
         />
       }
@@ -542,7 +545,7 @@ function formatNotificationTime(value: string) {
     return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
   }
 
-  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
 }
 
 const styles = StyleSheet.create({

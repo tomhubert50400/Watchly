@@ -42,7 +42,7 @@ function getTrackingStateCacheKey(userId: string, contentType: TrackedContentTyp
 export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps) {
   const { fontScale } = useWindowDimensions();
   const statusLayout = resolveTrackingStatusLayout(fontScale);
-  const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
+  const { currentUser, firebaseIdToken, getFirebaseIdToken, notifyTrackingChanged } = useAuthSession();
   const { showToast } = useToast();
   const ownerId = currentUser?.id ?? null;
   const trackingStateCacheKey = ownerId
@@ -156,6 +156,7 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
       trackingStateCache.set(ownerId!, contentType, tmdbId, savedState);
       setState(savedState);
       setStateScope(scope);
+      notifyTrackingChanged();
       hapticConfirm();
     } catch (saveError) {
       if (!isCurrent()) return;
@@ -184,6 +185,7 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
         />
       ) : null}
       <SegmentedControl<TrackingStatus>
+        containerStyle={styles.statusControl}
         disabled={!visibleStateKnown}
         onChange={(nextStatus) => {
           const mutation = buildTrackingMutation(
@@ -232,6 +234,9 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     justifyContent: 'center',
     minWidth: 0,
+  },
+  statusControl: {
+    backgroundColor: colors.interactiveSurface,
   },
   statusLabel: {
     color: colors.text,

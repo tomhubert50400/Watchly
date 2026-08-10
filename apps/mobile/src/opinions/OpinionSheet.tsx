@@ -1,7 +1,6 @@
 import { Star, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   GestureResponderEvent,
   Image,
@@ -133,13 +132,12 @@ export function OpinionSheet({
 
   const summary = useMemo(() => {
     if (!isSignedIn) return signedOutMessage;
-    if (isLoading) return 'Loading your opinion…';
     if (loadError) return loadError;
     if (opinion.savedRating === null) return 'Add a half-star rating and an optional written review.';
     return opinion.savedReview
       ? `${opinion.savedRating}/5 · Review added`
       : `${opinion.savedRating}/5 · No written review`;
-  }, [isLoading, isSignedIn, loadError, opinion.savedRating, opinion.savedReview, signedOutMessage]);
+  }, [isSignedIn, loadError, opinion.savedRating, opinion.savedReview, signedOutMessage]);
 
   function closeSheet() {
     if (isSaving) return;
@@ -273,16 +271,18 @@ export function OpinionSheet({
     </View>
   );
 
+  if (isLoading) {
+    return null;
+  }
+
   return (
     <View style={styles.triggerPanel}>
       <Text style={styles.triggerTitle}>Your opinion</Text>
       <View style={styles.triggerContent}>
         <Text style={[styles.triggerBody, loadError ? styles.errorText : null]}>{summary}</Text>
         <View style={styles.triggerAction}>
-          {isLoading ? <ActivityIndicator color={colors.rating} /> : null}
           {isSignedIn && !loadError ? (
             <Button
-              disabled={isLoading}
               fullWidth
               label={opinion.savedRating === null ? 'Rate & review' : 'Edit opinion'}
               onPress={() => setIsOpen(true)}
@@ -459,7 +459,7 @@ const styles = StyleSheet.create({
   triggerAction: { alignSelf: 'stretch' },
   triggerBody: { ...typography.body, alignSelf: 'stretch', color: colors.textMuted },
   triggerContent: { alignItems: 'stretch', alignSelf: 'stretch', flexDirection: 'column', gap: spacing.md },
-  triggerPanel: { ...shadows.panel, backgroundColor: colors.panelElevated, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, gap: spacing.md, marginBottom: spacing.md, padding: spacing.lg },
+  triggerPanel: { ...shadows.panel, backgroundColor: colors.interactiveSurface, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, gap: spacing.md, marginBottom: spacing.md, padding: spacing.lg },
   triggerTitle: { ...typography.title, color: colors.text },
   unsaved: { ...typography.meta, color: colors.textSubtle, marginTop: spacing.sm, textAlign: 'center' },
 });

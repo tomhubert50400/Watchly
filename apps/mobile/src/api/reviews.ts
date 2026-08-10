@@ -21,6 +21,7 @@ export type EpisodeCommunityResponse = {
   ratingCount: number;
   reviews: {
     author: {
+      avatarUrl: string | null;
       displayName: string | null;
       id: string;
     };

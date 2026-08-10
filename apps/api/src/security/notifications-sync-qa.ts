@@ -15,6 +15,7 @@ async function run() {
   let inFlight = 0;
   let maximumInFlight = 0;
   let subscriptionTake: number | undefined;
+  let updatedCandidateCount = 0;
   const dedupeKeys = new Set<string>();
   const prisma = {
     notification: {
@@ -30,6 +31,16 @@ async function run() {
         return { count };
       },
       findMany: async () => [],
+      updateMany: async ({ data, where }: {
+        data: { body: string; title: string };
+        where: { dedupeKey: string; kind: string; userId: string };
+      }) => {
+        assert.match(data.body, new RegExp(`^${data.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} `));
+        assert.equal(where.kind, 'RELEASE');
+        assert.equal(where.userId, 'user-a');
+        updatedCandidateCount += 1;
+        return { count: dedupeKeys.has(where.dedupeKey) ? 1 : 0 };
+      },
     },
     releaseAlertSubscription: {
       findMany: async ({ take }: { take?: number }) => {
@@ -63,6 +74,7 @@ async function run() {
   assert.equal(second.syncedContentCount, 48);
   assert.equal(catalogueCalls, 96, 'two bounded concurrent syncs must each stop at the quota');
   assert.ok(maximumInFlight <= 24, 'two concurrent requests may each use at most one 12-item batch');
+  assert.equal(updatedCandidateCount, 96, 'sync must refresh localized copy for every existing candidate');
   assert.equal(dedupeKeys.size, 48, 'concurrent syncs must persist one row per dedupe key without errors');
   assert.equal(first.createdCount + second.createdCount, 48);
 
