@@ -47,7 +47,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
   const ownerId = currentUser?.id ?? null;
   const ownerIdRef = useRef(ownerId);
   ownerIdRef.current = ownerId;
-  const cacheKey = getPrivateCacheKey(ownerId ?? 'visitor', `shared-watchlist:${route.params.watchlistId}:v2`);
+  const cacheKey = getPrivateCacheKey(ownerId ?? 'visitor', `shared-watchlist:${route.params.watchlistId}:v3`);
   const load = useCallback(async (cached?: SharedListDetails): Promise<SharedListDetails> => {
     const expectedOwnerId = ownerId;
     const token = await getFirebaseIdToken();
@@ -140,7 +140,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
     ownedDetailsRef.current = owned;
     setOwnedDetails(owned);
     void writePersistedCache(
-      getPrivateCacheKey(expectedOwnerId, `shared-watchlist:${route.params.watchlistId}:v2`),
+      getPrivateCacheKey(expectedOwnerId, `shared-watchlist:${route.params.watchlistId}:v3`),
       next,
     ).catch(() => undefined);
   }, [route.params.watchlistId]);

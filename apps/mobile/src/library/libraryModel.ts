@@ -117,7 +117,8 @@ export function calculateResumeEpisode(
   return next ? { episodeNumber: 1, seasonNumber: next.seasonNumber } : null;
 }
 
-export function shouldShowTrackedTitle(item: Pick<LibraryItemBase, 'hasReleaseAlert' | 'inferredWatchingFromProgress' | 'resumeEpisodeNumber' | 'resumeSeasonNumber' | 'status'>) {
+export function shouldShowTrackedTitle(item: Pick<LibraryItemBase, 'favorite' | 'hasReleaseAlert' | 'inferredWatchingFromProgress' | 'resumeEpisodeNumber' | 'resumeSeasonNumber' | 'status'>) {
+  if (item.favorite) return true;
   if (item.hasReleaseAlert) return true;
   if (item.status !== 'watching' && item.status !== 'watchlisted' && item.status !== 'watched') return false;
   if (!item.inferredWatchingFromProgress) return true;

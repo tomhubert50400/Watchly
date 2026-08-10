@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { BookmarkPlus, Plus, Sparkles } from 'lucide-react-native';
+import { BookmarkPlus, Plus } from 'lucide-react-native';
 import {
   addSharedWatchlistItem,
   createSharedWatchlist,
@@ -17,6 +17,7 @@ import {
   WatchlistContentType,
 } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
 import { SignInSheet } from '../auth/SignInRequired';
 import {
   BottomActionSheet,
@@ -29,6 +30,8 @@ import { hapticConfirm, hapticError, hapticSelection, hapticSuccess } from '../f
 import { useToast } from '../notifications/ToastContext';
 import { useWatchlistCache } from './WatchlistCacheContext';
 import { WatchlistOption, WatchlistOptionRow } from './WatchlistOptionRow';
+import { loadProgressively, takeHydrationItems } from './requestBoundaries';
+import { loadWatchlistPreviewUrls } from './watchlistPreview';
 import {
   autoSelectCreatedWatchlist,
   buildSelectionDiff,
@@ -43,8 +46,12 @@ type AddToWatchlistControlProps = {
 
 type CreateWatchlistKind = 'personal' | 'shared';
 
+const MAX_WATCHLIST_PREVIEWS = 12;
+const MAX_CONCURRENT_WATCHLIST_PREVIEWS = 2;
+
 export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistControlProps) {
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
+  const { refreshMovie, refreshSeries } = useCatalogueCache();
   const { showToast } = useToast();
   const { preloadWatchlists } = useWatchlistCache();
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
@@ -60,11 +67,82 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   const [options, setOptions] = useState<WatchlistOption[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const loadVersionRef = useRef(0);
+  const previewArtworkCacheRef = useRef(new Map<string, string | null>());
+  const previewHydrationCacheRef = useRef(new Map<string, string>());
+  const previewVersionRef = useRef(0);
   const saveVersionRef = useRef(0);
   const contentKey = `${contentType}:${tmdbId}`;
   const optionsOwnerKey = `${currentUser?.id ?? 'signed-out'}:${contentKey}`;
+  const previewOwnerKeyRef = useRef(optionsOwnerKey);
 
-  const loadOptions = useCallback(async (showLoading: boolean) => {
+  if (previewOwnerKeyRef.current !== optionsOwnerKey) {
+    previewOwnerKeyRef.current = optionsOwnerKey;
+    previewVersionRef.current += 1;
+  }
+
+  const loadPreviewArtwork = useCallback(async (item: {
+    contentType: WatchlistContentType;
+    tmdbId: number;
+  }) => {
+    const key = `${item.contentType}:${item.tmdbId}`;
+
+    if (previewArtworkCacheRef.current.has(key)) {
+      return previewArtworkCacheRef.current.get(key) ?? null;
+    }
+
+    const details = item.contentType === 'movie'
+      ? await refreshMovie(item.tmdbId)
+      : await refreshSeries(item.tmdbId);
+    const artworkUrl = details.backdropUrl ?? details.posterUrl;
+    previewArtworkCacheRef.current.set(key, artworkUrl);
+
+    return artworkUrl;
+  }, [refreshMovie, refreshSeries]);
+
+  const loadOptionPreviews = useCallback(async (
+    sourceOptions: WatchlistOption[],
+    expectedOwnerKey: string,
+  ) => {
+    const previewVersion = previewVersionRef.current + 1;
+    previewVersionRef.current = previewVersion;
+    const pendingOptions = takeHydrationItems(
+      sourceOptions.filter((option) => (
+        previewHydrationCacheRef.current.get(option.key) !== option.updatedAt
+      )),
+      MAX_WATCHLIST_PREVIEWS,
+    );
+    if (pendingOptions.length === 0) return;
+
+    const token = await getFirebaseIdToken();
+
+    if (!token || previewOwnerKeyRef.current !== expectedOwnerKey) return;
+
+    await loadProgressively({
+      concurrency: MAX_CONCURRENT_WATCHLIST_PREVIEWS,
+      items: pendingOptions,
+      load: async (option) => loadWatchlistPreviewUrls({
+        fallback: option.posterUrls,
+        list: option,
+        loadArtwork: loadPreviewArtwork,
+        token,
+      }),
+      onLoaded: (posterUrls, loadedOption) => {
+        if (
+          previewVersionRef.current !== previewVersion
+          || previewOwnerKeyRef.current !== expectedOwnerKey
+        ) return;
+
+        previewHydrationCacheRef.current.set(loadedOption.key, loadedOption.updatedAt);
+        setOptions((current) => current.map((option) => (
+          option.key === loadedOption.key && option.updatedAt === loadedOption.updatedAt
+            ? { ...option, posterUrls }
+            : option
+        )));
+      },
+    });
+  }, [getFirebaseIdToken, loadPreviewArtwork]);
+
+  const loadOptions = useCallback(async (showLoading: boolean, loadPreviews = false) => {
     if (!firebaseIdToken) return;
 
     const loadVersion = loadVersionRef.current + 1;
@@ -88,10 +166,16 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
       );
 
       if (loadVersionRef.current !== loadVersion) return;
-      setOptions(nextOptions);
+      setOptions((current) => nextOptions.map((option) => ({
+        ...option,
+        posterUrls: current.find((item) => (
+          item.key === option.key && item.updatedAt === option.updatedAt
+        ))?.posterUrls ?? option.posterUrls,
+      })));
       setOptionsContentKey(optionsOwnerKey);
       setInitialSelectedKeys(nextSelectedKeys);
       setSelectedKeys(rollbackSelection(nextSelectedKeys));
+      if (loadPreviews) void loadOptionPreviews(nextOptions, optionsOwnerKey);
     } catch (loadError) {
       if (loadVersionRef.current === loadVersion) {
         setOptions([]);
@@ -103,7 +187,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
     } finally {
       if (loadVersionRef.current === loadVersion) setIsLoading(false);
     }
-  }, [contentType, firebaseIdToken, getFirebaseIdToken, optionsOwnerKey, showToast, tmdbId]);
+  }, [contentType, firebaseIdToken, getFirebaseIdToken, loadOptionPreviews, optionsOwnerKey, showToast, tmdbId]);
 
   useEffect(() => {
     saveVersionRef.current += 1;
@@ -137,7 +221,9 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
       setOptions([]);
       setInitialSelectedKeys(new Set());
       setSelectedKeys(new Set());
-      void loadOptions(true);
+      void loadOptions(true, true);
+    } else {
+      void loadOptionPreviews(options, optionsOwnerKey);
     }
   }
 
@@ -244,6 +330,11 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
         completedRollbacks.unshift(operation.rollback);
       }
 
+      [...addedKeys, ...removedKeys].forEach((key) => previewHydrationCacheRef.current.delete(key));
+      void loadOptionPreviews(
+        updateOptionSelection(saveOptions, previousInitialKeys, nextSelectedKeys),
+        optionsOwnerKey,
+      );
       void preloadWatchlists();
       showToast('Watchlists updated.', 'success');
       hapticConfirm();
@@ -274,7 +365,8 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   const hasCurrentOptions = optionsContentKey === optionsOwnerKey;
   const diff = buildSelectionDiff(initialSelectedKeys, selectedKeys);
   const hasChanges = diff.addedKeys.length > 0 || diff.removedKeys.length > 0;
-  const hasSharedOptions = options.some((option) => option.kind === 'shared');
+  const personalOptions = options.filter((option) => option.kind === 'personal');
+  const sharedOptions = options.filter((option) => option.kind === 'shared');
   const saveLabel = buildSelectionLabel(initialSelectedKeys, selectedKeys);
 
   const footer = (
@@ -300,6 +392,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
               placeholderTextColor={colors.textSubtle}
               returnKeyType="done"
               style={styles.createInput}
+              textAlignVertical="center"
               value={newWatchlistName}
             />
             <Button
@@ -369,22 +462,48 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
             <Text style={styles.stateText}>Create your first personal or shared list below.</Text>
           </View>
         ) : (
-          <BottomActionSheetScrollView contentContainerStyle={styles.optionList}>
-            {options.map((option) => (
-              <WatchlistOptionRow
-                isSelected={selectedKeys.has(option.key)}
-                key={option.key}
-                onPress={() => toggleOption(option.key)}
-                option={option}
-              />
-            ))}
-            {hasSharedOptions ? (
-              <View style={styles.voteNote}>
-                <Sparkles color={colors.accentText} size={18} strokeWidth={2} />
-                <Text style={styles.voteNoteText}>
-                  <Text style={styles.voteNoteStrong}>Shared lists: </Text>
-                  voting becomes available after this title is added.
-                </Text>
+          <BottomActionSheetScrollView contentContainerStyle={styles.optionSections}>
+            {personalOptions.length > 0 ? (
+              <View style={styles.optionSection}>
+                <Text accessibilityRole="header" style={styles.optionSectionTitle}>Personal lists</Text>
+                <BottomActionSheetScrollView
+                  contentContainerStyle={styles.optionRail}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.optionScroller}
+                >
+                  {personalOptions.map((option) => (
+                    <WatchlistOptionRow
+                      isSelected={selectedKeys.has(option.key)}
+                      key={option.key}
+                      onPress={() => toggleOption(option.key)}
+                      option={option}
+                    />
+                  ))}
+                </BottomActionSheetScrollView>
+              </View>
+            ) : null}
+            {sharedOptions.length > 0 ? (
+              <View style={[
+                styles.optionSection,
+                personalOptions.length > 0 ? styles.optionSectionSeparated : null,
+              ]}>
+                <Text accessibilityRole="header" style={styles.optionSectionTitle}>Shared lists</Text>
+                <BottomActionSheetScrollView
+                  contentContainerStyle={styles.optionRail}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.optionScroller}
+                >
+                  {sharedOptions.map((option) => (
+                    <WatchlistOptionRow
+                      isSelected={selectedKeys.has(option.key)}
+                      key={option.key}
+                      onPress={() => toggleOption(option.key)}
+                      option={option}
+                    />
+                  ))}
+                </BottomActionSheetScrollView>
               </View>
             ) : null}
           </BottomActionSheetScrollView>
@@ -409,6 +528,8 @@ function toPersonalOption(watchlist: PersonalWatchlistSummary): WatchlistOption 
     kind: 'personal',
     memberCount: null,
     name: watchlist.name,
+    posterUrls: [],
+    updatedAt: watchlist.updatedAt,
   };
 }
 
@@ -421,6 +542,8 @@ function toSharedOption(watchlist: SharedWatchlistSummary): WatchlistOption {
     kind: 'shared',
     memberCount: watchlist.memberCount,
     name: watchlist.name,
+    posterUrls: [],
+    updatedAt: watchlist.updatedAt,
   };
 }
 
@@ -450,13 +573,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
   createInput: {
-    ...typography.body,
     backgroundColor: colors.background,
     borderColor: colors.border,
     borderRadius: radii.md,
     borderWidth: 1,
     color: colors.text,
     flex: 1,
+    fontSize: typography.body.fontSize,
+    letterSpacing: typography.body.letterSpacing,
     minHeight: 44,
     paddingHorizontal: spacing.md,
   },
@@ -494,10 +618,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-  optionList: {
+  optionRail: {
+    flexDirection: 'row',
     gap: spacing.sm,
+    paddingRight: spacing.xl,
+  },
+  optionScroller: {
+    flexGrow: 0,
+    height: 156,
+  },
+  optionSection: {
+    gap: spacing.sm,
+  },
+  optionSectionSeparated: {
+    borderTopColor: colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: spacing.lg,
+  },
+  optionSections: {
+    gap: spacing.xl,
     paddingBottom: spacing.sm,
     paddingTop: spacing.md,
+  },
+  optionSectionTitle: {
+    ...typography.eyebrow,
+    color: colors.textSubtle,
   },
   pressed: {
     opacity: 0.76,
@@ -515,14 +660,15 @@ const styles = StyleSheet.create({
   },
   trigger: {
     alignItems: 'center',
-    alignSelf: 'flex-start',
+    alignSelf: 'stretch',
     backgroundColor: colors.accentSoft,
     borderColor: colors.accentBorder,
-    borderRadius: radii.md,
+    borderRadius: radii.xl,
     borderWidth: 1,
+    flex: 1,
     flexDirection: 'row',
     gap: spacing.xs,
-    marginTop: spacing.md,
+    justifyContent: 'center',
     minHeight: 44,
     paddingHorizontal: spacing.md,
   },
@@ -530,24 +676,5 @@ const styles = StyleSheet.create({
     color: colors.accentText,
     fontSize: 13,
     fontWeight: '800',
-  },
-  voteNote: {
-    alignItems: 'flex-start',
-    backgroundColor: colors.panelElevated,
-    borderRadius: radii.md,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.xs,
-    padding: spacing.md,
-  },
-  voteNoteStrong: {
-    color: colors.accentText,
-    fontWeight: '800',
-  },
-  voteNoteText: {
-    color: colors.textMuted,
-    flex: 1,
-    fontSize: 12,
-    lineHeight: 17,
   },
 });

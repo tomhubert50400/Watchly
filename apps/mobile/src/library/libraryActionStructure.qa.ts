@@ -49,9 +49,43 @@ assert.doesNotMatch(
   'watchlist covers must not use stacked native images or a rectangular grid',
 );
 
-const libraryDataSource = readFileSync(new URL('useLibraryData.ts', import.meta.url), 'utf8');
+const watchlistOptionSource = readFileSync(
+  new URL('../watchlists/WatchlistOptionRow.tsx', import.meta.url),
+  'utf8',
+);
 assert.match(
-  libraryDataSource,
+  watchlistOptionSource,
+  /import \{ WatchlistCard \} from '\.\.\/library\/WatchlistRail'/,
+  'the add-to-list sheet must reuse the Library watchlist card',
+);
+assert.doesNotMatch(
+  watchlistOptionSource,
+  /LockKeyhole|Users|kindIcon/,
+  'the add-to-list sheet must not recreate the old generic option row',
+);
+
+const addToWatchlistSource = readFileSync(
+  new URL('../watchlists/AddToWatchlistControl.tsx', import.meta.url),
+  'utf8',
+);
+assert.match(
+  addToWatchlistSource,
+  /Personal lists[\s\S]*<BottomActionSheetScrollView[\s\S]*horizontal[\s\S]*personalOptions\.map[\s\S]*Shared lists[\s\S]*<BottomActionSheetScrollView[\s\S]*horizontal[\s\S]*sharedOptions\.map/,
+  'the add-to-list sheet must use a separate horizontal rail for each labelled section',
+);
+assert.doesNotMatch(
+  addToWatchlistSource,
+  /Shared lists:|voting becomes available|voteNote/,
+  'the grouped rails must not restore the shared-list tip',
+);
+
+const libraryDataSource = readFileSync(new URL('useLibraryData.ts', import.meta.url), 'utf8');
+const watchlistPreviewSource = readFileSync(
+  new URL('../watchlists/watchlistPreview.ts', import.meta.url),
+  'utf8',
+);
+assert.match(
+  watchlistPreviewSource,
   /details\.items\.slice\(0, 4\)/,
   'watchlist previews must hydrate up to four titles',
 );

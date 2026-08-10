@@ -32,8 +32,9 @@ assert.deepEqual(calculateResumeEpisode([{ episodeCount: 6, seasonNumber: 1 }, {
 assert.deepEqual(calculateResumeEpisode([{ episodeCount: 6, seasonNumber: 1 }, { episodeCount: 8, seasonNumber: 2 }], 1, 6), { episodeNumber: 1, seasonNumber: 2 });
 assert.equal(calculateResumeEpisode([{ episodeCount: 6, seasonNumber: 1 }], 1, 6), null);
 
-assert.equal(shouldShowTrackedTitle({ hasReleaseAlert: false, inferredWatchingFromProgress: true, resumeEpisodeNumber: null, resumeSeasonNumber: null, status: 'watching' }), false);
-assert.equal(shouldShowTrackedTitle({ hasReleaseAlert: true, inferredWatchingFromProgress: false, resumeEpisodeNumber: null, resumeSeasonNumber: null, status: null }), true);
+assert.equal(shouldShowTrackedTitle({ favorite: false, hasReleaseAlert: false, inferredWatchingFromProgress: true, resumeEpisodeNumber: null, resumeSeasonNumber: null, status: 'watching' }), false);
+assert.equal(shouldShowTrackedTitle({ favorite: false, hasReleaseAlert: true, inferredWatchingFromProgress: false, resumeEpisodeNumber: null, resumeSeasonNumber: null, status: null }), true);
+assert.equal(shouldShowTrackedTitle({ favorite: true, hasReleaseAlert: false, inferredWatchingFromProgress: false, resumeEpisodeNumber: null, resumeSeasonNumber: null, status: null }), true);
 
 assert.deepEqual(buildLibrarySummary([
   { ratingScore: 4.5, watchedEpisodeCount: 5 },

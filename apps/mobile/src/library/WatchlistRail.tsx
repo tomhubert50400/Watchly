@@ -1,3 +1,4 @@
+import { Check } from 'lucide-react-native';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, {
   Defs,
@@ -12,12 +13,62 @@ import type { LibraryListItem } from './useLibraryData';
 
 export function WatchlistRail({ lists, onOpen }: { lists: LibraryListItem[]; onOpen: (list: LibraryListItem) => void }) {
   return <ScrollView contentContainerStyle={styles.rail} horizontal showsHorizontalScrollIndicator={false}>
-    {lists.map((list, index) => <Pressable accessibilityLabel={`Open ${list.name}`} accessibilityRole="button" key={list.key} onPress={() => onOpen(list)} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-      <BlendedArtwork blendId={`watchlist-art-${index}`} urls={list.posterUrls} />
-      <View style={styles.overlay} />
-      <Text numberOfLines={2} style={styles.title}>{list.name}</Text>
-    </Pressable>)}
+    {lists.map((list, index) => (
+      <WatchlistCard
+        blendId={`watchlist-art-${index}`}
+        key={list.key}
+        name={list.name}
+        onPress={() => onOpen(list)}
+        posterUrls={list.posterUrls}
+      />
+    ))}
   </ScrollView>;
+}
+
+type WatchlistCardProps = {
+  accessibilityHint?: string;
+  accessibilityLabel?: string;
+  blendId: string;
+  isSelectable?: boolean;
+  isSelected?: boolean;
+  name: string;
+  onPress: () => void;
+  posterUrls: Array<string | null>;
+};
+
+export function WatchlistCard({
+  accessibilityHint,
+  accessibilityLabel,
+  blendId,
+  isSelectable = false,
+  isSelected = false,
+  name,
+  onPress,
+  posterUrls,
+}: WatchlistCardProps) {
+  return (
+    <Pressable
+      accessibilityHint={accessibilityHint}
+      accessibilityLabel={accessibilityLabel ?? `Open ${name}`}
+      accessibilityRole={isSelectable ? 'checkbox' : 'button'}
+      accessibilityState={isSelectable ? { checked: isSelected } : undefined}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.card,
+        isSelected ? styles.cardSelected : null,
+        pressed ? styles.pressed : null,
+      ]}
+    >
+      <BlendedArtwork blendId={blendId} urls={posterUrls} />
+      <View style={styles.overlay} />
+      <Text numberOfLines={2} style={styles.title}>{name}</Text>
+      {isSelectable ? (
+        <View style={[styles.selectionControl, isSelected ? styles.selectionControlSelected : null]}>
+          {isSelected ? <Check color={colors.textOnAccent} size={18} strokeWidth={3} /> : null}
+        </View>
+      ) : null}
+    </Pressable>
+  );
 }
 
 const ARTWORK_HEIGHT = 156;
@@ -147,6 +198,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     width: 278,
   },
+  cardSelected: {
+    borderColor: colors.accent,
+    borderWidth: 2,
+  },
   collage: {
     ...StyleSheet.absoluteFillObject,
   },
@@ -164,6 +219,23 @@ const styles = StyleSheet.create({
   rail: {
     gap: spacing.sm,
     paddingRight: spacing.xl,
+  },
+  selectionControl: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(9, 12, 19, 0.72)',
+    borderColor: 'rgba(255, 255, 255, 0.72)',
+    borderRadius: 16,
+    borderWidth: 1,
+    height: 32,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: spacing.sm,
+    top: spacing.sm,
+    width: 32,
+  },
+  selectionControlSelected: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   singleArtwork: {
     ...StyleSheet.absoluteFillObject,

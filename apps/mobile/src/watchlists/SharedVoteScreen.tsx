@@ -50,7 +50,7 @@ export function SharedVoteScreen({ route }: Props) {
   const ownerId = currentUser?.id ?? null;
   const ownerIdRef = useRef(ownerId);
   ownerIdRef.current = ownerId;
-  const cacheResource = `shared-vote:${route.params.watchlistId}:${route.params.sessionId}:v1`;
+  const cacheResource = `shared-vote:${route.params.watchlistId}:${route.params.sessionId}:v2`;
   const cacheKey = getPrivateCacheKey(ownerId ?? 'visitor', cacheResource);
   const load = useCallback(async (cached?: VoteDetails): Promise<VoteDetails> => {
     const expectedOwnerId = ownerId;

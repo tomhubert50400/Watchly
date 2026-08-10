@@ -56,13 +56,14 @@ type WatchlistCacheContextValue = {
 const WatchlistCacheContext = createContext<WatchlistCacheContextValue | null>(null);
 
 export function WatchlistCacheProvider({ children }: PropsWithChildren) {
-  const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
+  const { currentUser, getFirebaseIdToken } = useAuthSession();
   const { refreshMovie, refreshSeries } = useCatalogueCache();
   const [personalDetails, setPersonalDetails] = useState<Record<string, CachedPersonalWatchlist>>({});
   const [personalWatchlists, setPersonalWatchlists] = useState<PersonalWatchlistSummary[]>([]);
   const [sharedDetails, setSharedDetails] = useState<Record<string, CachedSharedWatchlist>>({});
   const [sharedWatchlists, setSharedWatchlists] = useState<SharedWatchlistSummary[]>([]);
   const [summariesOwnerId, setSummariesOwnerId] = useState<string | null>(currentUser?.id ?? null);
+  const preloadRequestRef = useRef<{ ownerId: string; promise: Promise<void> } | null>(null);
   const preloadVersionRef = useRef(0);
   const ownerRef = useRef<string | null>(currentUser?.id ?? null);
   const ownerVersionRef = useRef(0);
@@ -75,6 +76,7 @@ export function WatchlistCacheProvider({ children }: PropsWithChildren) {
   if (ownerRef.current !== ownerId) {
     ownerRef.current = ownerId;
     ownerVersionRef.current += 1;
+    preloadRequestRef.current = null;
     preloadVersionRef.current += 1;
   }
 
@@ -145,9 +147,12 @@ export function WatchlistCacheProvider({ children }: PropsWithChildren) {
     return cached;
   }, [getFirebaseIdToken, ownerId, refreshMovie, refreshSeries]);
 
-  const preloadWatchlists = useCallback(async () => {
+  const preloadWatchlists = useCallback(() => {
     const requestOwner = ownerId;
-    if (!firebaseIdToken || !requestOwner) return;
+    if (!requestOwner) return Promise.resolve();
+
+    const existing = preloadRequestRef.current;
+    if (existing?.ownerId === requestOwner) return existing.promise;
 
     const preloadVersion = preloadVersionRef.current + 1;
     const ownerVersion = ownerVersionRef.current;
@@ -155,23 +160,31 @@ export function WatchlistCacheProvider({ children }: PropsWithChildren) {
     const isCurrent = () => ownerRef.current === requestOwner
       && ownerVersionRef.current === ownerVersion
       && preloadVersionRef.current === preloadVersion;
+    const promise = (async () => {
+      const token = await getRequiredToken(getFirebaseIdToken);
+      if (!isCurrent()) return;
+      const [personalResponse, sharedResponse] = await Promise.all([
+        listWatchlists(token),
+        listSharedWatchlists(token),
+      ]);
 
-    const token = await getRequiredToken(getFirebaseIdToken);
-    if (!isCurrent()) return;
-    const [personalResponse, sharedResponse] = await Promise.all([
-      listWatchlists(token),
-      listSharedWatchlists(token),
-    ]);
+      if (!isCurrent()) return;
 
-    if (!isCurrent()) return;
+      setPersonalWatchlists(personalResponse.items);
+      setSharedWatchlists(sharedResponse.items);
+      setSummariesOwnerId(requestOwner);
+    })().finally(() => {
+      if (preloadRequestRef.current?.promise === promise) {
+        preloadRequestRef.current = null;
+      }
+    });
 
-    setPersonalWatchlists(personalResponse.items);
-    setSharedWatchlists(sharedResponse.items);
-    setSummariesOwnerId(requestOwner);
-  }, [firebaseIdToken, getFirebaseIdToken, ownerId]);
+    preloadRequestRef.current = { ownerId: requestOwner, promise };
+    return promise;
+  }, [getFirebaseIdToken, ownerId]);
 
   useEffect(() => {
-    void preloadWatchlists();
+    void preloadWatchlists().catch(() => undefined);
   }, [preloadWatchlists]);
 
   const value = useMemo<WatchlistCacheContextValue>(
