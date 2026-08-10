@@ -49,7 +49,7 @@ export function buildJournal(input: BuildJournalInput): JournalModel {
   input.progress.forEach((episode) => progressBySeries.set(episode.seriesTmdbId, [...(progressBySeries.get(episode.seriesTmdbId) ?? []), episode]));
   const seriesEntries = [...progressBySeries.entries()].map(([tmdbId, episodes]): JournalEntry => {
     const opinions = input.opinions.filter((opinion) => opinion.content.contentType === 'episode' && opinion.content.seriesTmdbId === tmdbId);
-    const scores = opinions.map((opinion) => opinion.score);
+    const scores = opinions.flatMap((opinion) => opinion.score === null ? [] : [opinion.score]);
     const reviews = opinions.filter((opinion) => opinion.type === 'episodeReview');
     const orderedEpisodes = episodes.slice().sort((a, b) => a.seasonNumber - b.seasonNumber || a.episodeNumber - b.episodeNumber);
     return {

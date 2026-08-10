@@ -1,7 +1,11 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
+import type { ViewingStats } from '../api/viewings';
 import type { LegalDocumentId } from '../legal/legalDocuments';
+import type { LibraryMediaItem } from '../library/useLibraryData';
+import type { ProfileMediaFilter } from '../profile/profileMediaModel';
 
 export type RootTabParamList = {
+  Community: undefined;
   Explore: undefined;
   Home: undefined;
   Library: undefined;
@@ -9,6 +13,10 @@ export type RootTabParamList = {
 };
 
 export type RootStackParamList = {
+  AllTimeStats: {
+    profileBackdropUrl: string | null;
+    stats?: ViewingStats;
+  };
   EpisodeDetail: {
     episodeNumber: number;
     seasonNumber: number;
@@ -16,10 +24,15 @@ export type RootStackParamList = {
     tmdbId: number;
     title: string;
   };
+  ExploreDiscovery: {
+    mediaType: 'movie' | 'series';
+    section: 'announced' | 'trending';
+  };
   FilmDetail: {
     title: string;
     tmdbId: number;
   };
+  ImportData: undefined;
   Journal: undefined;
   LegalDocument: {
     document: LegalDocumentId;
@@ -31,7 +44,17 @@ export type RootStackParamList = {
     title: string;
     watchlistId: string;
   };
+  ProfileMedia: {
+    filter: ProfileMediaFilter;
+    items?: LibraryMediaItem[];
+    profileBackdropUrl?: string | null;
+  };
   PublicProfile: {
+    profilePreview?: {
+      avatarUrl: string | null;
+      displayName: string;
+      handle: string;
+    };
     previewOwnProfile?: boolean;
     userId: string;
   };

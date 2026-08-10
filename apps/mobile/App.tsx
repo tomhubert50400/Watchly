@@ -3,21 +3,25 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeBottomTabNavigator } from '@react-navigation/bottom-tabs/unstable';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { BlurView } from 'expo-blur';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
+import Constants, { AppOwnership, ExecutionEnvironment } from 'expo-constants';
 import { StatusBar } from 'expo-status-bar';
-import { Compass, House, Library, UserCircle } from 'lucide-react-native';
+import { Compass, House, Library, UserCircle, Users } from 'lucide-react-native';
 import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthSessionProvider, useAuthSession } from './src/auth/AuthSessionContext';
 import { CatalogueCacheProvider } from './src/catalogue/CatalogueCacheContext';
 import { EpisodeDetailScreen } from './src/catalogue/EpisodeDetailScreen';
+import { ExploreDiscoveryScreen, getDiscoveryLabel } from './src/catalogue/ExploreDiscoveryScreen';
 import { ExploreScreen } from './src/catalogue/ExploreScreen';
 import { FilmDetailScreen } from './src/catalogue/FilmDetailScreen';
 import { SeasonDetailScreen } from './src/catalogue/SeasonDetailScreen';
 import { SeriesDetailScreen } from './src/catalogue/SeriesDetailScreen';
 import { colors } from './src/design/tokens';
+import { FeedScreen } from './src/feed/FeedScreen';
 import { HomeScreen } from './src/home/HomeScreen';
+import { ImportDataScreen } from './src/imports/ImportDataScreen';
 import { JournalScreen } from './src/journal/JournalScreen';
+import { AppStartupPreloader } from './src/launch/AppStartupPreloader';
 import { WatchlyLaunchGate } from './src/launch/WatchlyLaunchGate';
 import { LegalDocumentScreen } from './src/legal/LegalDocumentScreen';
 import { legalDocuments } from './src/legal/legalDocuments';
@@ -31,6 +35,8 @@ import { ToastProvider } from './src/notifications/ToastContext';
 import { OnboardingScreen } from './src/onboarding/OnboardingScreen';
 import { ProfileScreen } from './src/profile/ProfileScreen';
 import { PublicProfileScreen } from './src/profile/PublicProfileScreen';
+import { AllTimeStatsScreen } from './src/profile/AllTimeStatsScreen';
+import { ProfileMediaScreen } from './src/profile/ProfileMediaScreen';
 import { SettingsScreen } from './src/profile/SettingsScreen';
 
 import { PersonalWatchlistScreen } from './src/watchlists/PersonalWatchlistScreen';
@@ -41,6 +47,11 @@ import { WatchlistCacheProvider } from './src/watchlists/WatchlistCacheContext';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tabs = createBottomTabNavigator<RootTabParamList>();
 const NativeTabs = createNativeBottomTabNavigator<RootTabParamList>();
+type ExploreStackParamList = {
+  ExploreHome: undefined;
+  PublicProfile: RootStackParamList['PublicProfile'];
+};
+const ExploreStack = createNativeStackNavigator<ExploreStackParamList>();
 const watchlyNavigationTheme = {
   ...DarkTheme,
   colors: {
@@ -55,12 +66,14 @@ const watchlyNavigationTheme = {
 };
 
 const tabIcons: Record<MainTabName, typeof House> = {
+  Community: Users,
   Explore: Compass,
   Home: House,
   Library,
   Profile: UserCircle,
 };
 const nativeTabIcons = {
+  Community: { default: 'person.2', selected: 'person.2.fill' },
   Explore: { default: 'safari', selected: 'safari.fill' },
   Home: { default: 'house', selected: 'house.fill' },
   Library: { default: 'books.vertical', selected: 'books.vertical.fill' },
@@ -71,6 +84,20 @@ function ExploreTabScreen() {
   const isFocused = useIsFocused();
 
   return <ExploreScreen isActive={isFocused} />;
+}
+
+function ExploreNavigator() {
+  return (
+    <ExploreStack.Navigator
+      screenOptions={{
+        contentStyle: { backgroundColor: colors.background },
+        headerShown: false,
+      }}
+    >
+      <ExploreStack.Screen component={ExploreTabScreen} name="ExploreHome" />
+      <ExploreStack.Screen component={PublicProfileScreen} name="PublicProfile" />
+    </ExploreStack.Navigator>
+  );
 }
 
 function FallbackTabBarBackground() {
@@ -93,6 +120,7 @@ function NativeMainTabs() {
 
         return {
           headerShown: false,
+          lazy: false,
           tabBarActiveTintColor: colors.accent,
           tabBarIcon: ({ focused }) => ({
             name: focused ? icon.selected : icon.default,
@@ -103,7 +131,8 @@ function NativeMainTabs() {
       }}
     >
       <NativeTabs.Screen component={HomeScreen} name="Home" />
-      <NativeTabs.Screen component={ExploreTabScreen} name="Explore" />
+      <NativeTabs.Screen component={ExploreNavigator} name="Explore" />
+      <NativeTabs.Screen component={FeedScreen} name="Community" />
       <NativeTabs.Screen component={LibraryScreen} name="Library" />
       <NativeTabs.Screen component={ProfileScreen} name="Profile" />
     </NativeTabs.Navigator>
@@ -119,6 +148,8 @@ function FallbackMainTabs() {
 
         return {
           headerShown: false,
+          lazy: false,
+          sceneStyle: styles.tabScene,
           tabBarAccessibilityLabel: config?.label ?? route.name,
           tabBarActiveTintColor: colors.accent,
           tabBarBackground: () => <FallbackTabBarBackground />,
@@ -133,7 +164,8 @@ function FallbackMainTabs() {
       }}
     >
       <Tabs.Screen component={HomeScreen} name="Home" />
-      <Tabs.Screen component={ExploreTabScreen} name="Explore" />
+      <Tabs.Screen component={ExploreNavigator} name="Explore" />
+      <Tabs.Screen component={FeedScreen} name="Community" />
       <Tabs.Screen component={LibraryScreen} name="Library" />
       <Tabs.Screen component={ProfileScreen} name="Profile" />
     </Tabs.Navigator>
@@ -143,6 +175,7 @@ function FallbackMainTabs() {
 function MainTabs() {
   const canUseNativeTabs =
     Platform.OS === 'ios' &&
+    Constants.appOwnership !== AppOwnership.Expo &&
     Constants.executionEnvironment !== ExecutionEnvironment.StoreClient;
 
   return canUseNativeTabs ? <NativeMainTabs /> : <FallbackMainTabs />;
@@ -157,6 +190,7 @@ export default function App() {
             <ToastProvider>
               <CatalogueCacheProvider>
                 <WatchlistCacheProvider>
+                  <AppStartupPreloader />
                   <AppNavigator />
                 </WatchlistCacheProvider>
               </CatalogueCacheProvider>
@@ -170,7 +204,7 @@ export default function App() {
 
 function AppNavigator() {
   const { currentUser } = useAuthSession();
-  const needsOnboarding = currentUser && !currentUser.onboardingCompleted;
+  const needsOnboarding = currentUser && (!currentUser.onboardingCompleted || !currentUser.handle);
 
   return (
     <>
@@ -195,6 +229,28 @@ function AppNavigator() {
         ) : (
           <>
             <Stack.Screen component={MainTabs} name="MainTabs" options={{ headerShown: false }} />
+            <Stack.Screen
+              component={AllTimeStatsScreen}
+              name="AllTimeStats"
+              options={{
+                headerStyle: { backgroundColor: 'transparent' },
+                headerTransparent: true,
+                title: 'ALL TIME',
+              }}
+            />
+            <Stack.Screen
+              component={ProfileMediaScreen}
+              name="ProfileMedia"
+              options={({ route }) => ({
+                headerStyle: { backgroundColor: 'transparent' },
+                headerTransparent: true,
+                title: route.params.filter === 'series'
+                  ? 'Series'
+                  : route.params.filter === 'movies'
+                    ? 'Movies'
+                    : 'Favorites',
+              })}
+            />
             <Stack.Screen component={JournalScreen} name="Journal" options={{ title: 'Journal' }} />
             <Stack.Screen
               component={LegalDocumentScreen}
@@ -203,6 +259,7 @@ function AppNavigator() {
             />
             <Stack.Screen component={NotificationsScreen} name="Notifications" options={{ title: 'Alerts' }} />
             <Stack.Screen component={SettingsScreen} name="Settings" options={{ title: 'Settings' }} />
+            <Stack.Screen component={ImportDataScreen} name="ImportData" options={{ title: 'Import your data' }} />
             <Stack.Screen
               component={SharedWatchlistScreen}
               name="SharedWatchlist"
@@ -218,16 +275,18 @@ function AppNavigator() {
               name="EpisodeDetail"
               options={({ route }) => ({ title: route.params.title })}
             />
+            <Stack.Screen
+              component={ExploreDiscoveryScreen}
+              name="ExploreDiscovery"
+              options={({ route }) => ({
+                title: getDiscoveryLabel(route.params.section, route.params.mediaType),
+              })}
+            />
             <Stack.Screen component={FilmDetailScreen} name="FilmDetail" options={{ title: '' }} />
             <Stack.Screen
               component={PersonalWatchlistScreen}
               name="PersonalWatchlist"
               options={({ route }) => ({ title: route.params.title })}
-            />
-            <Stack.Screen
-              component={PublicProfileScreen}
-              name="PublicProfile"
-              options={{ title: 'Public profile' }}
             />
             <Stack.Screen
               component={SeasonDetailScreen}
@@ -271,5 +330,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0,
     lineHeight: 12,
+  },
+  tabScene: {
+    backgroundColor: colors.background,
   },
 });

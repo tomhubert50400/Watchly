@@ -10,6 +10,7 @@ export const colors = {
   danger: '#FF7888',
   dangerBorder: 'rgba(255, 120, 136, 0.36)',
   dangerBackground: 'rgba(255, 120, 136, 0.13)',
+  interactiveSurface: 'rgba(15, 19, 29, 0.40)',
   muted: '#A2AAB8',
   overlay: 'rgba(9, 12, 19, 0.72)',
   panel: '#0F131D',

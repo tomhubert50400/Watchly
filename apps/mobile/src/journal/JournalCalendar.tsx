@@ -100,7 +100,7 @@ export function JournalCalendar({
 
 function formatMonth(monthKey: string) {
   const [year, month] = monthKey.split('-').map(Number);
-  return new Date(Date.UTC(year!, month! - 1, 1)).toLocaleDateString(undefined, {
+  return new Date(Date.UTC(year!, month! - 1, 1)).toLocaleDateString('en-US', {
     month: 'long',
     timeZone: 'UTC',
     year: 'numeric',
@@ -108,7 +108,7 @@ function formatMonth(monthKey: string) {
 }
 
 function formatDate(dateKey: string) {
-  return new Date(`${dateKey}T00:00:00Z`).toLocaleDateString(undefined, {
+  return new Date(`${dateKey}T00:00:00Z`).toLocaleDateString('en-US', {
     day: 'numeric',
     month: 'long',
     timeZone: 'UTC',

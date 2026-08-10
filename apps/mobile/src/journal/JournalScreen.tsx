@@ -33,7 +33,7 @@ export function JournalScreen() {
   const [calendarMonthKey, setCalendarMonthKey] = useState<string | null>(null);
   const [filter, setFilter] = useState<JournalFilter>('all');
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
-  const key = currentUser ? `watchly:user:${currentUser.id}:journal:v1` : 'watchly:user:visitor:journal-disabled';
+  const key = currentUser ? `watchly:user:${currentUser.id}:journal:v2` : 'watchly:user:visitor:journal-disabled';
   const load = useCallback(async (cached?: JournalData): Promise<JournalData> => {
     if (!currentUser) throw new Error('Sign in to open your Journal.');
     const token = await getFirebaseIdToken(); if (!token) throw new Error('Sign in again to open your Journal.');
@@ -101,6 +101,6 @@ async function hydrateEntry(entry: JournalEntry, fallback?: HydratedJournalEntry
 function toJournalFallback(entry: JournalEntry): HydratedJournalEntry { return { ...entry, posterUrl: null, title: `${entry.kind === 'movie' ? 'Movie' : 'Series'} TMDB ${entry.tmdbId}` }; }
 function openEntry(navigation: Navigation, entry: HydratedJournalEntry) { if (entry.kind === 'movie') navigation.navigate('FilmDetail', { title: entry.title, tmdbId: entry.tmdbId }); else navigation.navigate('SeriesDetail', { title: entry.title, tmdbId: entry.tmdbId }); }
 function errorLabel(error: unknown) { return error instanceof Error ? error.message : 'unknown error'; }
-function formatSelectedDate(dateKey: string) { return new Date(`${dateKey}T00:00:00Z`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC', year: 'numeric' }); }
-function formatMonth(key: string) { const [year, month] = key.split('-').map(Number); return new Date(year!, month! - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }).toUpperCase(); }
+function formatSelectedDate(dateKey: string) { return new Date(`${dateKey}T00:00:00Z`).toLocaleDateString('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC', year: 'numeric' }); }
+function formatMonth(key: string) { const [year, month] = key.split('-').map(Number); return new Date(year!, month! - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase(); }
 const styles = StyleSheet.create({ dateControls: { alignItems: 'center', flexDirection: 'row', gap: spacing.xs, marginBottom: spacing.md }, intro: { borderBottomColor: colors.border, borderBottomWidth: 1, gap: spacing.md, paddingBottom: spacing.lg }, introText: { ...typography.body, color: colors.textMuted }, stats: { flexDirection: 'row', gap: spacing.lg }, stat: { flex: 1 }, statValue: { color: colors.text, fontSize: 17, fontWeight: '800' }, statLabel: { color: colors.textSubtle, fontSize: 11, marginTop: 2 }, filters: { gap: spacing.xs, paddingVertical: spacing.md }, months: { gap: spacing.md }, month: { ...typography.eyebrow, color: colors.accentText, marginBottom: spacing.md, marginTop: spacing.sm } });
