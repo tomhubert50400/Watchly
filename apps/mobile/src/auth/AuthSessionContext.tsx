@@ -22,18 +22,18 @@ type AuthSessionContextValue = {
   refreshCurrentUser: () => Promise<void>;
   signInWithGoogle: (googleIdToken: string) => Promise<void>;
   signOut: () => Promise<void>;
-  socialRevision: number;
   status: AuthSessionStatus;
   trackingRevision: number;
 };
 
 const AuthSessionContext = createContext<AuthSessionContextValue | null>(null);
+const SocialRevisionContext = createContext(0);
 
 export function AuthSessionProvider({ children }: PropsWithChildren) {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [firebaseIdToken, setFirebaseIdToken] = useState<string | null>(null);
   const [socialRevision, setSocialRevision] = useState(0);
-  const [status, setStatus] = useState<AuthSessionStatus>('idle');
+  const [status, setStatus] = useState<AuthSessionStatus>('loading');
   const [trackingRevision, setTrackingRevision] = useState(0);
   const explicitSignOutRef = useRef(false);
   const devSignInAttemptedRef = useRef(false);
@@ -220,7 +220,6 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       refreshCurrentUser,
       signInWithGoogle,
       signOut,
-      socialRevision,
       status,
       trackingRevision,
     }),
@@ -233,13 +232,18 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       refreshCurrentUser,
       signInWithGoogle,
       signOut,
-      socialRevision,
       status,
       trackingRevision,
     ],
   );
 
-  return <AuthSessionContext.Provider value={value}>{children}</AuthSessionContext.Provider>;
+  return (
+    <AuthSessionContext.Provider value={value}>
+      <SocialRevisionContext.Provider value={socialRevision}>
+        {children}
+      </SocialRevisionContext.Provider>
+    </AuthSessionContext.Provider>
+  );
 }
 
 export function useAuthSession() {
@@ -248,4 +252,8 @@ export function useAuthSession() {
   if (!context) throw new Error('useAuthSession must be used inside AuthSessionProvider.');
 
   return context;
+}
+
+export function useSocialRevision() {
+  return useContext(SocialRevisionContext);
 }

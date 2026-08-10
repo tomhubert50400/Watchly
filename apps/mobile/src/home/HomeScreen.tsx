@@ -14,7 +14,7 @@ import {
 import { FeedItem, getFeed, setFeedItemLiked } from '../api/feed';
 import { listNotifications } from '../api/notifications';
 import { listSeriesProgressSummaries, SeriesProgressSummary } from '../api/progress';
-import { useAuthSession } from '../auth/AuthSessionContext';
+import { useAuthSession, useSocialRevision } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { BrandWordmark } from '../brand/BrandWordmark';
 import { getPrivateCacheKey, getPublicCacheKey } from '../cache/persistedCache';
@@ -29,7 +29,6 @@ import { Screen } from '../components/Screen';
 import { SectionHeader } from '../components/SectionHeader';
 import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { colors, spacing, typography } from '../design/tokens';
-import { useHomeLaunchReadiness } from '../launch/WatchlyLaunchGate';
 import { RootStackParamList, RootTabParamList } from '../navigation/types';
 import { countUnreadNotifications } from '../notifications/notificationModel';
 import { ContinueWatchingRail } from './ContinueWatchingRail';
@@ -51,7 +50,19 @@ type HomeNavigation = CompositeNavigationProp<
   NativeStackNavigationProp<RootStackParamList>
 >;
 
-const PUBLIC_HOME_KEY = getPublicCacheKey('home:catalogue:v2');
+export const PUBLIC_HOME_KEY = getPublicCacheKey('home:catalogue:v3');
+
+export function getHomeProgressKey(userId: string) {
+  return getPrivateCacheKey(userId, 'home:progress:v2');
+}
+
+export function getHomeFeedKey(userId: string) {
+  return getPrivateCacheKey(userId, 'home:feed:v2');
+}
+
+export function getHomeNotificationsKey(userId: string) {
+  return getPrivateCacheKey(userId, 'notifications:inbox:v2');
+}
 
 export function HomeScreen() {
   const navigation = useNavigation<HomeNavigation>();
@@ -59,9 +70,9 @@ export function HomeScreen() {
     currentUser,
     firebaseIdToken,
     getFirebaseIdToken,
-    socialRevision,
     trackingRevision,
   } = useAuthSession();
+  const socialRevision = useSocialRevision();
   const isSignedIn = Boolean(currentUser && firebaseIdToken);
   const loadCatalogue = useCallback(loadHomeCatalogue, []);
   const loadProgress = useCallback(
@@ -79,32 +90,26 @@ export function HomeScreen() {
       throw new Error('Sign in again to update Alerts.');
     }
 
-    return (await listNotifications(token)).items;
+    return loadHomeNotifications(token);
   }, [getFirebaseIdToken]);
   const catalogue = useCachedResource({ key: PUBLIC_HOME_KEY, load: loadCatalogue });
   const progress = useCachedResource({
     enabled: isSignedIn,
-    key: currentUser ? getPrivateCacheKey(currentUser.id, 'home:progress:v1') : getPrivateCacheKey('visitor', 'home:progress:v1'),
+    key: getHomeProgressKey(currentUser?.id ?? 'visitor'),
     load: loadProgress,
   });
   const feed = useCachedResource({
     enabled: isSignedIn,
-    key: currentUser ? getPrivateCacheKey(currentUser.id, 'home:feed:v1') : getPrivateCacheKey('visitor', 'home:feed:v1'),
+    key: getHomeFeedKey(currentUser?.id ?? 'visitor'),
     load: loadFeed,
   });
   const notifications = useCachedResource({
     enabled: isSignedIn,
-    key: currentUser
-      ? getPrivateCacheKey(currentUser.id, 'notifications:inbox:v1')
-      : getPrivateCacheKey('visitor', 'notifications:inbox:v1'),
+    key: getHomeNotificationsKey(currentUser?.id ?? 'visitor'),
     load: loadNotifications,
   });
   const unreadNotificationCount = countUnreadNotifications(notifications.data ?? []);
   const atmosphereUrl = catalogue.data?.hero?.posterUrl ?? catalogue.data?.hero?.backdropUrl ?? null;
-  useHomeLaunchReadiness(
-    Boolean(catalogue.data || catalogue.error || !catalogue.isInitialLoading),
-  );
-
   useFocusEffect(useCallback(() => {
     if (isSignedIn) {
       notifications.revalidate();
@@ -326,7 +331,7 @@ function TrendingRail({
   );
 }
 
-async function loadHomeCatalogue(): Promise<HomeCatalogueData> {
+export async function loadHomeCatalogue(): Promise<HomeCatalogueData> {
   const response = await ensureCatalogueSections();
   const featured = response.spotlight;
 
@@ -339,7 +344,7 @@ async function loadHomeCatalogue(): Promise<HomeCatalogueData> {
   try {
     details = (await getMovieDetails(featured.tmdbId)).item;
     setMemoryResource(
-      `watchly:public:catalogue:movie:${featured.tmdbId}`,
+      `watchly:public:catalogue:movie:${featured.tmdbId}:v3`,
       details,
       new Date().toISOString(),
     );
@@ -351,6 +356,8 @@ async function loadHomeCatalogue(): Promise<HomeCatalogueData> {
     hero: {
       backdropUrl: details?.backdropUrl ?? featured.backdropUrl,
       genres: details?.genres ?? [],
+      logoAspectRatio: details?.logoAspectRatio ?? null,
+      logoUrl: details?.logoUrl ?? null,
       posterUrl: details?.posterUrl ?? featured.posterUrl,
       releaseDate: details?.releaseDate ?? featured.releaseDate,
       runtimeMinutes: details?.runtimeMinutes ?? null,
@@ -361,7 +368,7 @@ async function loadHomeCatalogue(): Promise<HomeCatalogueData> {
   };
 }
 
-async function loadHomeProgress(token: string): Promise<HomeProgressItem[]> {
+export async function loadHomeProgress(token: string): Promise<HomeProgressItem[]> {
   const summaries = (await listSeriesProgressSummaries(token)).items.slice(0, 8);
   const hydrated = await Promise.allSettled(summaries.map(hydrateProgressItem));
   const fulfilled = hydrated.filter(
@@ -410,7 +417,7 @@ async function hydrateProgressItem(summary: SeriesProgressSummary): Promise<Home
   };
 }
 
-async function loadHomeFeed(token: string): Promise<HomeFeedItem[]> {
+export async function loadHomeFeed(token: string): Promise<HomeFeedItem[]> {
   const rawItems = (await getFeed(token)).items.slice(0, 10);
   const hydrated = await Promise.allSettled(rawItems.map(hydrateFeedItem));
   const fulfilled = hydrated.filter(
@@ -424,11 +431,16 @@ async function loadHomeFeed(token: string): Promise<HomeFeedItem[]> {
   return fulfilled.map((result) => result.value);
 }
 
+export async function loadHomeNotifications(token: string) {
+  return (await listNotifications(token)).items;
+}
+
 async function hydrateFeedItem(item: FeedItem): Promise<HomeFeedItem> {
   if (item.content.contentType === 'movie') {
     const movie = (await getMovieDetails(item.content.tmdbId)).item;
 
     return {
+      authorAvatarUrl: item.author.avatarUrl,
       authorDisplayName: item.author.displayName,
       authorId: item.author.id,
       body: item.body,
@@ -454,6 +466,7 @@ async function hydrateFeedItem(item: FeedItem): Promise<HomeFeedItem> {
   ]);
 
   return {
+    authorAvatarUrl: item.author.avatarUrl,
     authorDisplayName: item.author.displayName,
     authorId: item.author.id,
     body: item.body,

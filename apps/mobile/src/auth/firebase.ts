@@ -91,7 +91,7 @@ export async function getFreshFirebaseIdToken(): Promise<string | null> {
     return null;
   }
 
-  return user.getIdToken(true);
+  return user.getIdToken();
 }
 
 export async function getFirebaseSessionFromUser(user: User): Promise<FirebaseSession> {

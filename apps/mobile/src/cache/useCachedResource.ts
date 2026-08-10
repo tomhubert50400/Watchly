@@ -63,6 +63,40 @@ export function createCachedResourceStateFromMemory<T>(key: string): CachedResou
   };
 }
 
+export async function preloadCachedResource<T>({
+  key,
+  load,
+  staleTimeMs = DEFAULT_STALE_TIME_MS,
+}: Omit<UseCachedResourceOptions<T>, 'enabled'>): Promise<T> {
+  let cached = getMemoryResource<T>(key);
+
+  try {
+    const persisted = await readPersistedCache<T>(key);
+
+    if (persisted && (!cached || persisted.savedAt > cached.savedAt)) {
+      cached = persisted;
+      setMemoryResource(key, persisted.data, persisted.savedAt);
+    }
+  } catch {
+    // A persistence failure must not block launch preloading.
+  }
+
+  if (cached && isMemoryResourceFresh(cached.savedAt, staleTimeMs)) {
+    return cached.data;
+  }
+
+  try {
+    const data = await getOrCreateResourceRequest(key, () => load(cached?.data));
+    const savedAt = new Date().toISOString();
+    setMemoryResource(key, data, savedAt);
+    void writePersistedCache(key, data, undefined, savedAt).catch(() => undefined);
+    return data;
+  } catch (error) {
+    if (cached) return cached.data;
+    throw error;
+  }
+}
+
 export function useCachedResource<T>({
   key,
   load,

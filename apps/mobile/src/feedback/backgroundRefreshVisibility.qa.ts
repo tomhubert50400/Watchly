@@ -81,11 +81,33 @@ assert.match(
   'silent revalidation must still bypass fresh-cache short circuits',
 );
 
+const authSessionSource = source('../auth/AuthSessionContext.tsx');
+const firebaseAuthSource = source('../auth/firebase.ts');
+assert.doesNotMatch(
+  firebaseAuthSource,
+  /getIdToken\(true\)/,
+  'authenticated reads must not force credential rotation on every request',
+);
+const authSessionValueSource = authSessionSource.slice(
+  authSessionSource.indexOf('const value = useMemo<AuthSessionContextValue>'),
+  authSessionSource.indexOf('return (', authSessionSource.indexOf('const value = useMemo<AuthSessionContextValue>')),
+);
+assert.doesNotMatch(
+  authSessionValueSource,
+  /socialRevision/,
+  'social refreshes must not invalidate every authentication consumer',
+);
+assert.match(
+  authSessionSource,
+  /const SocialRevisionContext = createContext\(0\)[\s\S]*export function useSocialRevision\(\)/,
+  'social refresh consumers must subscribe through their dedicated context',
+);
+
 const exploreSource = source('../catalogue/ExploreScreen.tsx');
 assert.match(
   exploreSource,
-  /isLoading && items\.length === 0/,
-  'Explore must reserve search loading UI for an empty result area',
+  /const resultCount = items\.length \+ people\.length;[\s\S]*isLoading && resultCount === 0/,
+  'Explore must reserve search loading UI for an empty media and people result area',
 );
 
 const progressSource = source('../tracking/EpisodeProgressControl.tsx');
@@ -103,13 +125,113 @@ assert.match(
 const feedSource = source('../feed/FeedScreen.tsx');
 assert.match(
   feedSource,
-  /const hasVisibleItems = itemsRef\.current\.length > 0/,
-  'Feed must detect already visible content before showing loading UI',
+  /const items = resource\.data \?\? \[\]/,
+  'Feed must keep rendering the cached Community items during revalidation',
 );
 assert.match(
   feedSource,
-  /isLoading && items\.length === 0/,
+  /resource\.isInitialLoading && items\.length === 0/,
   'Feed must only replace an empty feed with its loading state',
+);
+assert.match(
+  feedSource,
+  /resource\.error && items\.length === 0/,
+  'Feed must hide refresh failures when Community items are already visible',
+);
+
+const publicProfileSource = source('../profile/PublicProfileScreen.tsx');
+assert.match(
+  publicProfileSource,
+  /const requestToken = firebaseIdTokenRef\.current/,
+  'public profile requests must read renewable credentials without using them as screen identity',
+);
+assert.match(
+  publicProfileSource,
+  /\}, \[hydrateLoadedProfile, isOwnPreview, isSignedIn, route\.params\.userId\]\);/,
+  'public profile loading scope must depend on session and profile identity, not token rotation',
+);
+assert.match(
+  publicProfileSource,
+  /status === 'loading' && !profile \? \([\s\S]*<PublicProfileLoadingState/,
+  'public profiles must show a profile-shaped skeleton only while no hydrated profile is visible',
+);
+assert.doesNotMatch(
+  publicProfileSource,
+  /LoadingState label="Loading profile"/,
+  'public profiles must not fall back to a centered spinner while loading',
+);
+
+const ownerProfileSource = source('../profile/ProfileScreen.tsx');
+assert.match(
+  ownerProfileSource,
+  /return loadProfileData\(firebaseIdToken, refreshSeries, cached\)/,
+  'automatic owner profile revalidation must reuse the current credential without forcing token rotation',
+);
+assert.doesNotMatch(
+  ownerProfileSource,
+  /Loading your (favorites|movies|series)/,
+  'optional profile media rails must stay hidden until their data is ready',
+);
+
+const profileBodySource = source('../profile/ProfileBody.tsx');
+assert.match(
+  profileBodySource,
+  /showMediaRails \? \(/,
+  'profile media rails must support silent initial loading',
+);
+assert.doesNotMatch(
+  publicProfileSource,
+  /Follow state could not load|['"]Loading\.\.\.['"]/,
+  'follow relationship state must load without exposing technical status copy',
+);
+
+const notificationsSource = source('../notifications/NotificationsScreen.tsx');
+assert.match(
+  notificationsSource,
+  /loadPendingFollowRequests\(true\)[\s\S]*refreshing=\{resource\.isRefreshing \|\| isRefreshingFollowRequests\}/,
+  'only manual follow-request refreshes may drive the native refresh control',
+);
+
+const onboardingSource = source('../onboarding/OnboardingScreen.tsx');
+assert.match(
+  onboardingSource,
+  /searchLoading && items\.length === 0/,
+  'onboarding search must keep existing results visible while the next query loads',
+);
+
+const streamingSource = source('../catalogue/StreamingAvailabilityPanel.tsx');
+assert.doesNotMatch(
+  streamingSource,
+  /LoadingState|Checking providers|Could not load streaming availability/,
+  'optional provider enrichment must load and fail silently',
+);
+
+const episodeCommunitySource = source('../catalogue/EpisodeCommunityPanel.tsx');
+assert.doesNotMatch(
+  episodeCommunitySource,
+  /Loading community opinions|Could not load ratings and reviews/,
+  'optional episode community data must load and fail silently',
+);
+
+const exploreDiscoverySource = source('../catalogue/ExploreDiscoveryScreen.tsx');
+assert.doesNotMatch(
+  exploreDiscoverySource,
+  /Could not refresh these picks/,
+  'discovery refresh failures must stay hidden while existing groups remain visible',
+);
+
+const viewingCountSource = source('../viewings/ViewingCountControl.tsx');
+assert.match(
+  viewingCountSource,
+  /if \(isLoading && !summary\) \{\s*return null;/,
+  'optional viewing history must stay hidden until usable data is ready',
+);
+
+const opinionSource = source('../opinions/OpinionSheet.tsx');
+assert.match(
+  opinionSource,
+  /if \(isLoading\) \{\s*return null;/,
+  'optional opinion controls must stay hidden instead of exposing their initial request',
 );
 
 console.log('Background refresh visibility QA passed.');

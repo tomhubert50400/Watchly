@@ -30,6 +30,7 @@ const watchlyLetters = require('../../assets/watchly-letters-ui.png');
 const watchlyWordmark = require('../../assets/watchly-wordmark-ui.png');
 
 const LETTER_REVEAL_FEATHER = 24;
+const LAUNCH_ASSET_WAIT_MS = 400;
 const WORDMARK_ASPECT_RATIO = 512 / 189;
 // Visible W bounds: wordmark x 5-140, y 45-157; isolated layer x 7-249, y 77-239.
 const WORDMARK_W_ASPECT_CORRECTION = (112 / 162) / (135 / 242);
@@ -48,37 +49,37 @@ const KERNELS = [
   { delay: 1_320, lane: 0.02, size: 16 },
 ] as const;
 
-const HomeReadyContext = createContext<((ready: boolean) => void) | null>(null);
+const AppReadyContext = createContext<((ready: boolean) => void) | null>(null);
 
 export function WatchlyLaunchGate({ children }: PropsWithChildren) {
-  const [homeReady, setHomeReady] = useState(false);
-  const reportHomeReady = useCallback((ready: boolean) => {
-    if (ready) setHomeReady(true);
+  const [appReady, setAppReady] = useState(false);
+  const reportAppReady = useCallback((ready: boolean) => {
+    setAppReady(ready);
   }, []);
 
   return (
-    <HomeReadyContext.Provider value={reportHomeReady}>
+    <AppReadyContext.Provider value={reportAppReady}>
       <View style={styles.gate}>
         {children}
-        <WatchlyLaunchAnimation homeReady={homeReady} />
+        <WatchlyLaunchAnimation appReady={appReady} />
       </View>
-    </HomeReadyContext.Provider>
+    </AppReadyContext.Provider>
   );
 }
 
-export function useHomeLaunchReadiness(ready: boolean) {
-  const reportHomeReady = useContext(HomeReadyContext);
+export function useAppLaunchReadiness(ready: boolean) {
+  const reportAppReady = useContext(AppReadyContext);
 
-  if (!reportHomeReady) {
-    throw new Error('useHomeLaunchReadiness must be used inside WatchlyLaunchGate.');
+  if (!reportAppReady) {
+    throw new Error('useAppLaunchReadiness must be used inside WatchlyLaunchGate.');
   }
 
   useEffect(() => {
-    reportHomeReady(ready);
-  }, [ready, reportHomeReady]);
+    reportAppReady(ready);
+  }, [ready, reportAppReady]);
 }
 
-function WatchlyLaunchAnimation({ homeReady }: { homeReady: boolean }) {
+function WatchlyLaunchAnimation({ appReady }: { appReady: boolean }) {
   const { height, width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [blocksTouches, setBlocksTouches] = useState(true);
@@ -103,6 +104,13 @@ function WatchlyLaunchAnimation({ homeReady }: { homeReady: boolean }) {
     loadedAssetsRef.current.add(asset);
     if (loadedAssetsRef.current.size === 4) setAssetsReady(true);
   }, []);
+
+  useEffect(() => {
+    if (assetsReady) return;
+
+    const fallbackTimer = setTimeout(() => setAssetsReady(true), LAUNCH_ASSET_WAIT_MS);
+    return () => clearTimeout(fallbackTimer);
+  }, [assetsReady]);
 
   useEffect(() => {
     if (!assetsReady) return;
@@ -166,7 +174,7 @@ function WatchlyLaunchAnimation({ homeReady }: { homeReady: boolean }) {
     if (
       !dockComplete ||
       revealStartedRef.current ||
-      !(homeReady || latestRevealReached)
+      !(appReady || latestRevealReached)
     ) {
       return;
     }
@@ -185,7 +193,7 @@ function WatchlyLaunchAnimation({ homeReady }: { homeReady: boolean }) {
       const remaining = Math.max(0, launchTimeline.minimumDurationMs - elapsed);
       finishTimerRef.current = setTimeout(() => setVisible(false), remaining);
     });
-  }, [contentReveal, dockComplete, homeReady, latestRevealReached]);
+  }, [appReady, contentReveal, dockComplete, latestRevealReached]);
 
   if (!visible) return null;
 

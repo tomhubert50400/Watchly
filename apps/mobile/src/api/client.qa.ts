@@ -1,7 +1,7 @@
 // Node types are intentionally not part of the Expo runtime TypeScript configuration.
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import { readFileSync } from 'node:fs';
-import { ApiError, apiGet } from './client';
+import { ApiError, apiGet, apiPostFormData } from './client';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -123,6 +123,20 @@ async function main() {
     globalThis.fetch = (async () => new Response(null, { status: 204 })) as typeof fetch;
     const noContent = await apiGet<undefined>('/qa-no-content');
     assert(noContent === undefined, 'Expected 204 responses to resolve without JSON parsing.');
+
+    const formData = new FormData();
+    formData.append('file', new Blob(['Title,Year\nHeat,1995']), 'ratings.csv');
+    let uploadRequest: RequestInit | undefined;
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      uploadRequest = init;
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }) as typeof fetch;
+    await apiPostFormData('/qa-upload', formData);
+    assert(uploadRequest?.body === formData, 'Form data must be sent without JSON serialization.');
+    assert(
+      !(uploadRequest?.headers as Record<string, string> | undefined)?.['Content-Type'],
+      'Multipart boundaries must be set by fetch.',
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

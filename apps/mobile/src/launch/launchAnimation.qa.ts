@@ -16,6 +16,11 @@ assert.equal(
   launchTimeline.revealLatestStartMs + launchTimeline.revealDurationMs,
   launchTimeline.minimumDurationMs,
 );
+assert.equal(
+  launchTimeline.revealLatestStartMs - launchTimeline.dockEndMs,
+  570,
+  'the launch must not leave a multi-second black pause after docking',
+);
 
 const source = readFileSync(new URL('WatchlyLaunchGate.tsx', import.meta.url), 'utf8');
 
@@ -28,7 +33,7 @@ assert.match(
   'launch and Home must hand off through the same official wordmark asset',
 );
 assert.match(source, /useNativeDriver: true/g, 'launch transforms must run on the native driver');
-assert.match(source, /homeReady \|\| latestRevealReached/, 'Home readiness must gate the content fade');
+assert.match(source, /appReady \|\| latestRevealReached/, 'Application readiness must gate the content fade');
 assert.match(
   source,
   /if \(!assetsReady\) return;/,
@@ -48,6 +53,11 @@ assert.match(
   source,
   /loadedAssetsRef\.current\.size === 4/,
   'all four launch assets must be ready before the timeline starts',
+);
+assert.match(
+  source,
+  /setTimeout\(\(\) => setAssetsReady\(true\), LAUNCH_ASSET_WAIT_MS\)/,
+  'a missing native image event must not leave the launch screen black forever',
 );
 assert.match(
   source,

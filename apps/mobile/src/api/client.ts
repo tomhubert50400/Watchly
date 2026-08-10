@@ -4,6 +4,7 @@ const apiUrl = publicEnv.EXPO_PUBLIC_API_URL;
 
 type ApiRequestOptions = {
   body?: unknown;
+  formData?: FormData;
   timeoutMs?: number;
   token?: string;
 };
@@ -27,6 +28,14 @@ export function apiGet<T>(path: string, options: ApiRequestOptions = {}): Promis
 
 export function apiPost<T>(path: string, body: unknown, options: ApiRequestOptions = {}): Promise<T> {
   return apiRequest<T>('POST', path, { ...options, body });
+}
+
+export function apiPostFormData<T>(
+  path: string,
+  formData: FormData,
+  options: ApiRequestOptions = {},
+): Promise<T> {
+  return apiRequest<T>('POST', path, { ...options, formData });
 }
 
 export function apiPut<T>(path: string, body: unknown, options: ApiRequestOptions = {}): Promise<T> {
@@ -53,9 +62,9 @@ async function apiRequest<T>(method: string, path: string, options: ApiRequestOp
 
   try {
     const response = await fetch(`${apiUrl}${path}`, {
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      body: options.formData ?? (options.body !== undefined ? JSON.stringify(options.body) : undefined),
       headers: {
-        ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(options.body !== undefined && !options.formData ? { 'Content-Type': 'application/json' } : {}),
         ...(options.token ? { Authorization: ['Bearer', options.token].join(' ') } : {}),
       },
       method,
