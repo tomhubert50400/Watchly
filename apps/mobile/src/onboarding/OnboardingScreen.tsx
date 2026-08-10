@@ -14,7 +14,7 @@ import {
   CatalogueSearchType,
   searchCatalogue,
 } from '../api/catalogue';
-import { completeOnboarding, updateProfile } from '../api/profile';
+import { completeOnboarding, getHandleAvailability, updateProfile } from '../api/profile';
 import { upsertTrackingState } from '../api/tracking';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { Button } from '../components/Button';
@@ -24,6 +24,10 @@ import { MediaPoster } from '../components/MediaPoster';
 import { Screen } from '../components/Screen';
 import { TextInput } from '../components/TextInput';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import {
+  getProfileHandleError,
+  normalizeProfileHandleInput,
+} from '../profile/profileHandle';
 
 type OnboardingStep = 0 | 1 | 2;
 
@@ -41,7 +45,10 @@ export function OnboardingScreen() {
     refreshCurrentUser,
   } = useAuthSession();
   const [displayName, setDisplayName] = useState(currentUser?.displayName ?? '');
+  const [handle, setHandle] = useState(currentUser?.handle ?? '');
+  const [handleTouched, setHandleTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isCheckingHandle, setIsCheckingHandle] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
   const [items, setItems] = useState<CatalogueSearchItem[]>([]);
   const [query, setQuery] = useState('');
@@ -51,6 +58,8 @@ export function OnboardingScreen() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const trimmedQuery = query.trim();
+  const handleError = getProfileHandleError(handle);
+  const isHandleClaim = Boolean(currentUser?.onboardingCompleted && !currentUser.handle);
   const progress = useMemo(() => `${step + 1} / 3`, [step]);
 
   useEffect(() => {
@@ -111,6 +120,46 @@ export function OnboardingScreen() {
     });
   }
 
+  async function continueOnboarding() {
+    if (step === 0 && handleError) {
+      setHandleTouched(true);
+      setError(handleError);
+      return;
+    }
+
+    if (step === 0) {
+      if (!firebaseIdToken || isCheckingHandle) return;
+
+      setIsCheckingHandle(true);
+      setError(null);
+
+      try {
+        const availability = await getHandleAvailability(
+          firebaseIdToken,
+          normalizeProfileHandleInput(handle),
+        );
+
+        if (!availability.available) {
+          setHandleTouched(true);
+          setError('This handle is already taken.');
+          return;
+        }
+      } catch (caughtError) {
+        setError(
+          caughtError instanceof Error
+            ? caughtError.message
+            : 'Could not check this handle. Try again.',
+        );
+        return;
+      } finally {
+        setIsCheckingHandle(false);
+      }
+    }
+
+    setError(null);
+    setStep((current) => (current + 1) as OnboardingStep);
+  }
+
   async function finishOnboarding() {
     if (!firebaseIdToken || isFinishing) {
       return;
@@ -120,6 +169,12 @@ export function OnboardingScreen() {
     setIsFinishing(true);
 
     try {
+      if (handleError) {
+        setHandleTouched(true);
+        setStep(0);
+        throw new Error(handleError);
+      }
+
       const trimmedDisplayName = displayName.trim();
 
       await updateProfile(firebaseIdToken, {
@@ -140,12 +195,84 @@ export function OnboardingScreen() {
         notifyTrackingChanged();
       }
 
-      await completeOnboarding(firebaseIdToken);
+      await completeOnboarding(firebaseIdToken, normalizeProfileHandleInput(handle));
       await refreshCurrentUser();
-    } catch {
-      setError('Could not finish onboarding. Try again.');
+    } catch (caughtError) {
+      const message = caughtError instanceof Error
+        ? caughtError.message
+        : 'Could not finish onboarding. Try again.';
+
+      if (message.toLowerCase().includes('handle')) {
+        setStep(0);
+        setHandleTouched(true);
+      }
+
+      setError(message);
       setIsFinishing(false);
     }
+  }
+
+  async function finishHandleClaim() {
+    if (!firebaseIdToken || isFinishing) return;
+
+    setHandleTouched(true);
+    setError(null);
+
+    if (handleError) {
+      setError(handleError);
+      return;
+    }
+
+    setIsFinishing(true);
+
+    try {
+      await completeOnboarding(firebaseIdToken, normalizeProfileHandleInput(handle));
+      await refreshCurrentUser();
+    } catch (caughtError) {
+      setError(
+        caughtError instanceof Error
+          ? caughtError.message
+          : 'Could not save your handle. Try again.',
+      );
+      setIsFinishing(false);
+    }
+  }
+
+  if (isHandleClaim) {
+    return (
+      <Screen
+        eyebrow="Profile identity"
+        footer={(
+          <Button
+            fullWidth
+            label="Save permanent handle"
+            loading={isFinishing}
+            onPress={() => void finishHandleClaim()}
+          />
+        )}
+        title="Choose your @handle"
+      >
+        <View style={styles.content}>
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>One permanent identifier</Text>
+            <Text style={styles.bodyText}>
+              Your display name can keep changing. Your handle uniquely identifies your profile
+              and cannot be changed after you save it.
+            </Text>
+            <HandleField
+              error={handleTouched ? handleError : null}
+              handle={handle}
+              onChange={(value) => {
+                setHandle(value.toLowerCase().replace(/^@/, ''));
+                setHandleTouched(true);
+                setError(null);
+              }}
+            />
+          </View>
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        </View>
+      </Screen>
+    );
   }
 
   return (
@@ -166,8 +293,9 @@ export function OnboardingScreen() {
               {step < 2 ? (
                 <Button
                   accessibilityLabel="Continue onboarding"
+                  loading={step === 0 && isCheckingHandle}
                   label="Continue"
-                  onPress={() => setStep((current) => (current + 1) as OnboardingStep)}
+                  onPress={() => void continueOnboarding()}
                 />
               ) : (
                 <Button
@@ -209,9 +337,15 @@ export function OnboardingScreen() {
 
           {step === 0 ? (
             <ProfileBasicsStep
-              accountId={currentUser?.id ?? null}
               displayName={displayName}
+              handle={handle}
+              handleError={handleTouched ? handleError : null}
               onChangeDisplayName={setDisplayName}
+              onChangeHandle={(value) => {
+                setHandle(value.toLowerCase().replace(/^@/, ''));
+                setHandleTouched(true);
+                setError(null);
+              }}
             />
           ) : null}
 
@@ -239,13 +373,17 @@ export function OnboardingScreen() {
 }
 
 function ProfileBasicsStep({
-  accountId,
   displayName,
+  handle,
+  handleError,
   onChangeDisplayName,
+  onChangeHandle,
 }: {
-  accountId: string | null;
   displayName: string;
+  handle: string;
+  handleError: string | null;
   onChangeDisplayName: (value: string) => void;
+  onChangeHandle: (value: string) => void;
 }) {
   return (
     <View style={styles.card}>
@@ -255,12 +393,37 @@ function ProfileBasicsStep({
       </Text>
       <TextInput
         autoCapitalize="words"
-        helperText={accountId ? `Leave blank to show ${accountId}.` : 'You can edit this later.'}
+        helperText="You can edit this whenever you want."
         label="Display name"
         onChangeText={onChangeDisplayName}
         value={displayName}
       />
+      <HandleField error={handleError} handle={handle} onChange={onChangeHandle} />
     </View>
+  );
+}
+
+function HandleField({
+  error,
+  handle,
+  onChange,
+}: {
+  error: string | null;
+  handle: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <TextInput
+      autoCapitalize="none"
+      autoCorrect={false}
+      error={error ?? undefined}
+      helperText="Shown as @handle. Use 3-20 letters, numbers, or underscores. This cannot be changed later."
+      label="Permanent handle"
+      maxLength={21}
+      onChangeText={onChange}
+      placeholder="cinema_fan"
+      value={handle}
+    />
   );
 }
 
@@ -359,7 +522,7 @@ function StarterInterestsStep({
         <Chip label={`${selected.length} selected for My TV`} tone="success" />
       ) : null}
 
-      {searchLoading ? (
+      {searchLoading && items.length === 0 ? (
         <LoadingState label="Searching TMDB" />
       ) : null}
 

@@ -1,4 +1,5 @@
 import type {
+  ProfileBackdropSelection,
   ProfileOpinion,
   ProfileOpinionsResponse,
   UserProfile,
@@ -15,9 +16,13 @@ export type ProfileOpinionTarget =
   | { name: 'FilmDetail'; params: RootStackParamList['FilmDetail'] };
 
 export type ProfileModel = {
+  avatarUploadsEnabled: boolean;
+  avatarUrl: string | null;
   displayName: string;
+  handle: string;
   isPublic: boolean;
   opinions: ProfileOpinion[];
+  profileBackdrop: ProfileBackdropSelection | null;
   stats: {
     followersCount: number;
     followingCount: number;
@@ -34,9 +39,13 @@ export function buildProfileModel(
   const opinions = response.items;
 
   return {
+    avatarUploadsEnabled: profile.avatarUploadsEnabled,
+    avatarUrl: profile.avatarUrl,
     displayName: profile.displayName?.trim() || 'Watchly member',
+    handle: profile.handle ?? '',
     isPublic: profile.privacy.profileVisibility === 'public',
     opinions,
+    profileBackdrop: profile.profileBackdrop,
     stats: {
       followersCount: response.stats.followersCount,
       followingCount: response.stats.followingCount,

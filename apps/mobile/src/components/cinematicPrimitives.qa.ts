@@ -6,6 +6,14 @@ import { readFileSync } from 'node:fs';
 import { getBannerPresentation, getStarFillRatios, normalizeRating } from './cinematicPrimitives';
 
 const starRatingSource = readFileSync(new URL('StarRatingDisplay.tsx', import.meta.url), 'utf8');
+const spotlightAtmosphereSource = readFileSync(
+  new URL('SpotlightAtmosphere.tsx', import.meta.url),
+  'utf8',
+);
+const publicProfileSource = readFileSync(
+  new URL('../profile/PublicProfileScreen.tsx', import.meta.url),
+  'utf8',
+);
 
 assert.equal(normalizeRating(-1), 0);
 assert.equal(normalizeRating(3.24), 3);
@@ -18,6 +26,21 @@ assert.match(
   starRatingSource,
   /fillClip, \{ height: size, width: size \* fill \}/,
   'pink rating fill must have visible height',
+);
+assert.match(
+  spotlightAtmosphereSource,
+  /fadeIn\?: boolean/,
+  'the shared atmosphere must expose an opt-in fade instead of changing every screen',
+);
+assert.match(
+  spotlightAtmosphereSource,
+  /AccessibilityInfo\.isReduceMotionEnabled\(\)/,
+  'the optional atmosphere fade must respect reduced motion',
+);
+assert.match(
+  publicProfileSource,
+  /<SpotlightAtmosphere fadeIn imageUrl=\{atmosphereUrl\} \/>/,
+  'public profile artwork must opt into the backdrop fade',
 );
 
 assert.deepEqual(getBannerPresentation('updating'), {

@@ -34,8 +34,12 @@ const response = {
   stats: { followersCount: 7, followingCount: 3, postsCount: 2, reviewsCount: 1 },
 } as ProfileOpinionsResponse & { stats: { followingCount: number } };
 const publicProfile: UserProfile = {
+  avatarUploadsEnabled: true,
+  avatarUrl: 'https://images.watchly.test/avatars/user-1/photo.jpg',
   displayName: 'Watchly UI Review',
+  handle: 'watchly_ui_review',
   id: 'user-1',
+  profileBackdrop: { contentType: 'series', tmdbId: 1396 },
   privacy: {
     episodeProgressVisibility: 'private',
     profileVisibility: 'public',
@@ -47,8 +51,12 @@ const publicProfile: UserProfile = {
 };
 
 const publicModel = buildProfileModel(publicProfile, response);
+assert.equal(publicModel.avatarUploadsEnabled, true);
+assert.equal(publicModel.avatarUrl, publicProfile.avatarUrl);
 assert.equal(publicModel.displayName, 'Watchly UI Review');
+assert.equal(publicModel.handle, 'watchly_ui_review');
 assert.deepEqual(publicModel.opinions, [movieRating, movieReview]);
+assert.deepEqual(publicModel.profileBackdrop, publicProfile.profileBackdrop);
 assert.deepEqual(publicModel.stats, {
   followersCount: 7,
   followingCount: 3,

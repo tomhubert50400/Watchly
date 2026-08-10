@@ -1,4 +1,9 @@
-import { apiDelete, apiGet, apiPut } from './client';
+import { apiDelete, apiGet, apiPost, apiPut } from './client';
+import type { ReleaseAlertSummary } from './notifications';
+import type { SeriesProgressSummary } from './progress';
+import type { MovieRating } from './ratings';
+import type { TrackingState } from './tracking';
+import type { ViewingStats } from './viewings';
 
 export type PrivacyVisibility = 'public' | 'private';
 export type SharedWatchlistVisibility = 'members' | 'private';
@@ -13,21 +18,41 @@ export type ProfilePrivacy = {
 };
 
 export type UserProfile = {
+  avatarUploadsEnabled: boolean;
+  avatarUrl: string | null;
   displayName: string | null;
+  handle: string | null;
   id: string;
+  profileBackdrop: ProfileBackdropSelection | null;
   privacy: ProfilePrivacy;
+};
+
+export type ProfileBackdropSelection = {
+  contentType: 'movie' | 'series';
+  tmdbId: number;
 };
 
 export type OnboardingCompletion = {
   displayName: string | null;
+  handle: string;
   id: string;
   onboardingCompleted: boolean;
 };
 
 export type PublicProfile = {
+  avatarUrl: string | null;
   canViewContent: boolean;
   displayName: string | null;
+  handle: string | null;
   id: string;
+  media: {
+    movieRatings: MovieRating[];
+    releaseAlerts: ReleaseAlertSummary[];
+    seriesProgress: SeriesProgressSummary[];
+    trackingStates: TrackingState[];
+  };
+  opinions: ProfileOpinion[];
+  profileBackdrop: ProfileBackdropSelection | null;
   profileVisibility: PrivacyVisibility;
   stats: {
     followersCount: number;
@@ -35,12 +60,29 @@ export type PublicProfile = {
     postsCount: number;
     reviewsCount: number;
   };
+  viewingStats: ViewingStats | null;
   watchlists: Array<{
     id: string;
     itemCount: number;
     name: string;
     updatedAt: string;
   }>;
+};
+
+export type ProfileSearchItem = {
+  avatarUrl: string | null;
+  displayName: string;
+  handle: string;
+  id: string;
+};
+
+export type ProfileSearchResponse = {
+  items: ProfileSearchItem[];
+};
+
+export type HandleAvailability = {
+  available: boolean;
+  handle: string;
 };
 
 type ProfileMovieRatingOpinion = {
@@ -74,7 +116,7 @@ type ProfileMovieReviewOpinion = {
     tmdbId: number;
   };
   id: string;
-  score: number;
+  score: number | null;
   type: 'movieReview';
   updatedAt: string;
 };
@@ -88,7 +130,7 @@ type ProfileEpisodeReviewOpinion = {
     seriesTmdbId: number;
   };
   id: string;
-  score: number;
+  score: number | null;
   type: 'episodeReview';
   updatedAt: string;
 };
@@ -121,6 +163,14 @@ export type UpdatePrivacyInput = {
   viewingHistoryVisibility?: PrivacyVisibility;
 };
 
+export type AvatarUploadIntent = {
+  contentType: 'image/jpeg';
+  headers: Record<string, string>;
+  maxBytes: number;
+  objectKey: string;
+  uploadUrl: string;
+};
+
 export function getProfile(firebaseIdToken: string): Promise<UserProfile> {
   return apiGet<UserProfile>('/profile/me', { token: firebaseIdToken });
 }
@@ -144,6 +194,26 @@ export function getPublicProfile(
   });
 }
 
+export function searchProfiles(
+  firebaseIdToken: string,
+  query: string,
+): Promise<ProfileSearchResponse> {
+  return apiGet<ProfileSearchResponse>(
+    `/profile/search?query=${encodeURIComponent(query)}`,
+    { token: firebaseIdToken },
+  );
+}
+
+export function getHandleAvailability(
+  firebaseIdToken: string,
+  handle: string,
+): Promise<HandleAvailability> {
+  return apiGet<HandleAvailability>(
+    `/profile/handle-availability?handle=${encodeURIComponent(handle)}`,
+    { token: firebaseIdToken },
+  );
+}
+
 export function getDevTestProfile(firebaseIdToken: string): Promise<PublicProfile> {
   return apiPut<PublicProfile>('/profile/dev-test-user', {}, { token: firebaseIdToken });
 }
@@ -162,6 +232,36 @@ export function updatePrivacy(
   return apiPut<UserProfile>('/profile/privacy', input, { token: firebaseIdToken });
 }
 
+export function createAvatarUpload(firebaseIdToken: string): Promise<AvatarUploadIntent> {
+  return apiPost<AvatarUploadIntent>('/profile/me/avatar-upload', {}, {
+    token: firebaseIdToken,
+  });
+}
+
+export function confirmAvatarUpload(
+  firebaseIdToken: string,
+  objectKey: string,
+): Promise<UserProfile> {
+  return apiPut<UserProfile>('/profile/me/avatar', { objectKey }, {
+    token: firebaseIdToken,
+  });
+}
+
+export function removeAvatar(firebaseIdToken: string): Promise<UserProfile> {
+  return apiDelete<UserProfile>('/profile/me/avatar', { token: firebaseIdToken });
+}
+
+export function updateProfileBackdrop(
+  firebaseIdToken: string,
+  selection: ProfileBackdropSelection | null,
+): Promise<UserProfile> {
+  return apiPut<UserProfile>(
+    '/profile/me/backdrop',
+    selection ?? { contentType: null, tmdbId: null },
+    { token: firebaseIdToken },
+  );
+}
+
 export function exportAccountData(firebaseIdToken: string): Promise<unknown> {
   return apiGet<unknown>('/profile/me/export', { token: firebaseIdToken });
 }
@@ -170,10 +270,13 @@ export function deleteAccount(firebaseIdToken: string) {
   return apiDelete<{ deleted: true }>('/profile/me', { token: firebaseIdToken });
 }
 
-export function completeOnboarding(firebaseIdToken: string): Promise<OnboardingCompletion> {
+export function completeOnboarding(
+  firebaseIdToken: string,
+  handle: string,
+): Promise<OnboardingCompletion> {
   return apiPut<OnboardingCompletion>(
     '/profile/me/onboarding-completed',
-    {},
+    { handle },
     { token: firebaseIdToken },
   );
 }

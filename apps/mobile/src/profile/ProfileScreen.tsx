@@ -1,98 +1,222 @@
-import { memo, useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
-import { Settings, Share2 } from 'lucide-react-native';
-import { getEpisodeDetails, getMovieDetails } from '../api/catalogue';
+import { Alert, RefreshControl, Share, StyleSheet, Text, View } from 'react-native';
+import { Image as ImageIcon, Settings, Share2 } from 'lucide-react-native';
+import { getMovieDetails, type SeriesDetails } from '../api/catalogue';
 import {
   getOwnProfileOpinions,
   getProfile,
-  type ProfileOpinion,
+  removeAvatar,
+  updateProfileBackdrop,
+  type ProfileBackdropSelection,
 } from '../api/profile';
-import { useAuthSession } from '../auth/AuthSessionContext';
+import { getViewingStats, type ViewingStats } from '../api/viewings';
+import { useAuthSession, useSocialRevision } from '../auth/AuthSessionContext';
 import { ProfileAuthCard } from '../auth/ProfileAuthCard';
 import { BrandWordmark } from '../brand/BrandWordmark';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
-import { ExpandableReviewText } from '../components/ExpandableReviewText';
-import { IconButton } from '../components/IconButton';
 import { LoadingState } from '../components/LoadingState';
-import { MediaPoster } from '../components/MediaPoster';
 import { Screen } from '../components/Screen';
-import { SectionHeader } from '../components/SectionHeader';
-import { StarRatingDisplay } from '../components/StarRatingDisplay';
+import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
-import { colors, radii, spacing, typography } from '../design/tokens';
+import { colors, spacing, typography } from '../design/tokens';
+import { hapticError, hapticSuccess } from '../feedback/haptics';
+import type { LibraryMediaItem } from '../library/useLibraryData';
+import { useLibraryData } from '../library/useLibraryData';
 import { RootStackParamList } from '../navigation/types';
 import {
   buildProfileModel,
-  getProfileOpinionTarget,
-  isReview,
   type ProfileModel,
 } from './profileModel';
-import { ProfileSummaryCard } from './ProfileSummaryCard';
+import { ProfileBackdropPickerSheet } from './ProfileBackdropPickerSheet';
+import { getHydratedProfileOpinionTarget, ProfileBody } from './ProfileBody';
+import { ProfileHeaderButton } from './ProfileHeaderButton';
+import { hydrateViewingStatsArtwork } from './hydrateViewingStatsArtwork';
+import {
+  dedupeProfileMediaItems,
+  getProfileMediaItems,
+  getProfileMediaPreviews,
+} from './profileMediaModel';
+import { chooseAndUploadProfileAvatar } from './uploadProfileAvatar';
+import { useHydratedProfileMediaItems } from './useHydratedProfileMediaItems';
+import { useProfileBackdropArtwork } from './useProfileBackdropArtwork';
+import {
+  hydrateProfileOpinions,
+  type HydratedProfileOpinion,
+} from './profileOpinionHydration';
 
 type ProfileNavigation = NativeStackNavigationProp<RootStackParamList>;
-type HydratedProfileOpinion = ProfileOpinion & {
-  contentImageUrl: string | null;
-  contentSubtitle: string;
-  contentTitle: string;
-  seriesTitle: string | null;
+export type CachedProfile = Omit<ProfileModel, 'opinions'> & {
+  opinions: HydratedProfileOpinion[];
+  viewingStats: ViewingStats;
 };
-type HydratedProfileReview = Extract<HydratedProfileOpinion, { body: string }>;
-type CachedProfile = Omit<ProfileModel, 'opinions'> & { opinions: HydratedProfileOpinion[] };
-const MAX_PROFILE_OPINION_HYDRATIONS = 24;
+const EMPTY_PROFILE_MEDIA_ITEMS: LibraryMediaItem[] = [];
+
+export function getProfileResourceKey(userId: string) {
+  return getPrivateCacheKey(userId, 'profile:owner-activity:v9');
+}
+
+export async function loadProfileData(
+  token: string,
+  loadSeries: (tmdbId: number) => Promise<SeriesDetails>,
+  cached?: CachedProfile,
+): Promise<CachedProfile> {
+  const [profile, response, viewingStats] = await Promise.all([
+    getProfile(token),
+    getOwnProfileOpinions(token),
+    getViewingStats(token),
+  ]);
+  const model = buildProfileModel(profile, response);
+  const opinions = await hydrateProfileOpinions(model.opinions, loadSeries, cached?.opinions);
+  const hydratedViewingStats = await hydrateViewingStatsArtwork(
+    viewingStats,
+    async (tmdbId) => (await getMovieDetails(tmdbId)).item,
+    loadSeries,
+  );
+
+  return { ...model, opinions, viewingStats: hydratedViewingStats };
+}
 
 export function ProfileScreen() {
   const navigation = useNavigation<ProfileNavigation>();
   const {
     currentUser,
     firebaseIdToken,
-    getFirebaseIdToken,
-    socialRevision,
+    notifySocialChanged,
     trackingRevision,
   } = useAuthSession();
+  const socialRevision = useSocialRevision();
+  const [avatarOverride, setAvatarOverride] = useState<string | null | undefined>(undefined);
+  const [avatarStatus, setAvatarStatus] = useState<'idle' | 'saving'>('idle');
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [backdropOverride, setBackdropOverride] = useState<
+    ProfileBackdropSelection | null | undefined
+  >(undefined);
+  const [backdropPickerOpen, setBackdropPickerOpen] = useState(false);
+  const [backdropStatus, setBackdropStatus] = useState<'idle' | 'saving'>('idle');
+  const [backdropError, setBackdropError] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const { refreshSeries } = useCatalogueCache();
   const userId = currentUser?.id ?? null;
   const loadProfile = useCallback(async (cached?: CachedProfile): Promise<CachedProfile> => {
     void socialRevision;
     void trackingRevision;
-    const token = await getFirebaseIdToken();
-    if (!token) {
+    if (!firebaseIdToken) {
       throw new Error('Your session expired. Sign in again to refresh your profile.');
     }
 
-    const [profile, response] = await Promise.all([
-      getProfile(token),
-      getOwnProfileOpinions(token),
-    ]);
-    const model = buildProfileModel(profile, response);
-    const hydratedOpinions = await Promise.all(model.opinions.map((opinion, index) => {
-      const previous = cached?.opinions.find((candidate) => isSameOpinion(candidate, opinion));
-      return index < MAX_PROFILE_OPINION_HYDRATIONS
-        ? hydrateProfileOpinion(opinion, refreshSeries, previous)
-        : hydrateProfileOpinionTitle(opinion, previous, refreshSeries);
-    }));
-    const opinions = hydratedOpinions.filter(
-      (opinion): opinion is HydratedProfileOpinion => opinion !== null,
-    );
-
-    return { ...model, opinions };
-  }, [getFirebaseIdToken, refreshSeries, socialRevision, trackingRevision]);
+    return loadProfileData(firebaseIdToken, refreshSeries, cached);
+  }, [firebaseIdToken, refreshSeries, socialRevision, trackingRevision]);
   const resource = useCachedResource<CachedProfile>({
     enabled: Boolean(firebaseIdToken && userId),
-    key: userId ? getPrivateCacheKey(userId, 'profile:owner-activity:v4') : 'watchly:user:disabled:profile',
+    key: getProfileResourceKey(userId ?? 'visitor'),
     load: loadProfile,
   });
+  const mediaResource = useLibraryData();
   useFocusEffect(useCallback(() => {
-    if (firebaseIdToken && userId) resource.revalidate();
-  }, [firebaseIdToken, resource.revalidate, userId]));
+    if (firebaseIdToken && userId) {
+      resource.revalidate();
+      mediaResource.revalidate();
+    }
+  }, [firebaseIdToken, mediaResource.revalidate, resource.revalidate, userId]));
   const profile = resource.data;
-  const profileReviews = profile?.opinions.filter(isHydratedProfileReview) ?? [];
-  const recentOpinions = profile ? getRecentProfileOpinions(profile.opinions) : [];
+  const mediaItems = mediaResource.data?.items ?? EMPTY_PROFILE_MEDIA_ITEMS;
+  const previews = useMemo(() => getProfileMediaPreviews(mediaItems), [mediaItems]);
+  const previewSources = useMemo(() => dedupeProfileMediaItems([
+    ...previews.series,
+    ...previews.movies,
+    ...previews.favorites,
+  ]), [previews]);
+  const hydratedPreviewItems = useHydratedProfileMediaItems(previewSources);
+  const hydratedPreviewByKey = useMemo(
+    () => new Map(hydratedPreviewItems.map((item) => [item.key, item])),
+    [hydratedPreviewItems],
+  );
+  const hydratedPreviews = useMemo(() => ({
+    favorites: previews.favorites.map((item) => hydratedPreviewByKey.get(item.key) ?? item),
+    movies: previews.movies.map((item) => hydratedPreviewByKey.get(item.key) ?? item),
+    series: previews.series.map((item) => hydratedPreviewByKey.get(item.key) ?? item),
+  }), [hydratedPreviewByKey, previews]);
+  const backdropCandidates = useMemo(() => dedupeProfileMediaItems([
+    ...getProfileMediaItems(mediaItems, 'series'),
+    ...getProfileMediaItems(mediaItems, 'movies'),
+  ]), [mediaItems]);
+  const backdropPickerSources = backdropPickerOpen
+    ? backdropCandidates
+    : EMPTY_PROFILE_MEDIA_ITEMS;
+  const hydratedBackdropCandidates = useHydratedProfileMediaItems(backdropPickerSources);
+  const profileBackdrop = backdropOverride === undefined
+    ? profile?.profileBackdrop ?? null
+    : backdropOverride;
+  const selectedBackdropUrl = useProfileBackdropArtwork(profileBackdrop);
+  const atmosphereUrl = selectedBackdropUrl
+    ?? profile?.viewingStats.highlights[0]?.artworkUrl
+    ?? hydratedPreviewItems[0]?.backdropUrl
+    ?? hydratedPreviewItems[0]?.posterUrl
+    ?? profile?.opinions[0]?.contentImageUrl
+    ?? null;
+  const avatarUrl = avatarOverride === undefined ? profile?.avatarUrl ?? null : avatarOverride;
+
+  const changeAvatar = useCallback(async () => {
+    if (!firebaseIdToken || avatarStatus === 'saving' || !profile?.avatarUploadsEnabled) return;
+
+    setAvatarStatus('saving');
+    setAvatarError(null);
+    try {
+      const updatedProfile = await chooseAndUploadProfileAvatar(firebaseIdToken);
+      if (!updatedProfile) return;
+
+      setAvatarOverride(updatedProfile.avatarUrl);
+      notifySocialChanged();
+      hapticSuccess();
+    } catch (error) {
+      setAvatarError(
+        error instanceof Error ? error.message : 'Could not update your profile photo.',
+      );
+      hapticError();
+    } finally {
+      setAvatarStatus('idle');
+    }
+  }, [avatarStatus, firebaseIdToken, notifySocialChanged, profile?.avatarUploadsEnabled]);
+
+  const deleteAvatar = useCallback(async () => {
+    if (!firebaseIdToken || avatarStatus === 'saving') return;
+
+    setAvatarStatus('saving');
+    setAvatarError(null);
+    try {
+      const updatedProfile = await removeAvatar(firebaseIdToken);
+      setAvatarOverride(updatedProfile.avatarUrl);
+      notifySocialChanged();
+      hapticSuccess();
+    } catch (error) {
+      setAvatarError(
+        error instanceof Error ? error.message : 'Could not remove your profile photo.',
+      );
+      hapticError();
+    } finally {
+      setAvatarStatus('idle');
+    }
+  }, [avatarStatus, firebaseIdToken, notifySocialChanged]);
+
+  const openAvatarActions = useCallback(() => {
+    if (!profile?.avatarUploadsEnabled || avatarStatus === 'saving') return;
+
+    if (!avatarUrl) {
+      void changeAvatar();
+      return;
+    }
+
+    Alert.alert('Profile photo', 'Choose a new photo or return to your initials.', [
+      { onPress: () => void changeAvatar(), text: 'Choose a new photo' },
+      { onPress: () => void deleteAvatar(), style: 'destructive', text: 'Remove photo' },
+      { style: 'cancel', text: 'Cancel' },
+    ]);
+  }, [avatarStatus, avatarUrl, changeAvatar, deleteAvatar, profile?.avatarUploadsEnabled]);
 
   const shareProfile = useCallback(async () => {
     if (!profile) return;
@@ -104,6 +228,31 @@ export function ProfileScreen() {
     }
   }, [profile]);
 
+  const selectProfileBackdrop = useCallback(async (
+    selection: ProfileBackdropSelection | null,
+  ) => {
+    if (!firebaseIdToken || backdropStatus === 'saving') return;
+
+    const previous = profileBackdrop;
+    setBackdropOverride(selection);
+    setBackdropStatus('saving');
+    setBackdropError(null);
+    try {
+      const updatedProfile = await updateProfileBackdrop(firebaseIdToken, selection);
+      setBackdropOverride(updatedProfile.profileBackdrop);
+      setBackdropPickerOpen(false);
+      hapticSuccess();
+    } catch (error) {
+      setBackdropOverride(previous);
+      setBackdropError(
+        error instanceof Error ? error.message : 'Could not update your profile background.',
+      );
+      hapticError();
+    } finally {
+      setBackdropStatus('idle');
+    }
+  }, [backdropStatus, firebaseIdToken, profileBackdrop]);
+
   if (!firebaseIdToken || !userId) {
     return (
       <Screen horizontalPadding={false} leading={<BrandWordmark height={36} />} tabBarPadding={spacing.md} title="">
@@ -114,30 +263,50 @@ export function ProfileScreen() {
 
   return (
     <Screen
+      background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null}
       refreshControl={
         <RefreshControl
           colors={[colors.accent]}
-          onRefresh={resource.retry}
-          refreshing={resource.isRefreshing}
+          onRefresh={() => {
+            resource.retry();
+            mediaResource.retry();
+          }}
+          refreshing={resource.isRefreshing || mediaResource.isRefreshing}
           tintColor={colors.accent}
         />
       }
       leading={<BrandWordmark height={36} />}
-      tabBarPadding={spacing.md}
+      tabBarPadding
       title=""
       trailing={
         <View style={styles.headerActions}>
-          <IconButton
+          <ProfileHeaderButton
+            accessibilityLabel="Choose profile background"
+            disabled={!profile}
+            onPress={() => {
+              setBackdropError(null);
+              setBackdropPickerOpen(true);
+            }}
+          >
+            <ImageIcon
+              color={profileBackdrop ? colors.accentText : colors.text}
+              size={26}
+              strokeWidth={1.9}
+            />
+          </ProfileHeaderButton>
+          <ProfileHeaderButton
             accessibilityLabel="Share profile"
             disabled={!profile}
-            icon={<Share2 color={colors.text} size={21} strokeWidth={2} />}
             onPress={shareProfile}
-          />
-          <IconButton
+          >
+            <Share2 color={colors.text} size={27} strokeWidth={1.9} />
+          </ProfileHeaderButton>
+          <ProfileHeaderButton
             accessibilityLabel="Open settings"
-            icon={<Settings color={colors.text} size={21} strokeWidth={2} />}
             onPress={() => navigation.navigate('Settings')}
-          />
+          >
+            <Settings color={colors.text} size={28} strokeWidth={1.9} />
+          </ProfileHeaderButton>
         </View>
       }
     >
@@ -148,156 +317,74 @@ export function ProfileScreen() {
           <Button label="Retry" onPress={resource.retry} />
         </EmptyState>
       ) : profile ? (
-        <View style={styles.stack}>
-          <ProfileSummaryCard
-            displayName={profile.displayName}
-            followersCount={profile.stats.followersCount}
-            followingCount={profile.stats.followingCount}
-            ratingsCount={profile.stats.ratingsCount}
-            reviewsCount={profile.stats.reviewsCount}
-          />
-          {shareError ? <Text accessibilityLiveRegion="polite" style={styles.errorText}>{shareError}</Text> : null}
-          {profile.opinions.length === 0 ? (
-            <View style={styles.emptyActivity}>
-              <Text style={styles.emptyActivityTitle}>Your first rating will live here.</Text>
-              <Text style={styles.emptyActivityBody}>
-                Ratings and reviews stay visible to you here, whatever your privacy setting.
-              </Text>
-              <Button compact label="Manage privacy" onPress={() => navigation.navigate('Settings')} variant="secondary" />
-            </View>
-          ) : (
+        <ProfileBody
+          avatarLoading={avatarStatus === 'saving'}
+          avatarUrl={avatarUrl}
+          displayName={profile.displayName}
+          emptyActivityAction={(
+            <Button
+              compact
+              label="Manage privacy"
+              onPress={() => navigation.navigate('Settings')}
+              variant="secondary"
+            />
+          )}
+          emptyActivityBody="Ratings and reviews stay visible to you here, whatever your privacy setting."
+          emptyActivityTitle="Your first rating will live here."
+          followersCount={profile.stats.followersCount}
+          followingCount={profile.stats.followingCount}
+          handle={profile.handle}
+          mediaEmptyLabels={{
+            favorites: 'No favorites yet.',
+            movies: 'No movies to show yet.',
+            series: 'No series to show yet.',
+          }}
+          mediaPreviews={hydratedPreviews}
+          notice={(
             <>
-              <View style={styles.opinionsSection}>
-                <SectionHeader title="Recently on your profile" />
-                <ScrollView
-                  contentContainerStyle={styles.recentRail}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                >
-                  {recentOpinions.map((item) => (
-                    <ProfileRecentPoster
-                      item={item}
-                      key={`${item.type}-${item.id}`}
-                      onOpenContent={(opinion) => openOpinion(navigation, opinion)}
-                    />
-                  ))}
-                </ScrollView>
-              </View>
-              {profileReviews.length > 0 ? (
-                <View style={styles.opinionsSection}>
-                  <SectionHeader title="Latest reviews" />
-                  <View style={styles.opinionList}>
-                    {profileReviews.map((item) => (
-                      <ProfileReviewCard
-                        item={item}
-                        key={`${item.type}-${item.id}`}
-                        onOpenContent={(opinion) => openOpinion(navigation, opinion)}
-                      />
-                    ))}
-                  </View>
-                </View>
+              {avatarError ? <Text accessibilityLiveRegion="polite" style={styles.errorText}>{avatarError}</Text> : null}
+              {backdropError && !backdropPickerOpen ? (
+                <Text accessibilityLiveRegion="polite" style={styles.errorText}>{backdropError}</Text>
               ) : null}
+              {shareError ? <Text accessibilityLiveRegion="polite" style={styles.errorText}>{shareError}</Text> : null}
             </>
           )}
-        </View>
+          onAvatarPress={profile.avatarUploadsEnabled ? openAvatarActions : undefined}
+          onOpenMediaItem={(item) => openProfileMediaItem(navigation, item)}
+          onOpenOpinion={(item) => openOpinion(navigation, item)}
+          onOpenStats={() => navigation.navigate('AllTimeStats', { profileBackdropUrl: atmosphereUrl })}
+          onViewAllMedia={(filter) => navigation.navigate('ProfileMedia', { filter })}
+          opinions={profile.opinions}
+          showMediaRails={Boolean(mediaResource.data)}
+          stats={profile.viewingStats}
+        />
       ) : null}
+      <ProfileBackdropPickerSheet
+        busy={backdropStatus === 'saving'}
+        error={backdropError}
+        items={hydratedBackdropCandidates}
+        onClose={() => setBackdropPickerOpen(false)}
+        onSelect={(selection) => void selectProfileBackdrop(selection)}
+        selected={profileBackdrop}
+        visible={backdropPickerOpen}
+      />
     </Screen>
   );
 }
 
-const ProfileRecentPoster = memo(function ProfileRecentPoster({ item, onOpenContent }: {
-  item: HydratedProfileOpinion;
-  onOpenContent: (item: HydratedProfileOpinion) => void;
-}) {
-  const contentTitle = getOpinionDisplayTitle(item);
-
-  return (
-    <Pressable
-      accessibilityLabel={`Open ${contentTitle}`}
-      accessibilityRole="button"
-      onPress={() => onOpenContent(item)}
-      style={({ pressed }) => [styles.recentPosterCard, pressed ? styles.cardPressed : null]}
-    >
-      <MediaPoster
-        accessibilityLabel={`${contentTitle} artwork`}
-        posterUrl={item.contentImageUrl}
-        style={styles.recentPosterArtwork}
-      />
-      <Text numberOfLines={2} style={styles.recentPosterTitle}>{contentTitle}</Text>
-      <View style={styles.recentPosterMeta}>
-        <StarRatingDisplay rating={item.score} size={13} />
-        <Text style={styles.recentPosterKind}>{isReview(item) ? 'Review' : 'Rating'}</Text>
-      </View>
-    </Pressable>
-  );
-});
-
-const ProfileReviewCard = memo(function ProfileReviewCard({ item, onOpenContent }: {
-  item: HydratedProfileReview;
-  onOpenContent: (item: HydratedProfileOpinion) => void;
-}) {
-  const contentTitle = getOpinionDisplayTitle(item);
-  const contentMeta = item.content.contentType === 'episode'
-    ? `${item.contentTitle} · ${item.contentSubtitle}`
-    : item.contentSubtitle;
-
-  return (
-    <View style={styles.reviewCard}>
-      <Pressable
-        accessibilityLabel={`Open review for ${contentTitle}`}
-        accessibilityRole="button"
-        onPress={() => onOpenContent(item)}
-        style={({ pressed }) => [styles.reviewHeader, pressed ? styles.cardPressed : null]}
-      >
-        <MediaPoster
-          accessibilityLabel={`${contentTitle} artwork`}
-          posterUrl={item.contentImageUrl}
-          style={styles.reviewPoster}
-        />
-        <View style={styles.reviewHeaderCopy}>
-          <Text style={styles.date}>{formatDate(item.updatedAt)}</Text>
-          <Text numberOfLines={2} style={styles.reviewTitle}>{contentTitle}</Text>
-          <Text numberOfLines={1} style={styles.subtitle}>{contentMeta}</Text>
-          <StarRatingDisplay rating={item.score} size={15} />
-        </View>
-      </Pressable>
-      <ExpandableReviewText body={item.body} style={styles.reviewBody} textStyle={styles.reviewText} />
-    </View>
-  );
-});
-
-function getRecentProfileOpinions(items: HydratedProfileOpinion[]) {
-  const seenContent = new Set<string>();
-
-  return items.filter((item) => {
-    const key = item.content.contentType === 'movie'
-      ? `movie:${item.content.tmdbId}`
-      : `episode:${item.content.seriesTmdbId}:${item.content.seasonNumber}:${item.content.episodeNumber}`;
-
-    if (seenContent.has(key)) return false;
-    seenContent.add(key);
-    return true;
-  }).slice(0, 8);
-}
-
-function getOpinionDisplayTitle(item: HydratedProfileOpinion) {
-  return item.content.contentType === 'episode'
-    ? item.seriesTitle ?? item.contentTitle
-    : item.contentTitle;
-}
-
-function isHydratedProfileReview(item: HydratedProfileOpinion): item is HydratedProfileReview {
-  return isReview(item);
+function openProfileMediaItem(navigation: ProfileNavigation, item: LibraryMediaItem) {
+  if (item.contentType === 'movie') {
+    navigation.navigate('FilmDetail', { title: item.title, tmdbId: item.tmdbId });
+  } else {
+    navigation.navigate('SeriesDetail', { title: item.title, tmdbId: item.tmdbId });
+  }
 }
 
 function openOpinion(
   navigation: ProfileNavigation,
   item: HydratedProfileOpinion,
 ) {
-  const target = getProfileOpinionTarget(item, {
-    contentTitle: item.contentTitle,
-    seriesTitle: item.seriesTitle,
-  });
+  const target = getHydratedProfileOpinionTarget(item);
 
   if (target.name === 'FilmDetail') {
     navigation.navigate(target.name, target.params);
@@ -306,130 +393,7 @@ function openOpinion(
   }
 }
 
-async function hydrateProfileOpinion(
-  item: ProfileOpinion,
-  loadSeries: (tmdbId: number) => Promise<{ title: string }>,
-  previous?: HydratedProfileOpinion,
-): Promise<HydratedProfileOpinion | null> {
-  if (item.content.contentType === 'movie') {
-    try {
-      const response = await withTimeout(getMovieDetails(item.content.tmdbId), 2500);
-      return { ...item, contentImageUrl: response.item.posterUrl, contentSubtitle: 'Movie', contentTitle: response.item.title, seriesTitle: null };
-    } catch {
-      return previous ? { ...previous, ...item } : fallbackOpinion(item);
-    }
-  }
-  try {
-    const [episodeResponse, series] = await Promise.all([
-      withTimeout(
-        getEpisodeDetails(item.content.seriesTmdbId, item.content.seasonNumber, item.content.episodeNumber),
-        2500,
-      ),
-      loadSeries(item.content.seriesTmdbId),
-    ]);
-    return {
-      ...item,
-      contentImageUrl: episodeResponse.item.stillUrl,
-      contentSubtitle: `Season ${item.content.seasonNumber} · Episode ${item.content.episodeNumber}`,
-      contentTitle: episodeResponse.item.title,
-      seriesTitle: series.title,
-    };
-  } catch {
-    return hasRealSeriesTitle(previous) ? { ...previous, ...item } : null;
-  }
-}
-
-async function hydrateProfileOpinionTitle(
-  item: ProfileOpinion,
-  previous: HydratedProfileOpinion | undefined,
-  loadSeries: (tmdbId: number) => Promise<{ title: string }>,
-): Promise<HydratedProfileOpinion | null> {
-  if (item.content.contentType === 'movie') {
-    return previous ? { ...previous, ...item } : fallbackOpinion(item);
-  }
-
-  try {
-    const series = await loadSeries(item.content.seriesTmdbId);
-    return {
-      ...item,
-      contentImageUrl: previous?.contentImageUrl ?? null,
-      contentSubtitle: `Season ${item.content.seasonNumber} · Episode ${item.content.episodeNumber}`,
-      contentTitle: previous?.contentTitle ?? `Episode ${item.content.episodeNumber}`,
-      seriesTitle: series.title,
-    };
-  } catch {
-    return hasRealSeriesTitle(previous) ? { ...previous, ...item } : null;
-  }
-}
-
-function isSameOpinion(previous: HydratedProfileOpinion, current: ProfileOpinion) {
-  return previous.id === current.id;
-}
-
-function fallbackOpinion(item: ProfileOpinion): HydratedProfileOpinion {
-  if (item.content.contentType === 'movie') {
-    return { ...item, contentImageUrl: null, contentSubtitle: 'Movie', contentTitle: `Movie ${item.content.tmdbId}`, seriesTitle: null };
-  }
-  return {
-    ...item,
-    contentImageUrl: null,
-    contentSubtitle: `Season ${item.content.seasonNumber} · Episode ${item.content.episodeNumber}`,
-    contentTitle: `Episode ${item.content.episodeNumber}`,
-    seriesTitle: null,
-  };
-}
-
-function hasRealSeriesTitle(
-  item: HydratedProfileOpinion | undefined,
-): item is HydratedProfileOpinion & { seriesTitle: string } {
-  return Boolean(
-    item?.seriesTitle?.trim() && !/^Series\s+\d+$/i.test(item.seriesTitle.trim()),
-  );
-}
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timeout = setTimeout(() => reject(new Error('Catalogue enrichment timed out.')), timeoutMs);
-    promise.then(resolve, reject).finally(() => clearTimeout(timeout));
-  });
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString();
-}
-
 const styles = StyleSheet.create({
-  cardPressed: {
-    opacity: 0.78,
-    transform: [{ scale: 0.98 }],
-  },
-  date: {
-    ...typography.meta,
-    color: colors.textSubtle,
-  },
-  emptyActivity: {
-    alignItems: 'flex-start',
-    borderBottomColor: colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: spacing.md,
-    paddingVertical: spacing.xxl,
-  },
-  emptyActivityBody: {
-    ...typography.body,
-    color: colors.textMuted,
-    maxWidth: 320,
-  },
-  emptyActivityTitle: {
-    color: colors.text,
-    fontSize: 27,
-    fontWeight: '900',
-    letterSpacing: -0.7,
-    lineHeight: 33,
-    maxWidth: 300,
-  },
   errorText: {
     ...typography.meta,
     color: colors.danger,
@@ -437,87 +401,6 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  opinionList: {
-    gap: 0,
-  },
-  opinionsSection: {
     gap: spacing.md,
-  },
-  recentPosterArtwork: {
-    height: 174,
-    width: 116,
-  },
-  recentPosterCard: {
-    width: 116,
-  },
-  recentPosterKind: {
-    color: colors.textSubtle,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  recentPosterMeta: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: spacing.xs,
-  },
-  recentPosterTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '800',
-    lineHeight: 18,
-    marginTop: spacing.sm,
-    minHeight: 36,
-  },
-  recentRail: {
-    gap: spacing.md,
-    paddingRight: spacing.xl,
-  },
-  reviewBody: {
-    marginTop: spacing.xs,
-  },
-  reviewCard: {
-    borderBottomColor: colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: spacing.md,
-    paddingBottom: spacing.xl,
-    paddingTop: spacing.md,
-  },
-  reviewHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-  reviewHeaderCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  reviewPoster: {
-    height: 87,
-    width: 58,
-  },
-  reviewText: {
-    color: colors.textMuted,
-    fontSize: 16,
-    lineHeight: 25,
-  },
-  reviewTitle: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: -0.2,
-    lineHeight: 22,
-    marginTop: 3,
-  },
-  stack: {
-    gap: spacing.xxxl,
-  },
-  subtitle: {
-    ...typography.meta,
-    color: colors.textSubtle,
-    marginBottom: spacing.sm,
-    marginTop: 2,
   },
 });

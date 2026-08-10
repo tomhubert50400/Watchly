@@ -99,6 +99,26 @@ assert.match(
   'single-line fields must expose a Done return key by default',
 );
 assert.match(
+  textInput,
+  /textAlignVertical=\{multiline \? 'top' : 'center'\}/,
+  'shared fields must center single-line text and keep multiline text at the top',
+);
+assert.match(
+  textInput,
+  /fontSize: typography\.body\.fontSize,[\s\S]*letterSpacing: typography\.body\.letterSpacing,[\s\S]*inputMultiline: \{[\s\S]*lineHeight: typography\.body\.lineHeight/,
+  'shared fields must reserve the body line height for multiline editing',
+);
+assert.match(
+  explore,
+  /<NativeTextInput[\s\S]*style=\{styles\.searchInput\}[\s\S]*textAlignVertical="center"/,
+  'catalogue search text must stay vertically centered',
+);
+assert.match(
+  addToWatchlist,
+  /accessibilityLabel="New watchlist name"[\s\S]*style=\{styles\.createInput\}[\s\S]*textAlignVertical="center"/,
+  'the native watchlist name field must keep its text vertically centered',
+);
+assert.match(
   sharedWatchlist,
   /const memberForm = watchlist\.isOwner \? \([\s\S]*<TextInput[\s\S]*value=\{memberUserId\}[\s\S]*<Button[\s\S]*label="Add member"/,
   'the member field and validation action must stay together',

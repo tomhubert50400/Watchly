@@ -3,10 +3,12 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   Check,
   CheckCircle2,
+  Camera,
   ChevronRight,
   Code2,
   Download,
   Eye,
+  FileUp,
   FileText,
   Globe2,
   ListVideo,
@@ -20,13 +22,14 @@ import {
   Users,
 } from 'lucide-react-native';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import {
   deleteAccount,
   exportAccountData,
   getProfile,
   PrivacyVisibility,
   ProfilePrivacy,
+  removeAvatar,
   updatePrivacy,
   updateProfile,
 } from '../api/profile';
@@ -43,11 +46,13 @@ import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
 import { Screen } from '../components/Screen';
 import { TextInput } from '../components/TextInput';
+import { UserAvatar } from '../components/UserAvatar';
 import { colors, radii, shadows, spacing, touchTargets, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
 import type { LegalDocumentId } from '../legal/legalDocuments';
 import type { RootStackParamList } from '../navigation/types';
 import appConfig from '../../app.json';
+import { chooseAndUploadProfileAvatar } from './uploadProfileAvatar';
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
 type AccountAction = 'delete' | 'export' | 'signOut' | null;
@@ -71,12 +76,17 @@ export function SettingsScreen() {
   const {
     currentUser,
     firebaseIdToken,
+    notifySocialChanged,
     refreshCurrentUser,
     signOut,
     status: authStatus,
   } = useAuthSession();
   const [accountAction, setAccountAction] = useState<AccountAction>(null);
+  const [avatarStatus, setAvatarStatus] = useState<'idle' | 'saving'>('idle');
+  const [avatarUploadsEnabled, setAvatarUploadsEnabled] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('');
+  const [handle, setHandle] = useState<string | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -109,7 +119,10 @@ export function SettingsScreen() {
           displayName: profile.displayName ?? '',
           privacy: profile.privacy,
         };
+        setAvatarUploadsEnabled(profile.avatarUploadsEnabled);
+        setAvatarUrl(profile.avatarUrl);
         setDisplayName(nextSettings.displayName);
+        setHandle(profile.handle);
         setPrivacy(nextSettings.privacy);
         setSavedSettings(nextSettings);
         setStatus('ready');
@@ -235,6 +248,52 @@ export function SettingsScreen() {
       hapticError();
     } finally {
       setAccountAction(null);
+    }
+  }
+
+  async function changeAvatar() {
+    if (!firebaseIdToken || avatarStatus === 'saving' || !avatarUploadsEnabled) return;
+
+    setAvatarStatus('saving');
+    setMessage(null);
+    try {
+      const profile = await chooseAndUploadProfileAvatar(firebaseIdToken);
+      if (!profile) return;
+
+      setAvatarUrl(profile.avatarUrl);
+      notifySocialChanged();
+      setMessage({ text: 'Your profile photo is updated.', tone: 'success' });
+      hapticSuccess();
+    } catch (error) {
+      setMessage({
+        text: error instanceof Error ? error.message : 'Could not update your profile photo.',
+        tone: 'error',
+      });
+      hapticError();
+    } finally {
+      setAvatarStatus('idle');
+    }
+  }
+
+  async function deleteAvatar() {
+    if (!firebaseIdToken || avatarStatus === 'saving') return;
+
+    setAvatarStatus('saving');
+    setMessage(null);
+    try {
+      const profile = await removeAvatar(firebaseIdToken);
+      setAvatarUrl(profile.avatarUrl);
+      notifySocialChanged();
+      setMessage({ text: 'Your profile photo was removed.', tone: 'success' });
+      hapticSuccess();
+    } catch (error) {
+      setMessage({
+        text: error instanceof Error ? error.message : 'Could not remove your profile photo.',
+        tone: 'error',
+      });
+      hapticError();
+    } finally {
+      setAvatarStatus('idle');
     }
   }
 
@@ -370,12 +429,18 @@ export function SettingsScreen() {
       >
         <View style={styles.page}>
           <ProfileEditor
+            avatarUploadsEnabled={avatarUploadsEnabled}
+            avatarUrl={avatarUrl}
             displayName={displayName || currentUser?.displayName || 'Watchly member'}
             editing={isEditingProfile}
+            handle={handle ?? currentUser?.handle ?? null}
+            isAvatarSaving={avatarStatus === 'saving'}
+            onChangeAvatar={() => void changeAvatar()}
             onChangeText={(value) => {
               setDisplayName(value);
               setMessage(null);
             }}
+            onRemoveAvatar={() => void deleteAvatar()}
             onToggleEditing={() => setIsEditingProfile((current) => !current)}
             provider={currentUser?.provider}
             value={displayName}
@@ -445,10 +510,16 @@ export function SettingsScreen() {
           </SettingsSection>
 
           <SettingsSection
-            subtitle="Take a copy with you or permanently remove your account."
+            subtitle="Bring your history in, take a copy with you, or remove your account."
             title="Your data"
           >
             <View style={styles.group}>
+              <SettingsActionRow
+                body="Bring ratings, reviews, and viewing history from other services."
+                icon={FileUp}
+                label="Import your data"
+                onPress={() => navigation.navigate('ImportData')}
+              />
               <SettingsActionRow
                 body="Create a portable JSON copy to save or share."
                 icon={Download}
@@ -524,29 +595,73 @@ export function SettingsScreen() {
 }
 
 function ProfileEditor({
+  avatarUploadsEnabled,
+  avatarUrl,
   displayName,
   editing,
+  handle,
+  isAvatarSaving,
+  onChangeAvatar,
   onChangeText,
+  onRemoveAvatar,
   onToggleEditing,
   provider,
   value,
 }: {
+  avatarUploadsEnabled: boolean;
+  avatarUrl: string | null;
   displayName: string;
   editing: boolean;
+  handle: string | null;
+  isAvatarSaving: boolean;
+  onChangeAvatar: () => void;
   onChangeText: (value: string) => void;
+  onRemoveAvatar: () => void;
   onToggleEditing: () => void;
   provider?: string;
   value: string;
 }) {
+  const openAvatarActions = () => {
+    if (!avatarUploadsEnabled || isAvatarSaving) return;
+
+    if (!avatarUrl) {
+      onChangeAvatar();
+      return;
+    }
+
+    Alert.alert('Profile photo', 'Choose a new photo or return to your initials.', [
+      { onPress: onChangeAvatar, text: 'Choose a new photo' },
+      { onPress: onRemoveAvatar, style: 'destructive', text: 'Remove photo' },
+      { style: 'cancel', text: 'Cancel' },
+    ]);
+  };
+
   return (
     <View style={styles.profileCard}>
       <View style={styles.profileHeader}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{getInitials(displayName)}</Text>
-        </View>
+        <Pressable
+          accessibilityHint={avatarUploadsEnabled ? 'Opens your photo library.' : undefined}
+          accessibilityLabel={avatarUrl ? 'Change profile photo' : 'Add profile photo'}
+          accessibilityRole={avatarUploadsEnabled ? 'button' : undefined}
+          disabled={!avatarUploadsEnabled || isAvatarSaving}
+          onPress={openAvatarActions}
+          style={({ pressed }) => [styles.avatarButton, pressed ? styles.pressed : null]}
+        >
+          <UserAvatar avatarUrl={avatarUrl} displayName={displayName} size={64} />
+          {isAvatarSaving ? (
+            <View style={styles.avatarLoading}>
+              <ActivityIndicator color={colors.text} size="small" />
+            </View>
+          ) : avatarUploadsEnabled ? (
+            <View style={styles.avatarBadge}>
+              <Camera color={colors.text} size={14} strokeWidth={2.3} />
+            </View>
+          ) : null}
+        </Pressable>
         <View style={styles.profileCopy}>
           <Text style={styles.profileEyebrow}>Profile</Text>
           <Text numberOfLines={2} style={styles.profileName}>{displayName}</Text>
+          {handle ? <Text style={styles.profileHandle}>@{handle}</Text> : null}
           <Text style={styles.profileProvider}>{getProviderLabel(provider)}</Text>
         </View>
         <Pressable
@@ -575,6 +690,12 @@ function ProfileEditor({
             placeholder="Watchly member"
             value={value}
           />
+          {handle ? (
+            <View style={styles.immutableHandle}>
+              <Lock color={colors.textSubtle} size={15} strokeWidth={2} />
+              <Text style={styles.immutableHandleText}>@{handle} is your permanent handle.</Text>
+            </View>
+          ) : null}
         </View>
       ) : (
         <View style={styles.profileHint}>
@@ -842,18 +963,6 @@ function getProviderLabel(provider?: string) {
   return `Signed in with ${label}`;
 }
 
-function getInitials(value: string) {
-  const initials = value
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join('');
-
-  return initials || 'W';
-}
-
 function toWatchlistVisibilities(watchlists: PersonalWatchlistSummary[]) {
   return Object.fromEntries(
     watchlists.map((watchlist) => [watchlist.id, watchlist.visibility]),
@@ -871,20 +980,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
   },
-  avatar: {
+  avatarBadge: {
     alignItems: 'center',
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accentBorder,
-    borderRadius: 21,
-    borderWidth: 1,
-    height: 64,
+    backgroundColor: colors.accent,
+    borderColor: colors.background,
+    borderRadius: 13,
+    borderWidth: 2,
+    bottom: -2,
+    height: 26,
     justifyContent: 'center',
-    width: 64,
+    position: 'absolute',
+    right: -3,
+    width: 26,
   },
-  avatarText: {
-    color: colors.accentText,
-    fontSize: 22,
-    fontWeight: '900',
+  avatarButton: {
+    borderRadius: 32,
+  },
+  avatarLoading: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(9, 12, 19, 0.68)',
+    borderRadius: 32,
+    bottom: 0,
+    justifyContent: 'center',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
   },
   compactState: {
     alignItems: 'flex-start',
@@ -1120,6 +1241,22 @@ const styles = StyleSheet.create({
     color: colors.textSubtle,
     flex: 1,
     fontWeight: '500',
+  },
+  immutableHandle: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  immutableHandleText: {
+    ...typography.meta,
+    color: colors.textSubtle,
+    flex: 1,
+  },
+  profileHandle: {
+    ...typography.meta,
+    color: colors.textMuted,
+    marginTop: 2,
   },
   profileName: {
     color: colors.text,
