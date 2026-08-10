@@ -4,8 +4,17 @@
     "slug": "tv-app",
     "scheme": ["tvapp", "com.tom.tvapp.dev"],
     "version": "1.0.0",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "orientation": "portrait",
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "microphonePermission": false,
+          "photosPermission": "Allow Watchly to choose a profile photo."
+        }
+      ]
+    ],
     "icon": "./assets/icon.png",
     "splash": {
       "backgroundColor": "#090C13",
@@ -17,6 +26,7 @@
       "bundleIdentifier": "com.tom.tvapp.dev",
       "supportsTablet": true,
       "infoPlist": {
+        "CFBundleDevelopmentRegion": "en",
         "ITSAppUsesNonExemptEncryption": false,
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true

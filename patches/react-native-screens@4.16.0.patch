@@ -1,0 +1,69 @@
+diff --git a/src/components/bottom-tabs/BottomTabsScreen.tsx b/src/components/bottom-tabs/BottomTabsScreen.tsx
+index ce02d94844d248fe4c0f607392d409d603a77c9b..33b2ef7d5335bcb9d7fbe6c6519c141c8bb31883 100644
+--- a/src/components/bottom-tabs/BottomTabsScreen.tsx
++++ b/src/components/bottom-tabs/BottomTabsScreen.tsx
+@@ -241,7 +241,19 @@ function shouldFreezeScreen(
+   return !nativeViewVisible;
+ }
+ 
+-function parseIconToNativeProps(icon: Icon | undefined): {
++type ReactNavigationSFIcon = {
++  type: 'sfSymbol';
++  name: string;
++};
++
++type ReactNavigationPlatformIcon = {
++  ios?: Icon | ReactNavigationSFIcon;
++  shared?: Icon;
++};
++
++function parseIconToNativeProps(
++  icon: Icon | ReactNavigationSFIcon | ReactNavigationPlatformIcon | undefined,
++): {
+   iconType?: IconType;
+   iconImageSource?: ImageSourcePropType;
+   iconSfSymbolName?: string;
+@@ -250,22 +262,37 @@ function parseIconToNativeProps(icon: Icon | undefined): {
+     return {};
+   }
+ 
+-  if ('sfSymbolName' in icon) {
++  const resolvedIcon =
++    'ios' in icon || 'shared' in icon ? icon.ios ?? icon.shared : icon;
++
++  if (!resolvedIcon) {
++    return {};
++  }
++
++  if ('sfSymbolName' in resolvedIcon) {
+     // iOS-specific: SFSymbol usage
+     return {
+       iconType: 'sfSymbol',
+-      iconSfSymbolName: icon.sfSymbolName,
++      iconSfSymbolName: resolvedIcon.sfSymbolName,
++    };
++  } else if (
++    'type' in resolvedIcon &&
++    resolvedIcon.type === 'sfSymbol'
++  ) {
++    return {
++      iconType: 'sfSymbol',
++      iconSfSymbolName: resolvedIcon.name,
+     };
+-  } else if ('imageSource' in icon) {
++  } else if ('imageSource' in resolvedIcon) {
+     return {
+       iconType: 'image',
+-      iconImageSource: icon.imageSource,
++      iconImageSource: resolvedIcon.imageSource,
+     };
+-  } else if ('templateSource' in icon) {
++  } else if ('templateSource' in resolvedIcon) {
+     // iOS-specifig: image as a template usage
+     return {
+       iconType: 'template',
+-      iconImageSource: icon.templateSource,
++      iconImageSource: resolvedIcon.templateSource,
+     };
+   } else {
+     // iOS-specific: SFSymbol, image as a template usage
