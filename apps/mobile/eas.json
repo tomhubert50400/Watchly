@@ -6,14 +6,33 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "environment": "development",
+      "env": {
+        "APP_VARIANT": "development",
+        "EXPO_PUBLIC_APP_ENV": "development"
+      },
       "ios": {
         "image": "macos-sequoia-15.6-xcode-26.0",
         "simulator": false
       }
     },
-    "preview": {
-      "distribution": "internal"
+    "staging": {
+      "distribution": "internal",
+      "environment": "preview",
+      "env": {
+        "APP_VARIANT": "staging",
+        "EXPO_PUBLIC_APP_ENV": "staging"
+      }
     },
-    "production": {}
+    "preview": {
+      "extends": "staging"
+    },
+    "production": {
+      "environment": "production",
+      "env": {
+        "APP_VARIANT": "production",
+        "EXPO_PUBLIC_APP_ENV": "production"
+      }
+    }
   }
 }
