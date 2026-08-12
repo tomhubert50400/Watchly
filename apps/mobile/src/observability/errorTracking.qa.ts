@@ -2,6 +2,11 @@
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import assert from 'node:assert/strict';
 import { sanitizeMobileErrorEvent } from './errorTrackingEvent';
+import {
+  createMobileMonitoringProbeError,
+  getMobileMonitoringProbeStorageKey,
+  resolveMobileMonitoringProbeId,
+} from './mobileMonitoringProbe';
 
 const event = sanitizeMobileErrorEvent({
   request: {
@@ -19,5 +24,17 @@ assert.deepEqual(event, {
     url: 'https://watchly.example/path',
   },
 });
+
+assert.equal(resolveMobileMonitoringProbeId('production', 'p0.1'), null);
+assert.equal(resolveMobileMonitoringProbeId('staging', '  p0.1  '), 'p0.1');
+assert.equal(resolveMobileMonitoringProbeId('staging', '   '), null);
+assert.equal(
+  getMobileMonitoringProbeStorageKey('p0.1 mobile'),
+  'watchly:monitoring-probe:p0.1%20mobile',
+);
+
+const probeError = createMobileMonitoringProbeError();
+assert.equal(probeError.name, 'WatchlyMobileMonitoringProbeError');
+assert.equal(probeError.message, 'Watchly staging mobile monitoring probe');
 
 console.log('Mobile error tracking QA passed.');
