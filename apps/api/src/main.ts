@@ -6,10 +6,13 @@ import 'reflect-metadata';
 import { AppModule } from './app.module';
 import { DevExceptionFilter } from './dev-exception.filter';
 import { createEnvironmentIsolationMiddleware } from './environment-isolation';
+import { createRequestObservabilityMiddleware } from './observability/request-observability.middleware';
+import { StructuredLogger } from './observability/structured-logger';
 
 async function bootstrap() {
+  const structuredLogger = new StructuredLogger(process.env.APP_ENV?.trim() || 'development');
   const app = await NestFactory.create(AppModule, {
-    logger: ['error', 'warn', 'log'],
+    logger: structuredLogger,
   });
   const config = app.get(ConfigService);
   const logger = new Logger('Bootstrap');
@@ -19,6 +22,7 @@ async function bootstrap() {
   const port = config.getOrThrow<number>('PORT');
 
   app.use(helmet());
+  app.use(createRequestObservabilityMiddleware(structuredLogger));
   app.use(createEnvironmentIsolationMiddleware(appEnvironment));
   app.useGlobalPipes(
     new ValidationPipe({
@@ -27,7 +31,7 @@ async function bootstrap() {
       whitelist: true,
     }),
   );
-  app.useGlobalFilters(new DevExceptionFilter(isDevelopment));
+  app.useGlobalFilters(new DevExceptionFilter(isDevelopment, structuredLogger));
 
   if (corsOrigin) {
     app.enableCors({ origin: corsOrigin });
