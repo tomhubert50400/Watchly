@@ -1,6 +1,8 @@
 // Node types are intentionally not part of the Expo runtime TypeScript configuration.
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import assert from 'node:assert/strict';
+// @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
+import { readFileSync } from 'node:fs';
 import { sanitizeMobileErrorEvent } from './errorTrackingEvent';
 import {
   createMobileMonitoringProbeError,
@@ -41,5 +43,11 @@ assert.equal(
 const probeError = createMobileMonitoringProbeError();
 assert.equal(probeError.name, 'WatchlyMobileMonitoringProbeError');
 assert.equal(probeError.message, 'Watchly staging mobile monitoring probe');
+
+const errorTrackingSource = readFileSync(new URL('errorTracking.ts', import.meta.url), 'utf8');
+assert.match(
+  errorTrackingSource,
+  /onReady:\s*\(\)\s*=>\s*\{\s*void runNativeCrashMonitoringProbe\(\)\.catch\(\(\) => undefined\);\s*\}/,
+);
 
 console.log('Mobile error tracking QA passed.');

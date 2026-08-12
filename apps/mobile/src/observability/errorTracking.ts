@@ -20,12 +20,14 @@ export function initializeErrorTracking() {
     beforeSend: sanitizeMobileErrorEvent,
     dsn,
     environment: appEnvironment,
+    onReady: () => {
+      void runNativeCrashMonitoringProbe().catch(() => undefined);
+    },
     sendDefaultPii: false,
     tracesSampleRate: 0,
   });
   errorTrackingEnabled = true;
   void runMobileMonitoringProbe().catch(() => undefined);
-  void runNativeCrashMonitoringProbe().catch(() => undefined);
   return true;
 }
 
