@@ -8,6 +8,12 @@
 - The Better Stack Uptime integration sends e-mail incidents for new error groups, error spikes, and automatically reopened errors across both applications.
 - Railway service variables `ERROR_TRACKING_DSN` and `MONITORING_TEST_KEY` are sealed. The mobile DSN is stored as `EXPO_PUBLIC_ERROR_TRACKING_DSN` in the EAS `preview` environment. A DSN is an ingestion endpoint, not an account credential, but it must not be copied into source files.
 
+## Mobile staging source maps
+
+- The staging EAS build uses Sentry's Metro configuration to generate the Hermes bundle and its linked source map. The iOS build log must contain a `Source Map Upload Report` where the script and source map share the same debug ID.
+- Better Stack accepts the JavaScript source-map upload but does not accept Sentry's separate native dSYM project upload. Keep `SENTRY_ALLOW_FAILURE=true` in the EAS `preview` environment so that unsupported native upload cannot fail an otherwise valid build. This does not replace checking the JavaScript upload report.
+- To prove symbolication, temporarily set a unique `EXPO_PUBLIC_MONITORING_PROBE_ID`, build and open the staging app on a registered iPhone, then confirm that Better Stack resolves the call site to `apps/mobile/src/observability/mobileMonitoringProbe.ts`. Delete the probe variable immediately after the proof and resolve the controlled exception.
+
 Railway Hobby keeps logs for seven days. Use these Log Explorer filters during an incident:
 
 - `@level:error` for exceptions.
