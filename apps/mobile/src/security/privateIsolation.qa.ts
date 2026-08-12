@@ -7,6 +7,7 @@ import { resolveAppEnvironment, validatePublicEnvironment } from '../config/appE
 
 const stagingConfig = {
   apiUrl: 'https://api-staging.watchly.example',
+  errorTrackingDsn: 'https://source@example.ingest.error-tracking.test/1',
   firebaseApiKey: 'staging-api-key',
   firebaseAppId: 'staging-app-id',
   firebaseAuthDomain: 'watchly-staging.firebaseapp.com',
@@ -28,6 +29,10 @@ assert.throws(
 assert.throws(
   () => validatePublicEnvironment('production', { ...stagingConfig, firebaseAppId: undefined }),
   /EXPO_PUBLIC_FIREBASE_APP_ID/,
+);
+assert.throws(
+  () => validatePublicEnvironment('staging', { ...stagingConfig, errorTrackingDsn: undefined }),
+  /EXPO_PUBLIC_ERROR_TRACKING_DSN/,
 );
 assert.throws(
   () => validatePublicEnvironment('staging', { ...stagingConfig, uiReviewEmail: 'review@local.test' }),

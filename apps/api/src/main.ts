@@ -8,9 +8,16 @@ import { DevExceptionFilter } from './dev-exception.filter';
 import { createEnvironmentIsolationMiddleware } from './environment-isolation';
 import { createRequestObservabilityMiddleware } from './observability/request-observability.middleware';
 import { StructuredLogger } from './observability/structured-logger';
+import { initializeErrorTracking } from './observability/error-tracking';
 
 async function bootstrap() {
-  const structuredLogger = new StructuredLogger(process.env.APP_ENV?.trim() || 'development');
+  const environment = process.env.APP_ENV?.trim() || 'development';
+  initializeErrorTracking({
+    dsn: process.env.ERROR_TRACKING_DSN,
+    environment,
+    release: process.env.RAILWAY_GIT_COMMIT_SHA,
+  });
+  const structuredLogger = new StructuredLogger(environment);
   const app = await NestFactory.create(AppModule, {
     logger: structuredLogger,
   });

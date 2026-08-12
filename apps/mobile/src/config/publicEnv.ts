@@ -3,6 +3,7 @@ import { resolveAppEnvironment, validatePublicEnvironment } from './appEnvironme
 type PublicEnv = {
   EXPO_PUBLIC_APP_ENV?: string;
   EXPO_PUBLIC_API_URL?: string;
+  EXPO_PUBLIC_ERROR_TRACKING_DSN?: string;
   EXPO_PUBLIC_FIREBASE_API_KEY?: string;
   EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN?: string;
   EXPO_PUBLIC_FIREBASE_PROJECT_ID?: string;
@@ -34,6 +35,7 @@ const fallbackPublicEnv = appEnvironment === 'development' ? developmentFallback
 export const publicEnv: PublicEnv = {
   EXPO_PUBLIC_APP_ENV: process.env.EXPO_PUBLIC_APP_ENV ?? appEnvironment,
   EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL ?? fallbackPublicEnv.EXPO_PUBLIC_API_URL,
+  EXPO_PUBLIC_ERROR_TRACKING_DSN: process.env.EXPO_PUBLIC_ERROR_TRACKING_DSN,
   EXPO_PUBLIC_FIREBASE_API_KEY:
     process.env.EXPO_PUBLIC_FIREBASE_API_KEY ?? fallbackPublicEnv.EXPO_PUBLIC_FIREBASE_API_KEY,
   EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN:
@@ -55,6 +57,7 @@ export const publicEnv: PublicEnv = {
 
 validatePublicEnvironment(appEnvironment, {
   apiUrl: publicEnv.EXPO_PUBLIC_API_URL,
+  errorTrackingDsn: publicEnv.EXPO_PUBLIC_ERROR_TRACKING_DSN,
   firebaseApiKey: publicEnv.EXPO_PUBLIC_FIREBASE_API_KEY,
   firebaseAppId: publicEnv.EXPO_PUBLIC_FIREBASE_APP_ID,
   firebaseAuthDomain: publicEnv.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,

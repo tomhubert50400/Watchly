@@ -1,6 +1,6 @@
 # Watchly staging environment
 
-This is the first P0.1 delivery unit. It defines the repository contract that keeps local development, staging, and production configuration separate. Cloud resources still need to be provisioned before the staging environment is usable.
+This document defines the repository contract that keeps local development, staging, and production configuration separate. The Railway API and PostgreSQL services, staging Firebase project, EAS preview variables, uptime monitor, and error tracking applications are provisioned.
 
 ## Environment contract
 
@@ -17,6 +17,7 @@ The standard EAS `preview` environment backs the Watchly staging profile. This a
 Configure these values in the EAS `preview` environment:
 
 - `EXPO_PUBLIC_API_URL`, the HTTPS staging API URL.
+- `EXPO_PUBLIC_ERROR_TRACKING_DSN`, the Better Stack mobile ingestion DSN.
 - `EXPO_PUBLIC_FIREBASE_API_KEY`.
 - `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`.
 - `EXPO_PUBLIC_FIREBASE_PROJECT_ID`.
@@ -35,21 +36,22 @@ eas build --profile staging --platform ios
 
 ## Staging API variables
 
-Provision a dedicated API service and database, then configure at least the variables documented in `apps/api/.env.example`. Use `APP_ENV=staging` with `NODE_ENV=production`. The health response exposes `environment: staging`, which lets deployment smoke tests detect a wrong target.
+The dedicated API service and database use `APP_ENV=staging` with `NODE_ENV=production`. The health response exposes `environment: staging`, which lets deployment smoke tests detect a wrong target. `ERROR_TRACKING_DSN` and `MONITORING_TEST_KEY` are sealed Railway variables. The API refuses to boot in staging if either is absent.
 
 Set `DEPLOYMENT_APP_ENV=staging` when running `security:deployment-smoke` against staging. The smoke check verifies the health environment and sends the same value with protected-route probes.
 
 Never reuse the production database URL, Firebase project, R2 bucket credentials, or backend secrets in staging.
 
-## Required external work
+## Current staging state
 
 - Railway Hobby is the selected API and PostgreSQL provider. The workspace compute alert is set to 7 USD and its hard limit to 10 USD.
-- Provision isolated Railway staging services and secret storage.
-- Create the staging Firebase project and native application registrations.
-- Configure the EAS `preview` variables.
-- Deploy the API, run migrations, and execute the deployment smoke check.
-- Build and install the staging client, then prove that it reaches only the staging API.
+- Railway staging services and secret storage are isolated from local development.
+- The staging Firebase project and EAS `preview` environment are configured.
+- Better Stack monitors `/health` every three minutes and receives API and mobile exceptions.
+- The remaining native proof is to build and install the staging client, then prove on a physical device that it reaches only the staging API and reports a controlled mobile exception.
 
 ## Railway deployment contract
 
 `railway.json` builds only the API package, applies Prisma migrations as a pre-deploy command, starts the compiled NestJS service, and requires `/health` to pass before a deployment becomes active. The service must deploy from a committed Git revision so local environment files and unfinished worktree changes cannot enter a staging build.
+
+Operational monitoring, alert checks, rollback, and database recovery are documented in `docs/staging-monitoring.md`.

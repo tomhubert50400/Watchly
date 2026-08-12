@@ -8,6 +8,7 @@ import {
 import { getRequestPath } from './observability/request-observability.middleware';
 import { getRequestId } from './observability/request-context';
 import { redactSensitiveText, StructuredLogger } from './observability/structured-logger';
+import { captureApiException } from './observability/error-tracking';
 
 @Catch()
 export class DevExceptionFilter implements ExceptionFilter {
@@ -60,6 +61,16 @@ export class DevExceptionFilter implements ExceptionFilter {
   ) {
     const errorName = exception instanceof Error ? exception.name : 'UnknownError';
     const errorMessage = exception instanceof Error ? exception.message : 'Unknown thrown value';
+    const method = request.method ?? 'UNKNOWN';
+    const path = getRequestPath(request);
+    const requestId = getRequestId();
+
+    captureApiException(exception, {
+      method,
+      path,
+      requestId,
+      statusCode,
+    });
 
     this.logger?.write({
       errorMessage: redactSensitiveText(errorMessage),
@@ -67,9 +78,9 @@ export class DevExceptionFilter implements ExceptionFilter {
       event: 'http.exception',
       level: 'error',
       message: 'Unhandled request exception',
-      method: request.method ?? 'UNKNOWN',
-      path: getRequestPath(request),
-      requestId: getRequestId(),
+      method,
+      path,
+      requestId,
       statusCode,
     });
   }

@@ -2,6 +2,7 @@ export type AppEnvironment = 'development' | 'production' | 'staging';
 
 type PublicEnvironmentConfig = {
   apiUrl?: string;
+  errorTrackingDsn?: string;
   firebaseApiKey?: string;
   firebaseAppId?: string;
   firebaseAuthDomain?: string;
@@ -31,6 +32,7 @@ export function validatePublicEnvironment(
 
   const requiredValues = [
     ['EXPO_PUBLIC_API_URL', config.apiUrl],
+    ['EXPO_PUBLIC_ERROR_TRACKING_DSN', config.errorTrackingDsn],
     ['EXPO_PUBLIC_FIREBASE_API_KEY', config.firebaseApiKey],
     ['EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN', config.firebaseAuthDomain],
     ['EXPO_PUBLIC_FIREBASE_PROJECT_ID', config.firebaseProjectId],
@@ -45,6 +47,7 @@ export function validatePublicEnvironment(
   }
 
   const apiUrl = new URL(config.apiUrl!);
+  const errorTrackingDsn = new URL(config.errorTrackingDsn!);
 
   if (apiUrl.protocol !== 'https:') {
     throw new Error(`${environment} must use an HTTPS API URL.`);
@@ -52,6 +55,10 @@ export function validatePublicEnvironment(
 
   if (isLocalHostname(apiUrl.hostname)) {
     throw new Error(`${environment} cannot use a local API URL.`);
+  }
+
+  if (errorTrackingDsn.protocol !== 'https:' || isLocalHostname(errorTrackingDsn.hostname)) {
+    throw new Error(`${environment} must use a public HTTPS error tracking DSN.`);
   }
 
   if (
