@@ -2,7 +2,6 @@ import 'reflect-metadata';
 import { Type } from '@nestjs/common';
 import { GUARDS_METADATA, MODULE_METADATA } from '@nestjs/common/constants';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard } from '@nestjs/throttler';
 import { AuthGuard } from '../auth/auth.guard';
 import { OptionalAuthGuard } from '../auth/optional-auth.guard';
 import { AuthController } from '../auth/auth.controller';
@@ -30,6 +29,10 @@ import { SharedWatchlistsController } from '../shared-watchlists/shared-watchlis
 import { TrackingController } from '../tracking/tracking.controller';
 import { WatchlistsController } from '../watchlists/watchlists.controller';
 import { createEnvironmentIsolationMiddleware } from '../environment-isolation';
+import {
+  ProxyAwareThrottlerGuard,
+  resolveThrottlerTracker,
+} from './proxy-aware-throttler.guard';
 
 type ControllerClass = Type<unknown>;
 
@@ -66,6 +69,7 @@ async function main() {
     ...assertPublicControllersStayPublic(),
     ...assertOptionalAuthControllersUseOptionalAuthGuard(),
     ...assertGlobalThrottlerGuard(AppModule),
+    ...assertProxyAwareThrottlerTracker(),
     ...assertEnvironmentIsolation(),
   ];
 
@@ -163,10 +167,24 @@ function assertGlobalThrottlerGuard(appModule: Type<unknown>) {
     (provider: unknown) =>
       isProviderObject(provider) &&
       provider.provide === APP_GUARD &&
-      provider.useClass === ThrottlerGuard,
+      provider.useClass === ProxyAwareThrottlerGuard,
   );
 
-  return hasThrottler ? [] : ['AppModule must install ThrottlerGuard as a global guard.'];
+  return hasThrottler ? [] : ['AppModule must install ProxyAwareThrottlerGuard as a global guard.'];
+}
+
+function assertProxyAwareThrottlerTracker() {
+  const failures: string[] = [];
+
+  if (resolveThrottlerTracker({ headers: { 'x-real-ip': ' 203.0.113.10 ' }, ip: '10.0.0.1' }) !== '203.0.113.10') {
+    failures.push('Rate limiting must prefer the client IP provided by the Railway proxy.');
+  }
+
+  if (resolveThrottlerTracker({ ip: '127.0.0.1' }) !== '127.0.0.1') {
+    failures.push('Rate limiting must fall back to the request IP outside Railway.');
+  }
+
+  return failures;
 }
 
 function hasGuard(target: object | Function, guard: Type<unknown>) {
