@@ -6,13 +6,14 @@ const protectedPath = '/auth/me';
 async function main() {
   const baseUrl = readRequiredUrl();
   const corsOrigin = process.env.DEPLOYMENT_CORS_ORIGIN ?? process.env.CORS_ORIGIN;
+  const expectedEnvironment = process.env.DEPLOYMENT_APP_ENV ?? process.env.APP_ENV ?? 'development';
   const rateLimitProbeRequests = Number(process.env.RATE_LIMIT_PROBE_REQUESTS ?? '120');
 
   const failures = [
-    ...(await assertHealth(baseUrl)),
-    ...(await assertProtectedAuth(baseUrl)),
+    ...(await assertHealth(baseUrl, expectedEnvironment)),
+    ...(await assertProtectedAuth(baseUrl, expectedEnvironment)),
     ...(await assertCors(baseUrl, corsOrigin)),
-    ...(await assertRateLimit(baseUrl, rateLimitProbeRequests)),
+    ...(await assertRateLimit(baseUrl, expectedEnvironment, rateLimitProbeRequests)),
   ];
 
   if (failures.length > 0) {
@@ -32,7 +33,7 @@ function readRequiredUrl() {
   return value.replace(/\/$/, '');
 }
 
-async function assertHealth(baseUrl: string) {
+async function assertHealth(baseUrl: string, expectedEnvironment: string) {
   const response = await fetch(`${baseUrl}${healthPath}`);
 
   if (!response.ok) {
@@ -41,11 +42,19 @@ async function assertHealth(baseUrl: string) {
 
   const body = await response.json().catch(() => null);
 
-  return body && body.status === 'ok' ? [] : [`GET ${healthPath} should return status ok.`];
+  if (!body || body.status !== 'ok') {
+    return [`GET ${healthPath} should return status ok.`];
+  }
+
+  return body.environment === expectedEnvironment
+    ? []
+    : [`GET ${healthPath} expected environment ${expectedEnvironment}, received ${body.environment ?? 'none'}.`];
 }
 
-async function assertProtectedAuth(baseUrl: string) {
-  const response = await fetch(`${baseUrl}${protectedPath}`);
+async function assertProtectedAuth(baseUrl: string, expectedEnvironment: string) {
+  const response = await fetch(`${baseUrl}${protectedPath}`, {
+    headers: environmentHeaders(expectedEnvironment),
+  });
 
   return response.status === 401
     ? []
@@ -71,13 +80,15 @@ async function assertCors(baseUrl: string, corsOrigin: string | undefined) {
     : [`CORS preflight expected allow-origin ${corsOrigin}, received ${allowOrigin ?? 'none'}.`];
 }
 
-async function assertRateLimit(baseUrl: string, requests: number) {
+async function assertRateLimit(baseUrl: string, expectedEnvironment: string, requests: number) {
   if (!Number.isInteger(requests) || requests < 2) {
     return ['RATE_LIMIT_PROBE_REQUESTS must be an integer greater than 1.'];
   }
 
   for (let index = 0; index < requests; index += 1) {
-    const response = await fetch(`${baseUrl}${protectedPath}`);
+    const response = await fetch(`${baseUrl}${protectedPath}`, {
+      headers: environmentHeaders(expectedEnvironment),
+    });
 
     if (response.status === 429) {
       return [];
@@ -85,6 +96,10 @@ async function assertRateLimit(baseUrl: string, requests: number) {
   }
 
   return [`Rate limit probe did not receive 429 after ${requests} unauthenticated protected requests.`];
+}
+
+function environmentHeaders(environment: string) {
+  return { 'X-Watchly-Environment': environment };
 }
 
 void main();

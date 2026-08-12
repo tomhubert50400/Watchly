@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import 'reflect-metadata';
 import { AppModule } from './app.module';
 import { DevExceptionFilter } from './dev-exception.filter';
+import { createEnvironmentIsolationMiddleware } from './environment-isolation';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -13,10 +14,12 @@ async function bootstrap() {
   const config = app.get(ConfigService);
   const logger = new Logger('Bootstrap');
   const corsOrigin = config.get<string>('CORS_ORIGIN');
-  const isDevelopment = config.get<string>('NODE_ENV') !== 'production';
+  const appEnvironment = config.getOrThrow<string>('APP_ENV');
+  const isDevelopment = appEnvironment === 'development';
   const port = config.getOrThrow<number>('PORT');
 
   app.use(helmet());
+  app.use(createEnvironmentIsolationMiddleware(appEnvironment));
   app.useGlobalPipes(
     new ValidationPipe({
       forbidNonWhitelisted: true,

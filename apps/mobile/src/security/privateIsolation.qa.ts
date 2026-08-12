@@ -3,6 +3,36 @@
 import assert from 'node:assert/strict';
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import { readFileSync } from 'node:fs';
+import { resolveAppEnvironment, validatePublicEnvironment } from '../config/appEnvironment';
+
+const stagingConfig = {
+  apiUrl: 'https://api-staging.watchly.example',
+  firebaseApiKey: 'staging-api-key',
+  firebaseAppId: 'staging-app-id',
+  firebaseAuthDomain: 'watchly-staging.firebaseapp.com',
+  firebaseProjectId: 'watchly-staging',
+};
+
+assert.equal(resolveAppEnvironment(undefined), 'development');
+assert.equal(resolveAppEnvironment('staging'), 'staging');
+assert.throws(() => resolveAppEnvironment('preview'), /Invalid EXPO_PUBLIC_APP_ENV/);
+assert.doesNotThrow(() => validatePublicEnvironment('staging', stagingConfig));
+assert.throws(
+  () => validatePublicEnvironment('staging', { ...stagingConfig, apiUrl: 'http://10.0.0.4:3000' }),
+  /must use an HTTPS API URL/,
+);
+assert.throws(
+  () => validatePublicEnvironment('staging', { ...stagingConfig, apiUrl: 'https://localhost:3000' }),
+  /cannot use a local API URL/,
+);
+assert.throws(
+  () => validatePublicEnvironment('production', { ...stagingConfig, firebaseAppId: undefined }),
+  /EXPO_PUBLIC_FIREBASE_APP_ID/,
+);
+assert.throws(
+  () => validatePublicEnvironment('staging', { ...stagingConfig, uiReviewEmail: 'review@local.test' }),
+  /cannot include development authentication configuration/,
+);
 
 class ScopedVersionGuard {
   private scope: string;

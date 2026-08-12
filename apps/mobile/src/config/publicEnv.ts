@@ -1,4 +1,7 @@
+import { resolveAppEnvironment, validatePublicEnvironment } from './appEnvironment';
+
 type PublicEnv = {
+  EXPO_PUBLIC_APP_ENV?: string;
   EXPO_PUBLIC_API_URL?: string;
   EXPO_PUBLIC_FIREBASE_API_KEY?: string;
   EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN?: string;
@@ -12,7 +15,9 @@ type PublicEnv = {
   EXPO_PUBLIC_UI_REVIEW_PASSWORD?: string;
 };
 
-const fallbackPublicEnv: PublicEnv = {
+export const appEnvironment = resolveAppEnvironment(process.env.EXPO_PUBLIC_APP_ENV);
+
+const developmentFallbackPublicEnv: PublicEnv = {
   EXPO_PUBLIC_API_URL: 'http://10.0.2.2:3000',
   EXPO_PUBLIC_FIREBASE_API_KEY: 'AIzaSyDUmUqZ5FSeamLS7YZstJspviSLcOTz6qo',
   EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: 'tv-app-9dffd.firebaseapp.com',
@@ -24,7 +29,10 @@ const fallbackPublicEnv: PublicEnv = {
     '976365509331-hqmc9fs6br68ht4tkf83mej76cd9mohn.apps.googleusercontent.com',
 };
 
+const fallbackPublicEnv = appEnvironment === 'development' ? developmentFallbackPublicEnv : {};
+
 export const publicEnv: PublicEnv = {
+  EXPO_PUBLIC_APP_ENV: process.env.EXPO_PUBLIC_APP_ENV ?? appEnvironment,
   EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL ?? fallbackPublicEnv.EXPO_PUBLIC_API_URL,
   EXPO_PUBLIC_FIREBASE_API_KEY:
     process.env.EXPO_PUBLIC_FIREBASE_API_KEY ?? fallbackPublicEnv.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -44,3 +52,14 @@ export const publicEnv: PublicEnv = {
   EXPO_PUBLIC_UI_REVIEW_EMAIL: process.env.EXPO_PUBLIC_UI_REVIEW_EMAIL,
   EXPO_PUBLIC_UI_REVIEW_PASSWORD: process.env.EXPO_PUBLIC_UI_REVIEW_PASSWORD,
 };
+
+validatePublicEnvironment(appEnvironment, {
+  apiUrl: publicEnv.EXPO_PUBLIC_API_URL,
+  firebaseApiKey: publicEnv.EXPO_PUBLIC_FIREBASE_API_KEY,
+  firebaseAppId: publicEnv.EXPO_PUBLIC_FIREBASE_APP_ID,
+  firebaseAuthDomain: publicEnv.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  firebaseAuthEmulatorHost: publicEnv.EXPO_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST,
+  firebaseProjectId: publicEnv.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  uiReviewEmail: publicEnv.EXPO_PUBLIC_UI_REVIEW_EMAIL,
+  uiReviewPassword: publicEnv.EXPO_PUBLIC_UI_REVIEW_PASSWORD,
+});

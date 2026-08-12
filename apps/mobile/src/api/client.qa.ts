@@ -137,6 +137,11 @@ async function main() {
       !(uploadRequest?.headers as Record<string, string> | undefined)?.['Content-Type'],
       'Multipart boundaries must be set by fetch.',
     );
+    assert(
+      (uploadRequest?.headers as Record<string, string> | undefined)?.['X-Watchly-Environment']
+        === 'development',
+      'Every mobile API request must identify its app environment.',
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

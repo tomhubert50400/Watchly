@@ -29,6 +29,7 @@ import {
 import { SharedWatchlistsController } from '../shared-watchlists/shared-watchlists.controller';
 import { TrackingController } from '../tracking/tracking.controller';
 import { WatchlistsController } from '../watchlists/watchlists.controller';
+import { createEnvironmentIsolationMiddleware } from '../environment-isolation';
 
 type ControllerClass = Type<unknown>;
 
@@ -65,6 +66,7 @@ async function main() {
     ...assertPublicControllersStayPublic(),
     ...assertOptionalAuthControllersUseOptionalAuthGuard(),
     ...assertGlobalThrottlerGuard(AppModule),
+    ...assertEnvironmentIsolation(),
   ];
 
   if (failures.length > 0) {
@@ -72,6 +74,61 @@ async function main() {
   }
 
   console.log('Security QA passed.');
+}
+
+function assertEnvironmentIsolation() {
+  const failures: string[] = [];
+  const middleware = createEnvironmentIsolationMiddleware('staging');
+
+  if (runEnvironmentMiddleware(middleware, '/ratings', 'POST', 'production').statusCode !== 409) {
+    failures.push('An API must reject a client from another environment.');
+  }
+
+  if (runEnvironmentMiddleware(middleware, '/ratings', 'POST', undefined).statusCode !== 409) {
+    failures.push('An API must reject an application request without an environment.');
+  }
+
+  if (!runEnvironmentMiddleware(middleware, '/ratings', 'POST', 'staging').continued) {
+    failures.push('An API must accept a client from its own environment.');
+  }
+
+  if (!runEnvironmentMiddleware(middleware, '/health', 'GET', undefined).continued) {
+    failures.push('The health endpoint must remain available without a client environment header.');
+  }
+
+  if (!runEnvironmentMiddleware(middleware, '/ratings', 'OPTIONS', undefined).continued) {
+    failures.push('CORS preflight must remain available without a client environment header.');
+  }
+
+  return failures;
+}
+
+function runEnvironmentMiddleware(
+  middleware: ReturnType<typeof createEnvironmentIsolationMiddleware>,
+  path: string,
+  method: string,
+  environment: string | undefined,
+) {
+  const result = { continued: false, statusCode: 0 };
+
+  middleware(
+    {
+      get: () => environment,
+      method,
+      path,
+    },
+    {
+      status: (statusCode) => {
+        result.statusCode = statusCode;
+        return { json: () => undefined };
+      },
+    },
+    () => {
+      result.continued = true;
+    },
+  );
+
+  return result;
 }
 
 function assertOptionalAuthControllersUseOptionalAuthGuard() {

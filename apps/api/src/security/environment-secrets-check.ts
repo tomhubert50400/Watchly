@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const apiRequiredEnv = [
+  'APP_ENV',
   'NODE_ENV',
   'PORT',
   'CORS_ORIGIN',
@@ -60,11 +61,17 @@ function assertMobileEnvExample(contents: string) {
 }
 
 function assertNoBackendSecretsInMobile(envExample: string, source: string) {
+  const envNames = parseEnvNames(envExample);
+
   return backendOnlyNames.flatMap((name) =>
-    envExample.includes(name) || source.includes(name)
+    envNames.includes(name) || containsExactEnvName(source, name)
       ? [`Mobile app must not reference backend-only secret ${name}.`]
       : [],
   );
+}
+
+function containsExactEnvName(contents: string, name: string) {
+  return new RegExp(`(^|[^A-Z0-9_])${name}([^A-Z0-9_]|$)`).test(contents);
 }
 
 function parseEnvNames(contents: string) {

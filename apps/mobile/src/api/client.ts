@@ -1,4 +1,4 @@
-import { publicEnv } from '../config/publicEnv';
+import { appEnvironment, publicEnv } from '../config/publicEnv';
 
 const apiUrl = publicEnv.EXPO_PUBLIC_API_URL;
 
@@ -64,6 +64,7 @@ async function apiRequest<T>(method: string, path: string, options: ApiRequestOp
     const response = await fetch(`${apiUrl}${path}`, {
       body: options.formData ?? (options.body !== undefined ? JSON.stringify(options.body) : undefined),
       headers: {
+        'X-Watchly-Environment': appEnvironment,
         ...(options.body !== undefined && !options.formData ? { 'Content-Type': 'application/json' } : {}),
         ...(options.token ? { Authorization: ['Bearer', options.token].join(' ') } : {}),
       },

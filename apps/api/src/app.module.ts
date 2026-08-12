@@ -29,6 +29,7 @@ import { ViewingsModule } from './viewings/viewings.module';
     ConfigModule.forRoot({
       isGlobal: true,
       validationSchema: Joi.object({
+        APP_ENV: Joi.string().valid('development', 'staging', 'production').default('development'),
         CORS_ORIGIN: Joi.string().uri().optional(),
         DATABASE_URL: Joi.string().uri().required(),
         FIREBASE_AUTH_EMULATOR_HOST: Joi.string().allow('').optional(),

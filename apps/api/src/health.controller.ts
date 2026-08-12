@@ -1,10 +1,14 @@
 import { Controller, Get } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 @Controller('health')
 export class HealthController {
+  constructor(private readonly config: ConfigService) {}
+
   @Get()
   health() {
     return {
+      environment: this.config.getOrThrow<string>('APP_ENV'),
       status: 'ok',
       service: 'api',
       timestamp: new Date().toISOString(),
