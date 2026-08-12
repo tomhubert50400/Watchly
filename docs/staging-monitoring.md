@@ -4,15 +4,18 @@
 
 - Railway Observability is the infrastructure and log dashboard for the `staging` environment. Its default dashboard tracks CPU, memory, disk, network, usage, and error logs.
 - Better Stack Uptime checks `https://watchly-api-staging.up.railway.app/health` every three minutes from four regions. A valid response must contain `"status":"ok"`.
-- Better Stack Errors has separate `Watchly API Staging` and `Watchly Mobile Staging` applications.
-- The Better Stack Uptime integration sends e-mail incidents for new error groups, error spikes, and automatically reopened errors across both applications.
-- Railway service variables `ERROR_TRACKING_DSN` and `MONITORING_TEST_KEY` are sealed. The mobile DSN is stored as `EXPO_PUBLIC_ERROR_TRACKING_DSN` in the EAS `preview` environment. A DSN is an ingestion endpoint, not an account credential, but it must not be copied into source files.
+- Better Stack Errors receives API exceptions in `Watchly API Staging`. Sentry receives JavaScript, Hermes, and native iOS events in `watchly-mobile-staging`.
+- The Better Stack Uptime integration sends e-mail incidents for new API error groups, error spikes, and automatically reopened errors.
+- Railway service variables `ERROR_TRACKING_DSN` and `MONITORING_TEST_KEY` are sealed. The Sentry mobile DSN is stored as `EXPO_PUBLIC_ERROR_TRACKING_DSN` in the EAS `preview` environment. `SENTRY_AUTH_TOKEN` is sensitive, while `SENTRY_ORG` and `SENTRY_PROJECT` select the upload destination. A DSN is an ingestion endpoint, not an account credential, but it must not be copied into source files.
 
-## Mobile staging source maps
+## Mobile staging source maps and native symbols
 
 - The staging EAS build uses Sentry's Metro configuration to generate the Hermes bundle and its linked source map. The iOS build log must contain a `Source Map Upload Report` where the script and source map share the same debug ID.
-- Better Stack accepts the JavaScript source-map upload but does not accept Sentry's separate native dSYM project upload. Keep `SENTRY_ALLOW_FAILURE=true` in the EAS `preview` environment so that unsupported native upload cannot fail an otherwise valid build. This does not replace checking the JavaScript upload report.
-- To prove symbolication, temporarily set a unique `EXPO_PUBLIC_MONITORING_PROBE_ID`, build and open the staging app on a registered iPhone, then confirm that Better Stack resolves the call site to `apps/mobile/src/observability/mobileMonitoringProbe.ts`. Delete the probe variable immediately after the proof and resolve the controlled exception.
+- The same build must upload the Watchly dSYM and native debug information files to the Sentry organization `watchly-ja` and project `watchly-mobile-staging`. Do not set `SENTRY_URL` or `SENTRY_ALLOW_FAILURE`; a failed symbol upload must fail the staging build.
+- To prove JavaScript symbolication, temporarily set a unique `EXPO_PUBLIC_MONITORING_PROBE_ID`, build and open the staging app on a registered iPhone, then confirm that Sentry resolves the TypeScript call site in `apps/mobile/src/observability/mobileMonitoringProbe.ts`.
+- To prove native symbolication, temporarily set a unique `EXPO_PUBLIC_NATIVE_CRASH_PROBE_ID`. The probe waits for Sentry's native `onReady` callback, crashes once, and stores a device marker before the crash. Reopen the app so the cached native event can be sent, then verify the release, environment, probe tag, and named native frames in Sentry.
+- The physical iPhone proof completed on 2026-08-12. Sentry issue `WATCHLY-MOBILE-STAGING-1` received release `com.tom.tvapp.staging@1.0.0+1`, environment `staging`, tag `p0.1-native-ready-20260812`, and symbolicated frames including `+[SentrySDKInternal crash]`, `facebook::react::ObjCTurboModule::performVoidMethodInvocation`, and `main (AppDelegate.swift:6)`.
+- Delete either probe variable immediately after its proof and resolve the controlled issue so it cannot hide a real regression. The native crash probe variable was removed from EAS `preview` after the recorded proof.
 
 Railway Hobby keeps logs for seven days. Use these Log Explorer filters during an incident:
 
@@ -74,6 +77,6 @@ Production must not launch with this Hobby limitation. Before production, choose
 
 ## Routine
 
-- Daily during beta: check Better Stack Uptime incidents, new API/mobile errors, Railway error logs, and estimated usage.
+- Daily during beta: check Better Stack Uptime incidents, new API errors, Sentry mobile issues, Railway error logs, and estimated usage.
 - Weekly: review slow requests, unresolved exceptions, dependency warnings, and backup freshness.
 - Before each beta build: verify the EAS preview variables, deploy smoke check, alert delivery, and mobile error ingestion from the installed staging client.
