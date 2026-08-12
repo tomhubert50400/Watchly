@@ -5,6 +5,7 @@
 - Railway Observability is the infrastructure and log dashboard for the `staging` environment. Its default dashboard tracks CPU, memory, disk, network, usage, and error logs.
 - Better Stack Uptime checks `https://watchly-api-staging.up.railway.app/health` every three minutes from four regions. A valid response must contain `"status":"ok"`.
 - Better Stack Errors has separate `Watchly API Staging` and `Watchly Mobile Staging` applications.
+- The Better Stack Uptime integration sends e-mail incidents for new error groups, error spikes, and automatically reopened errors across both applications.
 - Railway service variables `ERROR_TRACKING_DSN` and `MONITORING_TEST_KEY` are sealed. The mobile DSN is stored as `EXPO_PUBLIC_ERROR_TRACKING_DSN` in the EAS `preview` environment. A DSN is an ingestion endpoint, not an account credential, but it must not be copied into source files.
 
 Railway Hobby keeps logs for seven days. Use these Log Explorer filters during an incident:
