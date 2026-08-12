@@ -6,6 +6,7 @@ import { sanitizeMobileErrorEvent } from './errorTrackingEvent';
 import {
   createMobileMonitoringProbeError,
   getMobileMonitoringProbeStorageKey,
+  getNativeCrashProbeStorageKey,
   resolveMobileMonitoringProbeId,
 } from './mobileMonitoringProbe';
 
@@ -24,6 +25,7 @@ export function initializeErrorTracking() {
   });
   errorTrackingEnabled = true;
   void runMobileMonitoringProbe().catch(() => undefined);
+  void runNativeCrashMonitoringProbe().catch(() => undefined);
   return true;
 }
 
@@ -46,6 +48,22 @@ async function runMobileMonitoringProbe() {
   if (await Sentry.flush()) {
     await AsyncStorage.setItem(storageKey, eventId);
   }
+}
+
+async function runNativeCrashMonitoringProbe() {
+  const probeId = resolveMobileMonitoringProbeId(
+    appEnvironment,
+    publicEnv.EXPO_PUBLIC_NATIVE_CRASH_PROBE_ID,
+  );
+  if (!probeId) return;
+
+  const storageKey = getNativeCrashProbeStorageKey(probeId);
+  if (await AsyncStorage.getItem(storageKey)) return;
+
+  await AsyncStorage.setItem(storageKey, 'armed');
+  Sentry.setTag('native_crash_probe_id', probeId);
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  Sentry.nativeCrash();
 }
 
 export function withErrorTracking<P extends Record<string, unknown>>(

@@ -5,6 +5,7 @@ import { sanitizeMobileErrorEvent } from './errorTrackingEvent';
 import {
   createMobileMonitoringProbeError,
   getMobileMonitoringProbeStorageKey,
+  getNativeCrashProbeStorageKey,
   resolveMobileMonitoringProbeId,
 } from './mobileMonitoringProbe';
 
@@ -31,6 +32,10 @@ assert.equal(resolveMobileMonitoringProbeId('staging', '   '), null);
 assert.equal(
   getMobileMonitoringProbeStorageKey('p0.1 mobile'),
   'watchly:monitoring-probe:p0.1%20mobile',
+);
+assert.equal(
+  getNativeCrashProbeStorageKey('p0.1 native'),
+  'watchly:native-crash-probe:p0.1%20native',
 );
 
 const probeError = createMobileMonitoringProbeError();

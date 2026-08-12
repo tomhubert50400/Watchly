@@ -1,4 +1,5 @@
 const PROBE_STORAGE_KEY_PREFIX = 'watchly:monitoring-probe:';
+const NATIVE_CRASH_PROBE_STORAGE_KEY_PREFIX = 'watchly:native-crash-probe:';
 
 export function resolveMobileMonitoringProbeId(
   environment: string,
@@ -12,6 +13,10 @@ export function resolveMobileMonitoringProbeId(
 
 export function getMobileMonitoringProbeStorageKey(probeId: string) {
   return `${PROBE_STORAGE_KEY_PREFIX}${encodeURIComponent(probeId)}`;
+}
+
+export function getNativeCrashProbeStorageKey(probeId: string) {
+  return `${NATIVE_CRASH_PROBE_STORAGE_KEY_PREFIX}${encodeURIComponent(probeId)}`;
 }
 
 export function createMobileMonitoringProbeError() {
