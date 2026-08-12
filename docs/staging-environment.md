@@ -43,9 +43,13 @@ Never reuse the production database URL, Firebase project, R2 bucket credentials
 
 ## Required external work
 
-- Choose the API and PostgreSQL hosting provider.
-- Provision isolated staging services and secret storage.
+- Railway Hobby is the selected API and PostgreSQL provider. The workspace compute alert is set to 7 USD and its hard limit to 10 USD.
+- Provision isolated Railway staging services and secret storage.
 - Create the staging Firebase project and native application registrations.
 - Configure the EAS `preview` variables.
 - Deploy the API, run migrations, and execute the deployment smoke check.
 - Build and install the staging client, then prove that it reaches only the staging API.
+
+## Railway deployment contract
+
+`railway.json` builds only the API package, applies Prisma migrations as a pre-deploy command, starts the compiled NestJS service, and requires `/health` to pass before a deployment becomes active. The service must deploy from a committed Git revision so local environment files and unfinished worktree changes cannot enter a staging build.
