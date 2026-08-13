@@ -22,6 +22,7 @@ import {
   Check,
   ChevronRight,
   Eye,
+  Flag,
   FilterX,
   KeyRound,
   LoaderCircle,
@@ -29,6 +30,9 @@ import {
   LogOut,
   Search,
   ShieldCheck,
+  UserCheck,
+  Users,
+  UserX,
   X,
 } from 'lucide-react';
 import Image from 'next/image';
@@ -39,7 +43,11 @@ import {
   applyModerationAction,
   getAdminSession,
   getReport,
+  getUser,
   listReports,
+  listUsers,
+  reactivateUser,
+  suspendUser,
   updateReportStatus,
 } from './api';
 import { getAdminAuth } from './firebase';
@@ -51,10 +59,15 @@ import {
   getPersonLabel,
   reasonLabels,
   statusLabels,
+  suspensionDurationLabels,
   targetTypeLabels,
+  userStatusLabels,
 } from './model';
 import type {
   AdminSession,
+  AdminUserDetail,
+  AdminUserPage,
+  AdminUserSummary,
   AuditEntry,
   ReportDetail,
   ReportFilters,
@@ -63,6 +76,10 @@ import type {
   ReportStatus,
   ReportSummary,
   ReportTargetType,
+  SuspensionDuration,
+  UserFilters,
+  UserModerationStatus,
+  UserSuspensionHistoryEntry,
 } from './types';
 
 const emptyFilters: ReportFilters = {
@@ -70,6 +87,11 @@ const emptyFilters: ReportFilters = {
   reason: '',
   status: '',
   targetType: '',
+};
+
+const initialUserFilters: UserFilters = {
+  query: '',
+  status: 'suspended',
 };
 
 export function AdminConsole() {
@@ -430,6 +452,7 @@ function ModerationWorkspace({
   session: AdminSession;
   user: User;
 }) {
+  const [activeView, setActiveView] = useState<'reports' | 'users'>('reports');
   const [filters, setFilters] = useState<ReportFilters>(emptyFilters);
   const [searchDraft, setSearchDraft] = useState('');
   const [page, setPage] = useState(1);
@@ -515,10 +538,14 @@ function ModerationWorkspace({
     await Promise.all([loadReportPage(), openReport(detail.id)]);
   }
 
-  async function handleEnforcementAction(action: EnforcementAction, note: string) {
+  async function handleEnforcementAction(
+    action: EnforcementAction,
+    note: string,
+    duration?: SuspensionDuration,
+  ) {
     if (!detail) return;
     const token = await user.getIdToken();
-    await applyModerationAction(token, detail.id, action.action, note);
+    await applyModerationAction(token, detail.id, action.action, note, duration);
     await Promise.all([loadReportPage(), openReport(detail.id)]);
   }
 
@@ -529,6 +556,24 @@ function ModerationWorkspace({
           <Image alt="" aria-hidden="true" src={watchlyMark} />
           <div><strong>WATCHLY</strong><small>Moderation control</small></div>
         </div>
+        <nav aria-label="Moderation sections" className="admin-view-tabs">
+          <button
+            aria-current={activeView === 'reports' ? 'page' : undefined}
+            className={activeView === 'reports' ? 'is-active' : undefined}
+            onClick={() => setActiveView('reports')}
+            type="button"
+          >
+            <Flag aria-hidden="true" size={16} /> Reports
+          </button>
+          <button
+            aria-current={activeView === 'users' ? 'page' : undefined}
+            className={activeView === 'users' ? 'is-active' : undefined}
+            onClick={() => setActiveView('users')}
+            type="button"
+          >
+            <Users aria-hidden="true" size={16} /> Users
+          </button>
+        </nav>
         <div className="admin-session">
           <div>
             <span>{session.email}</span>
@@ -540,6 +585,7 @@ function ModerationWorkspace({
         </div>
       </header>
 
+      {activeView === 'reports' ? (
       <main className="admin-main">
         <div className="admin-title-row">
           <div>
@@ -646,7 +692,320 @@ function ModerationWorkspace({
           </section>
         </div>
       </main>
+      ) : <UserRegistry user={user} />}
     </div>
+  );
+}
+
+function UserRegistry({ user }: { user: User }) {
+  const [filters, setFilters] = useState<UserFilters>(initialUserFilters);
+  const [searchDraft, setSearchDraft] = useState('');
+  const [page, setPage] = useState(1);
+  const [userPage, setUserPage] = useState<AdminUserPage | null>(null);
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<AdminUserDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  const loadUserPage = useCallback(async () => {
+    setListLoading(true);
+    setListError(null);
+
+    try {
+      const token = await user.getIdToken();
+      setUserPage(await listUsers(token, filters, page));
+    } catch (error) {
+      setListError(getRequestMessage(error));
+    } finally {
+      setListLoading(false);
+    }
+  }, [filters, page, user]);
+
+  useEffect(() => {
+    let active = true;
+
+    void user.getIdToken()
+      .then((token) => listUsers(token, filters, page))
+      .then((nextPage) => {
+        if (active) setUserPage(nextPage);
+      })
+      .catch((error: unknown) => {
+        if (active) setListError(getRequestMessage(error));
+      })
+      .finally(() => {
+        if (active) setListLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [filters, page, user]);
+
+  async function openUser(userId: string) {
+    setDetailLoading(true);
+    setDetailError(null);
+
+    try {
+      const token = await user.getIdToken();
+      setDetail(await getUser(token, userId));
+    } catch (error) {
+      setDetailError(getRequestMessage(error));
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  function updateStatus(status: UserModerationStatus | '') {
+    setListLoading(true);
+    setListError(null);
+    setFilters((current) => ({ ...current, status }));
+    setPage(1);
+    setFeedback(null);
+  }
+
+  function submitSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setListLoading(true);
+    setListError(null);
+    setFilters((current) => ({ ...current, query: searchDraft.trim() }));
+    setPage(1);
+    setFeedback(null);
+  }
+
+  function resetFilters() {
+    setListLoading(true);
+    setListError(null);
+    setFilters(initialUserFilters);
+    setSearchDraft('');
+    setPage(1);
+    setFeedback(null);
+  }
+
+  async function handleSuspend(duration: SuspensionDuration, note: string) {
+    if (!detail) return;
+    const token = await user.getIdToken();
+    await suspendUser(token, detail.id, duration, note);
+    setFeedback(`Suspended ${getPersonLabel(detail)} for ${suspensionDurationLabels[duration].toLowerCase()}.`);
+    await Promise.all([loadUserPage(), openUser(detail.id)]);
+  }
+
+  async function handleReactivate(note: string) {
+    if (!detail) return;
+    const token = await user.getIdToken();
+    await reactivateUser(token, detail.id, note);
+    setFeedback(`Reactivated ${getPersonLabel(detail)}.`);
+    await Promise.all([loadUserPage(), openUser(detail.id)]);
+  }
+
+  return (
+    <main className="admin-main">
+      <div className="admin-title-row">
+        <div>
+          <p className="admin-kicker">Account enforcement</p>
+          <h1>Users</h1>
+        </div>
+        <div className="admin-count" aria-live="polite">
+          <span>{userPage?.total ?? 0}</span>
+          <small>matching users</small>
+        </div>
+      </div>
+
+      {feedback ? (
+        <div aria-live="polite" className="admin-alert admin-alert--success" role="status">
+          <Check aria-hidden="true" size={17} /> {feedback}
+        </div>
+      ) : null}
+
+      <form aria-label="User filters" className="admin-filters admin-user-filters" onSubmit={submitSearch}>
+        <label className="admin-search" htmlFor="user-search">
+          <Search aria-hidden="true" size={17} />
+          <span className="sr-only">Search users</span>
+          <input
+            id="user-search"
+            onChange={(event) => setSearchDraft(event.target.value)}
+            placeholder="Search handle, name, email or user ID"
+            value={searchDraft}
+          />
+        </label>
+        <select
+          aria-label="Filter users by status"
+          onChange={(event) => updateStatus(event.target.value as UserModerationStatus | '')}
+          value={filters.status}
+        >
+          <option value="">All users</option>
+          {typedEntries(userStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+        </select>
+        <button className="admin-filter-button" type="submit">Apply</button>
+        <button aria-label="Reset user filters" className="admin-reset-button" onClick={resetFilters} type="button">
+          <FilterX aria-hidden="true" size={17} />
+        </button>
+      </form>
+
+      <div className="moderation-layout">
+        <section aria-labelledby="user-list-title" className="report-list-panel">
+          <div className="panel-heading">
+            <div><h2 id="user-list-title">Account registry</h2><p>Suspended accounts first</p></div>
+            {listLoading ? <LoaderCircle aria-hidden="true" className="spin" size={18} /> : null}
+          </div>
+          {listError ? <InlineError message={listError} onRetry={() => void loadUserPage()} /> : null}
+          {!listError && !listLoading && userPage?.items.length === 0 ? (
+            <div className="empty-state"><UserCheck aria-hidden="true" size={24} /><p>No users match these filters.</p></div>
+          ) : null}
+          {!listError && userPage?.items.length ? (
+            <UserTable items={userPage.items} onOpen={(userId) => void openUser(userId)} selectedId={detail?.id} />
+          ) : null}
+          <div className="pagination">
+            <button disabled={page <= 1 || listLoading} onClick={() => { setListLoading(true); setPage((value) => value - 1); }} type="button">
+              <ArrowLeft aria-hidden="true" size={16} /> Previous
+            </button>
+            <span>Page {userPage?.page ?? page} of {Math.max(userPage?.totalPages ?? 1, 1)}</span>
+            <button disabled={listLoading || page >= (userPage?.totalPages ?? 1)} onClick={() => { setListLoading(true); setPage((value) => value + 1); }} type="button">
+              Next <ArrowRight aria-hidden="true" size={16} />
+            </button>
+          </div>
+        </section>
+
+        <section aria-label="Selected user details" className="report-detail-panel">
+          {detailLoading ? <DetailLoading /> : null}
+          {!detailLoading && detailError ? <InlineError message={detailError} /> : null}
+          {!detailLoading && !detailError && detail ? (
+            <UserDetailView detail={detail} onReactivate={handleReactivate} onSuspend={handleSuspend} />
+          ) : null}
+          {!detailLoading && !detailError && !detail ? (
+            <div className="detail-placeholder">
+              <Users aria-hidden="true" size={26} strokeWidth={1.5} />
+              <h2>Select a user</h2>
+              <p>Open an account to review enforcement history and apply a sanction.</p>
+            </div>
+          ) : null}
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function UserTable({
+  items,
+  onOpen,
+  selectedId,
+}: {
+  items: AdminUserSummary[];
+  onOpen(userId: string): void;
+  selectedId?: string;
+}) {
+  return (
+    <div className="report-table-wrap">
+      <table className="report-table user-table">
+        <caption className="sr-only">Watchly account moderation registry</caption>
+        <thead><tr><th>Status</th><th>User</th><th>Email</th><th>Reports</th><th>Suspensions</th><th>Ends</th><th><span className="sr-only">Action</span></th></tr></thead>
+        <tbody>
+          {items.map((account) => (
+            <tr className={selectedId === account.id ? 'is-selected' : undefined} key={account.id}>
+              <td><UserStatusBadge status={account.status} /></td>
+              <td>{getPersonLabel(account)}</td>
+              <td>{account.emails[0] ?? 'Unknown'}</td>
+              <td>{account.reportCount}</td>
+              <td>{account.suspensionCount}</td>
+              <td>{formatSuspensionEnd(account.suspendedUntil, account.status)}</td>
+              <td><button aria-label={`Open ${getPersonLabel(account)}`} onClick={() => onOpen(account.id)} type="button"><ChevronRight aria-hidden="true" size={18} /></button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function UserDetailView({
+  detail,
+  onReactivate,
+  onSuspend,
+}: {
+  detail: AdminUserDetail;
+  onReactivate(note: string): Promise<void>;
+  onSuspend(duration: SuspensionDuration, note: string): Promise<void>;
+}) {
+  const [action, setAction] = useState<'suspend' | 'reactivate' | null>(null);
+
+  return (
+    <>
+      <div className="detail-heading">
+        <div><p className="admin-kicker">User {detail.id.slice(0, 8)}</p><h2>{getPersonLabel(detail)}</h2></div>
+        <UserStatusBadge status={detail.status} />
+      </div>
+      <dl className="detail-facts">
+        <div><dt>Email</dt><dd>{detail.emails.join(', ') || 'Not recorded yet'}</dd></div>
+        <div><dt>User ID</dt><dd>{detail.id}</dd></div>
+        <div><dt>Joined</dt><dd>{formatDate(detail.createdAt)}</dd></div>
+        <div><dt>Providers</dt><dd>{detail.identities.map((identity) => identity.provider).join(', ') || 'Unknown'}</dd></div>
+        <div><dt>Reports received</dt><dd>{detail.reportCount}</dd></div>
+        <div><dt>Hidden reviews</dt><dd>{detail.content.hiddenReviewCount} of {detail.content.reviewCount}</dd></div>
+      </dl>
+
+      <section className="detail-section">
+        <h3>Account enforcement</h3>
+        <div className="enforcement-card">
+          <div>
+            <span>Current state</span>
+            <strong>{userStatusLabels[detail.status]}</strong>
+            <p>{getUserStateDescription(detail)}</p>
+          </div>
+          {detail.status === 'suspended' ? (
+            <button className="moderation-action moderation-action--positive" onClick={() => setAction('reactivate')} type="button"><UserCheck aria-hidden="true" size={16} /> Reactivate</button>
+          ) : (
+            <button className="moderation-action moderation-action--negative" onClick={() => setAction('suspend')} type="button"><UserX aria-hidden="true" size={16} /> Suspend</button>
+          )}
+        </div>
+      </section>
+
+      <section className="detail-section audit-section">
+        <h3>Suspension history</h3>
+        {detail.suspensionHistory.length === 0 ? <p className="detail-muted">No previous suspension.</p> : (
+          <ol className="audit-list suspension-history">
+            {detail.suspensionHistory.map((entry) => (
+              <li key={entry.id}>
+                <span className="audit-dot" />
+                <div>
+                  <strong>{getHistoryState(entry)}</strong>
+                  <span>{formatDateTime(entry.startsAt)} / {entry.endsAt ? `until ${formatDateTime(entry.endsAt)}` : 'permanent'}</span>
+                  <p>{entry.note}</p>
+                  <time>{entry.reportId ? `Report ${entry.reportId.slice(0, 8)} / ` : ''}{entry.createdByEmail}</time>
+                  {entry.liftedAt ? <p className="history-lifted">Reactivated {formatDateTime(entry.liftedAt)}. {entry.liftedNote}</p> : null}
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+
+      {action === 'suspend' ? (
+        <ConfirmationDialog
+          action={{ label: 'Suspend account', tone: 'negative' }}
+          copy="The member will immediately lose authenticated access and disappear from public discovery. The internal note is retained in the sanction history."
+          durationRequired
+          onCancel={() => setAction(null)}
+          onConfirm={async (note, duration) => {
+            if (!duration) return;
+            await onSuspend(duration, note);
+            setAction(null);
+          }}
+          placeholder="State the evidence and policy basis for this suspension."
+          title="Suspend this account?"
+        />
+      ) : null}
+      {action === 'reactivate' ? (
+        <ConfirmationDialog
+          action={{ label: 'Reactivate account', tone: 'positive' }}
+          copy="The member will regain authenticated access and become eligible for public discovery immediately."
+          onCancel={() => setAction(null)}
+          onConfirm={async (note) => { await onReactivate(note); setAction(null); }}
+          placeholder="Explain why this suspension is being lifted."
+          title="Reactivate this account?"
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -693,7 +1052,11 @@ function ReportDetailView({
   onStatusChange,
 }: {
   detail: ReportDetail;
-  onEnforcementAction(action: EnforcementAction, note: string): Promise<void>;
+  onEnforcementAction(
+    action: EnforcementAction,
+    note: string,
+    duration?: SuspensionDuration,
+  ): Promise<void>;
   onStatusChange(action: ModerationAction, note: string): Promise<void>;
 }) {
   const [statusConfirmation, setStatusConfirmation] = useState<ModerationAction | null>(null);
@@ -739,7 +1102,7 @@ function ReportDetailView({
           <div>
             <span>Current state</span>
             <strong>{enforcementAction?.stateLabel ?? 'Target unavailable'}</strong>
-            <p>{enforcementAction?.description ?? 'The reported target no longer exists, so no enforcement action can be applied.'}</p>
+            <p>{enforcementAction ? getReportEnforcementDescription(detail, enforcementAction) : 'The reported target no longer exists, so no enforcement action can be applied.'}</p>
           </div>
           {enforcementAction ? (
             <button
@@ -791,9 +1154,10 @@ function ReportDetailView({
         <ConfirmationDialog
           action={enforcementConfirmation}
           copy={`${enforcementConfirmation.confirmationCopy} The sanction and your reason will be written to the immutable audit trail.`}
+          durationRequired={enforcementConfirmation.requiresDuration}
           onCancel={() => setEnforcementConfirmation(null)}
-          onConfirm={async (note) => {
-            await onEnforcementAction(enforcementConfirmation, note);
+          onConfirm={async (note, duration) => {
+            await onEnforcementAction(enforcementConfirmation, note, duration);
             setEnforcementConfirmation(null);
           }}
           placeholder="State the evidence and policy basis for this sanction."
@@ -807,6 +1171,7 @@ function ReportDetailView({
 function ConfirmationDialog({
   action,
   copy,
+  durationRequired = false,
   onCancel,
   onConfirm,
   placeholder,
@@ -814,13 +1179,15 @@ function ConfirmationDialog({
 }: {
   action: Pick<ModerationAction, 'label' | 'tone'>;
   copy: string;
+  durationRequired?: boolean;
   onCancel(): void;
-  onConfirm(note: string): Promise<void>;
+  onConfirm(note: string, duration?: SuspensionDuration): Promise<void>;
   placeholder: string;
   title: string;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [note, setNote] = useState('');
+  const [duration, setDuration] = useState<SuspensionDuration>('24Hours');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -839,7 +1206,7 @@ function ConfirmationDialog({
     setError(null);
 
     try {
-      await onConfirm(note.trim());
+      await onConfirm(note.trim(), durationRequired ? duration : undefined);
     } catch (requestError) {
       setError(getRequestMessage(requestError));
       setBusy(false);
@@ -857,6 +1224,18 @@ function ConfirmationDialog({
           <button aria-label="Close confirmation" disabled={busy} onClick={onCancel} type="button"><X aria-hidden="true" size={18} /></button>
         </div>
         <p>{copy}</p>
+        {durationRequired ? (
+          <>
+            <label htmlFor="suspension-duration">Suspension length</label>
+            <select
+              id="suspension-duration"
+              onChange={(event) => setDuration(event.target.value as SuspensionDuration)}
+              value={duration}
+            >
+              {typedEntries(suspensionDurationLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </>
+        ) : null}
         <label htmlFor="moderation-note">Reason for this decision</label>
         <textarea
           autoFocus
@@ -911,6 +1290,10 @@ function StatusBadge({ status }: { status: ReportStatus }) {
   return <span className={`status-badge status-badge--${status}`}>{statusLabels[status]}</span>;
 }
 
+function UserStatusBadge({ status }: { status: UserModerationStatus }) {
+  return <span className={`status-badge user-status-badge--${status}`}>{userStatusLabels[status]}</span>;
+}
+
 function DetailLoading() {
   return (
     <div aria-live="polite" className="detail-placeholder">
@@ -951,6 +1334,39 @@ function getAuditNote(metadata: unknown) {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null;
   const note = (metadata as Record<string, unknown>).note;
   return typeof note === 'string' ? note : null;
+}
+
+function getReportEnforcementDescription(
+  detail: ReportDetail,
+  action: EnforcementAction,
+) {
+  if (detail.moderationState !== 'suspended') return action.description;
+  return detail.moderationEndsAt
+    ? `The account is suspended until ${formatDateTime(detail.moderationEndsAt)}.`
+    : 'The account is permanently suspended.';
+}
+
+function getUserStateDescription(user: AdminUserDetail) {
+  if (user.status === 'suspended') {
+    return user.suspendedUntil
+      ? `Suspended until ${formatDateTime(user.suspendedUntil)}. Access returns automatically after that time.`
+      : 'Permanently suspended until manually reactivated.';
+  }
+
+  return user.status === 'previouslySuspended'
+    ? 'The account is active. Previous sanctions remain visible below.'
+    : 'The account is active with no suspension history.';
+}
+
+function getHistoryState(entry: UserSuspensionHistoryEntry) {
+  if (entry.liftedAt) return 'Lifted manually';
+  if (entry.endsAt && new Date(entry.endsAt) <= new Date()) return 'Expired automatically';
+  return entry.endsAt ? 'Temporary suspension' : 'Permanent suspension';
+}
+
+function formatSuspensionEnd(value: string | null, status: UserModerationStatus) {
+  if (status !== 'suspended') return 'Active';
+  return value ? formatDate(value) : 'Permanent';
 }
 
 function toSentenceCase(value: string) {

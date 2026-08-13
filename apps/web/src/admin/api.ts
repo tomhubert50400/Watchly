@@ -1,11 +1,15 @@
 import type {
   AdminSession,
+  AdminUserDetail,
+  AdminUserPage,
   ModerationActionName,
   ReportDetail,
   ReportFilters,
   ReportPage,
   ReportStatus,
   ReportSummary,
+  SuspensionDuration,
+  UserFilters,
 } from './types';
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '');
@@ -55,9 +59,44 @@ export function applyModerationAction(
   reportId: string,
   action: ModerationActionName,
   note: string,
+  duration?: SuspensionDuration,
 ) {
   return apiRequest<ReportSummary>(`/admin/reports/${reportId}/actions`, token, {
-    body: JSON.stringify({ action, note }),
+    body: JSON.stringify({ action, duration, note }),
+    headers: { 'Content-Type': 'application/json' },
+    method: 'POST',
+  });
+}
+
+export function listUsers(token: string, filters: UserFilters, page: number) {
+  const search = new URLSearchParams({ page: String(page), pageSize: '25' });
+
+  if (filters.query) search.set('query', filters.query);
+  if (filters.status) search.set('status', filters.status);
+
+  return apiRequest<AdminUserPage>(`/admin/users?${search}`, token);
+}
+
+export function getUser(token: string, userId: string) {
+  return apiRequest<AdminUserDetail>(`/admin/users/${userId}`, token);
+}
+
+export function suspendUser(
+  token: string,
+  userId: string,
+  duration: SuspensionDuration,
+  note: string,
+) {
+  return apiRequest(`/admin/users/${userId}/suspensions`, token, {
+    body: JSON.stringify({ duration, note }),
+    headers: { 'Content-Type': 'application/json' },
+    method: 'POST',
+  });
+}
+
+export function reactivateUser(token: string, userId: string, note: string) {
+  return apiRequest(`/admin/users/${userId}/reactivate`, token, {
+    body: JSON.stringify({ note }),
     headers: { 'Content-Type': 'application/json' },
     method: 'POST',
   });

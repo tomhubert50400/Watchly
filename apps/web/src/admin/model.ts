@@ -4,6 +4,8 @@ import type {
   ReportReason,
   ReportStatus,
   ReportTargetType,
+  SuspensionDuration,
+  UserModerationStatus,
 } from './types';
 
 export const statusLabels: Record<ReportStatus, string> = {
@@ -30,6 +32,19 @@ export const targetTypeLabels: Record<ReportTargetType, string> = {
   profile: 'Profile',
 };
 
+export const suspensionDurationLabels: Record<SuspensionDuration, string> = {
+  '24Hours': '24 hours',
+  '7Days': '7 days',
+  '30Days': '30 days',
+  permanent: 'Permanent',
+};
+
+export const userStatusLabels: Record<UserModerationStatus, string> = {
+  active: 'Active',
+  previouslySuspended: 'Previously suspended',
+  suspended: 'Suspended',
+};
+
 export type ModerationAction = {
   label: string;
   status: ReportStatus;
@@ -41,6 +56,7 @@ export type EnforcementAction = {
   confirmationCopy: string;
   description: string;
   label: string;
+  requiresDuration?: boolean;
   stateLabel: string;
   tone: 'positive' | 'negative';
 };
@@ -56,6 +72,7 @@ export function getEnforcementAction(
         confirmationCopy: 'This immediately blocks the member from authenticated Watchly APIs and removes the profile from public discovery.',
         description: 'The member can currently use Watchly and their profile remains public where privacy allows.',
         label: 'Suspend account',
+        requiresDuration: true,
         stateLabel: 'Account active',
         tone: 'negative',
       };
