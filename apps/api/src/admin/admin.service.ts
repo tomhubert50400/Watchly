@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Inject,
   Injectable,
@@ -14,9 +15,11 @@ import {
   ReportTargetType,
 } from '../generated/prisma/enums';
 import {
+  AdminModerationAction,
   AdminReportReason,
   AdminReportStatus,
   AdminReportTargetType,
+  ApplyModerationActionDto,
   ListReportsQuery,
   UpdateReportStatusDto,
 } from './admin.dto';
@@ -31,6 +34,7 @@ const reportSelect = {
       displayName: true,
       handle: true,
       id: true,
+      suspendedAt: true,
     },
   },
   reporter: {
@@ -133,6 +137,7 @@ export class AdminService {
         id: entry.id,
         metadata: entry.metadata,
       })),
+      moderationState: await this.getModerationState(report),
     };
   }
 
@@ -142,7 +147,7 @@ export class AdminService {
     input: UpdateReportStatusDto,
   ) {
     const nextStatus = toPrismaStatus(input.status);
-    const note = input.note.trim();
+    const note = normalizeAdminNote(input.note);
 
     const report = await this.prisma.withConnectionRetry(() =>
       this.prisma.$transaction(async (transaction) => {
@@ -190,6 +195,81 @@ export class AdminService {
     );
 
     return toReportResponse(report);
+  }
+
+  async applyModerationAction(
+    identity: AuthenticatedAdmin,
+    reportId: string,
+    input: ApplyModerationActionDto,
+  ) {
+    const note = normalizeAdminNote(input.note);
+
+    const report = await this.prisma.withConnectionRetry(() =>
+      this.prisma.$transaction(async (transaction) => {
+        const existing = await transaction.contentReport.findUnique({
+          select: reportSelect,
+          where: { id: reportId },
+        });
+
+        if (!existing) {
+          throw new NotFoundException('Report not found.');
+        }
+
+        const action = await applyEnforcement(transaction, existing, input.action);
+        const previousStatus = existing.status;
+        const updated = await transaction.contentReport.update({
+          data: {
+            resolvedAt: new Date(),
+            status: ReportStatus.RESOLVED,
+          },
+          select: reportSelect,
+          where: { id: reportId },
+        });
+
+        await transaction.adminAuditLog.create({
+          data: {
+            action,
+            actorEmail: identity.email,
+            actorFirebaseUid: identity.firebaseUid,
+            metadata: {
+              action: input.action,
+              fromStatus: toApiStatus(previousStatus),
+              note,
+              toStatus: 'resolved',
+            },
+            reportId,
+            reportedUserId: existing.reportedUser.id,
+          },
+        });
+
+        return updated;
+      }),
+    );
+
+    return toReportResponse(report);
+  }
+
+  private async getModerationState(report: SelectedReport) {
+    if (report.targetType === ReportTargetType.PROFILE) {
+      return report.reportedUser.suspendedAt ? 'suspended' : 'active';
+    }
+
+    const target = report.targetType === ReportTargetType.MOVIE_REVIEW
+      ? await this.prisma.withConnectionRetry(() =>
+          this.prisma.userMovieReview.findUnique({
+            select: { moderationHiddenAt: true },
+            where: { id: report.targetId },
+          }),
+        )
+      : await this.prisma.withConnectionRetry(() =>
+          this.prisma.userEpisodeReview.findUnique({
+            select: { moderationHiddenAt: true },
+            where: { id: report.targetId },
+          }),
+        );
+
+    if (!target) return 'unavailable';
+    return target.moderationHiddenAt ? 'hidden' : 'visible';
   }
 
   private writeAudit(
@@ -248,7 +328,11 @@ function toReportResponse(report: SelectedReport) {
     details: report.details,
     id: report.id,
     reason: toApiReason(report.reason),
-    reportedUser: report.reportedUser,
+    reportedUser: {
+      displayName: report.reportedUser.displayName,
+      handle: report.reportedUser.handle,
+      id: report.reportedUser.id,
+    },
     reporter: report.reporter,
     resolvedAt: report.resolvedAt?.toISOString() ?? null,
     status: toApiStatus(report.status),
@@ -336,9 +420,110 @@ function toAuditAction(action: AdminAuditAction) {
     [AdminAuditAction.REPORT_LIST_VIEWED]: 'reportListViewed',
     [AdminAuditAction.REPORT_STATUS_CHANGED]: 'reportStatusChanged',
     [AdminAuditAction.REPORT_VIEWED]: 'reportViewed',
+    [AdminAuditAction.USER_SUSPENDED]: 'userSuspended',
+    [AdminAuditAction.USER_REACTIVATED]: 'userReactivated',
+    [AdminAuditAction.CONTENT_HIDDEN]: 'contentHidden',
+    [AdminAuditAction.CONTENT_RESTORED]: 'contentRestored',
   };
 
   return actions[action];
+}
+
+async function applyEnforcement(
+  transaction: Prisma.TransactionClient,
+  report: SelectedReport,
+  action: AdminModerationAction,
+) {
+  switch (action) {
+    case 'suspendUser': {
+      assertProfileAction(report);
+
+      if (report.reportedUser.suspendedAt) {
+        throw new ConflictException('Account is already suspended.');
+      }
+
+      await transaction.user.update({
+        data: { suspendedAt: new Date() },
+        where: { id: report.reportedUser.id },
+      });
+      return AdminAuditAction.USER_SUSPENDED;
+    }
+    case 'reactivateUser': {
+      assertProfileAction(report);
+
+      if (!report.reportedUser.suspendedAt) {
+        throw new ConflictException('Account is already active.');
+      }
+
+      await transaction.user.update({
+        data: { suspendedAt: null },
+        where: { id: report.reportedUser.id },
+      });
+      return AdminAuditAction.USER_REACTIVATED;
+    }
+    case 'hideContent':
+      return updateReportedContent(transaction, report, true);
+    case 'restoreContent':
+      return updateReportedContent(transaction, report, false);
+  }
+}
+
+function assertProfileAction(report: SelectedReport) {
+  if (report.targetType !== ReportTargetType.PROFILE) {
+    throw new BadRequestException('This action only applies to profile reports.');
+  }
+}
+
+async function updateReportedContent(
+  transaction: Prisma.TransactionClient,
+  report: SelectedReport,
+  hidden: boolean,
+) {
+  if (report.targetType === ReportTargetType.PROFILE) {
+    throw new BadRequestException('This action only applies to review reports.');
+  }
+
+  const target = report.targetType === ReportTargetType.MOVIE_REVIEW
+    ? await transaction.userMovieReview.findUnique({
+        select: { moderationHiddenAt: true, userId: true },
+        where: { id: report.targetId },
+      })
+    : await transaction.userEpisodeReview.findUnique({
+        select: { moderationHiddenAt: true, userId: true },
+        where: { id: report.targetId },
+      });
+
+  if (!target || target.userId !== report.reportedUser.id) {
+    throw new NotFoundException('Reported content not found.');
+  }
+
+  if (hidden === Boolean(target.moderationHiddenAt)) {
+    throw new ConflictException(hidden ? 'Content is already hidden.' : 'Content is already visible.');
+  }
+
+  if (report.targetType === ReportTargetType.MOVIE_REVIEW) {
+    await transaction.userMovieReview.update({
+      data: { moderationHiddenAt: hidden ? new Date() : null },
+      where: { id: report.targetId },
+    });
+  } else {
+    await transaction.userEpisodeReview.update({
+      data: { moderationHiddenAt: hidden ? new Date() : null },
+      where: { id: report.targetId },
+    });
+  }
+
+  return hidden ? AdminAuditAction.CONTENT_HIDDEN : AdminAuditAction.CONTENT_RESTORED;
+}
+
+function normalizeAdminNote(value: string) {
+  const note = value.trim();
+
+  if (note.length < 3) {
+    throw new BadRequestException('note must contain at least 3 non-whitespace characters.');
+  }
+
+  return note;
 }
 
 function isClosedStatus(status: ReportStatus) {

@@ -6,12 +6,14 @@ import { FeedService } from './feed.service';
 
 type Review = {
   id: string;
+  moderationHiddenAt: Date | null;
   userId: string;
   user: {
     privacySettings: {
       profileVisibility: PrivacyVisibility;
       reviewsVisibility: PrivacyVisibility;
     } | null;
+    suspendedAt: Date | null;
   };
 };
 
@@ -19,15 +21,21 @@ async function run() {
   const movieLikes = new Set<string>();
   const episodeLikes = new Set<string>();
   let blocked = false;
+  let moderationHiddenAt: Date | null = null;
+  let movieListWhere: unknown;
+  let episodeListWhere: unknown;
   let reviewVisibility: PrivacyVisibility = PrivacyVisibility.PUBLIC;
+  let suspendedAt: Date | null = null;
   const review = (id: string): Review => ({
     id,
+    moderationHiddenAt,
     userId: 'author',
     user: {
       privacySettings: {
         profileVisibility: PrivacyVisibility.PUBLIC,
         reviewsVisibility: reviewVisibility,
       },
+      suspendedAt,
     },
   });
   const createLikeDelegate = (likes: Set<string>) => ({
@@ -54,12 +62,39 @@ async function run() {
     movieReviewLike: createLikeDelegate(movieLikes),
     userBlock: {
       findFirst: async () => blocked ? { id: 'block' } : null,
+      findMany: async () => [],
     },
     userEpisodeReview: {
+      findMany: async ({ where }: { where: unknown }) => {
+        episodeListWhere = where;
+        return [];
+      },
       findUnique: async ({ where }: { where: { id: string } }) => review(where.id),
     },
+    userEpisodeRating: {
+      findMany: async () => [],
+    },
+    userFollow: {
+      findMany: async () => [{
+        followedUser: {
+          privacySettings: {
+            profileVisibility: PrivacyVisibility.PUBLIC,
+            reviewsVisibility: PrivacyVisibility.PUBLIC,
+          },
+          suspendedAt: null,
+        },
+        followedUserId: 'author',
+      }],
+    },
     userMovieReview: {
+      findMany: async ({ where }: { where: unknown }) => {
+        movieListWhere = where;
+        return [];
+      },
       findUnique: async ({ where }: { where: { id: string } }) => review(where.id),
+    },
+    userMovieRating: {
+      findMany: async () => [],
     },
     withConnectionRetry: async (operation: () => Promise<unknown>) => operation(),
   };
@@ -69,6 +104,16 @@ async function run() {
     { getPublicUrl: () => null } as never,
   );
   const identity = { firebaseUid: 'viewer' } as never;
+
+  assert.deepEqual(await service.listFeed(identity), { items: [] });
+  assert.deepEqual(movieListWhere, {
+    moderationHiddenAt: null,
+    userId: { in: ['author'] },
+  });
+  assert.deepEqual(episodeListWhere, {
+    moderationHiddenAt: null,
+    userId: { in: ['author'] },
+  });
 
   assert.deepEqual(await service.likeMovieReview(identity, 'movie-review'), {
     likeCount: 1,
@@ -98,6 +143,20 @@ async function run() {
   );
 
   reviewVisibility = PrivacyVisibility.PUBLIC;
+  moderationHiddenAt = new Date('2026-08-13T12:00:00.000Z');
+  await assert.rejects(
+    () => service.likeMovieReview(identity, 'hidden-review'),
+    NotFoundException,
+  );
+
+  moderationHiddenAt = null;
+  suspendedAt = new Date('2026-08-13T12:00:00.000Z');
+  await assert.rejects(
+    () => service.likeEpisodeReview(identity, 'suspended-author-review'),
+    NotFoundException,
+  );
+
+  suspendedAt = null;
   blocked = true;
   await assert.rejects(
     () => service.likeEpisodeReview(identity, 'blocked-review'),

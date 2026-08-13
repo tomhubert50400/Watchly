@@ -198,7 +198,12 @@ export class ReviewsService {
               },
               {
                 user: {
-                  episodeReviews: { some: episodeKey },
+                  episodeReviews: {
+                    some: {
+                      ...episodeKey,
+                      moderationHiddenAt: null,
+                    },
+                  },
                   privacySettings: {
                     reviewsVisibility: PrivacyVisibility.PUBLIC,
                   },
@@ -206,6 +211,7 @@ export class ReviewsService {
               },
             ],
             user: {
+              suspendedAt: null,
               privacySettings: {
                 profileVisibility: PrivacyVisibility.PUBLIC,
               },
@@ -227,7 +233,9 @@ export class ReviewsService {
           where: {
             ...episodeKey,
             ...visibleUserFilter,
+            moderationHiddenAt: null,
             user: {
+              suspendedAt: null,
               privacySettings: {
                 profileVisibility: PrivacyVisibility.PUBLIC,
                 reviewsVisibility: PrivacyVisibility.PUBLIC,

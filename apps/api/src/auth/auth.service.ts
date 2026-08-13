@@ -1,10 +1,34 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { AuthenticatedIdentity } from './auth.types';
 import { PrismaService } from '../database/prisma.service';
 
 @Injectable()
 export class AuthService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+
+  async assertActiveIdentity(identity: AuthenticatedIdentity) {
+    const authIdentity = await this.prisma.withConnectionRetry(() =>
+      this.prisma.authIdentity.findUnique({
+        select: {
+          user: {
+            select: {
+              suspendedAt: true,
+            },
+          },
+        },
+        where: {
+          provider_providerUserId: {
+            provider: identity.provider,
+            providerUserId: identity.providerUserId,
+          },
+        },
+      }),
+    );
+
+    if (authIdentity?.user.suspendedAt) {
+      throw new ForbiddenException('This account is suspended.');
+    }
+  }
 
   async getOrCreateUser(identity: AuthenticatedIdentity) {
     return this.prisma.withConnectionRetry(async () => {

@@ -7,6 +7,7 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
   Req,
   UnauthorizedException,
@@ -18,6 +19,7 @@ import {
   ADMIN_REPORT_REASONS,
   ADMIN_REPORT_STATUSES,
   ADMIN_REPORT_TARGET_TYPES,
+  ApplyModerationActionDto,
   ListReportsQuery,
   UpdateReportStatusDto,
 } from './admin.dto';
@@ -74,6 +76,15 @@ export class AdminController {
     @Body() body: UpdateReportStatusDto,
   ) {
     return this.admin.updateReportStatus(getAdminIdentity(request), reportId, body);
+  }
+
+  @Post('reports/:reportId/actions')
+  applyModerationAction(
+    @Req() request: AdminRequest,
+    @Param('reportId', ParseUUIDPipe) reportId: string,
+    @Body() body: ApplyModerationActionDto,
+  ) {
+    return this.admin.applyModerationAction(getAdminIdentity(request), reportId, body);
   }
 }
 

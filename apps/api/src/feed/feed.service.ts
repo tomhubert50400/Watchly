@@ -54,11 +54,13 @@ type FeedEpisodeRating = {
 };
 
 type VisibleReview = {
+  moderationHiddenAt: Date | null;
   user: {
     privacySettings: {
       profileVisibility: PrivacyVisibility;
       reviewsVisibility: PrivacyVisibility;
     } | null;
+    suspendedAt: Date | null;
   };
   userId: string;
 };
@@ -110,6 +112,7 @@ export class FeedService {
           },
           take: FEED_LIMIT,
           where: {
+            moderationHiddenAt: null,
             userId: {
               in: authorIds,
             },
@@ -143,6 +146,7 @@ export class FeedService {
           },
           take: FEED_LIMIT,
           where: {
+            moderationHiddenAt: null,
             userId: {
               in: authorIds,
             },
@@ -309,6 +313,8 @@ export class FeedService {
   private async assertReviewVisible(viewerId: string, review: VisibleReview | null) {
     if (
       !review ||
+      review.moderationHiddenAt !== null ||
+      review.user.suspendedAt !== null ||
       review.user.privacySettings?.profileVisibility !== PrivacyVisibility.PUBLIC ||
       review.user.privacySettings.reviewsVisibility !== PrivacyVisibility.PUBLIC
     ) {
@@ -365,6 +371,7 @@ export class FeedService {
       .filter((follow) => !blockedUserIds.has(follow.followedUserId))
       .filter(
         (follow) =>
+          follow.followedUser.suspendedAt === null &&
           follow.followedUser.privacySettings?.profileVisibility === PrivacyVisibility.PUBLIC &&
           follow.followedUser.privacySettings.reviewsVisibility === PrivacyVisibility.PUBLIC,
       )

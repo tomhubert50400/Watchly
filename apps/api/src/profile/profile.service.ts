@@ -381,6 +381,7 @@ export class ProfileService {
           },
           handle: { not: null },
           onboardingCompleted: true,
+          suspendedAt: null,
           OR: [
             {
               displayName: {
@@ -812,7 +813,7 @@ export class ProfileService {
             },
           },
         },
-        where: { id: targetUserId },
+        where: { id: targetUserId, suspendedAt: null },
       }),
     );
 
@@ -865,6 +866,7 @@ export class ProfileService {
                 blockedUsers: { none: { blockedUserId: viewerId } },
                 handle: { not: null },
                 onboardingCompleted: true,
+                suspendedAt: null,
               },
               status: FollowStatus.ACCEPTED,
             },
@@ -888,6 +890,7 @@ export class ProfileService {
                 blockedUsers: { none: { blockedUserId: viewerId } },
                 handle: { not: null },
                 onboardingCompleted: true,
+                suspendedAt: null,
               },
               followerId: targetUserId,
               status: FollowStatus.ACCEPTED,
@@ -985,6 +988,7 @@ export class ProfileService {
           },
           where: {
             id: userId,
+            suspendedAt: null,
           },
         }),
     );
@@ -1086,12 +1090,12 @@ export class ProfileService {
           this.prisma.userMovieReview.findMany({
             orderBy: { updatedAt: 'desc' },
             take: PROFILE_OPINION_LIMIT,
-            where: { userId },
+            where: { moderationHiddenAt: null, userId },
           }),
           this.prisma.userEpisodeReview.findMany({
             orderBy: { updatedAt: 'desc' },
             take: PROFILE_OPINION_LIMIT,
-            where: { userId },
+            where: { moderationHiddenAt: null, userId },
           }),
         ] as const)),
         this.getProfileStats(userId),
@@ -1243,11 +1247,15 @@ export class ProfileService {
           _count: {
             select: {
               episodeRatings: true,
-              episodeReviews: true,
-              followers: { where: { status: FollowStatus.ACCEPTED } },
-              following: { where: { status: FollowStatus.ACCEPTED } },
+              episodeReviews: { where: { moderationHiddenAt: null } },
+              followers: {
+                where: { follower: { suspendedAt: null }, status: FollowStatus.ACCEPTED },
+              },
+              following: {
+                where: { followedUser: { suspendedAt: null }, status: FollowStatus.ACCEPTED },
+              },
               movieRatings: true,
-              movieReviews: true,
+              movieReviews: { where: { moderationHiddenAt: null } },
             },
           },
         },
@@ -1269,8 +1277,12 @@ export class ProfileService {
         select: {
           _count: {
             select: {
-              followers: { where: { status: FollowStatus.ACCEPTED } },
-              following: { where: { status: FollowStatus.ACCEPTED } },
+              followers: {
+                where: { follower: { suspendedAt: null }, status: FollowStatus.ACCEPTED },
+              },
+              following: {
+                where: { followedUser: { suspendedAt: null }, status: FollowStatus.ACCEPTED },
+              },
             },
           },
         },

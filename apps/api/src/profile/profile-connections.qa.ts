@@ -73,6 +73,7 @@ async function run() {
       blockedUsers: { none: { blockedUserId: viewerId } },
       handle: { not: null },
       onboardingCompleted: true,
+      suspendedAt: null,
     },
     status: FollowStatus.ACCEPTED,
   }, 'followers must be accepted, onboarded, navigable, and must not have blocked the viewer');
@@ -90,6 +91,7 @@ async function run() {
       blockedUsers: { none: { blockedUserId: viewerId } },
       handle: { not: null },
       onboardingCompleted: true,
+      suspendedAt: null,
     },
     followerId: targetUserId,
     status: FollowStatus.ACCEPTED,

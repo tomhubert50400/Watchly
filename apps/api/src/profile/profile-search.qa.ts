@@ -72,6 +72,7 @@ async function run() {
     },
     handle: { not: null },
     onboardingCompleted: true,
+    suspendedAt: null,
     OR: [
       {
         displayName: {
