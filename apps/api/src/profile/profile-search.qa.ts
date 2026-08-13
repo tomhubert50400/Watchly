@@ -65,11 +65,6 @@ async function run() {
 
   assert.equal(capturedSearchArgs?.take, 20, 'profile search must keep the result list bounded');
   assert.deepEqual(capturedSearchArgs?.where, {
-    blockedBy: {
-      none: {
-        blockerId: 'viewer-id',
-      },
-    },
     blockedUsers: {
       none: {
         blockedUserId: 'viewer-id',
@@ -91,7 +86,7 @@ async function run() {
         },
       },
     ],
-  }, 'profile search must include public and private profiles while excluding blocked accounts');
+  }, 'profile search must include profiles blocked by the viewer while excluding members who blocked them');
 
   await service.searchProfiles(identity, '@AL');
   assert.deepEqual(

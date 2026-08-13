@@ -36,6 +36,8 @@ export function ProfileBody({
   mediaPreviews,
   notice,
   onAvatarPress,
+  onFollowersPress,
+  onFollowingPress,
   onOpenMediaItem,
   onOpenOpinion,
   onOpenStats,
@@ -44,6 +46,7 @@ export function ProfileBody({
   showMediaRails = true,
   stats,
   statsAccessibilityHint,
+  statsTitle,
 }: {
   avatarLoading?: boolean;
   avatarUrl: string | null;
@@ -63,6 +66,8 @@ export function ProfileBody({
   mediaPreviews: ProfileMediaPreviews;
   notice?: ReactNode;
   onAvatarPress?: () => void;
+  onFollowersPress?: () => void;
+  onFollowingPress?: () => void;
   onOpenMediaItem: (item: LibraryMediaItem) => void;
   onOpenOpinion: (item: HydratedProfileOpinion) => void;
   onOpenStats: () => void;
@@ -71,6 +76,7 @@ export function ProfileBody({
   showMediaRails?: boolean;
   stats: ViewingStats;
   statsAccessibilityHint?: string;
+  statsTitle?: string;
 }) {
   const profileReviews = opinions.filter(isHydratedProfileReview);
   const recentOpinions = getRecentProfileOpinions(opinions);
@@ -86,6 +92,8 @@ export function ProfileBody({
           followingCount={followingCount}
           handle={handle}
           onAvatarPress={onAvatarPress}
+          onFollowersPress={onFollowersPress}
+          onFollowingPress={onFollowingPress}
           reviewsCount={profileReviews.length}
         />
         {identityAction}
@@ -94,6 +102,7 @@ export function ProfileBody({
           accessibilityHint={statsAccessibilityHint}
           onPress={onOpenStats}
           stats={stats}
+          title={statsTitle}
         />
         <View pointerEvents="none" style={styles.statsDivider} />
       </View>

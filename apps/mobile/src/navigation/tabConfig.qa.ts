@@ -84,7 +84,7 @@ assert(
 assert(
   !publicProfileSource.includes('BrandWordmark') &&
     publicProfileSource.includes('tabBarPadding') &&
-    publicProfileSource.includes('accessibilityLabel="Back to Explore"') &&
+    publicProfileSource.includes('accessibilityLabel="Back"') &&
     publicProfileSource.includes('onPress={() => navigation.goBack()}'),
   'Public profiles must omit the Watchly wordmark, keep an accessible back action, and reserve space for the persistent tab bar.',
 );

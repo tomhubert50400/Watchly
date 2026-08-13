@@ -339,6 +339,14 @@ export class ProfileService {
     return this.getPublicProfileByUserId(targetUserId, viewerId === targetUserId, viewerId);
   }
 
+  async listProfileFollowers(identity: AuthenticatedIdentity, targetUserId: string) {
+    return this.listProfileConnections(identity, targetUserId, 'followers');
+  }
+
+  async listProfileFollowing(identity: AuthenticatedIdentity, targetUserId: string) {
+    return this.listProfileConnections(identity, targetUserId, 'following');
+  }
+
   async searchProfiles(identity: AuthenticatedIdentity, value?: string) {
     const query = (value?.trim() ?? '').replace(/^@/, '');
 
@@ -366,11 +374,6 @@ export class ProfileService {
         },
         take: PROFILE_SEARCH_LIMIT,
         where: {
-          blockedBy: {
-            none: {
-              blockerId: viewerId,
-            },
-          },
           blockedUsers: {
             none: {
               blockedUserId: viewerId,
@@ -790,6 +793,118 @@ export class ProfileService {
     return user.id;
   }
 
+  private async listProfileConnections(
+    identity: AuthenticatedIdentity,
+    targetUserId: string,
+    kind: 'followers' | 'following',
+  ) {
+    const viewerId = await this.getUserId(identity);
+
+    assertUuid(targetUserId);
+
+    const target = await this.prisma.withConnectionRetry(() =>
+      this.prisma.user.findUnique({
+        select: {
+          id: true,
+          privacySettings: {
+            select: {
+              profileVisibility: true,
+            },
+          },
+        },
+        where: { id: targetUserId },
+      }),
+    );
+
+    if (!target) {
+      throw new NotFoundException('Profile not found.');
+    }
+
+    if (viewerId !== targetUserId) {
+      const blockRelationship = await this.getProfileBlockRelationship(viewerId, targetUserId);
+
+      if (blockRelationship) {
+        throw new ForbiddenException('This profile is unavailable.');
+      }
+
+      if (target.privacySettings?.profileVisibility === PrivacyVisibility.PRIVATE) {
+        const acceptedFollow = await this.prisma.withConnectionRetry(() =>
+          this.prisma.userFollow.findFirst({
+            select: { id: true },
+            where: {
+              followedUserId: targetUserId,
+              followerId: viewerId,
+              status: FollowStatus.ACCEPTED,
+            },
+          }),
+        );
+
+        if (!acceptedFollow) {
+          throw new ForbiddenException('Follow this private profile to view its connections.');
+        }
+      }
+    }
+
+    const users = kind === 'followers'
+      ? (await this.prisma.withConnectionRetry(() =>
+          this.prisma.userFollow.findMany({
+            orderBy: { createdAt: 'desc' },
+            select: {
+              follower: {
+                select: {
+                  avatarObjectKey: true,
+                  displayName: true,
+                  handle: true,
+                  id: true,
+                },
+              },
+            },
+            where: {
+              followedUserId: targetUserId,
+              follower: {
+                blockedUsers: { none: { blockedUserId: viewerId } },
+                handle: { not: null },
+                onboardingCompleted: true,
+              },
+              status: FollowStatus.ACCEPTED,
+            },
+          }),
+        )).map((connection) => connection.follower)
+      : (await this.prisma.withConnectionRetry(() =>
+          this.prisma.userFollow.findMany({
+            orderBy: { createdAt: 'desc' },
+            select: {
+              followedUser: {
+                select: {
+                  avatarObjectKey: true,
+                  displayName: true,
+                  handle: true,
+                  id: true,
+                },
+              },
+            },
+            where: {
+              followedUser: {
+                blockedUsers: { none: { blockedUserId: viewerId } },
+                handle: { not: null },
+                onboardingCompleted: true,
+              },
+              followerId: targetUserId,
+              status: FollowStatus.ACCEPTED,
+            },
+          }),
+        )).map((connection) => connection.followedUser);
+
+    return {
+      items: users.map((user) => ({
+        avatarUrl: this.avatarStorage.getPublicUrl(user.avatarObjectKey),
+        displayName: user.displayName?.trim() || user.handle,
+        handle: user.handle,
+        id: user.id,
+      })),
+    };
+  }
+
   private async getProfileByUserId(userId: string) {
     const { privacySettings, user } = await this.prisma.withConnectionRetry(async () => {
       const user = await this.prisma.user.findUniqueOrThrow({
@@ -878,13 +993,14 @@ export class ProfileService {
       throw new NotFoundException('Profile not found.');
     }
 
-    if (!allowOwnerPrivateView && viewerId) {
-      await this.assertNotBlockedByEitherUser(viewerId, userId);
-    }
+    const blockRelationship = !allowOwnerPrivateView && viewerId
+      ? await this.getProfileBlockRelationship(viewerId, userId)
+      : null;
+    const isBlockedProfile = blockRelationship !== null;
 
     const profileIsPrivate =
       user.privacySettings?.profileVisibility === PrivacyVisibility.PRIVATE;
-    const acceptedFollow = profileIsPrivate && !allowOwnerPrivateView && viewerId
+    const acceptedFollow = profileIsPrivate && !allowOwnerPrivateView && viewerId && !isBlockedProfile
       ? await this.prisma.withConnectionRetry(() =>
           this.prisma.userFollow.findFirst({
             select: {
@@ -898,7 +1014,8 @@ export class ProfileService {
           }),
         )
       : null;
-    const canViewContent = !profileIsPrivate || allowOwnerPrivateView || Boolean(acceptedFollow);
+    const canViewContent = !isBlockedProfile
+      && (!profileIsPrivate || allowOwnerPrivateView || Boolean(acceptedFollow));
     const profileContent = canViewContent
       ? await Promise.all([
           this.listOpinionsForUser(user.id),
@@ -913,6 +1030,7 @@ export class ProfileService {
 
     return {
       avatarUrl: this.avatarStorage.getPublicUrl(user.avatarObjectKey),
+      blockRelationship,
       canViewContent,
       displayName: user.displayName,
       handle: user.handle,
@@ -924,7 +1042,7 @@ export class ProfileService {
         trackingStates: [],
       },
       opinions: opinions?.items ?? [],
-      profileBackdrop: canViewContent
+      profileBackdrop: canViewContent || isBlockedProfile
         ? toApiProfileBackdrop(
             user.profileBackdropContentType,
             user.profileBackdropTmdbId,
@@ -936,8 +1054,8 @@ export class ProfileService {
       stats: {
         followersCount: socialStats?.followersCount ?? 0,
         followingCount: socialStats?.followingCount ?? 0,
-        postsCount: canViewContent ? socialStats?.postsCount ?? 0 : 0,
-        reviewsCount: canViewContent ? socialStats?.reviewsCount ?? 0 : 0,
+        postsCount: canViewContent || isBlockedProfile ? socialStats?.postsCount ?? 0 : 0,
+        reviewsCount: canViewContent || isBlockedProfile ? socialStats?.reviewsCount ?? 0 : 0,
       },
       viewingStats: viewingStats ?? null,
       watchlists: canViewContent
@@ -1252,27 +1370,32 @@ export class ProfileService {
     );
   }
 
-  private async assertNotBlockedByEitherUser(viewerId: string, targetUserId: string) {
-    const block = await this.prisma.withConnectionRetry(() =>
-      this.prisma.userBlock.findFirst({
-      where: {
-        OR: [
-          {
-            blockedUserId: targetUserId,
-            blockerId: viewerId,
-          },
-          {
-            blockedUserId: viewerId,
-            blockerId: targetUserId,
-          },
-        ],
-      },
+  private async getProfileBlockRelationship(viewerId: string, targetUserId: string) {
+    const blocks = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userBlock.findMany({
+        select: {
+          blockerId: true,
+        },
+        where: {
+          OR: [
+            {
+              blockedUserId: targetUserId,
+              blockerId: viewerId,
+            },
+            {
+              blockedUserId: viewerId,
+              blockerId: targetUserId,
+            },
+          ],
+        },
       }),
     );
 
-    if (block) {
-      throw new ForbiddenException('This profile is unavailable.');
-    }
+    if (blocks.length === 0) return null;
+
+    return blocks.some((block) => block.blockerId === viewerId)
+      ? 'blocked_by_viewer'
+      : 'blocked_by_profile';
   }
 }
 

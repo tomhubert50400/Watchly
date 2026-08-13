@@ -12,6 +12,8 @@ type ProfileSummaryCardProps = {
   followingCount?: number;
   handle: string | null;
   onAvatarPress?: () => void;
+  onFollowersPress?: () => void;
+  onFollowingPress?: () => void;
   postsCount?: number;
   ratingsCount?: number;
   reviewsCount: number;
@@ -26,6 +28,8 @@ export function ProfileSummaryCard({
   followingCount,
   handle,
   onAvatarPress,
+  onFollowersPress,
+  onFollowingPress,
   reviewsCount,
   socialStatsLoading = false,
 }: ProfileSummaryCardProps) {
@@ -78,9 +82,13 @@ export function ProfileSummaryCard({
           </View>
         ) : (
           <View style={styles.socialRow}>
-            <SocialStat label="followers" value={followersCount} />
+            <SocialStat label="followers" onPress={onFollowersPress} value={followersCount} />
             <Text style={styles.dot}>·</Text>
-            <SocialStat label={secondaryLabel} value={secondaryValue} />
+            <SocialStat
+              label={secondaryLabel}
+              onPress={followingCount === undefined ? undefined : onFollowingPress}
+              value={secondaryValue}
+            />
           </View>
         )}
       </View>
@@ -88,13 +96,34 @@ export function ProfileSummaryCard({
   );
 }
 
-function SocialStat({ label, value }: { label: string; value: number }) {
-  return (
+function SocialStat({
+  label,
+  onPress,
+  value,
+}: {
+  label: string;
+  onPress?: () => void;
+  value: number;
+}) {
+  const labelContent = (
     <Text style={styles.socialStat}>
       <Text style={styles.socialValue}>{value}</Text>
       {` ${label}`}
     </Text>
   );
+
+  return onPress ? (
+    <Pressable
+      accessibilityHint={`Opens the ${label} list.`}
+      accessibilityLabel={`${value} ${label}`}
+      accessibilityRole="button"
+      hitSlop={10}
+      onPress={onPress}
+      style={({ pressed }) => pressed ? styles.socialStatPressed : null}
+    >
+      {labelContent}
+    </Pressable>
+  ) : labelContent;
 }
 
 const styles = StyleSheet.create({
@@ -182,6 +211,9 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 14,
     fontWeight: '500',
+  },
+  socialStatPressed: {
+    opacity: 0.62,
   },
   socialValue: {
     color: colors.accent,

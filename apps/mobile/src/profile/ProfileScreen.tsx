@@ -350,6 +350,14 @@ export function ProfileScreen() {
             </>
           )}
           onAvatarPress={profile.avatarUploadsEnabled ? openAvatarActions : undefined}
+          onFollowersPress={() => navigation.navigate('ProfileConnections', {
+            kind: 'followers',
+            userId: profile.userId,
+          })}
+          onFollowingPress={() => navigation.navigate('ProfileConnections', {
+            kind: 'following',
+            userId: profile.userId,
+          })}
           onOpenMediaItem={(item) => openProfileMediaItem(navigation, item)}
           onOpenOpinion={(item) => openOpinion(navigation, item)}
           onOpenStats={() => navigation.navigate('AllTimeStats', { profileBackdropUrl: atmosphereUrl })}

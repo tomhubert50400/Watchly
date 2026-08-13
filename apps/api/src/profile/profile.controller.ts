@@ -110,6 +110,22 @@ export class ProfileController {
     return this.profile.getPublicProfile(getIdentity(request), userId);
   }
 
+  @Get('users/:userId/followers')
+  async followers(
+    @Req() request: AuthenticatedRequest,
+    @Param('userId') userId: string,
+  ) {
+    return this.profile.listProfileFollowers(getIdentity(request), userId);
+  }
+
+  @Get('users/:userId/following')
+  async following(
+    @Req() request: AuthenticatedRequest,
+    @Param('userId') userId: string,
+  ) {
+    return this.profile.listProfileFollowing(getIdentity(request), userId);
+  }
+
   @Put('me')
   async updateMe(@Req() request: AuthenticatedRequest, @Body() body: UpdateProfileDto) {
     return this.profile.updateProfile(getIdentity(request), body);

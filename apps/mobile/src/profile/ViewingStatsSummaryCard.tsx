@@ -8,10 +8,12 @@ export function ViewingStatsSummaryCard({
   accessibilityHint = 'Opens your complete all-time viewing statistics.',
   onPress,
   stats,
+  title = 'YOUR STATS',
 }: {
   accessibilityHint?: string;
   onPress: () => void;
   stats: ViewingStats;
+  title?: string;
 }) {
   return (
     <Pressable
@@ -22,7 +24,7 @@ export function ViewingStatsSummaryCard({
       style={({ pressed }) => [styles.card, pressed ? styles.pressed : null]}
     >
       <View style={styles.headingRow}>
-        <Text accessibilityRole="header" style={styles.eyebrow}>YOUR STATS</Text>
+        <Text accessibilityRole="header" style={styles.eyebrow}>{title}</Text>
         <View style={styles.action}>
           <Text style={styles.actionLabel}>SEE ALL</Text>
           <ChevronRight color={colors.accent} size={18} strokeWidth={2.5} />

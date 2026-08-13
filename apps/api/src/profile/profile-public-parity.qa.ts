@@ -16,7 +16,7 @@ assert.match(
 );
 assert.match(
   source,
-  /opinions: opinions\?\.items \?\? \[\][\s\S]*profileBackdrop: canViewContent[\s\S]*viewingStats: viewingStats \?\? null/,
+  /opinions: opinions\?\.items \?\? \[\][\s\S]*profileBackdrop: canViewContent \|\| isBlockedProfile[\s\S]*viewingStats: viewingStats \?\? null/,
   'public profile responses must include the selected backdrop, opinions, and viewing stats',
 );
 assert.match(
@@ -33,6 +33,21 @@ assert.match(
   source,
   /const socialStats = canViewContent[\s\S]*this\.getProfileSocialStats\(user\.id\)[\s\S]*followersCount: socialStats\?\.followersCount[\s\S]*followingCount: socialStats\?\.followingCount/,
   'private profile projections must retain follower and following counts',
+);
+assert.match(
+  source,
+  /const blockRelationship = [\s\S]*getProfileBlockRelationship\(viewerId, userId\)[\s\S]*blockRelationship,/,
+  'public profile responses must identify which side initiated a block',
+);
+assert.match(
+  source,
+  /profileBackdrop: canViewContent \|\| isBlockedProfile[\s\S]*reviewsCount: canViewContent \|\| isBlockedProfile[\s\S]*viewingStats: viewingStats \?\? null/,
+  'blocked profile projections must retain identity counts and backdrop without exposing viewing stats',
+);
+assert.doesNotMatch(
+  source,
+  /isBlockedProfile[\s\S]{0,120}getStatsForUser\(user\.id\)/,
+  'blocked profiles must not load viewing stats',
 );
 
 console.log('Public profile parity QA passed.');

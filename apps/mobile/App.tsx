@@ -33,6 +33,7 @@ import { RootStackParamList, RootTabParamList } from './src/navigation/types';
 import { NotificationsScreen } from './src/notifications/NotificationsScreen';
 import { ToastProvider } from './src/notifications/ToastContext';
 import { OnboardingScreen } from './src/onboarding/OnboardingScreen';
+import { ProfileConnectionsScreen } from './src/profile/ProfileConnectionsScreen';
 import { ProfileScreen } from './src/profile/ProfileScreen';
 import { PublicProfileScreen } from './src/profile/PublicProfileScreen';
 import { AllTimeStatsScreen } from './src/profile/AllTimeStatsScreen';
@@ -229,6 +230,16 @@ function AppNavigator() {
         ) : (
           <>
             <Stack.Screen component={MainTabs} name="MainTabs" options={{ headerShown: false }} />
+            <Stack.Screen
+              component={ProfileConnectionsScreen}
+              name="ProfileConnections"
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
+              component={PublicProfileScreen}
+              name="PublicProfile"
+              options={{ headerShown: false }}
+            />
             <Stack.Screen
               component={AllTimeStatsScreen}
               name="AllTimeStats"

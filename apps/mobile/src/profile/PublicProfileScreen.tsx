@@ -31,7 +31,7 @@ import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Screen';
 import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
-import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { colors, radii, spacing, typography } from '../design/tokens';
 import type { LibraryMediaItem } from '../library/useLibraryData';
 import { mergeLibraryItems, shouldShowTrackedTitle } from '../library/libraryModel';
 import type { RootStackParamList } from '../navigation/types';
@@ -53,7 +53,7 @@ import { useProfileBackdropArtwork } from './useProfileBackdropArtwork';
 
 type PublicProfileRoute = RouteProp<RootStackParamList, 'PublicProfile'>;
 type PublicProfileNavigation = NativeStackNavigationProp<RootStackParamList>;
-type LoadStatus = 'blocked' | 'error' | 'loading' | 'ready' | 'unavailable';
+type LoadStatus = 'error' | 'loading' | 'ready' | 'unavailable';
 type HydratedPublicProfile = Omit<PublicProfile, 'opinions' | 'viewingStats'> & {
   opinions: HydratedProfileOpinion[];
   viewingStats: ViewingStats | null;
@@ -89,7 +89,7 @@ export function PublicProfileScreen() {
   const hydrateLoadedProfile = useCallback(async (
     loadedProfile: PublicProfile,
   ): Promise<HydratedPublicProfile> => {
-    if (!loadedProfile.canViewContent || !loadedProfile.viewingStats) {
+    if ((!loadedProfile.canViewContent && !loadedProfile.blockRelationship) || !loadedProfile.viewingStats) {
       return { ...loadedProfile, opinions: [], viewingStats: null };
     }
 
@@ -147,19 +147,6 @@ export function PublicProfileScreen() {
       if (nextBlockState) {
         setBlockState(nextBlockState);
       }
-      if (nextBlockState?.blocked) {
-        setFollowState({
-          followedAt: null,
-          following: false,
-          status: 'none',
-          userId: expectedUserId,
-        });
-        profileRef.current = null;
-        setProfile(null);
-        setProfileSnapshot(null);
-        setStatus('blocked');
-        return;
-      }
       if (profileResult.status === 'rejected') {
         throw profileResult.reason;
       }
@@ -167,7 +154,14 @@ export function PublicProfileScreen() {
       const loadedProfile = profileResult.value;
       setProfileSnapshot(loadedProfile);
       setFollowersCountOverride(null);
-      if (followResult.status === 'fulfilled' && followResult.value) {
+      if (loadedProfile.blockRelationship) {
+        setFollowState({
+          followedAt: null,
+          following: false,
+          status: 'none',
+          userId: expectedUserId,
+        });
+      } else if (followResult.status === 'fulfilled' && followResult.value) {
         setFollowState(followResult.value);
       }
 
@@ -239,11 +233,15 @@ export function PublicProfileScreen() {
     ?? profile?.opinions[0]?.contentImageUrl
     ?? null;
   const activeProfile = profile ?? profileSnapshot;
+  const blockRelationship = activeProfile?.blockRelationship
+    ?? (blockState?.blocked ? 'blocked_by_viewer' : null);
   const followersCount = followersCountOverride ?? activeProfile?.stats.followersCount ?? 0;
 
   async function toggleBlock() {
     if (!firebaseIdToken || isOwnPreview || isUpdatingBlock || followMutationRef.current) return;
 
+    const currentProfile = profileRef.current;
+    const wasFollowing = followState?.status === 'following';
     setIsUpdatingBlock(true);
     setMessage(null);
 
@@ -256,6 +254,28 @@ export function PublicProfileScreen() {
       notifySocialChanged();
 
       if (nextBlockState.blocked) {
+        const blockedProfile = currentProfile ? {
+          ...currentProfile,
+          blockRelationship: 'blocked_by_viewer' as const,
+          canViewContent: false,
+          media: {
+            movieRatings: [],
+            releaseAlerts: [],
+            seriesProgress: [],
+            trackingStates: [],
+          },
+          opinions: [],
+          stats: {
+            ...currentProfile.stats,
+            followersCount: Math.max(
+              0,
+              currentProfile.stats.followersCount - Number(wasFollowing),
+            ),
+          },
+          viewingStats: null,
+          watchlists: [],
+        } : null;
+
         setFollowState({
           followedAt: null,
           following: false,
@@ -263,17 +283,44 @@ export function PublicProfileScreen() {
           userId: route.params.userId,
         });
         setFollowersCountOverride(null);
-        profileRef.current = null;
-        setProfile(null);
-        setProfileSnapshot(null);
-        setStatus('blocked');
+
+        if (blockedProfile) {
+          profileRef.current = blockedProfile;
+          setProfile(blockedProfile);
+          setProfileSnapshot(blockedProfile);
+          setStatus('ready');
+        }
+
+        if (blockedProfile) {
+          void getPublicProfile(firebaseIdToken, route.params.userId)
+            .then(async (loadedProfile) => {
+              const nextProfile = await hydrateLoadedProfile(loadedProfile);
+              profileRef.current = nextProfile;
+              setProfile(nextProfile);
+              setProfileSnapshot(loadedProfile);
+            })
+            .catch(() => undefined);
+          return;
+        }
+
+        const loadedProfile = await getPublicProfile(firebaseIdToken, route.params.userId);
+        setProfileSnapshot(loadedProfile);
+        const nextProfile = await hydrateLoadedProfile(loadedProfile);
+        profileRef.current = nextProfile;
+        setProfile(nextProfile);
+        setStatus('ready');
         return;
       }
 
-      const [loadedProfile, nextFollowState] = await Promise.all([
-        getPublicProfile(firebaseIdToken, route.params.userId),
-        getFollowState(firebaseIdToken, route.params.userId),
-      ]);
+      const loadedProfile = await getPublicProfile(firebaseIdToken, route.params.userId);
+      const nextFollowState = loadedProfile.blockRelationship
+        ? {
+            followedAt: null,
+            following: false,
+            status: 'none' as const,
+            userId: route.params.userId,
+          }
+        : await getFollowState(firebaseIdToken, route.params.userId);
 
       setFollowState(nextFollowState);
       setProfileSnapshot(loadedProfile);
@@ -282,8 +329,8 @@ export function PublicProfileScreen() {
       setProfile(nextProfile);
       setFollowersCountOverride(null);
       setStatus('ready');
-    } catch {
-      setMessage('Could not update blocking.');
+    } catch (error) {
+      setMessage(error instanceof ApiError ? error.message : 'Could not update blocking.');
     } finally {
       setIsUpdatingBlock(false);
     }
@@ -293,6 +340,7 @@ export function PublicProfileScreen() {
     if (
       !firebaseIdToken
       || !followState
+      || blockRelationship
       || isOwnPreview
       || isUpdatingBlock
       || followMutationRef.current
@@ -382,25 +430,43 @@ export function PublicProfileScreen() {
     }
   }, [profile]);
 
-  const followButton = !isOwnPreview && followState ? (
-    <Button
-      accessibilityHint={followState.status === 'pending' ? 'Cancels your follow request.' : undefined}
-      disabled={isUpdatingBlock}
-      fullWidth
-      label={
-        followState.status === 'following'
-          ? 'Following'
-          : followState.status === 'pending'
-            ? 'Request sent'
-            : 'Follow profile'
-      }
-      onPress={toggleFollow}
-      variant={followState.status === 'none' ? 'primary' : 'secondary'}
-    />
+  const followButton = !isOwnPreview ? (
+    blockRelationship === 'blocked_by_viewer' ? (
+      <Button
+        accessibilityHint="Restores access to this member's profile activity."
+        disabled={isUpdatingBlock}
+        fullWidth
+        label={isUpdatingBlock ? 'Updating...' : 'Unblock'}
+        onPress={toggleBlock}
+        variant="secondary"
+      />
+    ) : blockRelationship === 'blocked_by_profile' ? (
+      <Button
+        accessibilityHint="Unavailable because this member blocked you."
+        disabled
+        fullWidth
+        label="Follow profile"
+      />
+    ) : followState ? (
+      <Button
+        accessibilityHint={followState.status === 'pending' ? 'Cancels your follow request.' : undefined}
+        disabled={isUpdatingBlock}
+        fullWidth
+        label={
+          followState.status === 'following'
+            ? 'Following'
+            : followState.status === 'pending'
+              ? 'Request sent'
+              : 'Follow profile'
+        }
+        onPress={toggleFollow}
+        variant={followState.status === 'none' ? 'primary' : 'secondary'}
+      />
+    ) : null
   ) : null;
 
   const backButton = (
-    <ProfileHeaderButton accessibilityLabel="Back to Explore" onPress={() => navigation.goBack()}>
+    <ProfileHeaderButton accessibilityLabel="Back" onPress={() => navigation.goBack()}>
       <ChevronLeft color={colors.text} size={30} strokeWidth={2} />
     </ProfileHeaderButton>
   );
@@ -457,36 +523,35 @@ export function PublicProfileScreen() {
         />
       ) : null}
 
-      {status === 'blocked' ? (
-        <View style={styles.card}>
-          <Text style={styles.name}>Blocked profile</Text>
-          <Text style={styles.body}>This profile is hidden because you blocked this user.</Text>
-          <Button
-            disabled={isUpdatingBlock}
-            label={isUpdatingBlock ? 'Updating...' : 'Unblock profile'}
-            onPress={toggleBlock}
-            variant="secondary"
-          />
-          <Button
-            icon={<Flag color={colors.textMuted} size={17} strokeWidth={2} />}
-            label="Report profile"
-            onPress={() => setReportTarget({
-              id: route.params.userId,
-              label: 'Blocked profile',
-              type: 'profile',
-            })}
-            variant="ghost"
-          />
-          {message ? <Text style={styles.errorText}>{message}</Text> : null}
-        </View>
-      ) : null}
-
       {status === 'error' && !profile ? (
         <EmptyState body={message ?? 'Try again later.'} title="Profile unavailable" />
       ) : null}
 
-      {profile && status !== 'blocked' && status !== 'unavailable' ? (
-        !profile.canViewContent ? (
+      {profile && status !== 'unavailable' ? (
+        blockRelationship ? (
+          <View style={styles.blockedProfile}>
+            <ProfileSummaryCard
+              avatarUrl={profile.avatarUrl}
+              displayName={profile.displayName}
+              followersCount={followersCount}
+              followingCount={profile.stats.followingCount}
+              handle={profile.handle}
+              reviewsCount={profile.stats.reviewsCount}
+            />
+            {followButton}
+            <View style={styles.blockedNotice}>
+              <Ban color={colors.textMuted} size={19} strokeWidth={2} />
+              <Text style={styles.blockedNoticeText}>
+                {blockRelationship === 'blocked_by_viewer'
+                  ? 'You blocked this member. You can still view their profile overview, but you cannot see their activity or interact with them.'
+                  : 'This member blocked you. You can still view their profile overview, but you cannot follow or interact with them.'}
+              </Text>
+            </View>
+            {message ? (
+              <Text accessibilityLiveRegion="polite" style={styles.errorText}>{message}</Text>
+            ) : null}
+          </View>
+        ) : !profile.canViewContent ? (
           <View style={styles.privateState}>
             <View style={styles.privateIdentity}>
               <ProfileSummaryCard
@@ -534,6 +599,14 @@ export function PublicProfileScreen() {
                   {message ?? shareError}
                 </Text>
               ) : undefined}
+              onFollowersPress={() => navigation.navigate('ProfileConnections', {
+                kind: 'followers',
+                userId: profile.id,
+              })}
+              onFollowingPress={() => navigation.navigate('ProfileConnections', {
+                kind: 'following',
+                userId: profile.id,
+              })}
               onOpenMediaItem={(item) => openProfileMediaItem(navigation, item)}
               onOpenOpinion={(item) => openOpinion(navigation, item)}
               onOpenStats={() => navigation.navigate('AllTimeStats', {
@@ -548,6 +621,7 @@ export function PublicProfileScreen() {
               opinions={profile.opinions}
               stats={profile.viewingStats}
               statsAccessibilityHint="Opens this member's complete all-time viewing statistics."
+              statsTitle={isOwnPreview ? 'YOUR STATS' : 'STATS'}
             />
           </View>
         ) : null
@@ -559,18 +633,20 @@ export function PublicProfileScreen() {
         visible={profileActionsOpen}
       >
         <View style={styles.profileActions}>
-          <Button
-            accessibilityHint="Blocks this member and hides their profile."
-            disabled={isUpdatingBlock}
-            fullWidth
-            icon={<Ban color={colors.danger} size={19} strokeWidth={2} />}
-            label={isUpdatingBlock ? 'Updating...' : 'Block profile'}
-            onPress={() => {
-              setProfileActionsOpen(false);
-              void toggleBlock();
-            }}
-            variant="danger"
-          />
+          {!blockRelationship ? (
+            <Button
+              accessibilityHint="Blocks this member and hides their profile."
+              disabled={isUpdatingBlock}
+              fullWidth
+              icon={<Ban color={colors.danger} size={19} strokeWidth={2} />}
+              label={isUpdatingBlock ? 'Updating...' : 'Block profile'}
+              onPress={() => {
+                setProfileActionsOpen(false);
+                void toggleBlock();
+              }}
+              variant="danger"
+            />
+          ) : null}
           <Button
             accessibilityHint="Opens the private profile report form."
             fullWidth
@@ -714,14 +790,18 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.muted,
   },
-  card: {
-    ...shadows.panel,
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    gap: spacing.md,
-    padding: spacing.lg,
+  blockedNotice: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  blockedNoticeText: {
+    ...typography.body,
+    color: colors.textMuted,
+    flex: 1,
+  },
+  blockedProfile: {
+    gap: spacing.xl,
   },
   errorText: {
     ...typography.body,
@@ -735,10 +815,6 @@ const styles = StyleSheet.create({
   },
   loadingStack: {
     gap: spacing.xl,
-  },
-  name: {
-    ...typography.title,
-    color: colors.text,
   },
   privateState: {
     gap: spacing.xxl,

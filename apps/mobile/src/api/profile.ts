@@ -41,6 +41,7 @@ export type OnboardingCompletion = {
 
 export type PublicProfile = {
   avatarUrl: string | null;
+  blockRelationship: 'blocked_by_profile' | 'blocked_by_viewer' | null;
   canViewContent: boolean;
   displayName: string | null;
   handle: string | null;
@@ -77,6 +78,10 @@ export type ProfileSearchItem = {
 };
 
 export type ProfileSearchResponse = {
+  items: ProfileSearchItem[];
+};
+
+export type ProfileConnectionsResponse = {
   items: ProfileSearchItem[];
 };
 
@@ -192,6 +197,17 @@ export function getPublicProfile(
   return apiGet<PublicProfile>(`/profile/users/${encodeURIComponent(userId)}`, {
     token: firebaseIdToken,
   });
+}
+
+export function getProfileConnections(
+  firebaseIdToken: string,
+  userId: string,
+  kind: 'followers' | 'following',
+): Promise<ProfileConnectionsResponse> {
+  return apiGet<ProfileConnectionsResponse>(
+    `/profile/users/${encodeURIComponent(userId)}/${kind}`,
+    { token: firebaseIdToken },
+  );
 }
 
 export function searchProfiles(
