@@ -1,5 +1,7 @@
 export type ReportStatus = 'new' | 'inProgress' | 'resolved' | 'rejected';
 export type ReportTargetType = 'profile' | 'movieReview' | 'episodeReview';
+export type ModerationActionName = 'suspendUser' | 'reactivateUser' | 'hideContent' | 'restoreContent';
+export type ModerationState = 'active' | 'suspended' | 'visible' | 'hidden' | 'unavailable';
 export type ReportReason =
   | 'spam'
   | 'harassment'
@@ -32,7 +34,14 @@ export type ReportSummary = {
 };
 
 export type AuditEntry = {
-  action: 'reportListViewed' | 'reportViewed' | 'reportStatusChanged';
+  action:
+    | 'reportListViewed'
+    | 'reportViewed'
+    | 'reportStatusChanged'
+    | 'userSuspended'
+    | 'userReactivated'
+    | 'contentHidden'
+    | 'contentRestored';
   actorEmail: string;
   createdAt: string;
   id: string;
@@ -41,6 +50,7 @@ export type AuditEntry = {
 
 export type ReportDetail = ReportSummary & {
   auditTrail: AuditEntry[];
+  moderationState: ModerationState;
 };
 
 export type ReportPage = {

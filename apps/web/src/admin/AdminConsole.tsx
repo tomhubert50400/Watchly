@@ -36,6 +36,7 @@ import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import watchlyMark from '../../../mobile/assets/watchly-logo-ui.png';
 import {
   AdminApiError,
+  applyModerationAction,
   getAdminSession,
   getReport,
   listReports,
@@ -43,7 +44,9 @@ import {
 } from './api';
 import { getAdminAuth } from './firebase';
 import {
+  EnforcementAction,
   ModerationAction,
+  getEnforcementAction,
   getModerationActions,
   getPersonLabel,
   reasonLabels,
@@ -512,6 +515,13 @@ function ModerationWorkspace({
     await Promise.all([loadReportPage(), openReport(detail.id)]);
   }
 
+  async function handleEnforcementAction(action: EnforcementAction, note: string) {
+    if (!detail) return;
+    const token = await user.getIdToken();
+    await applyModerationAction(token, detail.id, action.action, note);
+    await Promise.all([loadReportPage(), openReport(detail.id)]);
+  }
+
   return (
     <div className="admin-shell">
       <header className="admin-header">
@@ -620,7 +630,11 @@ function ModerationWorkspace({
             {detailLoading ? <DetailLoading /> : null}
             {!detailLoading && detailError ? <InlineError message={detailError} /> : null}
             {!detailLoading && !detailError && detail ? (
-              <ReportDetailView detail={detail} onStatusChange={handleStatusChange} />
+              <ReportDetailView
+                detail={detail}
+                onEnforcementAction={handleEnforcementAction}
+                onStatusChange={handleStatusChange}
+              />
             ) : null}
             {!detailLoading && !detailError && !detail ? (
               <div className="detail-placeholder">
@@ -675,12 +689,16 @@ function ReportTable({
 
 function ReportDetailView({
   detail,
+  onEnforcementAction,
   onStatusChange,
 }: {
   detail: ReportDetail;
+  onEnforcementAction(action: EnforcementAction, note: string): Promise<void>;
   onStatusChange(action: ModerationAction, note: string): Promise<void>;
 }) {
-  const [confirmation, setConfirmation] = useState<ModerationAction | null>(null);
+  const [statusConfirmation, setStatusConfirmation] = useState<ModerationAction | null>(null);
+  const [enforcementConfirmation, setEnforcementConfirmation] = useState<EnforcementAction | null>(null);
+  const enforcementAction = getEnforcementAction(detail.targetType, detail.moderationState);
 
   return (
     <>
@@ -716,10 +734,30 @@ function ReportDetailView({
       </section>
 
       <section className="detail-section">
-        <h3>Moderation action</h3>
+        <h3>Enforcement</h3>
+        <div className="enforcement-card">
+          <div>
+            <span>Current state</span>
+            <strong>{enforcementAction?.stateLabel ?? 'Target unavailable'}</strong>
+            <p>{enforcementAction?.description ?? 'The reported target no longer exists, so no enforcement action can be applied.'}</p>
+          </div>
+          {enforcementAction ? (
+            <button
+              className={`moderation-action moderation-action--${enforcementAction.tone}`}
+              onClick={() => setEnforcementConfirmation(enforcementAction)}
+              type="button"
+            >
+              {enforcementAction.label}
+            </button>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="detail-section">
+        <h3>Report workflow</h3>
         <div className="action-row">
           {getModerationActions(detail.status).map((action) => (
-            <button className={`moderation-action moderation-action--${action.tone}`} key={action.status} onClick={() => setConfirmation(action)} type="button">
+            <button className={`moderation-action moderation-action--${action.tone}`} key={action.status} onClick={() => setStatusConfirmation(action)} type="button">
               {action.label}
             </button>
           ))}
@@ -735,14 +773,31 @@ function ReportDetailView({
         )}
       </section>
 
-      {confirmation ? (
+      {statusConfirmation ? (
         <ConfirmationDialog
-          action={confirmation}
-          onCancel={() => setConfirmation(null)}
+          action={statusConfirmation}
+          copy="The workflow status change and your reason will be written to the immutable audit trail. This does not apply a sanction by itself."
+          onCancel={() => setStatusConfirmation(null)}
           onConfirm={async (note) => {
-            await onStatusChange(confirmation, note);
-            setConfirmation(null);
+            await onStatusChange(statusConfirmation, note);
+            setStatusConfirmation(null);
           }}
+          placeholder="Describe what you reviewed and why this status is appropriate."
+          title={`${statusConfirmation.label} this report?`}
+        />
+      ) : null}
+
+      {enforcementConfirmation ? (
+        <ConfirmationDialog
+          action={enforcementConfirmation}
+          copy={`${enforcementConfirmation.confirmationCopy} The sanction and your reason will be written to the immutable audit trail.`}
+          onCancel={() => setEnforcementConfirmation(null)}
+          onConfirm={async (note) => {
+            await onEnforcementAction(enforcementConfirmation, note);
+            setEnforcementConfirmation(null);
+          }}
+          placeholder="State the evidence and policy basis for this sanction."
+          title={`${enforcementConfirmation.label}?`}
         />
       ) : null}
     </>
@@ -751,12 +806,18 @@ function ReportDetailView({
 
 function ConfirmationDialog({
   action,
+  copy,
   onCancel,
   onConfirm,
+  placeholder,
+  title,
 }: {
-  action: ModerationAction;
+  action: Pick<ModerationAction, 'label' | 'tone'>;
+  copy: string;
   onCancel(): void;
   onConfirm(note: string): Promise<void>;
+  placeholder: string;
+  title: string;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [note, setNote] = useState('');
@@ -791,11 +852,11 @@ function ConfirmationDialog({
         <div className="dialog-heading">
           <div>
             <p className="admin-kicker">Confirm action</p>
-            <h2 id="confirmation-title">{action.label} this report?</h2>
+            <h2 id="confirmation-title">{title}</h2>
           </div>
           <button aria-label="Close confirmation" disabled={busy} onClick={onCancel} type="button"><X aria-hidden="true" size={18} /></button>
         </div>
-        <p>The status change and your reason will be written to the immutable audit trail.</p>
+        <p>{copy}</p>
         <label htmlFor="moderation-note">Reason for this decision</label>
         <textarea
           autoFocus
@@ -803,7 +864,7 @@ function ConfirmationDialog({
           maxLength={1000}
           minLength={3}
           onChange={(event) => setNote(event.target.value)}
-          placeholder="Describe what you reviewed and why this status is appropriate."
+          placeholder={placeholder}
           required
           rows={5}
           value={note}
@@ -823,13 +884,21 @@ function ConfirmationDialog({
 
 function AuditTrailEntry({ entry }: { entry: AuditEntry }) {
   const note = getAuditNote(entry.metadata);
-  const actionLabel = entry.action === 'reportStatusChanged' ? 'Changed report status' : 'Viewed sensitive report';
+  const actionLabels: Record<AuditEntry['action'], string> = {
+    contentHidden: 'Hid reported review',
+    contentRestored: 'Restored reported review',
+    reportListViewed: 'Viewed report queue',
+    reportStatusChanged: 'Changed report status',
+    reportViewed: 'Viewed sensitive report',
+    userReactivated: 'Reactivated reported account',
+    userSuspended: 'Suspended reported account',
+  };
 
   return (
     <li>
       <span className="audit-dot" />
       <div>
-        <strong>{actionLabel}</strong>
+        <strong>{actionLabels[entry.action]}</strong>
         <span>{entry.actorEmail}</span>
         {note ? <p>{note}</p> : null}
         <time dateTime={entry.createdAt}>{formatDateTime(entry.createdAt)}</time>

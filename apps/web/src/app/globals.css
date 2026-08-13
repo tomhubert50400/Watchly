@@ -1475,6 +1475,45 @@ summary {
   gap: 0.55rem;
 }
 
+.enforcement-card {
+  align-items: center;
+  background: var(--panel-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  padding: 0.9rem;
+}
+
+.enforcement-card > div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.enforcement-card span {
+  color: var(--text-subtle);
+  font-size: 0.61rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.enforcement-card strong {
+  font-size: 0.8rem;
+}
+
+.enforcement-card p {
+  color: var(--text-subtle);
+  font-size: 0.7rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.enforcement-card .moderation-action {
+  flex: 0 0 auto;
+}
+
 .moderation-action {
   align-items: center;
   border: 1px solid;
@@ -1754,6 +1793,11 @@ summary {
 
   .detail-facts {
     grid-template-columns: 1fr;
+  }
+
+  .enforcement-card {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .snapshot-list > div {

@@ -1,5 +1,6 @@
 import type {
   AdminSession,
+  ModerationActionName,
   ReportDetail,
   ReportFilters,
   ReportPage,
@@ -46,6 +47,19 @@ export function updateReportStatus(
     body: JSON.stringify({ note, status }),
     headers: { 'Content-Type': 'application/json' },
     method: 'PATCH',
+  });
+}
+
+export function applyModerationAction(
+  token: string,
+  reportId: string,
+  action: ModerationActionName,
+  note: string,
+) {
+  return apiRequest<ReportSummary>(`/admin/reports/${reportId}/actions`, token, {
+    body: JSON.stringify({ action, note }),
+    headers: { 'Content-Type': 'application/json' },
+    method: 'POST',
   });
 }
 
