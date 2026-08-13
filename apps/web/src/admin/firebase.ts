@@ -3,7 +3,7 @@
 import { FirebaseOptions, getApp, getApps, initializeApp } from 'firebase/app';
 import {
   Auth,
-  browserSessionPersistence,
+  browserLocalPersistence,
   getAuth,
   setPersistence,
 } from 'firebase/auth';
@@ -32,7 +32,7 @@ async function initializeAdminAuth() {
     : initializeApp(config, 'watchly-admin');
   const auth = getAuth(app);
 
-  await setPersistence(auth, browserSessionPersistence);
+  await setPersistence(auth, browserLocalPersistence);
 
   return auth;
 }
