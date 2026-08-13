@@ -33,7 +33,7 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
-import watchlyMark from '../../../mobile/assets/watchly-w-ui.png';
+import watchlyMark from '../../../mobile/assets/watchly-logo-ui.png';
 import {
   AdminApiError,
   getAdminSession,
