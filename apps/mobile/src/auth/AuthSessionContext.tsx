@@ -1,5 +1,6 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getCurrentUser, CurrentUser } from '../api/auth';
+import { ApiError } from '../api/client';
 import { clearPrivateCacheForUser } from '../cache/persistedCache';
 import { createAuthTransitionGuard, performGuaranteedSignOut } from './authTransition';
 import {
@@ -23,6 +24,7 @@ export type GoogleSignInResult =
   | { challenge: TotpSignInChallenge; type: 'totpRequired' };
 
 type AuthSessionContextValue = {
+  authErrorMessage: string | null;
   currentUser: CurrentUser | null;
   getFirebaseIdToken: () => Promise<string | null>;
   notifySocialChanged: () => void;
@@ -39,6 +41,7 @@ const AuthSessionContext = createContext<AuthSessionContextValue | null>(null);
 const SocialRevisionContext = createContext(0);
 
 export function AuthSessionProvider({ children }: PropsWithChildren) {
+  const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [firebaseIdToken, setFirebaseIdToken] = useState<string | null>(null);
   const [socialRevision, setSocialRevision] = useState(0);
@@ -96,10 +99,20 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   }, []);
 
   const applyFirebaseSession = useCallback(async (nextFirebaseIdToken: string, transition: number) => {
-    const user = await getCurrentUser(nextFirebaseIdToken);
+    let user: CurrentUser;
+
+    try {
+      user = await getCurrentUser(nextFirebaseIdToken);
+    } catch (error) {
+      if (authTransitionsRef.current.isCurrent(transition)) {
+        setAuthErrorMessage(getSessionAccessMessage(error));
+      }
+      throw error;
+    }
 
     if (!authTransitionsRef.current.isCurrent(transition)) return false;
 
+    setAuthErrorMessage(null);
     explicitSignOutRef.current = false;
     latestFirebaseIdTokenRef.current = nextFirebaseIdToken;
     setFirebaseIdToken(nextFirebaseIdToken);
@@ -142,6 +155,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
 
           setFirebaseIdToken(null);
           setCurrentUser(null);
+          setAuthErrorMessage(null);
           setStatus('idle');
           return;
         }
@@ -238,6 +252,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     latestFirebaseIdTokenRef.current = null;
     setFirebaseIdToken(null);
     setCurrentUser(null);
+    setAuthErrorMessage(null);
     setSocialRevision(0);
     setTrackingRevision(0);
 
@@ -255,6 +270,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
 
   const value = useMemo<AuthSessionContextValue>(
     () => ({
+      authErrorMessage,
       currentUser,
       firebaseIdToken,
       getFirebaseIdToken,
@@ -267,6 +283,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       trackingRevision,
     }),
     [
+      authErrorMessage,
       currentUser,
       firebaseIdToken,
       getFirebaseIdToken,
@@ -287,6 +304,10 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       </SocialRevisionContext.Provider>
     </AuthSessionContext.Provider>
   );
+}
+
+function getSessionAccessMessage(error: unknown) {
+  return error instanceof ApiError && error.status === 403 ? error.message : null;
 }
 
 export function useAuthSession() {

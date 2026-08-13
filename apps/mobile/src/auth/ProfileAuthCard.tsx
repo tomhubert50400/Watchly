@@ -37,7 +37,7 @@ export function ProfileAuthCard({
   embedded = false,
   title = 'Your Watchly starts here',
 }: ProfileAuthCardProps = {}) {
-  const { signInWithGoogle, status: sessionStatus } = useAuthSession();
+  const { authErrorMessage, signInWithGoogle, status: sessionStatus } = useAuthSession();
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
   const [localStatus, setLocalStatus] = useState<AuthStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
@@ -111,6 +111,7 @@ export function ProfileAuthCard({
   }, [response, signInWithGoogle]);
 
   const status = sessionStatus === 'loading' ? 'loading' : localStatus;
+  const displayedMessage = message ?? (sessionStatus === 'error' ? authErrorMessage : null);
   const canUseGoogle = missingConfig.length === 0 && Boolean(request) && status !== 'loading';
 
   async function selectProvider(provider: AuthProviderConfig) {
@@ -191,7 +192,7 @@ export function ProfileAuthCard({
             Google setup is incomplete: {missingConfig.join(', ')}
           </Text>
         ) : null}
-        {!totpChallenge && message ? <Text accessibilityLiveRegion="polite" style={styles.setupMessage}>{message}</Text> : null}
+        {!totpChallenge && displayedMessage ? <Text accessibilityLiveRegion="polite" style={styles.setupMessage}>{displayedMessage}</Text> : null}
         {!totpChallenge && status === 'loading' ? (
           <Text accessibilityLiveRegion="polite" style={styles.connecting}>Connecting with {connectingProvider ?? 'your account'}…</Text>
         ) : null}
@@ -350,6 +351,7 @@ function ProviderLogo({ id }: { id: AuthProviderConfig['id'] }) {
 }
 
 function accountError(error: unknown) {
+  if (error instanceof ApiError && error.status === 403) return error.message;
   if (error instanceof ApiError && error.status) return `Backend account check failed with status ${error.status}.`;
   if (error instanceof ApiError) return error.message;
   return 'Sign-in failed. Check Firebase and backend account setup.';

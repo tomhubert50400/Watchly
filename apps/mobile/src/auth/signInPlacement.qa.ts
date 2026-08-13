@@ -5,6 +5,19 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const signInSheetSource = readFileSync(new URL('./SignInRequired.tsx', import.meta.url), 'utf8');
+const authSessionSource = readFileSync(new URL('./AuthSessionContext.tsx', import.meta.url), 'utf8');
+const profileAuthCardSource = readFileSync(new URL('./ProfileAuthCard.tsx', import.meta.url), 'utf8');
+
+assert.match(
+  authSessionSource,
+  /error instanceof ApiError && error\.status === 403 \? error\.message/,
+  'a restored suspended session must retain the safe API access message',
+);
+assert.match(
+  profileAuthCardSource,
+  /error instanceof ApiError && error\.status === 403\) return error\.message/,
+  'sign-in must show the safe suspension message instead of a generic 403 error',
+);
 
 assert.match(
   signInSheetSource,
