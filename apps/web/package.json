@@ -1,0 +1,29 @@
+{
+  "name": "web",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev -p 3001",
+    "lint": "eslint .",
+    "start": "next start -p 3001",
+    "test": "tsx src/content/legal.qa.ts && tsx src/admin/model.qa.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "firebase": "12.14.0",
+    "lucide-react": "1.31.0",
+    "next": "16.2.11",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.4",
+    "eslint": "9.39.2",
+    "eslint-config-next": "16.2.11",
+    "tsx": "4.22.4",
+    "typescript": "~6.0.3"
+  }
+}
