@@ -13,6 +13,15 @@ import {
 
 type AuthSessionStatus = 'idle' | 'loading' | 'signedIn' | 'error';
 
+export type TotpSignInChallenge = {
+  displayName: string | null;
+  verify: (oneTimePassword: string) => Promise<void>;
+};
+
+export type GoogleSignInResult =
+  | { type: 'signedIn' }
+  | { challenge: TotpSignInChallenge; type: 'totpRequired' };
+
 type AuthSessionContextValue = {
   currentUser: CurrentUser | null;
   getFirebaseIdToken: () => Promise<string | null>;
@@ -20,7 +29,7 @@ type AuthSessionContextValue = {
   firebaseIdToken: string | null;
   notifyTrackingChanged: () => void;
   refreshCurrentUser: () => Promise<void>;
-  signInWithGoogle: (googleIdToken: string) => Promise<void>;
+  signInWithGoogle: (googleIdToken: string) => Promise<GoogleSignInResult>;
   signOut: () => Promise<void>;
   status: AuthSessionStatus;
   trackingRevision: number;
@@ -167,11 +176,45 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     explicitSignOutRef.current = false;
     setStatus('loading');
     try {
-      const firebaseSession = await signInWithGoogleIdToken(googleIdToken);
+      const result = await signInWithGoogleIdToken(googleIdToken);
 
-      if (!authTransitionsRef.current.isCurrent(transition)) return;
+      if (result.type === 'totpRequired') {
+        if (authTransitionsRef.current.isCurrent(transition)) setStatus('idle');
 
-      await applyFirebaseSession(firebaseSession.firebaseIdToken, transition);
+        return {
+          challenge: {
+            displayName: result.challenge.displayName,
+            verify: async (oneTimePassword: string) => {
+              const verificationTransition = authTransitionsRef.current.begin();
+              setStatus('loading');
+              let firebaseSession;
+
+              try {
+                firebaseSession = await result.challenge.verify(oneTimePassword);
+              } catch (error) {
+                if (authTransitionsRef.current.isCurrent(verificationTransition)) setStatus('idle');
+                throw error;
+              }
+
+              if (!authTransitionsRef.current.isCurrent(verificationTransition)) return;
+
+              try {
+                await applyFirebaseSession(firebaseSession.firebaseIdToken, verificationTransition);
+              } catch (error) {
+                if (authTransitionsRef.current.isCurrent(verificationTransition)) setStatus('error');
+                throw error;
+              }
+            },
+          },
+          type: 'totpRequired' as const,
+        };
+      }
+
+      if (authTransitionsRef.current.isCurrent(transition)) {
+        await applyFirebaseSession(result.session.firebaseIdToken, transition);
+      }
+
+      return { type: 'signedIn' as const };
     } catch (error) {
       if (authTransitionsRef.current.isCurrent(transition)) setStatus('error');
       throw error;

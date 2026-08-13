@@ -1,16 +1,20 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
-import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Keyboard, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { ApiError } from '../api/client';
 import { BrandLogo } from '../brand/BrandLogo';
+import { Button } from '../components/Button';
+import { TextInput } from '../components/TextInput';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { useAuthSession } from './AuthSessionContext';
+import type { TotpSignInChallenge } from './AuthSessionContext';
 import { getMissingFirebaseConfig } from './firebase';
 import { getMissingGoogleClientConfig, googleClientIds, googleNativeRedirectUri } from './googleAuthConfig';
 import { authProviders, type AuthProviderConfig } from './providerConfig';
+import { getTotpErrorMessage, isValidTotpCode, normalizeTotpCode } from './totpChallenge';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -37,6 +41,9 @@ export function ProfileAuthCard({
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
   const [localStatus, setLocalStatus] = useState<AuthStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
+  const [totpChallenge, setTotpChallenge] = useState<TotpSignInChallenge | null>(null);
+  const [totpCode, setTotpCode] = useState('');
+  const [totpError, setTotpError] = useState<string | null>(null);
   const missingConfig = useMemo(
     () => [...getMissingFirebaseConfig(), ...getMissingGoogleClientConfig(Platform.OS)],
     [],
@@ -52,7 +59,19 @@ export function ProfileAuthCard({
       setLocalStatus('loading');
       setMessage(null);
       try {
-        await signInWithGoogle(idToken);
+        const result = await signInWithGoogle(idToken);
+
+        if (result.type === 'totpRequired') {
+          if (mounted) {
+            setConnectingProvider(null);
+            setLocalStatus('idle');
+            setTotpChallenge(result.challenge);
+            setTotpCode('');
+            setTotpError(null);
+          }
+          return;
+        }
+
         hapticSuccess();
         if (mounted) {
           setConnectingProvider(null);
@@ -115,6 +134,41 @@ export function ProfileAuthCard({
     }
   }
 
+  async function verifyTotp() {
+    if (!totpChallenge || status === 'loading') return;
+
+    if (!isValidTotpCode(totpCode)) {
+      hapticError();
+      setTotpError('Enter the 6-digit code from your authenticator.');
+      return;
+    }
+
+    setConnectingProvider('your security code');
+    setLocalStatus('loading');
+    setTotpError(null);
+    Keyboard.dismiss();
+
+    try {
+      await totpChallenge.verify(totpCode);
+      hapticSuccess();
+    } catch (error) {
+      hapticError();
+      console.warn('TOTP verification failed', safeError(error));
+      setConnectingProvider(null);
+      setLocalStatus('error');
+      setTotpError(error instanceof ApiError ? accountError(error) : getTotpErrorMessage(error));
+    }
+  }
+
+  function cancelTotp() {
+    setConnectingProvider(null);
+    setLocalStatus('idle');
+    setTotpChallenge(null);
+    setTotpCode('');
+    setTotpError(null);
+    setMessage(null);
+  }
+
   const primaryProviders = authProviders.filter((provider) => provider.presentation === 'primary');
   const secondaryProviders = authProviders.filter((provider) => provider.presentation === 'secondary');
 
@@ -123,55 +177,101 @@ export function ProfileAuthCard({
       <View pointerEvents="none" style={styles.glow} />
       <View style={styles.card}>
         <BrandLogo size={76} />
-        <Text accessibilityRole="header" style={styles.title}>{title}</Text>
-        <Text style={styles.body}>{body}</Text>
+        <Text accessibilityRole="header" style={styles.title}>
+          {totpChallenge ? 'Verify it\'s you' : title}
+        </Text>
+        <Text style={styles.body}>
+          {totpChallenge
+            ? `Enter the 6-digit code from ${totpChallenge.displayName ?? 'your authenticator app'}.`
+            : body}
+        </Text>
 
-        {missingConfig.length > 0 ? (
+        {!totpChallenge && missingConfig.length > 0 ? (
           <Text accessibilityLiveRegion="polite" style={styles.configWarning}>
             Google setup is incomplete: {missingConfig.join(', ')}
           </Text>
         ) : null}
-        {message ? <Text accessibilityLiveRegion="polite" style={styles.setupMessage}>{message}</Text> : null}
-        {status === 'loading' ? (
+        {!totpChallenge && message ? <Text accessibilityLiveRegion="polite" style={styles.setupMessage}>{message}</Text> : null}
+        {!totpChallenge && status === 'loading' ? (
           <Text accessibilityLiveRegion="polite" style={styles.connecting}>Connecting with {connectingProvider ?? 'your account'}…</Text>
         ) : null}
 
-        <View style={styles.primaryList}>
-          {primaryProviders.map((provider) => (
-            <ProviderButton
-              disabled={provider.id === 'google' && !canUseGoogle}
-              key={provider.id}
-              label={`Continue with ${provider.name}`}
-              logo={<ProviderLogo id={provider.id} />}
-              onPress={() => { void selectProvider(provider); }}
-              white={provider.id === 'google'}
+        {totpChallenge ? (
+          <View style={styles.totpForm}>
+            <TextInput
+              autoComplete="one-time-code"
+              autoFocus
+              error={totpError ?? undefined}
+              keyboardType="number-pad"
+              label="Authentication code"
+              maxLength={6}
+              onChangeText={(value) => {
+                setTotpCode(normalizeTotpCode(value));
+                if (totpError) {
+                  setLocalStatus('idle');
+                  setTotpError(null);
+                }
+              }}
+              onSubmitEditing={() => { void verifyTotp(); }}
+              placeholder="000000"
+              textContentType="oneTimeCode"
+              value={totpCode}
             />
-          ))}
-        </View>
-
-        <Text style={styles.moreLabel}>OTHER AVAILABLE OPTIONS</Text>
-        <View style={styles.secondaryRow}>
-          {secondaryProviders.map((provider) => (
-            <View key={provider.id} style={styles.secondaryItem}>
-              <Pressable
-                accessibilityLabel={`Continue with ${provider.name}`}
-                accessibilityRole="button"
-                onPress={() => { void selectProvider(provider); }}
-                style={({ pressed }) => [
-                  styles.roundProvider,
-                  provider.id === 'microsoft' ? styles.microsoft : null,
-                  provider.id === 'discord' ? styles.discord : null,
-                  provider.id === 'facebook' ? styles.facebook : null,
-                  pressed ? styles.pressed : null,
-                ]}
-              >
-                <ProviderLogo id={provider.id} />
-              </Pressable>
-              <Text style={styles.providerName}>{provider.name}</Text>
+            <Button
+              disabled={!isValidTotpCode(totpCode)}
+              fullWidth
+              label="Verify code"
+              loading={status === 'loading'}
+              onPress={() => { void verifyTotp(); }}
+            />
+            <Button
+              disabled={status === 'loading'}
+              fullWidth
+              label="Use another account"
+              onPress={cancelTotp}
+              variant="ghost"
+            />
+          </View>
+        ) : (
+          <>
+            <View style={styles.primaryList}>
+              {primaryProviders.map((provider) => (
+                <ProviderButton
+                  disabled={provider.id === 'google' && !canUseGoogle}
+                  key={provider.id}
+                  label={`Continue with ${provider.name}`}
+                  logo={<ProviderLogo id={provider.id} />}
+                  onPress={() => { void selectProvider(provider); }}
+                  white={provider.id === 'google'}
+                />
+              ))}
             </View>
-          ))}
-        </View>
-        <Text style={styles.note}>Choose the sign-in method you prefer. Providers that still need setup remain visible and never simulate success.</Text>
+
+            <Text style={styles.moreLabel}>OTHER AVAILABLE OPTIONS</Text>
+            <View style={styles.secondaryRow}>
+              {secondaryProviders.map((provider) => (
+                <View key={provider.id} style={styles.secondaryItem}>
+                  <Pressable
+                    accessibilityLabel={`Continue with ${provider.name}`}
+                    accessibilityRole="button"
+                    onPress={() => { void selectProvider(provider); }}
+                    style={({ pressed }) => [
+                      styles.roundProvider,
+                      provider.id === 'microsoft' ? styles.microsoft : null,
+                      provider.id === 'discord' ? styles.discord : null,
+                      provider.id === 'facebook' ? styles.facebook : null,
+                      pressed ? styles.pressed : null,
+                    ]}
+                  >
+                    <ProviderLogo id={provider.id} />
+                  </Pressable>
+                  <Text style={styles.providerName}>{provider.name}</Text>
+                </View>
+              ))}
+            </View>
+            <Text style={styles.note}>Choose the sign-in method you prefer. Providers that still need setup remain visible and never simulate success.</Text>
+          </>
+        )}
       </View>
     </View>
   );
@@ -286,4 +386,5 @@ const styles = StyleSheet.create({
   shell: { paddingHorizontal: spacing.lg, paddingTop: spacing.xxl, position: 'relative' },
   shellEmbedded: { paddingHorizontal: 0, paddingTop: 0 },
   title: { color: colors.text, fontSize: 25, fontWeight: '900', lineHeight: 30, marginTop: spacing.md, textAlign: 'center' },
+  totpForm: { gap: spacing.sm, marginTop: spacing.lg },
 });

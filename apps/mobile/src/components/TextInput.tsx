@@ -45,7 +45,7 @@ export function TextInput({
         returnKeyType={returnKeyType ?? (multiline ? undefined : 'done')}
         textAlignVertical={multiline ? 'top' : 'center'}
       />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
       {!error && helperText ? <Text style={styles.helper}>{helperText}</Text> : null}
     </View>
   );

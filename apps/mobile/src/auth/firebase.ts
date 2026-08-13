@@ -4,18 +4,22 @@ import {
   Auth,
   connectAuthEmulator,
   getAuth,
+  getMultiFactorResolver,
   GoogleAuthProvider,
   initializeAuth,
+  MultiFactorError,
   NextOrObserver,
   onAuthStateChanged,
   signInWithCredential,
   signInWithEmailAndPassword,
   signOut,
+  TotpMultiFactorGenerator,
   User,
 } from '@firebase/auth';
 import * as FirebaseAuth from '@firebase/auth';
 import { publicEnv } from '../config/publicEnv';
 import { resolveDevAuthConfig } from './devAuthConfig';
+import { selectTotpFactor } from './totpChallenge';
 
 const firebaseConfigKeys = [
   'EXPO_PUBLIC_FIREBASE_API_KEY',
@@ -37,6 +41,15 @@ export type FirebaseSession = {
   firebaseIdToken: string;
 };
 
+export type FirebaseTotpChallenge = {
+  displayName: string | null;
+  verify: (oneTimePassword: string) => Promise<FirebaseSession>;
+};
+
+export type FirebaseGoogleSignInResult =
+  | { session: FirebaseSession; type: 'signedIn' }
+  | { challenge: FirebaseTotpChallenge; type: 'totpRequired' };
+
 let authInstance: Auth | null = null;
 let authEmulatorConnected = false;
 const devAuthConfig = resolveDevAuthConfig(
@@ -55,11 +68,40 @@ export function getMissingFirebaseConfig(): string[] {
   return firebaseConfigKeys.filter((key) => !firebaseConfig[key]);
 }
 
-export async function signInWithGoogleIdToken(googleIdToken: string): Promise<FirebaseSession> {
+export async function signInWithGoogleIdToken(googleIdToken: string): Promise<FirebaseGoogleSignInResult> {
   const credential = GoogleAuthProvider.credential(googleIdToken);
-  const userCredential = await signInWithCredential(getAuthInstance(), credential);
+  const auth = getAuthInstance();
 
-  return getFirebaseSessionFromUser(userCredential.user);
+  try {
+    const userCredential = await signInWithCredential(auth, credential);
+
+    return {
+      session: await getFirebaseSessionFromUser(userCredential.user),
+      type: 'signedIn',
+    };
+  } catch (error) {
+    if (!isMultiFactorError(error)) throw error;
+
+    const resolver = getMultiFactorResolver(auth, error);
+    const hint = selectTotpFactor(resolver.hints);
+
+    if (!hint) {
+      throw new Error('This account requires a second-factor method that Watchly does not support yet.');
+    }
+
+    return {
+      challenge: {
+        displayName: hint.displayName ?? null,
+        verify: async (oneTimePassword) => {
+          const assertion = TotpMultiFactorGenerator.assertionForSignIn(hint.uid, oneTimePassword);
+          const userCredential = await resolver.resolveSignIn(assertion);
+
+          return getFirebaseSessionFromUser(userCredential.user);
+        },
+      },
+      type: 'totpRequired',
+    };
+  }
 }
 
 export async function signInWithConfiguredDevAccount(): Promise<FirebaseSession | null> {
@@ -140,4 +182,13 @@ function getFirebaseConfig(): FirebaseOptions {
     authDomain: firebaseConfig.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
     projectId: firebaseConfig.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
   };
+}
+
+function isMultiFactorError(error: unknown): error is MultiFactorError {
+  return Boolean(
+    error
+    && typeof error === 'object'
+    && 'code' in error
+    && error.code === 'auth/multi-factor-auth-required',
+  );
 }
