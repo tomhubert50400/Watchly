@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { UnauthorizedException } from '@nestjs/common';
+import { parseFirebaseServiceAccount } from '../auth/firebase-admin-app';
 import {
   shouldCheckFirebaseTokenRevocation,
   verifyBearerTokenWithAuth,
@@ -63,6 +64,38 @@ async function main() {
     shouldCheckFirebaseTokenRevocation('development', '127.0.0.1:9099', 'firebase-admin.json'),
     false,
     'The local Auth emulator must not perform a production revocation lookup.',
+  );
+
+  assert.deepEqual(
+    parseFirebaseServiceAccount(
+      JSON.stringify({
+        client_email: 'watchly-auth@example.iam.gserviceaccount.com',
+        private_key: 'private-key',
+        project_id: 'watchly-staging',
+      }),
+      'watchly-staging',
+    ),
+    {
+      clientEmail: 'watchly-auth@example.iam.gserviceaccount.com',
+      privateKey: 'private-key',
+      projectId: 'watchly-staging',
+    },
+    'Railway service account JSON must be parsed without changing credential fields.',
+  );
+  assert.throws(
+    () => parseFirebaseServiceAccount('{', 'watchly-staging'),
+    /must contain valid JSON/,
+  );
+  assert.throws(
+    () => parseFirebaseServiceAccount(
+      JSON.stringify({
+        client_email: 'watchly-auth@example.iam.gserviceaccount.com',
+        private_key: 'private-key',
+        project_id: 'watchly-production',
+      }),
+      'watchly-staging',
+    ),
+    /does not match FIREBASE_PROJECT_ID/,
   );
 
   const rejected = await verifyBearerTokenWithAuth(

@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import { initializeFirebaseAdmin } from '../auth/firebase-admin-app';
 
 async function main() {
   const [action, email] = process.argv.slice(2);
@@ -15,9 +15,7 @@ async function main() {
     throw new Error('FIREBASE_PROJECT_ID is required.');
   }
 
-  if (getApps().length === 0) {
-    initializeApp({ projectId });
-  }
+  initializeFirebaseAdmin(projectId, process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
 
   const auth = getAuth();
   const user = await auth.getUserByEmail(email.trim().toLowerCase());

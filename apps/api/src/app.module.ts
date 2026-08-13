@@ -43,6 +43,11 @@ import { ViewingsModule } from './viewings/viewings.module';
         }),
         FIREBASE_AUTH_EMULATOR_HOST: Joi.string().allow('').optional(),
         FIREBASE_PROJECT_ID: Joi.string().required(),
+        FIREBASE_SERVICE_ACCOUNT_JSON: Joi.string().when('APP_ENV', {
+          is: Joi.valid('staging', 'production'),
+          then: Joi.required(),
+          otherwise: Joi.allow('').optional(),
+        }),
         NODE_ENV: Joi.string().valid('development', 'test', 'production').default('development'),
         PORT: Joi.number().integer().min(1).max(65535).default(3000),
         RATE_LIMIT_MAX_REQUESTS: Joi.number().integer().min(1).default(100),

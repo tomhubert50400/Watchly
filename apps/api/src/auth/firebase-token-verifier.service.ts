@@ -1,9 +1,9 @@
 import { ForbiddenException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { getApps, initializeApp } from 'firebase-admin/app';
 import { DecodedIdToken, getAuth } from 'firebase-admin/auth';
 import { AuthProvider } from '../generated/prisma/enums';
 import { AuthenticatedAdmin, AuthenticatedIdentity } from './auth.types';
+import { initializeFirebaseAdmin } from './firebase-admin-app';
 
 @Injectable()
 export class FirebaseTokenVerifier {
@@ -21,14 +21,14 @@ export class FirebaseTokenVerifier {
     this.checkRevokedTokens = shouldCheckFirebaseTokenRevocation(
       config.get<string>('NODE_ENV'),
       authEmulatorHost,
-      config.get<string>('GOOGLE_APPLICATION_CREDENTIALS'),
+      config.get<string>('GOOGLE_APPLICATION_CREDENTIALS') ||
+        config.get<string>('FIREBASE_SERVICE_ACCOUNT_JSON'),
     );
 
-    if (getApps().length === 0) {
-      initializeApp({
-        projectId: config.getOrThrow<string>('FIREBASE_PROJECT_ID'),
-      });
-    }
+    initializeFirebaseAdmin(
+      config.getOrThrow<string>('FIREBASE_PROJECT_ID'),
+      config.get<string>('FIREBASE_SERVICE_ACCOUNT_JSON'),
+    );
   }
 
   async verifyBearerToken(token: string): Promise<AuthenticatedIdentity> {
@@ -111,11 +111,11 @@ export async function verifyAdminBearerTokenWithAuth(
 export function shouldCheckFirebaseTokenRevocation(
   nodeEnv: string | undefined,
   authEmulatorHost: string | undefined,
-  applicationCredentialsPath: string | undefined,
+  adminCredentialSource: string | undefined,
 ) {
   if (authEmulatorHost) return false;
 
-  return nodeEnv === 'production' || Boolean(applicationCredentialsPath);
+  return nodeEnv === 'production' || Boolean(adminCredentialSource);
 }
 
 export function verifyFirebaseIdToken(
