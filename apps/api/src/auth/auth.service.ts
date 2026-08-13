@@ -1,6 +1,7 @@
 import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { AuthenticatedIdentity } from './auth.types';
 import { PrismaService } from '../database/prisma.service';
+import { isAccountSuspended } from '../moderation/account-suspension';
 
 @Injectable()
 export class AuthService {
@@ -13,6 +14,7 @@ export class AuthService {
           user: {
             select: {
               suspendedAt: true,
+              suspendedUntil: true,
             },
           },
         },
@@ -25,8 +27,17 @@ export class AuthService {
       }),
     );
 
-    if (authIdentity?.user.suspendedAt) {
-      throw new ForbiddenException('This account is suspended.');
+    if (authIdentity && isAccountSuspended(authIdentity.user)) {
+      const suspendedUntil = authIdentity.user.suspendedUntil?.toISOString() ?? null;
+
+      throw new ForbiddenException({
+        code: 'ACCOUNT_SUSPENDED',
+        message: suspendedUntil
+          ? `This account is suspended until ${suspendedUntil}.`
+          : 'This account is permanently suspended. Contact Watchly support if you believe this is a mistake.',
+        supportUrl: 'https://trywatchly.com/support',
+        suspendedUntil,
+      });
     }
   }
 
@@ -45,6 +56,13 @@ export class AuthService {
       });
 
       if (existingIdentity) {
+        if (identity.email && identity.email !== existingIdentity.email) {
+          await this.prisma.authIdentity.update({
+            data: { email: identity.email },
+            where: { id: existingIdentity.id },
+          });
+        }
+
         return {
           id: existingIdentity.user.id,
           displayName: existingIdentity.user.displayName,
@@ -60,6 +78,7 @@ export class AuthService {
             create: {
               provider: identity.provider,
               providerUserId: identity.providerUserId,
+              email: identity.email,
             },
           },
           displayName: identity.displayName,

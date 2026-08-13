@@ -62,9 +62,15 @@ async function run() {
     ],
   });
   const capturedSearchArgs = searchArgs as SearchArgs | null;
+  const activeFilter = ((capturedSearchArgs?.where as { AND: unknown[] }).AND)[0];
+  const suspensionCutoff = (
+    activeFilter as { OR: Array<{ suspendedUntil?: { lte: unknown } }> }
+  ).OR[1]?.suspendedUntil?.lte;
 
   assert.equal(capturedSearchArgs?.take, 20, 'profile search must keep the result list bounded');
+  assert(suspensionCutoff instanceof Date);
   assert.deepEqual(capturedSearchArgs?.where, {
+    AND: [activeFilter],
     blockedUsers: {
       none: {
         blockedUserId: 'viewer-id',
@@ -72,7 +78,6 @@ async function run() {
     },
     handle: { not: null },
     onboardingCompleted: true,
-    suspendedAt: null,
     OR: [
       {
         displayName: {
@@ -90,8 +95,9 @@ async function run() {
   }, 'profile search must include profiles blocked by the viewer while excluding members who blocked them');
 
   await service.searchProfiles(identity, '@AL');
+  const repeatedWhere = (searchArgs as SearchArgs | null)?.where as Record<string, unknown>;
   assert.deepEqual(
-    (searchArgs as SearchArgs | null)?.where,
+    { ...repeatedWhere, AND: (capturedSearchArgs?.where as { AND: unknown[] }).AND },
     capturedSearchArgs?.where,
     'profile search must treat handles with and without @ identically',
   );

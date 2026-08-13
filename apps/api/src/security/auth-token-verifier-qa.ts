@@ -117,9 +117,9 @@ async function main() {
   const passwordAuth = {
     verifyIdToken: async () => ({
       aud: 'security-qa', auth_time: 0, exp: 1,
-      firebase: { identities: {}, sign_in_provider: 'password' },
+    firebase: { identities: {}, sign_in_provider: 'password' },
       iat: 0, iss: 'https://securetoken.google.com/security-qa',
-      name: 'Watchly UI Review', sub: 'ui-review-user', uid: 'ui-review-user',
+      email: 'ui-review@watchly.test', name: 'Watchly UI Review', sub: 'ui-review-user', uid: 'ui-review-user',
     }),
   };
   const productionPasswordError = await verifyBearerTokenWithAuth(passwordAuth, 'password-token').then(
@@ -135,6 +135,7 @@ async function main() {
   });
   assert.equal(emulatorIdentity.provider, 'GOOGLE');
   assert.equal(emulatorIdentity.providerUserId, 'ui-review-user');
+  assert.equal(emulatorIdentity.email, 'ui-review@watchly.test');
 
   console.log('Auth token verifier QA passed.');
 }

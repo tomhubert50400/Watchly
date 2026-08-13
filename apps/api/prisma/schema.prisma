@@ -114,6 +114,8 @@ enum AdminAuditAction {
   REPORT_LIST_VIEWED
   REPORT_VIEWED
   REPORT_STATUS_CHANGED
+  USER_LIST_VIEWED
+  USER_VIEWED
   USER_SUSPENDED
   USER_REACTIVATED
   CONTENT_HIDDEN
@@ -139,6 +141,7 @@ model User {
   handle                     String?                    @unique @db.VarChar(20)
   onboardingCompleted        Boolean                    @default(false)
   suspendedAt                DateTime?
+  suspendedUntil             DateTime?
   createdAt                  DateTime                   @default(now())
   updatedAt                  DateTime                   @updatedAt
   authIdentities             AuthIdentity[]
@@ -153,6 +156,7 @@ model User {
   movieReviews               UserMovieReview[]
   reportsReceived            ContentReport[]            @relation("ReportedUser")
   reportsSubmitted           ContentReport[]            @relation("ReportReporter")
+  suspensions                UserSuspension[]
   releaseAlertSubscriptions  ReleaseAlertSubscription[]
   notifications              Notification[]             @relation("NotificationRecipient")
   actedNotifications         Notification[]             @relation("NotificationActor")
@@ -175,6 +179,7 @@ model AuthIdentity {
   userId         String       @db.Uuid
   provider       AuthProvider
   providerUserId String
+  email          String?      @db.VarChar(320)
   createdAt      DateTime     @default(now())
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -378,11 +383,33 @@ model ContentReport {
   resolvedAt       DateTime?
   reporter         User             @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
   reportedUser     User             @relation("ReportedUser", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  suspensions      UserSuspension[]
 
   @@unique([reporterId, targetType, targetId])
   @@index([reportedUserId])
   @@index([status, createdAt])
   @@map("content_reports")
+}
+
+model UserSuspension {
+  id                    String         @id @default(uuid()) @db.Uuid
+  userId                String         @db.Uuid
+  reportId              String?        @db.Uuid
+  startsAt              DateTime       @default(now())
+  endsAt                DateTime?
+  liftedAt              DateTime?
+  note                  String         @db.Text
+  createdByFirebaseUid  String         @db.VarChar(128)
+  createdByEmail        String         @db.VarChar(320)
+  liftedNote            String?        @db.Text
+  liftedByFirebaseUid   String?        @db.VarChar(128)
+  liftedByEmail         String?        @db.VarChar(320)
+  user                  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  report                ContentReport? @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@index([userId, startsAt])
+  @@index([reportId])
+  @@map("user_suspensions")
 }
 
 model UserBlock {

@@ -4,6 +4,7 @@ import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
 import { FollowStatus, PrivacyVisibility } from '../generated/prisma/enums';
 import { AvatarStorageService } from '../media/avatar-storage.service';
+import { isAccountSuspended } from '../moderation/account-suspension';
 
 type FeedAuthor = {
   avatarObjectKey: string | null;
@@ -61,6 +62,7 @@ type VisibleReview = {
       reviewsVisibility: PrivacyVisibility;
     } | null;
     suspendedAt: Date | null;
+    suspendedUntil: Date | null;
   };
   userId: string;
 };
@@ -314,7 +316,7 @@ export class FeedService {
     if (
       !review ||
       review.moderationHiddenAt !== null ||
-      review.user.suspendedAt !== null ||
+      isAccountSuspended(review.user) ||
       review.user.privacySettings?.profileVisibility !== PrivacyVisibility.PUBLIC ||
       review.user.privacySettings.reviewsVisibility !== PrivacyVisibility.PUBLIC
     ) {
@@ -371,7 +373,7 @@ export class FeedService {
       .filter((follow) => !blockedUserIds.has(follow.followedUserId))
       .filter(
         (follow) =>
-          follow.followedUser.suspendedAt === null &&
+          !isAccountSuspended(follow.followedUser) &&
           follow.followedUser.privacySettings?.profileVisibility === PrivacyVisibility.PUBLIC &&
           follow.followedUser.privacySettings.reviewsVisibility === PrivacyVisibility.PUBLIC,
       )

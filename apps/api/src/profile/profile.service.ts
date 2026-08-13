@@ -24,6 +24,7 @@ import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
 import { AvatarStorageService } from '../media/avatar-storage.service';
+import { activeAccountWhere } from '../moderation/account-suspension';
 import { ViewingsService } from '../viewings/viewings.service';
 import {
   PrivacyVisibilityValue,
@@ -374,6 +375,7 @@ export class ProfileService {
         },
         take: PROFILE_SEARCH_LIMIT,
         where: {
+          AND: [activeAccountWhere()],
           blockedUsers: {
             none: {
               blockedUserId: viewerId,
@@ -381,7 +383,6 @@ export class ProfileService {
           },
           handle: { not: null },
           onboardingCompleted: true,
-          suspendedAt: null,
           OR: [
             {
               displayName: {
@@ -813,7 +814,7 @@ export class ProfileService {
             },
           },
         },
-        where: { id: targetUserId, suspendedAt: null },
+        where: { AND: [activeAccountWhere()], id: targetUserId },
       }),
     );
 
@@ -866,7 +867,7 @@ export class ProfileService {
                 blockedUsers: { none: { blockedUserId: viewerId } },
                 handle: { not: null },
                 onboardingCompleted: true,
-                suspendedAt: null,
+                AND: [activeAccountWhere()],
               },
               status: FollowStatus.ACCEPTED,
             },
@@ -890,7 +891,7 @@ export class ProfileService {
                 blockedUsers: { none: { blockedUserId: viewerId } },
                 handle: { not: null },
                 onboardingCompleted: true,
-                suspendedAt: null,
+                AND: [activeAccountWhere()],
               },
               followerId: targetUserId,
               status: FollowStatus.ACCEPTED,
@@ -987,8 +988,8 @@ export class ProfileService {
             privacySettings: true,
           },
           where: {
+            AND: [activeAccountWhere()],
             id: userId,
-            suspendedAt: null,
           },
         }),
     );
@@ -1249,10 +1250,16 @@ export class ProfileService {
               episodeRatings: true,
               episodeReviews: { where: { moderationHiddenAt: null } },
               followers: {
-                where: { follower: { suspendedAt: null }, status: FollowStatus.ACCEPTED },
+                where: {
+                  follower: { AND: [activeAccountWhere()] },
+                  status: FollowStatus.ACCEPTED,
+                },
               },
               following: {
-                where: { followedUser: { suspendedAt: null }, status: FollowStatus.ACCEPTED },
+                where: {
+                  followedUser: { AND: [activeAccountWhere()] },
+                  status: FollowStatus.ACCEPTED,
+                },
               },
               movieRatings: true,
               movieReviews: { where: { moderationHiddenAt: null } },
@@ -1278,10 +1285,16 @@ export class ProfileService {
           _count: {
             select: {
               followers: {
-                where: { follower: { suspendedAt: null }, status: FollowStatus.ACCEPTED },
+                where: {
+                  follower: { AND: [activeAccountWhere()] },
+                  status: FollowStatus.ACCEPTED,
+                },
               },
               following: {
-                where: { followedUser: { suspendedAt: null }, status: FollowStatus.ACCEPTED },
+                where: {
+                  followedUser: { AND: [activeAccountWhere()] },
+                  status: FollowStatus.ACCEPTED,
+                },
               },
             },
           },

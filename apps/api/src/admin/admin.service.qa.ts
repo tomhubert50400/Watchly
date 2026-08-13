@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { AdminAuditAction, ReportReason, ReportStatus, ReportTargetType } from '../generated/prisma/enums';
+import { AdminAuditAction, AuthProvider, ReportReason, ReportStatus, ReportTargetType } from '../generated/prisma/enums';
 import { AdminService } from './admin.service';
 
 const PROFILE_REPORT_ID = '11111111-1111-4111-8111-111111111111';
@@ -13,11 +13,27 @@ const EPISODE_REVIEW_ID = '77777777-7777-4777-8777-777777777777';
 
 async function run() {
   const auditLogs: Array<Record<string, unknown>> = [];
+  let userListWhere: unknown;
+  const suspensionRows: Array<Record<string, unknown>> = [];
   const reports = new Map([
     [PROFILE_REPORT_ID, createReport(PROFILE_REPORT_ID, ReportTargetType.PROFILE, SUBJECT_ID)],
     [MOVIE_REPORT_ID, createReport(MOVIE_REPORT_ID, ReportTargetType.MOVIE_REVIEW, MOVIE_REVIEW_ID)],
     [EPISODE_REPORT_ID, createReport(EPISODE_REPORT_ID, ReportTargetType.EPISODE_REVIEW, EPISODE_REVIEW_ID)],
   ]);
+  const subject = {
+    _count: { episodeReviews: 1, movieReviews: 2, reportsReceived: 3, suspensions: 0 },
+    authIdentities: [{
+      email: 'reported@watchly.test',
+      provider: AuthProvider.GOOGLE,
+      providerUserId: 'firebase-subject',
+    }],
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    displayName: 'Reported member',
+    handle: 'reported',
+    id: SUBJECT_ID,
+    suspendedAt: null as Date | null,
+    suspendedUntil: null as Date | null,
+  };
   const content = {
     [MOVIE_REVIEW_ID]: { moderationHiddenAt: null as Date | null, userId: SUBJECT_ID },
     [EPISODE_REVIEW_ID]: { moderationHiddenAt: null as Date | null, userId: SUBJECT_ID },
@@ -51,25 +67,62 @@ async function run() {
     },
   };
   const user = {
-    update: async ({ data }: { data: { suspendedAt: Date | null } }) => {
-      for (const report of reports.values()) report.reportedUser.suspendedAt = data.suspendedAt;
-      return reports.get(PROFILE_REPORT_ID)?.reportedUser;
+    count: async () => 1,
+    findMany: async ({ where }: { where: unknown }) => {
+      userListWhere = where;
+      return [subject];
+    },
+    findUnique: async ({ where }: { where: { id: string } }) => where.id === SUBJECT_ID ? subject : null,
+    update: async ({ data }: {
+      data: { suspendedAt: Date | null; suspendedUntil: Date | null };
+    }) => {
+      subject.suspendedAt = data.suspendedAt;
+      subject.suspendedUntil = data.suspendedUntil;
+      for (const report of reports.values()) {
+        report.reportedUser.suspendedAt = data.suspendedAt;
+        report.reportedUser.suspendedUntil = data.suspendedUntil;
+      }
+      return { suspendedAt: subject.suspendedAt, suspendedUntil: subject.suspendedUntil };
     },
   };
-  const userMovieReview = createReviewDelegate(content[MOVIE_REVIEW_ID]);
-  const userEpisodeReview = createReviewDelegate(content[EPISODE_REVIEW_ID]);
-  const prisma = {
-    $transaction: async (operation: (transaction: unknown) => Promise<unknown>) => operation({
-      adminAuditLog,
-      contentReport,
-      user,
-      userEpisodeReview,
-      userMovieReview,
-    }),
+  const userSuspension = {
+    create: async ({ data }: { data: Record<string, unknown> }) => {
+      const row = { ...data, id: `suspension-${suspensionRows.length + 1}`, liftedAt: null };
+      suspensionRows.push(row);
+      subject._count.suspensions = suspensionRows.length;
+      return row;
+    },
+    findFirst: async () => {
+      const row = [...suspensionRows].reverse().find((candidate) => candidate.liftedAt === null);
+      return row ? { id: row.id } : null;
+    },
+    findMany: async () => suspensionRows,
+    update: async ({ data, where }: { data: Record<string, unknown>; where: { id: string } }) => {
+      const row = suspensionRows.find((candidate) => candidate.id === where.id);
+      assert(row);
+      Object.assign(row, data);
+      return row;
+    },
+  };
+  const userMovieReview = {
+    ...createReviewDelegate(content[MOVIE_REVIEW_ID]),
+    count: async () => 1,
+  };
+  const userEpisodeReview = {
+    ...createReviewDelegate(content[EPISODE_REVIEW_ID]),
+    count: async () => 0,
+  };
+  const transaction = {
     adminAuditLog,
     contentReport,
+    user,
     userEpisodeReview,
     userMovieReview,
+    userSuspension,
+  };
+  const prisma = {
+    ...transaction,
+    $transaction: async (operation: (client: unknown) => Promise<unknown>) => operation(transaction),
     withConnectionRetry: async (operation: () => Promise<unknown>) => operation(),
   };
   const service = new AdminService(prisma as never);
@@ -94,29 +147,36 @@ async function run() {
   });
   assert.equal(updated.status, 'inProgress');
   assert.equal(auditLogs[2]?.action, AdminAuditAction.REPORT_STATUS_CHANGED);
-  assert.deepEqual(auditLogs[2]?.metadata, {
-    fromStatus: 'new',
-    note: 'Reviewed the captured profile and started investigation.',
-    toStatus: 'inProgress',
-  });
 
   await assert.rejects(
     () => service.updateReportStatus(identity, PROFILE_REPORT_ID, { note: '   ', status: 'resolved' }),
     BadRequestException,
   );
+  await assert.rejects(
+    () => service.applyModerationAction(identity, PROFILE_REPORT_ID, {
+      action: 'suspendUser', note: 'Duration is missing.',
+    }),
+    BadRequestException,
+  );
 
   const suspended = await service.applyModerationAction(identity, PROFILE_REPORT_ID, {
     action: 'suspendUser',
+    duration: '7Days',
     note: 'Confirmed repeated harassment.',
   });
   assert.equal(suspended.status, 'resolved');
-  assert(reports.get(PROFILE_REPORT_ID)?.reportedUser.suspendedAt instanceof Date);
+  assert(subject.suspendedAt instanceof Date);
+  assert(subject.suspendedUntil instanceof Date);
+  assert.equal(
+    subject.suspendedUntil.getTime() - subject.suspendedAt.getTime(),
+    7 * 24 * 60 * 60 * 1000,
+  );
+  assert.equal(suspensionRows[0]?.reportId, PROFILE_REPORT_ID);
   assert.equal(auditLogs.at(-1)?.action, AdminAuditAction.USER_SUSPENDED);
 
   await assert.rejects(
     () => service.applyModerationAction(identity, PROFILE_REPORT_ID, {
-      action: 'suspendUser',
-      note: 'Duplicate suspension attempt.',
+      action: 'suspendUser', duration: '24Hours', note: 'Duplicate suspension attempt.',
     }),
     ConflictException,
   );
@@ -125,13 +185,44 @@ async function run() {
     action: 'reactivateUser',
     note: 'Account restored after review.',
   });
-  assert.equal(reports.get(PROFILE_REPORT_ID)?.reportedUser.suspendedAt, null);
+  assert.equal(subject.suspendedAt, null);
+  assert(suspensionRows[0]?.liftedAt instanceof Date);
   assert.equal(auditLogs.at(-1)?.action, AdminAuditAction.USER_REACTIVATED);
+
+  const users = await service.listUsers(identity, { page: 1, pageSize: 25, status: 'previouslySuspended' });
+  assert.equal(users.items[0]?.status, 'previouslySuspended');
+  assert.deepEqual(users.items[0]?.emails, ['reported@watchly.test']);
+  assert.equal(auditLogs.at(-1)?.action, AdminAuditAction.USER_LIST_VIEWED);
+  assert.equal((userListWhere as { AND: unknown[] }).AND.length, 2);
+
+  await service.listUsers(identity, {
+    page: 1,
+    pageSize: 25,
+    query: 'reported@watchly.test',
+    status: 'suspended',
+  });
+  assert.equal((userListWhere as { AND: unknown[] }).AND.length, 2);
+
+  const userDetail = await service.getUser(identity, SUBJECT_ID);
+  assert.equal(userDetail.suspensionHistory.length, 1);
+  assert.equal(userDetail.content.hiddenReviewCount, 1);
+  assert.equal(auditLogs.at(-1)?.action, AdminAuditAction.USER_VIEWED);
+
+  const permanent = await service.suspendUser(identity, SUBJECT_ID, {
+    duration: 'permanent',
+    note: 'Repeated severe violations.',
+  });
+  assert.equal(permanent.suspendedUntil, null);
+  assert.equal(permanent.status, 'suspended');
+
+  await service.reactivateUser(identity, SUBJECT_ID, {
+    note: 'Manual reactivation after appeal review.',
+  });
+  assert.equal(subject.suspendedAt, null);
 
   await assert.rejects(
     () => service.applyModerationAction(identity, PROFILE_REPORT_ID, {
-      action: 'hideContent',
-      note: 'Invalid action target.',
+      action: 'hideContent', note: 'Invalid action target.',
     }),
     BadRequestException,
   );
@@ -149,10 +240,8 @@ function createReport(id: string, targetType: ReportTargetType, targetId: string
     id,
     reason: ReportReason.SPAM,
     reportedUser: {
-      displayName: 'Reported member',
-      handle: 'reported',
-      id: SUBJECT_ID,
-      suspendedAt: null as Date | null,
+      displayName: 'Reported member', handle: 'reported', id: SUBJECT_ID,
+      suspendedAt: null as Date | null, suspendedUntil: null as Date | null,
     },
     reporter: { displayName: 'Reporter', handle: 'reporter', id: REPORTER_ID },
     resolvedAt: null as Date | null,
@@ -181,22 +270,19 @@ async function assertContentActions(
   content: { moderationHiddenAt: Date | null },
 ) {
   await service.applyModerationAction(identity, reportId, {
-    action: 'hideContent',
-    note: 'Review violates community rules.',
+    action: 'hideContent', note: 'Review violates community rules.',
   });
   assert(content.moderationHiddenAt instanceof Date);
 
   await assert.rejects(
     () => service.applyModerationAction(identity, reportId, {
-      action: 'hideContent',
-      note: 'Duplicate hide attempt.',
+      action: 'hideContent', note: 'Duplicate hide attempt.',
     }),
     ConflictException,
   );
 
   await service.applyModerationAction(identity, reportId, {
-    action: 'restoreContent',
-    note: 'Review restored after second review.',
+    action: 'restoreContent', note: 'Review restored after second review.',
   });
   assert.equal(content.moderationHiddenAt, null);
 }

@@ -14,6 +14,7 @@ type Review = {
       reviewsVisibility: PrivacyVisibility;
     } | null;
     suspendedAt: Date | null;
+    suspendedUntil: Date | null;
   };
 };
 
@@ -26,6 +27,7 @@ async function run() {
   let episodeListWhere: unknown;
   let reviewVisibility: PrivacyVisibility = PrivacyVisibility.PUBLIC;
   let suspendedAt: Date | null = null;
+  let suspendedUntil: Date | null = null;
   const review = (id: string): Review => ({
     id,
     moderationHiddenAt,
@@ -36,6 +38,7 @@ async function run() {
         reviewsVisibility: reviewVisibility,
       },
       suspendedAt,
+      suspendedUntil,
     },
   });
   const createLikeDelegate = (likes: Set<string>) => ({
@@ -82,6 +85,7 @@ async function run() {
             reviewsVisibility: PrivacyVisibility.PUBLIC,
           },
           suspendedAt: null,
+          suspendedUntil: null,
         },
         followedUserId: 'author',
       }],
@@ -151,12 +155,14 @@ async function run() {
 
   moderationHiddenAt = null;
   suspendedAt = new Date('2026-08-13T12:00:00.000Z');
+  suspendedUntil = null;
   await assert.rejects(
     () => service.likeEpisodeReview(identity, 'suspended-author-review'),
     NotFoundException,
   );
 
   suspendedAt = null;
+  suspendedUntil = null;
   blocked = true;
   await assert.rejects(
     () => service.likeEpisodeReview(identity, 'blocked-review'),

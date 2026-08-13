@@ -4,6 +4,7 @@ import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
 import { PrivacyVisibility } from '../generated/prisma/enums';
 import { AvatarStorageService } from '../media/avatar-storage.service';
+import { activeAccountWhere } from '../moderation/account-suspension';
 
 @Injectable()
 export class ReviewsService {
@@ -211,7 +212,7 @@ export class ReviewsService {
               },
             ],
             user: {
-              suspendedAt: null,
+              AND: [activeAccountWhere()],
               privacySettings: {
                 profileVisibility: PrivacyVisibility.PUBLIC,
               },
@@ -235,7 +236,7 @@ export class ReviewsService {
             ...visibleUserFilter,
             moderationHiddenAt: null,
             user: {
-              suspendedAt: null,
+              AND: [activeAccountWhere()],
               privacySettings: {
                 profileVisibility: PrivacyVisibility.PUBLIC,
                 reviewsVisibility: PrivacyVisibility.PUBLIC,

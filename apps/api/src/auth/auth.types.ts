@@ -2,6 +2,7 @@ import { AuthProvider } from '../generated/prisma/enums';
 
 export type AuthenticatedIdentity = {
   displayName: string | null;
+  email?: string | null;
   provider: AuthProvider;
   providerUserId: string;
 };

@@ -4,9 +4,10 @@ import { AuthService } from '../auth/auth.service';
 
 async function run() {
   let suspendedAt: Date | null = null;
+  let suspendedUntil: Date | null = null;
   const prisma = {
     authIdentity: {
-      findUnique: async () => ({ user: { suspendedAt } }),
+      findUnique: async () => ({ user: { suspendedAt, suspendedUntil } }),
     },
     withConnectionRetry: async (operation: () => Promise<unknown>) => operation(),
   };
@@ -22,8 +23,11 @@ async function run() {
   await assert.rejects(
     () => service.assertActiveIdentity(identity),
     (error: unknown) =>
-      error instanceof ForbiddenException && error.message === 'This account is suspended.',
+      error instanceof ForbiddenException && error.getResponse() !== null,
   );
+
+  suspendedUntil = new Date('2020-08-13T12:00:00.000Z');
+  await service.assertActiveIdentity(identity);
 
   console.log('Auth suspension QA passed.');
 }

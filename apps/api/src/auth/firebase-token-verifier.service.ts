@@ -69,6 +69,7 @@ export async function verifyBearerTokenWithAuth(
 
   return {
     displayName: typeof decodedToken.name === 'string' ? decodedToken.name : null,
+    email: typeof decodedToken.email === 'string' ? decodedToken.email : null,
     provider,
     providerUserId: decodedToken.uid,
   };

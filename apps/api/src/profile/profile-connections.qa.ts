@@ -67,13 +67,16 @@ async function run() {
       id: '33333333-3333-4333-8333-333333333333',
     }],
   });
+  const followerFilter = (
+    (connectionArgs as unknown as { where: { follower: { AND: unknown[] } } }).where.follower.AND
+  )[0];
   assert.deepEqual((connectionArgs as { where: Record<string, unknown> } | null)?.where, {
     followedUserId: targetUserId,
     follower: {
+      AND: [followerFilter],
       blockedUsers: { none: { blockedUserId: viewerId } },
       handle: { not: null },
       onboardingCompleted: true,
-      suspendedAt: null,
     },
     status: FollowStatus.ACCEPTED,
   }, 'followers must be accepted, onboarded, navigable, and must not have blocked the viewer');
@@ -86,12 +89,15 @@ async function run() {
       id: '44444444-4444-4444-8444-444444444444',
     }],
   });
+  const followedUserFilter = (
+    (connectionArgs as unknown as { where: { followedUser: { AND: unknown[] } } }).where.followedUser.AND
+  )[0];
   assert.deepEqual((connectionArgs as { where: Record<string, unknown> } | null)?.where, {
     followedUser: {
+      AND: [followedUserFilter],
       blockedUsers: { none: { blockedUserId: viewerId } },
       handle: { not: null },
       onboardingCompleted: true,
-      suspendedAt: null,
     },
     followerId: targetUserId,
     status: FollowStatus.ACCEPTED,

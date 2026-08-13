@@ -34,17 +34,19 @@ async function run() {
     ratingCount: 0,
     reviews: [],
   });
+  const reviewActiveFilter = getActiveFilter(reviewsWhere);
+  const aggregateActiveFilter = getActiveFilter(aggregateWhere);
   assert.deepEqual(reviewsWhere, {
     episodeNumber: 3,
     moderationHiddenAt: null,
     seasonNumber: 2,
     seriesTmdbId: 100,
     user: {
+      AND: [reviewActiveFilter],
       privacySettings: {
         profileVisibility: PrivacyVisibility.PUBLIC,
         reviewsVisibility: PrivacyVisibility.PUBLIC,
       },
-      suspendedAt: null,
     },
   });
   assert.deepEqual(aggregateWhere, {
@@ -76,14 +78,24 @@ async function run() {
     seasonNumber: 2,
     seriesTmdbId: 100,
     user: {
+      AND: [aggregateActiveFilter],
       privacySettings: {
         profileVisibility: PrivacyVisibility.PUBLIC,
       },
-      suspendedAt: null,
     },
   });
 
   console.log('Reviews moderation QA passed.');
+}
+
+function getActiveFilter(where: unknown) {
+  const user = (where as { user: { AND: Array<{ OR: unknown[] }> } }).user;
+  const filter = user.AND[0];
+  const cutoff = (filter?.OR[1] as { suspendedUntil: { lte: unknown } }).suspendedUntil.lte;
+
+  assert.deepEqual(filter?.OR[0], { suspendedAt: null });
+  assert(cutoff instanceof Date);
+  return filter;
 }
 
 void run().catch((error: unknown) => {

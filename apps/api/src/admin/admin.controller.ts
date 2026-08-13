@@ -19,8 +19,12 @@ import {
   ADMIN_REPORT_REASONS,
   ADMIN_REPORT_STATUSES,
   ADMIN_REPORT_TARGET_TYPES,
+  ADMIN_USER_STATUSES,
   ApplyModerationActionDto,
   ListReportsQuery,
+  ListUsersQuery,
+  ReactivateUserDto,
+  SuspendUserDto,
   UpdateReportStatusDto,
 } from './admin.dto';
 import { AdminService } from './admin.service';
@@ -85,6 +89,48 @@ export class AdminController {
     @Body() body: ApplyModerationActionDto,
   ) {
     return this.admin.applyModerationAction(getAdminIdentity(request), reportId, body);
+  }
+
+  @Get('users')
+  listUsers(
+    @Req() request: AdminRequest,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('query') query?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.admin.listUsers(getAdminIdentity(request), {
+      page: parseBoundedInteger(page, 1, 1, Number.MAX_SAFE_INTEGER, 'page'),
+      pageSize: parseBoundedInteger(pageSize, 25, 1, 100, 'pageSize'),
+      query: parseSearchQuery(query),
+      status: parseOptionalValue(status, ADMIN_USER_STATUSES, 'status'),
+    } satisfies ListUsersQuery);
+  }
+
+  @Get('users/:userId')
+  user(
+    @Req() request: AdminRequest,
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ) {
+    return this.admin.getUser(getAdminIdentity(request), userId);
+  }
+
+  @Post('users/:userId/suspensions')
+  suspendUser(
+    @Req() request: AdminRequest,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() body: SuspendUserDto,
+  ) {
+    return this.admin.suspendUser(getAdminIdentity(request), userId, body);
+  }
+
+  @Post('users/:userId/reactivate')
+  reactivateUser(
+    @Req() request: AdminRequest,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() body: ReactivateUserDto,
+  ) {
+    return this.admin.reactivateUser(getAdminIdentity(request), userId, body);
   }
 }
 

@@ -15,12 +15,20 @@ import {
   ReportTargetType,
 } from '../generated/prisma/enums';
 import {
-  AdminModerationAction,
+  isAccountSuspended,
+  activeAccountWhere,
+  suspendedAccountWhere,
+} from '../moderation/account-suspension';
+import {
   AdminReportReason,
   AdminReportStatus,
   AdminReportTargetType,
+  AdminSuspensionDuration,
   ApplyModerationActionDto,
   ListReportsQuery,
+  ListUsersQuery,
+  ReactivateUserDto,
+  SuspendUserDto,
   UpdateReportStatusDto,
 } from './admin.dto';
 
@@ -35,6 +43,7 @@ const reportSelect = {
       handle: true,
       id: true,
       suspendedAt: true,
+      suspendedUntil: true,
     },
   },
   reporter: {
@@ -53,6 +62,31 @@ const reportSelect = {
 } satisfies Prisma.ContentReportSelect;
 
 type SelectedReport = Prisma.ContentReportGetPayload<{ select: typeof reportSelect }>;
+
+const userSummarySelect = {
+  _count: {
+    select: {
+      reportsReceived: true,
+      suspensions: true,
+    },
+  },
+  authIdentities: {
+    orderBy: { createdAt: 'asc' as const },
+    select: {
+      email: true,
+      provider: true,
+      providerUserId: true,
+    },
+  },
+  createdAt: true,
+  displayName: true,
+  handle: true,
+  id: true,
+  suspendedAt: true,
+  suspendedUntil: true,
+} satisfies Prisma.UserSelect;
+
+type SelectedUserSummary = Prisma.UserGetPayload<{ select: typeof userSummarySelect }>;
 
 @Injectable()
 export class AdminService {
@@ -137,6 +171,10 @@ export class AdminService {
         id: entry.id,
         metadata: entry.metadata,
       })),
+      moderationEndsAt: report.targetType === ReportTargetType.PROFILE &&
+        isAccountSuspended(report.reportedUser)
+        ? report.reportedUser.suspendedUntil?.toISOString() ?? null
+        : null,
       moderationState: await this.getModerationState(report),
     };
   }
@@ -215,7 +253,13 @@ export class AdminService {
           throw new NotFoundException('Report not found.');
         }
 
-        const action = await applyEnforcement(transaction, existing, input.action);
+        const action = await applyEnforcement(
+          transaction,
+          existing,
+          input,
+          note,
+          identity,
+        );
         const previousStatus = existing.status;
         const updated = await transaction.contentReport.update({
           data: {
@@ -233,6 +277,7 @@ export class AdminService {
             actorFirebaseUid: identity.firebaseUid,
             metadata: {
               action: input.action,
+              ...(input.duration ? { duration: input.duration } : {}),
               fromStatus: toApiStatus(previousStatus),
               note,
               toStatus: 'resolved',
@@ -249,9 +294,180 @@ export class AdminService {
     return toReportResponse(report);
   }
 
+  async listUsers(identity: AuthenticatedAdmin, query: ListUsersQuery) {
+    const now = new Date();
+    const where = buildUserWhere(query, now);
+    const skip = (query.page - 1) * query.pageSize;
+    const [users, total] = await this.prisma.withConnectionRetry(() =>
+      Promise.all([
+        this.prisma.user.findMany({
+          orderBy: [{ suspendedAt: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
+          select: userSummarySelect,
+          skip,
+          take: query.pageSize,
+          where,
+        }),
+        this.prisma.user.count({ where }),
+      ]),
+    );
+
+    await this.writeAudit(identity, AdminAuditAction.USER_LIST_VIEWED, {
+      metadata: {
+        filters: {
+          queryUsed: Boolean(query.query),
+          ...(query.status ? { status: query.status } : {}),
+        },
+        page: query.page,
+        pageSize: query.pageSize,
+        resultCount: users.length,
+      },
+    });
+
+    return {
+      items: users.map((user) => toUserSummaryResponse(user, now)),
+      page: query.page,
+      pageSize: query.pageSize,
+      total,
+      totalPages: Math.ceil(total / query.pageSize),
+    };
+  }
+
+  async getUser(identity: AuthenticatedAdmin, userId: string) {
+    const now = new Date();
+    const [user, suspensions, hiddenMovieReviewCount, hiddenEpisodeReviewCount] =
+      await this.prisma.withConnectionRetry(() => Promise.all([
+        this.prisma.user.findUnique({
+          select: {
+            ...userSummarySelect,
+            _count: {
+              select: {
+                episodeReviews: true,
+                movieReviews: true,
+                reportsReceived: true,
+                suspensions: true,
+              },
+            },
+          },
+          where: { id: userId },
+        }),
+        this.prisma.userSuspension.findMany({
+          orderBy: [{ startsAt: 'desc' }, { id: 'desc' }],
+          select: {
+            createdByEmail: true,
+            endsAt: true,
+            id: true,
+            liftedAt: true,
+            liftedByEmail: true,
+            liftedNote: true,
+            note: true,
+            reportId: true,
+            startsAt: true,
+          },
+          take: 100,
+          where: { userId },
+        }),
+        this.prisma.userMovieReview.count({
+          where: { moderationHiddenAt: { not: null }, userId },
+        }),
+        this.prisma.userEpisodeReview.count({
+          where: { moderationHiddenAt: { not: null }, userId },
+        }),
+      ]));
+
+    if (!user) {
+      throw new NotFoundException('User not found.');
+    }
+
+    await this.writeAudit(identity, AdminAuditAction.USER_VIEWED, {
+      reportedUserId: userId,
+    });
+
+    return {
+      ...toUserSummaryResponse(user, now),
+      content: {
+        hiddenReviewCount: hiddenMovieReviewCount + hiddenEpisodeReviewCount,
+        reviewCount: user._count.movieReviews + user._count.episodeReviews,
+      },
+      suspensionHistory: suspensions.map((suspension) => ({
+        createdByEmail: suspension.createdByEmail,
+        endsAt: suspension.endsAt?.toISOString() ?? null,
+        id: suspension.id,
+        liftedAt: suspension.liftedAt?.toISOString() ?? null,
+        liftedByEmail: suspension.liftedByEmail,
+        liftedNote: suspension.liftedNote,
+        note: suspension.note,
+        reportId: suspension.reportId,
+        startsAt: suspension.startsAt.toISOString(),
+      })),
+    };
+  }
+
+  async suspendUser(
+    identity: AuthenticatedAdmin,
+    userId: string,
+    input: SuspendUserDto,
+  ) {
+    const note = normalizeAdminNote(input.note);
+
+    return this.prisma.withConnectionRetry(() =>
+      this.prisma.$transaction(async (transaction) => {
+        const state = await createUserSuspension(
+          transaction,
+          userId,
+          input.duration,
+          note,
+          identity,
+        );
+
+        await transaction.adminAuditLog.create({
+          data: {
+            action: AdminAuditAction.USER_SUSPENDED,
+            actorEmail: identity.email,
+            actorFirebaseUid: identity.firebaseUid,
+            metadata: {
+              duration: input.duration,
+              endsAt: state.suspendedUntil?.toISOString() ?? null,
+              note,
+              source: 'userRegistry',
+            },
+            reportedUserId: userId,
+          },
+        });
+
+        return toSuspensionStateResponse(state);
+      }),
+    );
+  }
+
+  async reactivateUser(
+    identity: AuthenticatedAdmin,
+    userId: string,
+    input: ReactivateUserDto,
+  ) {
+    const note = normalizeAdminNote(input.note);
+
+    return this.prisma.withConnectionRetry(() =>
+      this.prisma.$transaction(async (transaction) => {
+        const state = await liftUserSuspension(transaction, userId, note, identity);
+
+        await transaction.adminAuditLog.create({
+          data: {
+            action: AdminAuditAction.USER_REACTIVATED,
+            actorEmail: identity.email,
+            actorFirebaseUid: identity.firebaseUid,
+            metadata: { note, source: 'userRegistry' },
+            reportedUserId: userId,
+          },
+        });
+
+        return toSuspensionStateResponse(state);
+      }),
+    );
+  }
+
   private async getModerationState(report: SelectedReport) {
     if (report.targetType === ReportTargetType.PROFILE) {
-      return report.reportedUser.suspendedAt ? 'suspended' : 'active';
+      return isAccountSuspended(report.reportedUser) ? 'suspended' : 'active';
     }
 
     const target = report.targetType === ReportTargetType.MOVIE_REVIEW
@@ -322,6 +538,40 @@ function buildReportWhere(query: ListReportsQuery): Prisma.ContentReportWhereInp
   };
 }
 
+function buildUserWhere(query: ListUsersQuery, now: Date): Prisma.UserWhereInput {
+  const filters: Prisma.UserWhereInput[] = [];
+
+  if (query.status === 'active') {
+    filters.push(activeAccountWhere(now));
+  } else if (query.status === 'suspended') {
+    filters.push(suspendedAccountWhere(now));
+  } else if (query.status === 'previouslySuspended') {
+    filters.push(activeAccountWhere(now), { suspensions: { some: {} } });
+  }
+
+  if (query.query) {
+    filters.push({
+      OR: [
+        { displayName: { contains: query.query, mode: 'insensitive' } },
+        { handle: { contains: query.query, mode: 'insensitive' } },
+        {
+          authIdentities: {
+            some: { email: { contains: query.query, mode: 'insensitive' } },
+          },
+        },
+        {
+          authIdentities: {
+            some: { providerUserId: { contains: query.query, mode: 'insensitive' } },
+          },
+        },
+        ...(isUuid(query.query) ? [{ id: query.query }] : []),
+      ],
+    });
+  }
+
+  return filters.length > 0 ? { AND: filters } : {};
+}
+
 function toReportResponse(report: SelectedReport) {
   return {
     createdAt: report.createdAt.toISOString(),
@@ -340,6 +590,43 @@ function toReportResponse(report: SelectedReport) {
     targetSnapshot: report.targetSnapshot,
     targetType: toApiTargetType(report.targetType),
     updatedAt: report.updatedAt.toISOString(),
+  };
+}
+
+function toUserSummaryResponse(user: SelectedUserSummary, now: Date) {
+  const suspended = isAccountSuspended(user, now);
+
+  return {
+    createdAt: user.createdAt.toISOString(),
+    displayName: user.displayName,
+    emails: user.authIdentities.flatMap((identity) => identity.email ? [identity.email] : []),
+    handle: user.handle,
+    id: user.id,
+    identities: user.authIdentities.map((identity) => ({
+      email: identity.email,
+      provider: identity.provider.toLowerCase(),
+      providerUserId: identity.providerUserId,
+    })),
+    reportCount: user._count.reportsReceived,
+    status: suspended
+      ? 'suspended'
+      : user._count.suspensions > 0
+        ? 'previouslySuspended'
+        : 'active',
+    suspendedAt: suspended ? user.suspendedAt?.toISOString() ?? null : null,
+    suspendedUntil: suspended ? user.suspendedUntil?.toISOString() ?? null : null,
+    suspensionCount: user._count.suspensions,
+  };
+}
+
+function toSuspensionStateResponse(state: {
+  suspendedAt: Date | null;
+  suspendedUntil: Date | null;
+}) {
+  return {
+    status: isAccountSuspended(state) ? 'suspended' : 'active',
+    suspendedAt: state.suspendedAt?.toISOString() ?? null,
+    suspendedUntil: state.suspendedUntil?.toISOString() ?? null,
   };
 }
 
@@ -420,6 +707,8 @@ function toAuditAction(action: AdminAuditAction) {
     [AdminAuditAction.REPORT_LIST_VIEWED]: 'reportListViewed',
     [AdminAuditAction.REPORT_STATUS_CHANGED]: 'reportStatusChanged',
     [AdminAuditAction.REPORT_VIEWED]: 'reportViewed',
+    [AdminAuditAction.USER_LIST_VIEWED]: 'userListViewed',
+    [AdminAuditAction.USER_VIEWED]: 'userViewed',
     [AdminAuditAction.USER_SUSPENDED]: 'userSuspended',
     [AdminAuditAction.USER_REACTIVATED]: 'userReactivated',
     [AdminAuditAction.CONTENT_HIDDEN]: 'contentHidden',
@@ -432,33 +721,31 @@ function toAuditAction(action: AdminAuditAction) {
 async function applyEnforcement(
   transaction: Prisma.TransactionClient,
   report: SelectedReport,
-  action: AdminModerationAction,
+  input: ApplyModerationActionDto,
+  note: string,
+  identity: AuthenticatedAdmin,
 ) {
-  switch (action) {
+  switch (input.action) {
     case 'suspendUser': {
       assertProfileAction(report);
 
-      if (report.reportedUser.suspendedAt) {
-        throw new ConflictException('Account is already suspended.');
+      if (!input.duration) {
+        throw new BadRequestException('duration is required to suspend an account.');
       }
 
-      await transaction.user.update({
-        data: { suspendedAt: new Date() },
-        where: { id: report.reportedUser.id },
-      });
+      await createUserSuspension(
+        transaction,
+        report.reportedUser.id,
+        input.duration,
+        note,
+        identity,
+        report.id,
+      );
       return AdminAuditAction.USER_SUSPENDED;
     }
     case 'reactivateUser': {
       assertProfileAction(report);
-
-      if (!report.reportedUser.suspendedAt) {
-        throw new ConflictException('Account is already active.');
-      }
-
-      await transaction.user.update({
-        data: { suspendedAt: null },
-        where: { id: report.reportedUser.id },
-      });
+      await liftUserSuspension(transaction, report.reportedUser.id, note, identity);
       return AdminAuditAction.USER_REACTIVATED;
     }
     case 'hideContent':
@@ -466,6 +753,112 @@ async function applyEnforcement(
     case 'restoreContent':
       return updateReportedContent(transaction, report, false);
   }
+}
+
+async function createUserSuspension(
+  transaction: Prisma.TransactionClient,
+  userId: string,
+  duration: AdminSuspensionDuration,
+  note: string,
+  identity: AuthenticatedAdmin,
+  reportId?: string,
+) {
+  const existing = await transaction.user.findUnique({
+    select: { id: true, suspendedAt: true, suspendedUntil: true },
+    where: { id: userId },
+  });
+
+  if (!existing) {
+    throw new NotFoundException('User not found.');
+  }
+
+  if (isAccountSuspended(existing)) {
+    throw new ConflictException('Account is already suspended.');
+  }
+
+  const startsAt = new Date();
+  const endsAt = getSuspensionEnd(duration, startsAt);
+  const updated = await transaction.user.update({
+    data: { suspendedAt: startsAt, suspendedUntil: endsAt },
+    select: { suspendedAt: true, suspendedUntil: true },
+    where: { id: userId },
+  });
+
+  await transaction.userSuspension.create({
+    data: {
+      createdByEmail: identity.email,
+      createdByFirebaseUid: identity.firebaseUid,
+      endsAt,
+      note,
+      reportId,
+      startsAt,
+      userId,
+    },
+  });
+
+  return updated;
+}
+
+async function liftUserSuspension(
+  transaction: Prisma.TransactionClient,
+  userId: string,
+  note: string,
+  identity: AuthenticatedAdmin,
+) {
+  const now = new Date();
+  const existing = await transaction.user.findUnique({
+    select: { id: true, suspendedAt: true, suspendedUntil: true },
+    where: { id: userId },
+  });
+
+  if (!existing) {
+    throw new NotFoundException('User not found.');
+  }
+
+  if (!isAccountSuspended(existing, now)) {
+    throw new ConflictException('Account is already active.');
+  }
+
+  const activeSuspension = await transaction.userSuspension.findFirst({
+    orderBy: { startsAt: 'desc' },
+    select: { id: true },
+    where: {
+      liftedAt: null,
+      userId,
+      OR: [{ endsAt: null }, { endsAt: { gt: now } }],
+    },
+  });
+  const updated = await transaction.user.update({
+    data: { suspendedAt: null, suspendedUntil: null },
+    select: { suspendedAt: true, suspendedUntil: true },
+    where: { id: userId },
+  });
+
+  if (activeSuspension) {
+    await transaction.userSuspension.update({
+      data: {
+        liftedAt: now,
+        liftedByEmail: identity.email,
+        liftedByFirebaseUid: identity.firebaseUid,
+        liftedNote: note,
+      },
+      where: { id: activeSuspension.id },
+    });
+  }
+
+  return updated;
+}
+
+function getSuspensionEnd(duration: AdminSuspensionDuration, startsAt: Date) {
+  const milliseconds: Record<Exclude<AdminSuspensionDuration, 'permanent'>, number> = {
+    '24Hours': 24 * 60 * 60 * 1000,
+    '7Days': 7 * 24 * 60 * 60 * 1000,
+    '30Days': 30 * 24 * 60 * 60 * 1000,
+  };
+
+  return duration === 'permanent'
+    ? null
+    : new Date(startsAt.getTime() + milliseconds[duration]);
 }
 
 function assertProfileAction(report: SelectedReport) {
