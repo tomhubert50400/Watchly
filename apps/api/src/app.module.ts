@@ -34,6 +34,7 @@ import { ViewingsModule } from './viewings/viewings.module';
       isGlobal: true,
       validationSchema: Joi.object({
         APP_ENV: Joi.string().valid('development', 'staging', 'production').default('development'),
+        CORS_ADDITIONAL_ORIGIN: Joi.string().uri().optional(),
         CORS_ORIGIN: Joi.string().uri().optional(),
         DATABASE_URL: Joi.string().uri().required(),
         ERROR_TRACKING_DSN: Joi.string().uri().when('APP_ENV', {

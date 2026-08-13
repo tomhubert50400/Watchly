@@ -23,7 +23,10 @@ async function bootstrap() {
   });
   const config = app.get(ConfigService);
   const logger = new Logger('Bootstrap');
-  const corsOrigin = config.get<string>('CORS_ORIGIN');
+  const corsOrigins = [
+    config.get<string>('CORS_ORIGIN'),
+    config.get<string>('CORS_ADDITIONAL_ORIGIN'),
+  ].filter((origin): origin is string => Boolean(origin));
   const appEnvironment = config.getOrThrow<string>('APP_ENV');
   const isDevelopment = appEnvironment === 'development';
   const port = config.getOrThrow<number>('PORT');
@@ -40,8 +43,8 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new DevExceptionFilter(isDevelopment, structuredLogger));
 
-  if (corsOrigin) {
-    app.enableCors({ origin: corsOrigin });
+  if (corsOrigins.length > 0) {
+    app.enableCors({ origin: corsOrigins });
   }
 
   await app.listen(port, '0.0.0.0');
