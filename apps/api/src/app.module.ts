@@ -19,6 +19,7 @@ import { ProfileModule } from './profile/profile.module';
 import { ProxyAwareThrottlerGuard } from './security/proxy-aware-throttler.guard';
 import { RatingsModule } from './ratings/ratings.module';
 import { ReportsModule } from './reports/reports.module';
+import { ReleaseEventsModule } from './release-events/release-events.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { SharedWatchlistsModule } from './shared-watchlists/shared-watchlists.module';
 import { TrackingModule } from './tracking/tracking.module';
@@ -79,6 +80,7 @@ import { ViewingsModule } from './viewings/viewings.module';
     ProgressModule,
     ProfileModule,
     RatingsModule,
+    ReleaseEventsModule,
     ReportsModule,
     ReviewsModule,
     SharedWatchlistsModule,

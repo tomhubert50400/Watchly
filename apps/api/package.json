@@ -24,7 +24,7 @@
     "start": "node dist/main.js",
     "start:dev": "tsx watch --exclude \"src/generated/**\" src/main.ts",
     "storage:r2-smoke": "tsx src/media/r2-storage-smoke.ts",
-    "test": "tsx src/security/security-qa.ts && tsx src/security/auth-token-verifier-qa.ts && tsx src/security/external-http-qa.ts && tsx src/database/prisma-retry.qa.ts && tsx src/profile/profile-backdrop.qa.ts && tsx src/profile/profile-handle.qa.ts && tsx src/profile/profile-search.qa.ts && tsx src/profile/profile-public-parity.qa.ts && tsx src/catalogue/catalogue-search.qa.ts && tsx src/imports/import-file.parser.qa.ts && tsx src/imports/imports.service.qa.ts && tsx src/feed/feed-likes.qa.ts && tsx src/media/avatar-storage.qa.ts && tsx src/reports/reports.service.qa.ts && tsx src/viewings/viewing-stats.qa.ts && tsx src/security/notifications-sync-qa.ts",
+    "test": "tsx src/security/security-qa.ts && tsx src/security/auth-token-verifier-qa.ts && tsx src/security/external-http-qa.ts && tsx src/database/prisma-retry.qa.ts && tsx src/profile/profile-backdrop.qa.ts && tsx src/profile/profile-handle.qa.ts && tsx src/profile/profile-search.qa.ts && tsx src/profile/profile-public-parity.qa.ts && tsx src/catalogue/catalogue-search.qa.ts && tsx src/imports/import-file.parser.qa.ts && tsx src/imports/imports.service.qa.ts && tsx src/feed/feed-likes.qa.ts && tsx src/media/avatar-storage.qa.ts && tsx src/reports/reports.service.qa.ts && tsx src/viewings/viewing-stats.qa.ts && tsx src/security/notifications-sync-qa.ts && tsx src/release-events/release-events.qa.ts",
     "typecheck": "pnpm run prisma:generate && tsc --noEmit"
   },
   "dependencies": {
