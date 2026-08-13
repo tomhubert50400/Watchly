@@ -87,6 +87,23 @@ enum NotificationKind {
   SHARED_VOTE_UPDATE
 }
 
+enum ReleaseDatePrecision {
+  DATE
+  UNKNOWN
+}
+
+enum ReleaseEventStatus {
+  ACTIVE
+  WITHDRAWN
+}
+
+enum ReleaseEventSyncStatus {
+  RUNNING
+  SUCCEEDED
+  PARTIAL
+  FAILED
+}
+
 enum AuditAction {
   PRIVACY_UPDATED
   USER_BLOCKED
@@ -520,12 +537,14 @@ model Notification {
   votingSessionId   String?                  @db.Uuid
   actorUserId       String?                  @db.Uuid
   routeMetadata     Json?
+  releaseEventId    String?                  @db.Uuid
   createdAt         DateTime                 @default(now())
   updatedAt         DateTime                 @updatedAt
   user              User                     @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
   actor             User?                    @relation("NotificationActor", fields: [actorUserId], references: [id], onDelete: SetNull)
   sharedWatchlist   SharedWatchlist?         @relation(fields: [sharedWatchlistId], references: [id], onDelete: Cascade)
   votingSession     SharedVotingSession?     @relation(fields: [votingSessionId], references: [id], onDelete: Cascade)
+  releaseEvent      ReleaseEvent?            @relation(fields: [releaseEventId], references: [id], onDelete: SetNull)
 
   @@unique([userId, dedupeKey])
   @@index([userId, readAt, createdAt])
@@ -533,7 +552,50 @@ model Notification {
   @@index([sharedWatchlistId])
   @@index([votingSessionId])
   @@index([actorUserId])
+  @@index([releaseEventId])
   @@map("notifications")
+}
+
+model ReleaseEvent {
+  id            String                  @id @default(uuid()) @db.Uuid
+  source        String                  @default("TMDB") @db.VarChar(32)
+  sourceKey     String                  @unique @db.VarChar(160)
+  type          ReleaseNotificationType
+  contentType   TrackedContentType
+  tmdbId        Int
+  seasonNumber  Int?
+  episodeNumber Int?
+  title         String                  @db.VarChar(160)
+  releaseDate   DateTime?               @db.Date
+  precision     ReleaseDatePrecision    @default(UNKNOWN)
+  timeZone      String?                 @db.VarChar(64)
+  regionCode    String?                 @db.Char(2)
+  status        ReleaseEventStatus      @default(ACTIVE)
+  lastSyncedAt  DateTime
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  notifications Notification[]
+
+  @@index([contentType, tmdbId, status, releaseDate])
+  @@index([status, releaseDate])
+  @@map("release_events")
+}
+
+model ReleaseEventSyncRun {
+  id             String                 @id @default(uuid()) @db.Uuid
+  status         ReleaseEventSyncStatus @default(RUNNING)
+  contentCount   Int                    @default(0)
+  createdCount   Int                    @default(0)
+  updatedCount   Int                    @default(0)
+  withdrawnCount Int                    @default(0)
+  failedCount    Int                    @default(0)
+  errorSummary   String?                @db.VarChar(1000)
+  startedAt      DateTime               @default(now())
+  completedAt    DateTime?
+
+  @@index([startedAt])
+  @@index([status, startedAt])
+  @@map("release_event_sync_runs")
 }
 
 model ReleaseAlertSubscription {
