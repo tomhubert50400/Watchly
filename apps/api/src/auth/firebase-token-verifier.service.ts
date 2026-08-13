@@ -1,21 +1,23 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { DecodedIdToken, getAuth } from 'firebase-admin/auth';
 import { AuthProvider } from '../generated/prisma/enums';
-import { AuthenticatedIdentity } from './auth.types';
+import { AuthenticatedAdmin, AuthenticatedIdentity } from './auth.types';
 
 @Injectable()
 export class FirebaseTokenVerifier {
   private readonly allowEmulatorPasswordProvider: boolean;
   private readonly checkRevokedTokens: boolean;
+  private readonly isAuthEmulator: boolean;
 
   constructor(@Inject(ConfigService) config: ConfigService) {
     const authEmulatorHost = config.get<string>('FIREBASE_AUTH_EMULATOR_HOST');
 
+    this.isAuthEmulator = Boolean(authEmulatorHost);
     this.allowEmulatorPasswordProvider =
       config.get<string>('NODE_ENV') !== 'production' &&
-      Boolean(authEmulatorHost);
+      this.isAuthEmulator;
     this.checkRevokedTokens = shouldCheckFirebaseTokenRevocation(
       config.get<string>('NODE_ENV'),
       authEmulatorHost,
@@ -34,6 +36,10 @@ export class FirebaseTokenVerifier {
       allowPasswordProvider: this.allowEmulatorPasswordProvider,
       checkRevoked: this.checkRevokedTokens,
     });
+  }
+
+  async verifyAdminBearerToken(token: string): Promise<AuthenticatedAdmin> {
+    return verifyAdminBearerTokenWithAuth(getAuth(), token, !this.isAuthEmulator);
   }
 }
 
@@ -65,6 +71,40 @@ export async function verifyBearerTokenWithAuth(
     displayName: typeof decodedToken.name === 'string' ? decodedToken.name : null,
     provider,
     providerUserId: decodedToken.uid,
+  };
+}
+
+export async function verifyAdminBearerTokenWithAuth(
+  auth: FirebaseAuthVerifier,
+  token: string,
+  checkRevoked = true,
+): Promise<AuthenticatedAdmin> {
+  let decodedToken: DecodedIdToken;
+
+  try {
+    decodedToken = await verifyFirebaseIdToken(auth, token, checkRevoked);
+  } catch {
+    throw new UnauthorizedException('Invalid auth token.');
+  }
+
+  if (decodedToken.admin !== true) {
+    throw new ForbiddenException('Admin access is required.');
+  }
+
+  if (!decodedToken.email || decodedToken.email_verified !== true) {
+    throw new ForbiddenException('A verified admin email is required.');
+  }
+
+  const secondFactor = decodedToken.firebase.sign_in_second_factor;
+
+  if (!secondFactor) {
+    throw new ForbiddenException('Multi-factor authentication is required.');
+  }
+
+  return {
+    email: decodedToken.email,
+    firebaseUid: decodedToken.uid,
+    secondFactor,
   };
 }
 

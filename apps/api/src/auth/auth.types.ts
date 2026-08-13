@@ -12,3 +12,13 @@ export type AuthenticatedRequest = {
     authorization?: string | string[];
   };
 };
+
+export type AuthenticatedAdmin = {
+  email: string;
+  firebaseUid: string;
+  secondFactor: string;
+};
+
+export type AdminRequest = AuthenticatedRequest & {
+  adminIdentity?: AuthenticatedAdmin;
+};

@@ -38,6 +38,19 @@ async function main() {
     await prisma.releaseAlertSubscription.count();
     await prisma.notification.count();
     await prisma.auditLog.count();
+    await prisma.adminAuditLog.count();
+    const [adminAuditTrigger] = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1
+        FROM pg_trigger
+        WHERE tgname = 'admin_audit_logs_append_only'
+          AND NOT tgisinternal
+      ) AS "exists"
+    `;
+
+    if (!adminAuditTrigger?.exists) {
+      throw new Error('Admin audit append-only trigger is missing.');
+    }
     console.log('Database connection ok');
   } finally {
     await prisma.$disconnect();

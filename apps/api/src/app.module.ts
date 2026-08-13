@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
 import Joi from 'joi';
+import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
 import { BlocksModule } from './blocks/blocks.module';
 import { CatalogueModule } from './catalogue/catalogue.module';
@@ -59,6 +60,7 @@ import { ViewingsModule } from './viewings/viewings.module';
         TMDB_ACCESS_TOKEN: Joi.string().allow('').optional(),
       }),
     }),
+    AdminModule,
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => [

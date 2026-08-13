@@ -28,6 +28,10 @@ export class PrismaService implements OnModuleDestroy {
     return this.client.auditLog;
   }
 
+  get adminAuditLog() {
+    return this.client.adminAuditLog;
+  }
+
   get catalogueSpotlight() {
     return this.client.catalogueSpotlight;
   }
