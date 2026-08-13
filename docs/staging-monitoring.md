@@ -27,6 +27,8 @@ Railway Hobby keeps logs for seven days. Use these Log Explorer filters during a
 
 Request logs include `timestamp`, `environment`, `service`, `requestId`, `method`, `path`, `statusCode`, and `durationMs`. Query strings, authorization values, credentials, passwords, and user data are removed before logging or error ingestion.
 
+The canonical release synchronization writes `release_events.sync.completed` records with status and item counts. Read its latest persisted run with `GET /internal/monitoring/release-events` and the sealed `X-Watchly-Monitoring-Key`. Investigate a `partial` or `failed` run in Railway logs before relying on release alerts. The canonical data and synchronization policy are documented in `docs/release-events.md`.
+
 ## Alert verification
 
 Use Better Stack's `Send test alert` action after changing an escalation policy. Confirm that the incident email reaches the Watchly operational mailbox. This tests the complete notification path without making the API unavailable.

@@ -1,15 +1,26 @@
-import { Inject, Injectable } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnModuleDestroy,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
-import { SeriesDetails, TmdbCatalogueService } from '../catalogue/tmdb-catalogue.service';
 import { PrismaService } from '../database/prisma.service';
 import {
   NotificationKind,
   ReleaseNotificationType,
   TrackedContentType,
 } from '../generated/prisma/enums';
+import {
+  CanonicalReleaseEvent,
+  ReleaseEventsService,
+} from '../release-events/release-events.service';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const SCHEDULE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const SYNC_BATCH_SIZE = 12;
 const MAX_SYNC_SUBSCRIPTIONS = 48;
 
@@ -19,6 +30,7 @@ type NotificationCandidate = {
   contentType: TrackedContentType;
   episodeNumber?: number;
   generatedKey: string;
+  releaseEventId: string;
   releasedAt: Date | null;
   seasonNumber?: number;
   tmdbId: number;
@@ -28,12 +40,36 @@ type NotificationCandidate = {
 };
 
 @Injectable()
-export class NotificationsService {
+export class NotificationsService implements OnApplicationBootstrap, OnModuleDestroy {
+  private readonly logger = new Logger(NotificationsService.name);
+  private scheduledSyncPromise: Promise<void> | null = null;
+  private scheduleTimer: ReturnType<typeof setInterval> | null = null;
+
   constructor(
     @Inject(AuthService) private readonly authService: AuthService,
-    @Inject(TmdbCatalogueService) private readonly catalogue: TmdbCatalogueService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(ReleaseEventsService) private readonly releaseEvents: ReleaseEventsService,
+    @Inject(ConfigService) private readonly config: ConfigService,
   ) {}
+
+  onApplicationBootstrap() {
+    if (this.config.getOrThrow<string>('APP_ENV') === 'development') {
+      return;
+    }
+
+    void this.runScheduledSync();
+    this.scheduleTimer = setInterval(() => {
+      void this.runScheduledSync();
+    }, SCHEDULE_INTERVAL_MS);
+    this.scheduleTimer.unref();
+  }
+
+  onModuleDestroy() {
+    if (this.scheduleTimer) {
+      clearInterval(this.scheduleTimer);
+      this.scheduleTimer = null;
+    }
+  }
 
   async list(identity: AuthenticatedIdentity) {
     const userId = await this.getUserId(identity);
@@ -59,10 +95,12 @@ export class NotificationsService {
 
     for (let offset = 0; offset < alertSubscriptions.length; offset += SYNC_BATCH_SIZE) {
       const batch = alertSubscriptions.slice(offset, offset + SYNC_BATCH_SIZE);
-      const batchCandidates = await Promise.all(
-        batch.map((item) => this.buildCandidates(item.contentType, item.tmdbId)),
+      const createdCounts = await Promise.all(
+        batch.map((item) =>
+          this.syncSubscription(userId, item.contentType, item.tmdbId),
+        ),
       );
-      createdCount += await this.createNotifications(userId, batchCandidates.flat());
+      createdCount += createdCounts.reduce((total, count) => total + count, 0);
     }
 
     const list = await this.list(identity);
@@ -123,7 +161,7 @@ export class NotificationsService {
       }),
     );
 
-    await this.createNotifications(userId, await this.buildCandidates(trackedContentType, tmdbId));
+    await this.syncSubscription(userId, trackedContentType, tmdbId);
 
     return this.getReleaseAlertForUser(userId, trackedContentType, tmdbId);
   }
@@ -242,12 +280,130 @@ export class NotificationsService {
     );
   }
 
-  private async buildCandidates(contentType: TrackedContentType, tmdbId: number) {
-    if (contentType === TrackedContentType.MOVIE) {
-      return this.buildMovieCandidates(tmdbId);
+  private async syncSubscription(
+    userId: string,
+    contentType: TrackedContentType,
+    tmdbId: number,
+  ) {
+    const candidates = await this.buildCandidates(contentType, tmdbId);
+    if (candidates === null) {
+      return 0;
     }
 
-    return this.buildSeriesCandidates(tmdbId);
+    await this.pruneInvalidFutureNotifications(userId, contentType, tmdbId, candidates);
+    return this.createNotifications(userId, candidates);
+  }
+
+  private async runScheduledSync() {
+    if (this.scheduledSyncPromise) {
+      return this.scheduledSyncPromise;
+    }
+
+    this.scheduledSyncPromise = this.performScheduledSync().finally(() => {
+      this.scheduledSyncPromise = null;
+    });
+
+    return this.scheduledSyncPromise;
+  }
+
+  private async performScheduledSync() {
+    try {
+      await this.releaseEvents.syncAllTrackedContent();
+      const subscriptions = await this.prisma.withConnectionRetry(() =>
+        this.prisma.releaseAlertSubscription.findMany({
+          orderBy: [{ contentType: 'asc' }, { tmdbId: 'asc' }, { userId: 'asc' }],
+          select: {
+            contentType: true,
+            tmdbId: true,
+            userId: true,
+          },
+        }),
+      );
+      const groups = groupSubscriptionsByContent(subscriptions);
+      let createdCount = 0;
+      let failedContentCount = 0;
+
+      for (let offset = 0; offset < groups.length; offset += SYNC_BATCH_SIZE) {
+        const batch = groups.slice(offset, offset + SYNC_BATCH_SIZE);
+        const results = await Promise.allSettled(
+          batch.map((group) => this.syncSubscriberGroup(group)),
+        );
+
+        results.forEach((result) => {
+          if (result.status === 'fulfilled') {
+            createdCount += result.value;
+          } else {
+            failedContentCount += 1;
+          }
+        });
+      }
+
+      this.logger.log(JSON.stringify({
+        contentCount: groups.length,
+        createdCount,
+        event: 'release_notifications.scheduled_sync.completed',
+        failedContentCount,
+        subscriberCount: subscriptions.length,
+      }));
+    } catch (error) {
+      this.logger.error(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  private async syncSubscriberGroup(group: SubscriptionGroup) {
+    const candidates = await this.buildCandidates(group.contentType, group.tmdbId);
+    if (candidates === null) {
+      throw new Error(`Release event sync failed for ${group.contentType}:${group.tmdbId}.`);
+    }
+
+    const createdCounts = await Promise.all(group.userIds.map(async (userId) => {
+      await this.pruneInvalidFutureNotifications(
+        userId,
+        group.contentType,
+        group.tmdbId,
+        candidates,
+      );
+      return this.createNotifications(userId, candidates);
+    }));
+
+    return createdCounts.reduce((total, count) => total + count, 0);
+  }
+
+  private async buildCandidates(contentType: TrackedContentType, tmdbId: number) {
+    try {
+      const result = await this.releaseEvents.syncContent(contentType, tmdbId);
+      return result.events.flatMap(buildMilestoneCandidates);
+    } catch {
+      this.logger.warn(JSON.stringify({
+        contentType: contentType.toLowerCase(),
+        event: 'release_notifications.sync.failed',
+        tmdbId,
+      }));
+      return null;
+    }
+  }
+
+  private async pruneInvalidFutureNotifications(
+    userId: string,
+    contentType: TrackedContentType,
+    tmdbId: number,
+    candidates: NotificationCandidate[],
+  ) {
+    const generatedKeys = candidates.map((candidate) => candidate.generatedKey);
+
+    await this.prisma.withConnectionRetry(() =>
+      this.prisma.notification.deleteMany({
+        where: {
+          contentType,
+          dedupeKey: generatedKeys.length > 0 ? { notIn: generatedKeys } : undefined,
+          kind: NotificationKind.RELEASE,
+          readAt: null,
+          releasedAt: { gt: new Date() },
+          tmdbId,
+          userId,
+        },
+      }),
+    );
   }
 
   private async createNotifications(userId: string, candidates: NotificationCandidate[]) {
@@ -258,7 +414,14 @@ export class NotificationsService {
         this.prisma.notification.updateMany({
           data: {
             body: candidate.body,
+            contentType: candidate.contentType,
+            episodeNumber: candidate.episodeNumber,
+            releaseEventId: candidate.releaseEventId,
+            releasedAt: candidate.releasedAt,
+            releaseType: candidate.type,
+            seasonNumber: candidate.seasonNumber,
             title: candidate.title,
+            tmdbId: candidate.tmdbId,
           },
           where: {
             dedupeKey: candidate.generatedKey,
@@ -275,6 +438,7 @@ export class NotificationsService {
           episodeNumber: candidate.episodeNumber,
           dedupeKey: candidate.generatedKey,
           kind: NotificationKind.RELEASE,
+          releaseEventId: candidate.releaseEventId,
           releasedAt: candidate.releasedAt,
           releaseType: candidate.type,
           seasonNumber: candidate.seasonNumber,
@@ -289,92 +453,47 @@ export class NotificationsService {
     return created.count;
   }
 
-  private async buildMovieCandidates(tmdbId: number): Promise<NotificationCandidate[]> {
-    try {
-      const response = await this.catalogue.getMovie(tmdbId);
-      const movie = response.item;
-      const releaseDate = parseReleaseDate(movie.releaseDate);
-
-      if (!releaseDate) {
-        return [];
-      }
-
-      return buildMilestoneCandidates({
-        contentType: TrackedContentType.MOVIE,
-        label: 'film',
-        releaseDate,
-        title: movie.title,
-        tmdbId: movie.tmdbId,
-        type: ReleaseNotificationType.MOVIE_RELEASE,
-      });
-    } catch {
-      return [];
-    }
-  }
-
-  private async buildSeriesCandidates(tmdbId: number): Promise<NotificationCandidate[]> {
-    try {
-      const response = await this.catalogue.getSeries(tmdbId);
-      const series = response.item;
-      const seasonCandidates = series.seasons.flatMap((season) =>
-        this.buildSeasonCandidate(series, season),
-      );
-
-      return seasonCandidates;
-    } catch {
-      return [];
-    }
-  }
-
-  private buildSeasonCandidate(
-    series: SeriesDetails,
-    season: SeriesDetails['seasons'][number],
-  ): NotificationCandidate[] {
-    const releaseDate = parseReleaseDate(season.airDate);
-
-    if (season.seasonNumber <= 0 || !releaseDate) {
-      return [];
-    }
-
-    return buildMilestoneCandidates({
-      contentType: TrackedContentType.SERIES,
-      label: 'season',
-      releaseDate,
-      seasonNumber: season.seasonNumber,
-      title: `${series.title}: ${season.name}`,
-      tmdbId: series.tmdbId,
-      type: ReleaseNotificationType.SEASON_RELEASE,
-    });
-  }
 }
 
-function parseReleaseDate(value: string | null) {
-  if (!value) {
-    return null;
-  }
-
-  const date = new Date(`${value}T00:00:00.000Z`);
-
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function buildMilestoneCandidates({
-  contentType,
-  label,
-  releaseDate,
-  seasonNumber,
-  title,
-  tmdbId,
-  type,
-}: {
+type SubscriptionGroup = {
   contentType: TrackedContentType;
-  label: 'film' | 'season';
-  releaseDate: Date;
-  seasonNumber?: number;
-  title: string;
   tmdbId: number;
-  type: ReleaseNotificationType;
-}): NotificationCandidate[] {
+  userIds: string[];
+};
+
+function groupSubscriptionsByContent(
+  subscriptions: Array<{
+    contentType: TrackedContentType;
+    tmdbId: number;
+    userId: string;
+  }>,
+) {
+  const groups = new Map<string, SubscriptionGroup>();
+
+  subscriptions.forEach((subscription) => {
+    const key = `${subscription.contentType}:${subscription.tmdbId}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.userIds.push(subscription.userId);
+      return;
+    }
+
+    groups.set(key, {
+      contentType: subscription.contentType,
+      tmdbId: subscription.tmdbId,
+      userIds: [subscription.userId],
+    });
+  });
+
+  return [...groups.values()];
+}
+
+function buildMilestoneCandidates(event: CanonicalReleaseEvent): NotificationCandidate[] {
+  if (!event.releaseDate) {
+    return [];
+  }
+
+  const releaseDate = event.releaseDate;
   const milestones: Array<'announcement' | 'one-week' | 'release-day'> = [];
 
   if (isFutureDate(releaseDate)) {
@@ -390,14 +509,16 @@ function buildMilestoneCandidates({
   }
 
   return milestones.map((milestone) => ({
-    body: buildReleaseBody(title, releaseDate, label, milestone),
-    contentType,
-    generatedKey: buildGeneratedKey(contentType, tmdbId, seasonNumber, releaseDate, milestone),
+    body: buildReleaseBody(event.title, releaseDate, getReleaseLabel(event.type), milestone),
+    contentType: event.contentType,
+    episodeNumber: event.episodeNumber ?? undefined,
+    generatedKey: buildGeneratedKey(event, milestone),
+    releaseEventId: event.id,
     releasedAt: releaseDate,
-    seasonNumber,
-    title,
-    tmdbId,
-    type,
+    seasonNumber: event.seasonNumber ?? undefined,
+    title: event.title,
+    tmdbId: event.tmdbId,
+    type: event.type,
   }));
 }
 
@@ -418,7 +539,7 @@ function isSameUtcDate(left: Date, right: Date) {
 function buildReleaseBody(
   title: string,
   releaseDate: Date,
-  label: 'film' | 'season',
+  label: 'episode' | 'film' | 'season',
   milestone: 'announcement' | 'one-week' | 'release-day',
 ) {
   const dateLabel = releaseDate.toISOString().slice(0, 10);
@@ -435,18 +556,25 @@ function buildReleaseBody(
 }
 
 function buildGeneratedKey(
-  contentType: TrackedContentType,
-  tmdbId: number,
-  seasonNumber: number | undefined,
-  releaseDate: Date,
+  event: CanonicalReleaseEvent,
   milestone: 'announcement' | 'one-week' | 'release-day',
 ) {
   const contentKey =
-    contentType === TrackedContentType.MOVIE
-      ? `movie:${tmdbId}`
-      : `series:${tmdbId}:season:${seasonNumber}`;
+    event.type === ReleaseNotificationType.MOVIE_RELEASE
+      ? `movie:${event.tmdbId}`
+      : event.type === ReleaseNotificationType.SEASON_RELEASE
+        ? `series:${event.tmdbId}:season:${event.seasonNumber}`
+        : `series:${event.tmdbId}:season:${event.seasonNumber}:episode:${event.episodeNumber}`;
 
-  return `${contentKey}:${milestone}:${toDateKey(releaseDate)}`;
+  return `${contentKey}:${milestone}`;
+}
+
+function getReleaseLabel(type: ReleaseNotificationType): 'episode' | 'film' | 'season' {
+  if (type === ReleaseNotificationType.MOVIE_RELEASE) {
+    return 'film';
+  }
+
+  return type === ReleaseNotificationType.SEASON_RELEASE ? 'season' : 'episode';
 }
 
 function toDateKey(date: Date) {

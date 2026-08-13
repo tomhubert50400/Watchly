@@ -11,6 +11,7 @@ import {
   TrackedContentType,
 } from '../generated/prisma/enums';
 import { NotificationsService } from '../notifications/notifications.service';
+import { ReleaseEventsService } from '../release-events/release-events.service';
 import { SharedWatchlistsService } from '../shared-watchlists/shared-watchlists.service';
 
 async function main() {
@@ -34,7 +35,8 @@ async function main() {
       };
     },
   } as unknown as TmdbCatalogueService;
-  const notifications = new NotificationsService(auth, catalogue, prisma);
+  const releaseEvents = new ReleaseEventsService(catalogue, prisma);
+  const notifications = new NotificationsService(auth, prisma, releaseEvents, config);
   const sharedWatchlists = new SharedWatchlistsService(auth, prisma);
   let userIds: string[] = [];
 
@@ -93,6 +95,12 @@ async function main() {
     assert(untouchedOutsider.readAt === null, 'Mark-all-read must be scoped to the authenticated user.');
 
     const syncTmdbIds = Array.from({ length: 13 }, (_, index) => 10_000 + index);
+    await prisma.releaseEvent.deleteMany({
+      where: {
+        contentType: TrackedContentType.MOVIE,
+        tmdbId: { in: syncTmdbIds },
+      },
+    });
     await prisma.releaseAlertSubscription.createMany({
       data: syncTmdbIds.map((tmdbId) => ({
         contentType: TrackedContentType.MOVIE,
@@ -222,6 +230,12 @@ async function cleanup(prisma: PrismaService, userIds: string[]) {
     },
   });
   await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+  await prisma.releaseEvent.deleteMany({
+    where: {
+      contentType: TrackedContentType.MOVIE,
+      tmdbId: { gte: 10_000, lte: 10_012 },
+    },
+  });
 }
 
 void main();
