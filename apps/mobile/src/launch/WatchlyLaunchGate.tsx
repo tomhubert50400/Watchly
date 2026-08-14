@@ -31,6 +31,7 @@ const watchlyWordmark = require('../../assets/watchly-wordmark-ui.png');
 
 const LETTER_REVEAL_FEATHER = 24;
 const LAUNCH_ASSET_WAIT_MS = 400;
+const WORDMARK_EXIT_END_PROGRESS = 0.25;
 const WORDMARK_ASPECT_RATIO = 512 / 189;
 // Visible W bounds: wordmark x 5-140, y 45-157; isolated layer x 7-249, y 77-239.
 const WORDMARK_W_ASPECT_CORRECTION = (112 / 162) / (135 / 242);
@@ -290,15 +291,27 @@ function WatchlyLaunchAnimation({ appReady }: { appReady: boolean }) {
     inputRange: [0, 0.96, 1],
     outputRange: [1, 1, 0],
   });
-  const backgroundOpacity = Animated.subtract(1, contentReveal);
+  const backgroundOpacity = contentReveal.interpolate({
+    inputRange: [0, WORDMARK_EXIT_END_PROGRESS, 1],
+    outputRange: [1, 1, 0],
+  });
+  const wordmarkExitOpacity = contentReveal.interpolate({
+    extrapolate: 'clamp',
+    inputRange: [0, WORDMARK_EXIT_END_PROGRESS],
+    outputRange: [1, 0],
+  });
   const assembledLogoOpacity = dock.interpolate({
     inputRange: [0, 0.88, 1],
     outputRange: [1, 1, 0],
   });
-  const finalWordmarkOpacity = dock.interpolate({
+  const dockedWordmarkOpacity = dock.interpolate({
     inputRange: [0, 0.88, 1],
     outputRange: [0, 0, 1],
   });
+  const finalWordmarkOpacity = Animated.multiply(
+    dockedWordmarkOpacity,
+    wordmarkExitOpacity,
+  );
   const popcornTranslateY = fill.interpolate({
     inputRange: [0, 1],
     outputRange: [initialIconSize * 0.42, 0],

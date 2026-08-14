@@ -106,8 +106,18 @@ assert.doesNotMatch(
 );
 assert.match(
   source,
-  /const finalWordmarkOpacity = dock\.interpolate/,
-  'the official wordmark must take over before the backdrop disappears',
+  /const wordmarkExitOpacity = contentReveal\.interpolate\(\{[\s\S]*?inputRange: \[0, WORDMARK_EXIT_END_PROGRESS\],[\s\S]*?outputRange: \[1, 0\],/,
+  'the docked wordmark must fade out before the page is revealed',
+);
+assert.match(
+  source,
+  /const backgroundOpacity = contentReveal\.interpolate\(\{[\s\S]*?inputRange: \[0, WORDMARK_EXIT_END_PROGRESS, 1\],[\s\S]*?outputRange: \[1, 1, 0\],/,
+  'the launch background must stay opaque until the docked wordmark is hidden',
+);
+assert.match(
+  source,
+  /const finalWordmarkOpacity = Animated\.multiply\([\s\S]*?dockedWordmarkOpacity,[\s\S]*?wordmarkExitOpacity,/,
+  'the final wordmark must use its dedicated exit opacity',
 );
 assert.doesNotMatch(
   source,
