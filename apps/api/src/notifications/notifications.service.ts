@@ -11,6 +11,8 @@ import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
 import {
   NotificationKind,
+  ReleaseDatePrecision,
+  ReleaseEventStatus,
   ReleaseNotificationType,
   TrackedContentType,
 } from '../generated/prisma/enums';
@@ -122,6 +124,52 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
         tmdbId: subscription.tmdbId,
         updatedAt: subscription.updatedAt.toISOString(),
       })),
+    };
+  }
+
+  async listReleaseCalendar(identity: AuthenticatedIdentity, now = new Date()) {
+    const userId = await this.getUserId(identity);
+    const alertSubscriptions = await this.listCalendarSubscriptions(userId);
+
+    if (alertSubscriptions.length === 0) {
+      return { items: [] };
+    }
+
+    const subscriptionsToRefresh = alertSubscriptions.slice(0, MAX_SYNC_SUBSCRIPTIONS);
+    for (let offset = 0; offset < subscriptionsToRefresh.length; offset += SYNC_BATCH_SIZE) {
+      const batch = subscriptionsToRefresh.slice(offset, offset + SYNC_BATCH_SIZE);
+      await Promise.all(batch.map((subscription) =>
+        this.syncSubscription(userId, subscription.contentType, subscription.tmdbId),
+      ));
+    }
+
+    const today = new Date(`${now.toISOString().slice(0, 10)}T00:00:00.000Z`);
+    const events = await this.prisma.withConnectionRetry(() =>
+      this.prisma.releaseEvent.findMany({
+        where: {
+          AND: [
+            {
+              OR: alertSubscriptions.map((subscription) => ({
+                contentType: subscription.contentType,
+                tmdbId: subscription.tmdbId,
+              })),
+            },
+            {
+              OR: [
+                { releaseDate: { gte: today } },
+                { releaseDate: null },
+              ],
+            },
+          ],
+          status: ReleaseEventStatus.ACTIVE,
+        },
+      }),
+    );
+
+    return {
+      items: events
+        .map(toReleaseCalendarDto)
+        .sort(compareReleaseCalendarItems),
     };
   }
 
@@ -406,6 +454,24 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
     );
   }
 
+  private async listCalendarSubscriptions(userId: string) {
+    return this.prisma.withConnectionRetry(() =>
+      this.prisma.releaseAlertSubscription.findMany({
+        orderBy: {
+          updatedAt: 'desc',
+        },
+        select: {
+          contentType: true,
+          tmdbId: true,
+          updatedAt: true,
+        },
+        where: {
+          userId,
+        },
+      }),
+    );
+  }
+
   private async createNotifications(userId: string, candidates: NotificationCandidate[]) {
     if (candidates.length === 0) return 0;
 
@@ -599,6 +665,41 @@ function fromNotificationType(type: ReleaseNotificationType) {
   }
 
   return 'episode_release';
+}
+
+function toReleaseCalendarDto(event: {
+  contentType: TrackedContentType;
+  episodeNumber: number | null;
+  id: string;
+  precision: ReleaseDatePrecision;
+  releaseDate: Date | null;
+  seasonNumber: number | null;
+  title: string;
+  tmdbId: number;
+  type: ReleaseNotificationType;
+}) {
+  return {
+    contentType: fromTrackedContentType(event.contentType),
+    episodeNumber: event.episodeNumber,
+    id: event.id,
+    precision: event.precision === ReleaseDatePrecision.DATE ? 'date' as const : 'unknown' as const,
+    releaseDate: event.releaseDate?.toISOString().slice(0, 10) ?? null,
+    seasonNumber: event.seasonNumber,
+    title: event.title,
+    tmdbId: event.tmdbId,
+    type: fromNotificationType(event.type),
+  };
+}
+
+function compareReleaseCalendarItems(
+  left: ReturnType<typeof toReleaseCalendarDto>,
+  right: ReturnType<typeof toReleaseCalendarDto>,
+) {
+  if (left.releaseDate === null) return right.releaseDate === null ? left.title.localeCompare(right.title) : 1;
+  if (right.releaseDate === null) return -1;
+  return left.releaseDate.localeCompare(right.releaseDate)
+    || left.title.localeCompare(right.title)
+    || left.id.localeCompare(right.id);
 }
 
 function fromNotificationKind(kind: NotificationKind) {
