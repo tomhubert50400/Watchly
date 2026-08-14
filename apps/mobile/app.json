@@ -9,6 +9,13 @@
     "plugins": [
       "@sentry/react-native/expo",
       [
+        "expo-notifications",
+        {
+          "color": "#D43A5C",
+          "defaultChannel": "release-alerts"
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "microphonePermission": false,

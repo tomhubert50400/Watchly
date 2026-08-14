@@ -16,6 +16,12 @@ export const appLinking: LinkingOptions<RootStackParamList> = {
         },
       },
       Notifications: 'alerts',
+      SeriesDetail: {
+        path: 'series/:tmdbId',
+        parse: {
+          tmdbId: Number,
+        },
+      },
     },
   },
   prefixes: ['tvapp://', 'com.tom.tvapp.dev://'],

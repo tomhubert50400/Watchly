@@ -39,6 +39,7 @@ export type RootStackParamList = {
   };
   MainTabs: NavigatorScreenParams<RootTabParamList> | undefined;
   Notifications: undefined;
+  NotificationPreferences: undefined;
   Onboarding: undefined;
   PersonalWatchlist: {
     title: string;

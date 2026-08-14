@@ -2,6 +2,7 @@ import { createContext, PropsWithChildren, useCallback, useContext, useEffect, u
 import { getCurrentUser, CurrentUser } from '../api/auth';
 import { ApiError } from '../api/client';
 import { clearPrivateCacheForUser } from '../cache/persistedCache';
+import { revokeStoredPushDevice } from '../notifications/nativePushNotifications';
 import { createAuthTransitionGuard, performGuaranteedSignOut } from './authTransition';
 import {
   getFreshFirebaseIdToken,
@@ -249,6 +250,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     setStatus('loading');
     explicitSignOutRef.current = true;
     const signedOutUserId = currentUser?.id;
+    const signedOutFirebaseIdToken = latestFirebaseIdTokenRef.current;
     latestFirebaseIdTokenRef.current = null;
     setFirebaseIdToken(null);
     setCurrentUser(null);
@@ -257,10 +259,15 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     setTrackingRevision(0);
 
     try {
-      await performGuaranteedSignOut(signedOutUserId, {
-        clearPrivateCacheForUser,
-        signOutFromFirebase,
-      });
+      await Promise.all([
+        performGuaranteedSignOut(signedOutUserId, {
+          clearPrivateCacheForUser,
+          signOutFromFirebase,
+        }),
+        signedOutFirebaseIdToken
+          ? revokeStoredPushDevice(signedOutFirebaseIdToken).catch(() => false)
+          : Promise.resolve(false),
+      ]);
       const isCurrentAfterFirebaseSignOut = authTransitionsRef.current.isCurrent(transition);
       if (!isCurrentAfterFirebaseSignOut || !authTransitionsRef.current.isCurrent(transition)) return;
     } finally {

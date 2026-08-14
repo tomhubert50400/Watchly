@@ -3,6 +3,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   Check,
   CheckCircle2,
+  BellRing,
   Camera,
   ChevronRight,
   Code2,
@@ -462,6 +463,21 @@ export function SettingsScreen() {
                 value={privacy.profileVisibility}
               />
             </PrivacyPanel>
+          </SettingsSection>
+
+          <SettingsSection
+            subtitle="Control which Watchly alerts can appear outside the app."
+            title="Notifications"
+          >
+            <View style={styles.group}>
+              <SettingsActionRow
+                body="Manage device permission and followed release notifications."
+                icon={BellRing}
+                label="System notifications"
+                last
+                onPress={() => navigation.navigate('NotificationPreferences')}
+              />
+            </View>
           </SettingsSection>
 
           <SettingsSection

@@ -13,6 +13,7 @@ import { SignInSheet } from '../auth/SignInRequired';
 import { colors, radii } from '../design/tokens';
 import { hapticConfirm, hapticError } from '../feedback/haptics';
 import { useToast } from './ToastContext';
+import { maybeEnableReleasePushFromAlert, ReleasePushSetupResult } from './nativePushNotifications';
 import {
   getReleaseAlertControlPresentation,
   getReleaseAlertControlSession,
@@ -104,6 +105,15 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
       if (!isCurrent()) return;
       if (!token) throw new Error('Sign in again to update release alerts.');
 
+      let pushSetup: ReleasePushSetupResult | null = null;
+      if (!previousState?.enabled && currentUser?.id) {
+        pushSetup = await maybeEnableReleasePushFromAlert(token, currentUser.id).catch(() => ({
+          message: 'System notifications could not be enabled. Your in-app alert still works.',
+          status: 'unavailable' as const,
+        }));
+        if (!isCurrent()) return;
+      }
+
       const nextState = previousState?.enabled
         ? await disableReleaseAlert(token, contentType, tmdbId)
         : await enableReleaseAlert(token, contentType, tmdbId);
@@ -113,6 +123,7 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
       setStateScope(scope);
       notifyTrackingChanged();
       hapticConfirm();
+      if (pushSetup?.message) showToast(pushSetup.message);
     } catch (toggleError) {
       if (!isCurrent()) return;
       setState(previousState);
