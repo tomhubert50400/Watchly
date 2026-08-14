@@ -2,13 +2,13 @@
 
 ## Scope
 
-`ReleaseEvent` is the API source of truth for release dates used by internal alerts and the personal release calendar, and later by push delivery.
+`ReleaseEvent` is the API source of truth for release dates used by internal alerts, the personal release calendar, and release push delivery.
 
 The current flow is:
 
-`TMDB -> release_events -> internal notifications / personal release calendar`
+`TMDB -> release_events -> internal notifications / personal release calendar / release push`
 
-P0.2 includes the authenticated personal calendar for active release alerts. System push delivery remains a later consumer and must read `release_events` instead of calling TMDB independently.
+P0.2 includes the authenticated personal calendar and opt-in system push for active release alerts. Push delivery reads the canonical internal notification projection instead of calling TMDB independently.
 
 ## Canonical identity
 
@@ -55,9 +55,21 @@ The endpoint refreshes the same canonical pipeline used by internal alerts befor
 
 The mobile screen is available from Alerts. It provides a monthly view, daily agenda selection, All/Movies/Series filters, a separate Date pending section, and links back to the related title where the alert can be managed. Unknown dates remain undated and are never placed on an invented calendar day.
 
+## System push
+
+System push is private and disabled by default. The mobile app asks for native permission contextually when a signed-in user activates a first release alert, or explicitly from Settings. A separate Followed releases preference controls this category without affecting in-app alerts.
+
+Each Expo push token is scoped to the authenticated user and `APP_ENV`. Signing out, disabling system notifications, an operating-system permission revocation, or an Expo `DeviceNotRegistered` receipt deactivates the registration. A token reassigned to another user cannot receive queued notifications owned by the previous account.
+
+Only newly created canonical release notifications are queued. Database uniqueness on the internal notification and on each notification/device delivery pair prevents duplicate push across retries or overlapping projections. The API records Expo tickets, checks receipts after 15 minutes, retries transient send failures up to five attempts, and expires missing receipts after 24 hours. Push taps open the matching movie or series detail through a `tvapp://` deep link.
+
+This milestone covers followed-release push only. Social and community push categories remain outside P0.2.
+
 ## Operations
 
-Every full run writes a row to `release_event_sync_runs` with its status and content, create, update, withdrawal, and failure counts. The API also writes a `release_events.sync.completed` log record.
+Every full run writes a row to `release_event_sync_runs` with its status and content, create, update, withdrawal, and failure counts. The API also writes a `release_events.sync.completed` log record. Push batches write `push.release.dispatch.completed` with the attempted delivery count.
+
+`EXPO_PUSH_ACCESS_TOKEN` is optional. Set it only when enhanced Expo push security is enabled for the project, and keep it backend-only.
 
 With the sealed monitoring key, staging and production operators can read the latest run at:
 
@@ -74,7 +86,9 @@ pnpm --filter api typecheck
 pnpm --filter api exec tsx src/release-events/release-events.qa.ts
 pnpm --filter api exec tsx src/security/notifications-sync-qa.ts
 pnpm --dir apps/api exec tsx src/notifications/release-calendar.qa.ts
+pnpm --dir apps/api exec tsx src/push/push.qa.ts
 pnpm --dir apps/mobile exec tsx src/notifications/releaseCalendarModel.qa.ts
+pnpm --dir apps/mobile exec tsx src/notifications/pushNotifications.qa.ts
 pnpm --filter api db:deploy
 pnpm --filter api run security:notifications-smoke
 ```
