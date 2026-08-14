@@ -2,13 +2,13 @@
 
 ## Scope
 
-`ReleaseEvent` is the API source of truth for release dates used by internal alerts and, later, the personal calendar and push delivery.
+`ReleaseEvent` is the API source of truth for release dates used by internal alerts and the personal release calendar, and later by push delivery.
 
 The current flow is:
 
-`TMDB -> release_events -> internal notifications`
+`TMDB -> release_events -> internal notifications / personal release calendar`
 
-P0.2 does not add the calendar UI or system push delivery. Those consumers must read `release_events` instead of calling TMDB independently.
+P0.2 includes the authenticated personal calendar for active release alerts. System push delivery remains a later consumer and must read `release_events` instead of calling TMDB independently.
 
 ## Canonical identity
 
@@ -47,6 +47,14 @@ Notification dedupe keys are stable per content identity and milestone, for exam
 
 When a date moves, the notification row updates its `releaseEventId`, copy, and `releasedAt` value. An unread future milestone that is no longer valid is removed. Read or past notification history is preserved.
 
+## Personal release calendar
+
+`GET /notifications/release-calendar` returns active canonical events for the signed-in user's release alert subscriptions. It includes future events and undated events, but never past or withdrawn rows.
+
+The endpoint refreshes the same canonical pipeline used by internal alerts before reading the calendar. User-triggered refresh work remains bounded to the 48 most recently updated subscriptions, while the calendar query itself includes every active subscription and the scheduled job continues to refresh all tracked content.
+
+The mobile screen is available from Alerts. It provides a monthly view, daily agenda selection, All/Movies/Series filters, a separate Date pending section, and links back to the related title where the alert can be managed. Unknown dates remain undated and are never placed on an invented calendar day.
+
 ## Operations
 
 Every full run writes a row to `release_event_sync_runs` with its status and content, create, update, withdrawal, and failure counts. The API also writes a `release_events.sync.completed` log record.
@@ -65,6 +73,8 @@ Run:
 pnpm --filter api typecheck
 pnpm --filter api exec tsx src/release-events/release-events.qa.ts
 pnpm --filter api exec tsx src/security/notifications-sync-qa.ts
+pnpm --dir apps/api exec tsx src/notifications/release-calendar.qa.ts
+pnpm --dir apps/mobile exec tsx src/notifications/releaseCalendarModel.qa.ts
 pnpm --filter api db:deploy
 pnpm --filter api run security:notifications-smoke
 ```
