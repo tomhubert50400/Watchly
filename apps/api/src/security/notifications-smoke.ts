@@ -36,7 +36,13 @@ async function main() {
     },
   } as unknown as TmdbCatalogueService;
   const releaseEvents = new ReleaseEventsService(catalogue, prisma);
-  const notifications = new NotificationsService(auth, prisma, releaseEvents, config);
+  const notifications = new NotificationsService(
+    auth,
+    prisma,
+    releaseEvents,
+    { enqueueReleaseNotifications: async () => 0 } as never,
+    config,
+  );
   const sharedWatchlists = new SharedWatchlistsService(auth, prisma);
   let userIds: string[] = [];
 

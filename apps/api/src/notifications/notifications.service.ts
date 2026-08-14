@@ -20,6 +20,7 @@ import {
   CanonicalReleaseEvent,
   ReleaseEventsService,
 } from '../release-events/release-events.service';
+import { PushService } from '../push/push.service';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SCHEDULE_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -51,6 +52,7 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
     @Inject(AuthService) private readonly authService: AuthService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(ReleaseEventsService) private readonly releaseEvents: ReleaseEventsService,
+    @Inject(PushService) private readonly push: PushService,
     @Inject(ConfigService) private readonly config: ConfigService,
   ) {}
 
@@ -475,6 +477,18 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
   private async createNotifications(userId: string, candidates: NotificationCandidate[]) {
     if (candidates.length === 0) return 0;
 
+    const existingNotifications = await this.prisma.withConnectionRetry(() =>
+      this.prisma.notification.findMany({
+        select: { dedupeKey: true },
+        where: {
+          dedupeKey: { in: candidates.map((candidate) => candidate.generatedKey) },
+          kind: NotificationKind.RELEASE,
+          userId,
+        },
+      }),
+    );
+    const existingKeys = new Set(existingNotifications.map((notification) => notification.dedupeKey));
+
     const created = await this.prisma.withConnectionRetry(async () => {
       await Promise.all(candidates.map((candidate) =>
         this.prisma.notification.updateMany({
@@ -515,6 +529,36 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
         skipDuplicates: true,
       });
     });
+
+    const newKeys = candidates
+      .filter((candidate) => !existingKeys.has(candidate.generatedKey))
+      .map((candidate) => candidate.generatedKey);
+    if (newKeys.length > 0) {
+      const newNotifications = await this.prisma.withConnectionRetry(() =>
+        this.prisma.notification.findMany({
+          select: {
+            body: true,
+            contentType: true,
+            id: true,
+            title: true,
+            tmdbId: true,
+          },
+          where: {
+            dedupeKey: { in: newKeys },
+            kind: NotificationKind.RELEASE,
+            userId,
+          },
+        }),
+      );
+      await this.push.enqueueReleaseNotifications(
+        userId,
+        newNotifications.flatMap((notification) =>
+          notification.contentType && notification.tmdbId
+            ? [{ ...notification, contentType: notification.contentType, tmdbId: notification.tmdbId }]
+            : []
+        ),
+      );
+    }
 
     return created.count;
   }

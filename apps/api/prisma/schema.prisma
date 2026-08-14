@@ -104,6 +104,18 @@ enum ReleaseEventSyncStatus {
   FAILED
 }
 
+enum PushPlatform {
+  IOS
+  ANDROID
+}
+
+enum PushDeliveryStatus {
+  PENDING
+  TICKETED
+  DELIVERED
+  FAILED
+}
+
 enum AuditAction {
   PRIVACY_UPDATED
   USER_BLOCKED
@@ -160,6 +172,8 @@ model User {
   releaseAlertSubscriptions  ReleaseAlertSubscription[]
   notifications              Notification[]             @relation("NotificationRecipient")
   actedNotifications         Notification[]             @relation("NotificationActor")
+  notificationPreference     NotificationPreference?
+  pushDevices                PushDevice[]
   privacySettings            PrivacySettings?
   blockedUsers               UserBlock[]                @relation("UserBlocksMade")
   blockedBy                  UserBlock[]                @relation("UserBlocksReceived")
@@ -585,6 +599,7 @@ model Notification {
   sharedWatchlist   SharedWatchlist?         @relation(fields: [sharedWatchlistId], references: [id], onDelete: Cascade)
   votingSession     SharedVotingSession?     @relation(fields: [votingSessionId], references: [id], onDelete: Cascade)
   releaseEvent      ReleaseEvent?            @relation(fields: [releaseEventId], references: [id], onDelete: SetNull)
+  pushDeliveries    PushDelivery[]
 
   @@unique([userId, dedupeKey])
   @@index([userId, readAt, createdAt])
@@ -650,6 +665,60 @@ model ReleaseAlertSubscription {
   @@unique([userId, contentType, tmdbId])
   @@index([contentType, tmdbId])
   @@map("release_alert_subscriptions")
+}
+
+model NotificationPreference {
+  userId             String   @id @db.Uuid
+  pushEnabled        Boolean  @default(false)
+  releasePushEnabled Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model PushDevice {
+  id               String         @id @default(uuid()) @db.Uuid
+  userId           String         @db.Uuid
+  environment      String         @db.VarChar(16)
+  platform         PushPlatform
+  expoPushToken    String         @db.VarChar(255)
+  active           Boolean        @default(true)
+  lastRegisteredAt DateTime       @default(now())
+  revokedAt        DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries       PushDelivery[]
+
+  @@unique([environment, expoPushToken])
+  @@index([userId, environment, active])
+  @@map("push_devices")
+}
+
+model PushDelivery {
+  id               String             @id @default(uuid()) @db.Uuid
+  notificationId   String             @db.Uuid
+  pushDeviceId     String             @db.Uuid
+  status           PushDeliveryStatus @default(PENDING)
+  ticketId         String?            @unique @db.VarChar(64)
+  attemptCount     Int                @default(0)
+  nextAttemptAt    DateTime           @default(now())
+  lastAttemptAt    DateTime?
+  errorCode        String?            @db.VarChar(64)
+  errorMessage     String?            @db.VarChar(500)
+  sentAt           DateTime?
+  receiptCheckedAt DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  notification     Notification       @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  pushDevice       PushDevice         @relation(fields: [pushDeviceId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, pushDeviceId])
+  @@index([status, nextAttemptAt])
+  @@map("push_deliveries")
 }
 
 model AuditLog {

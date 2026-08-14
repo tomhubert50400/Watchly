@@ -82,6 +82,7 @@ async function run() {
     { getOrCreateUser: async () => ({ id: 'user-a' }) } as never,
     prisma as never,
     releaseEvents as never,
+    { enqueueReleaseNotifications: async () => 0 } as never,
     { getOrThrow: () => 'development' } as never,
   );
 

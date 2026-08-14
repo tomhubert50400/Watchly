@@ -84,6 +84,7 @@ async function run() {
     { getOrCreateUser: async () => ({ id: 'user-a' }) } as never,
     prisma as never,
     releaseEvents as never,
+    { enqueueReleaseNotifications: async () => 0 } as never,
     { getOrThrow: () => 'development' } as never,
   );
   const identity = { firebaseUid: 'firebase-a' } as never;
@@ -113,6 +114,7 @@ async function run() {
         return { count: data.length };
       },
       deleteMany: async () => ({ count: 0 }),
+      findMany: async () => [],
       updateMany: async () => ({ count: 0 }),
     },
     releaseAlertSubscription: {
@@ -154,6 +156,7 @@ async function run() {
     {} as never,
     scheduledPrisma as never,
     scheduledReleaseEvents as never,
+    { enqueueReleaseNotifications: async () => 0 } as never,
     { getOrThrow: () => 'development' } as never,
   );
   await (scheduledService as unknown as { performScheduledSync: () => Promise<void> })

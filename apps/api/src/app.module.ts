@@ -51,6 +51,7 @@ import { ViewingsModule } from './viewings/viewings.module';
         }),
         NODE_ENV: Joi.string().valid('development', 'test', 'production').default('development'),
         PORT: Joi.number().integer().min(1).max(65535).default(3000),
+        EXPO_PUSH_ACCESS_TOKEN: Joi.string().allow('').optional(),
         RATE_LIMIT_MAX_REQUESTS: Joi.number().integer().min(1).default(100),
         RATE_LIMIT_TTL_MS: Joi.number().integer().min(1000).default(60000),
         MONITORING_TEST_KEY: Joi.string().min(32).when('APP_ENV', {

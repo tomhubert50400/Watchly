@@ -11,10 +11,16 @@ const apiRequiredEnv = [
   'RATE_LIMIT_TTL_MS',
   'RATE_LIMIT_MAX_REQUESTS',
   'TMDB_ACCESS_TOKEN',
+  'EXPO_PUSH_ACCESS_TOKEN',
 ];
 
 const mobileAllowedEnvPrefixes = ['EXPO_PUBLIC_'];
-const backendOnlyNames = ['DATABASE_URL', 'TMDB_ACCESS_TOKEN', 'FIREBASE_AUTH_EMULATOR_HOST'];
+const backendOnlyNames = [
+  'DATABASE_URL',
+  'TMDB_ACCESS_TOKEN',
+  'FIREBASE_AUTH_EMULATOR_HOST',
+  'EXPO_PUSH_ACCESS_TOKEN',
+];
 
 function main() {
   const repoRoot = join(process.cwd(), '..', '..');
