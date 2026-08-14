@@ -31,6 +31,7 @@ import { detailBackOptions, resolvePreviousPageLabel, rootStackScreenOptions } f
 import { mainTabs, MainTabName } from './src/navigation/tabConfig';
 import { RootStackParamList, RootTabParamList } from './src/navigation/types';
 import { NotificationsScreen } from './src/notifications/NotificationsScreen';
+import { ReleaseCalendarScreen } from './src/notifications/ReleaseCalendarScreen';
 import { ToastProvider } from './src/notifications/ToastContext';
 import { OnboardingScreen } from './src/onboarding/OnboardingScreen';
 import { ProfileConnectionsScreen } from './src/profile/ProfileConnectionsScreen';
@@ -269,6 +270,7 @@ function AppNavigator() {
               options={({ route }) => ({ title: legalDocuments[route.params.document].title })}
             />
             <Stack.Screen component={NotificationsScreen} name="Notifications" options={{ title: 'Alerts' }} />
+            <Stack.Screen component={ReleaseCalendarScreen} name="ReleaseCalendar" options={{ title: 'Release calendar' }} />
             <Stack.Screen component={SettingsScreen} name="Settings" options={{ title: 'Settings' }} />
             <Stack.Screen component={ImportDataScreen} name="ImportData" options={{ title: 'Import your data' }} />
             <Stack.Screen

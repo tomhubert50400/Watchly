@@ -35,6 +35,7 @@ const protectedScreens = [
   '../journal/JournalScreen.tsx',
   '../library/LibraryScreen.tsx',
   '../notifications/NotificationsScreen.tsx',
+  '../notifications/ReleaseCalendarScreen.tsx',
   '../profile/PublicProfileScreen.tsx',
   '../profile/SettingsScreen.tsx',
   '../watchlists/PersonalWatchlistScreen.tsx',

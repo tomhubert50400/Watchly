@@ -49,6 +49,7 @@ export type RootStackParamList = {
     items?: LibraryMediaItem[];
     profileBackdropUrl?: string | null;
   };
+  ReleaseCalendar: undefined;
   ProfileConnections: {
     kind: 'followers' | 'following';
     userId: string;

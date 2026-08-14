@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { BellRing, CalendarDays, ListPlus, Vote } from 'lucide-react-native';
+import { BellRing, CalendarDays, ChevronRight, ListPlus, Vote } from 'lucide-react-native';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import {
   acceptFollowRequest,
@@ -405,6 +405,22 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
       }
       title=""
     >
+      <Pressable
+        accessibilityHint="Opens your calendar of releases with active alerts."
+        accessibilityLabel="Open release calendar"
+        accessibilityRole="button"
+        onPress={() => navigation.navigate('ReleaseCalendar')}
+        style={({ pressed }) => [styles.calendarLink, pressed ? styles.pressed : null]}
+      >
+        <View style={styles.calendarLinkIcon}>
+          <CalendarDays color={colors.accentText} size={22} strokeWidth={2} />
+        </View>
+        <View style={styles.calendarLinkCopy}>
+          <Text style={styles.calendarLinkTitle}>Release calendar</Text>
+          <Text style={styles.calendarLinkBody}>See every upcoming release tied to an active alert.</Text>
+        </View>
+        <ChevronRight color={colors.textSubtle} size={19} strokeWidth={2} />
+      </Pressable>
       {visibleFollowRequests.length > 0 && filter === 'all' ? (
         <View style={styles.requestsSection}>
           <Text style={styles.groupLabel}>Follow requests</Text>
@@ -549,6 +565,42 @@ function formatNotificationTime(value: string) {
 }
 
 const styles = StyleSheet.create({
+  calendarLink: {
+    alignItems: 'center',
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+    minHeight: 76,
+    padding: spacing.sm,
+  },
+  calendarLinkBody: {
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  calendarLinkCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  calendarLinkIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.panelElevated,
+    borderRadius: radii.md,
+    height: touchTargets.min,
+    justifyContent: 'center',
+    width: touchTargets.min,
+  },
+  calendarLinkTitle: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '800',
+    lineHeight: 18,
+  },
   empty: {
     paddingTop: spacing.xxl,
   },

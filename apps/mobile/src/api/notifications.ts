@@ -1,5 +1,6 @@
 import { apiDelete, apiGet, apiPost, apiPut } from './client';
 import type { NotificationItem } from '../notifications/notificationModel';
+import type { ReleaseCalendarItem } from '../notifications/releaseCalendarModel';
 
 type ReleaseNotification = {
   body: string;
@@ -41,6 +42,10 @@ export type NotificationsSyncResponse = NotificationsResponse & {
   syncedContentCount: number;
 };
 
+export type ReleaseCalendarResponse = {
+  items: ReleaseCalendarItem[];
+};
+
 export function listNotifications(token: string) {
   return apiGet<NotificationsResponse>('/notifications', { token });
 }
@@ -59,6 +64,10 @@ export function markAllNotificationsRead(token: string) {
 
 export function listReleaseAlerts(token: string) {
   return apiGet<ReleaseAlertsResponse>('/notifications/release-alerts', { token });
+}
+
+export function listReleaseCalendar(token: string) {
+  return apiGet<ReleaseCalendarResponse>('/notifications/release-calendar', { token });
 }
 
 export function getReleaseAlert(
