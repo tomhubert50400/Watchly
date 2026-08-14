@@ -12,7 +12,7 @@ import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { useAuthSession } from './AuthSessionContext';
 import type { TotpSignInChallenge } from './AuthSessionContext';
 import { getMissingFirebaseConfig } from './firebase';
-import { getMissingGoogleClientConfig, googleClientIds, googleNativeRedirectUri } from './googleAuthConfig';
+import { getMissingGoogleClientConfig, googleClientIds } from './googleAuthConfig';
 import { authProviders, type AuthProviderConfig } from './providerConfig';
 import { getTotpErrorMessage, isValidTotpCode, normalizeTotpCode } from './totpChallenge';
 
@@ -49,7 +49,7 @@ export function ProfileAuthCard({
     [],
   );
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest(
-    { ...googleRequestClientIds, redirectUri: googleNativeRedirectUri, selectAccount: true },
+    { ...googleRequestClientIds, selectAccount: true },
   );
 
   useEffect(() => {

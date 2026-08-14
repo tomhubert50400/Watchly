@@ -20,6 +20,7 @@ module.exports = ({ config }) => {
   return {
     ...config,
     name: variant === 'staging' ? 'Watchly Staging' : config.name,
+    scheme: getApplicationSchemes(config.scheme, config.ios?.bundleIdentifier, applicationId),
     ios: {
       ...config.ios,
       bundleIdentifier: applicationId,
@@ -37,6 +38,19 @@ module.exports = ({ config }) => {
     },
   };
 };
+
+function getApplicationSchemes(configuredSchemes, configuredApplicationId, applicationId) {
+  const schemes = Array.isArray(configuredSchemes)
+    ? configuredSchemes
+    : configuredSchemes
+      ? [configuredSchemes]
+      : [];
+
+  return [...new Set([
+    ...schemes.filter((scheme) => scheme !== configuredApplicationId),
+    applicationId,
+  ])];
+}
 
 function getApplicationId(variant, config) {
   if (variant === 'development') {

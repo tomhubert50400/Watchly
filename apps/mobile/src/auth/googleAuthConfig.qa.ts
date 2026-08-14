@@ -1,17 +1,41 @@
 // Node types are intentionally not part of the Expo runtime TypeScript configuration.
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import assert from 'node:assert/strict';
-import { googleNativeRedirectUri } from './googleAuthConfig';
+// @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
+import { readFileSync } from 'node:fs';
+
+const authCardSource = readFileSync(new URL('./ProfileAuthCard.tsx', import.meta.url), 'utf8');
 
 assert.equal(
-  googleNativeRedirectUri,
-  'com.tom.tvapp.dev:/auth',
-  'Google native auth must use the registered reverse-DNS scheme with a single slash',
-);
-assert.equal(
-  googleNativeRedirectUri.includes('://'),
+  authCardSource.includes('redirectUri: googleNativeRedirectUri'),
   false,
-  'Google rejects the double-slash native redirect used by the previous auth flow',
+  'Google auth must derive its native redirect from the installed application ID',
+);
+
+const previousVariant = process.env.APP_VARIANT;
+const previousPublicEnvironment = process.env.EXPO_PUBLIC_APP_ENV;
+process.env.APP_VARIANT = 'staging';
+process.env.EXPO_PUBLIC_APP_ENV = 'staging';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const configureApp = require('../../app.config.js');
+const stagingConfig = configureApp({
+  config: {
+    android: { package: 'com.tom.tvapp.dev' },
+    ios: { bundleIdentifier: 'com.tom.tvapp.dev' },
+    scheme: ['tvapp', 'com.tom.tvapp.dev'],
+  },
+});
+
+if (previousVariant === undefined) delete process.env.APP_VARIANT;
+else process.env.APP_VARIANT = previousVariant;
+if (previousPublicEnvironment === undefined) delete process.env.EXPO_PUBLIC_APP_ENV;
+else process.env.EXPO_PUBLIC_APP_ENV = previousPublicEnvironment;
+
+assert.deepEqual(
+  stagingConfig.scheme,
+  ['tvapp', 'com.tom.tvapp.staging'],
+  'The staging build must register the staging application ID as its OAuth redirect scheme',
 );
 
 console.log('Google auth config QA passed.');

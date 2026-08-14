@@ -1,7 +1,5 @@
 import { publicEnv } from '../config/publicEnv';
 
-export const googleNativeRedirectUri = 'com.tom.tvapp.dev:/auth';
-
 export const googleClientIds = {
   androidClientId: publicEnv.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
   iosClientId: publicEnv.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
