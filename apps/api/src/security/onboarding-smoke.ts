@@ -22,7 +22,11 @@ async function main() {
     assert(created.onboardingCompleted === false, 'New users should start onboarding incomplete.');
 
     const handle = `onboard_${Date.now().toString(36)}`;
-    const completed = await profile.completeOnboarding(identity, handle);
+    const completed = await profile.completeOnboarding(identity, {
+      displayName: 'Onboarding smoke user',
+      handle,
+      tasteItems: [{ contentType: 'movie', tmdbId: 603 }],
+    });
 
     assert(completed.onboardingCompleted === true, 'Completion route should mark onboarding complete.');
     assert(completed.handle === handle, 'Completion route should claim the normalized handle.');
@@ -31,6 +35,22 @@ async function main() {
 
     assert(reloaded.onboardingCompleted === true, 'Auth user should expose completed onboarding.');
     assert(reloaded.handle === handle, 'Auth user should expose the permanent handle.');
+
+    const tasteState = await prisma.userContentState.findUnique({
+      where: {
+        userId_contentType_tmdbId: {
+          contentType: 'MOVIE',
+          tmdbId: 603,
+          userId: created.id,
+        },
+      },
+    });
+    const viewingCount = await prisma.viewingEvent.count({
+      where: { contentType: 'MOVIE', tmdbId: 603, userId: created.id },
+    });
+
+    assert(tasteState?.status === 'WATCHED', 'Taste titles should be stored as Watched.');
+    assert(viewingCount === 0, 'Taste titles must not create a fake Journal viewing date.');
 
     console.log('Onboarding smoke passed.');
   } finally {

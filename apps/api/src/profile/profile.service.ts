@@ -13,6 +13,7 @@ import { getAuth } from 'firebase-admin/auth';
 import {
   AuditAction,
   AuthProvider,
+  DataImportStatus,
   FollowStatus,
   PrivacyVisibility,
   SharedWatchlistVisibility,
@@ -28,6 +29,7 @@ import { activeAccountWhere } from '../moderation/account-suspension';
 import { ViewingsService } from '../viewings/viewings.service';
 import {
   PrivacyVisibilityValue,
+  CompleteOnboardingDto,
   SharedWatchlistVisibilityValue,
   UpdateProfileBackdropDto,
   UpdatePrivacySettingsDto,
@@ -715,8 +717,15 @@ export class ProfileService {
     return this.getProfileByUserId(userId);
   }
 
-  async completeOnboarding(identity: AuthenticatedIdentity, value: string) {
-    const handle = normalizeProfileHandle(value);
+  async completeOnboarding(
+    identity: AuthenticatedIdentity,
+    value: CompleteOnboardingDto | string,
+  ) {
+    const input: CompleteOnboardingDto = typeof value === 'string' ? { handle: value } : value;
+    const handle = normalizeProfileHandle(input.handle);
+    const displayName = normalizeOnboardingDisplayName(input.displayName);
+    const tasteItems = dedupeTasteItems(input.tasteItems ?? []);
+    const completedImportIds = input.completedImportIds ?? [];
     const userId = await this.getUserId(identity);
     let user;
 
@@ -725,7 +734,9 @@ export class ProfileService {
         this.prisma.$transaction(async (tx) => {
           const current = await tx.user.findUniqueOrThrow({
             select: {
+              displayName: true,
               handle: true,
+              onboardingCompleted: true,
             },
             where: {
               id: userId,
@@ -734,6 +745,60 @@ export class ProfileService {
 
           if (current.handle && current.handle !== handle) {
             throw new BadRequestException('Your handle cannot be changed.');
+          }
+
+          if (!current.onboardingCompleted) {
+            if (!(displayName ?? current.displayName)?.trim()) {
+              throw new BadRequestException('Enter your display name to continue.');
+            }
+
+            const completedImports = completedImportIds.length > 0
+              ? await tx.dataImport.findMany({
+                select: { id: true, preview: true },
+                where: {
+                  id: { in: completedImportIds },
+                  status: DataImportStatus.COMPLETED,
+                  userId,
+                },
+              })
+              : [];
+
+            if (completedImports.length !== completedImportIds.length) {
+              throw new BadRequestException('A completed import does not belong to this account.');
+            }
+
+            const importAddedTitles = completedImports.some((item) =>
+              getCompletedImportTitleCount(item.preview) > 0
+            );
+
+            if (!importAddedTitles && (tasteItems.length < 1 || tasteItems.length > 3)) {
+              throw new BadRequestException(
+                'Choose 1 to 3 titles you have already watched, or complete an import.',
+              );
+            }
+
+            for (const item of tasteItems) {
+              await tx.userContentState.upsert({
+                create: {
+                  contentType: item.contentType === 'movie'
+                    ? TrackedContentType.MOVIE
+                    : TrackedContentType.SERIES,
+                  status: UserContentStatus.WATCHED,
+                  tmdbId: item.tmdbId,
+                  userId,
+                },
+                update: { status: UserContentStatus.WATCHED },
+                where: {
+                  userId_contentType_tmdbId: {
+                    contentType: item.contentType === 'movie'
+                      ? TrackedContentType.MOVIE
+                      : TrackedContentType.SERIES,
+                    tmdbId: item.tmdbId,
+                    userId,
+                  },
+                },
+              });
+            }
           }
 
           if (!current.handle) {
@@ -765,6 +830,7 @@ export class ProfileService {
 
           return tx.user.update({
             data: {
+              ...(displayName !== undefined ? { displayName } : {}),
               onboardingCompleted: true,
             },
             where: {
@@ -1422,6 +1488,34 @@ export class ProfileService {
       ? 'blocked_by_viewer'
       : 'blocked_by_profile';
   }
+}
+
+function normalizeOnboardingDisplayName(value: string | null | undefined) {
+  if (value === undefined) return undefined;
+
+  const displayName = value?.trim() ?? '';
+  return displayName.length > 0 ? displayName : null;
+}
+
+function dedupeTasteItems(items: CompleteOnboardingDto['tasteItems']) {
+  const unique = new Map<string, NonNullable<CompleteOnboardingDto['tasteItems']>[number]>();
+
+  (items ?? []).forEach((item) => {
+    unique.set(`${item.contentType}:${item.tmdbId}`, item);
+  });
+
+  return [...unique.values()];
+}
+
+function getCompletedImportTitleCount(value: unknown) {
+  if (!value || typeof value !== 'object' || !('result' in value)) return 0;
+
+  const result = value.result;
+  if (!result || typeof result !== 'object' || !('titlesProcessed' in result)) return 0;
+
+  return typeof result.titlesProcessed === 'number' && result.titlesProcessed > 0
+    ? result.titlesProcessed
+    : 0;
 }
 
 const PROFILE_SEARCH_LIMIT = 20;

@@ -1,4 +1,19 @@
-import { IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, Min, ValidateIf } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  MaxLength,
+  Min,
+  ValidateIf,
+  ValidateNested,
+} from 'class-validator';
 import {
   PROFILE_HANDLE_INPUT_MAX_LENGTH,
   PROFILE_HANDLE_INPUT_PATTERN,
@@ -24,12 +39,39 @@ export class ConfirmAvatarUploadDto {
 }
 
 export class CompleteOnboardingDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  completedImportIds?: string[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  displayName?: string | null;
+
   @IsString()
   @MaxLength(PROFILE_HANDLE_INPUT_MAX_LENGTH)
   @Matches(PROFILE_HANDLE_INPUT_PATTERN, {
     message: 'handle must use 3 to 20 letters, numbers, or underscores',
   })
   handle!: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(3)
+  @ValidateNested({ each: true })
+  @Type(() => OnboardingTasteItemDto)
+  tasteItems?: OnboardingTasteItemDto[];
+}
+
+export class OnboardingTasteItemDto {
+  @IsIn(['movie', 'series'])
+  contentType!: 'movie' | 'series';
+
+  @IsInt()
+  @Min(1)
+  tmdbId!: number;
 }
 
 export class UpdateProfileBackdropDto {

@@ -103,16 +103,16 @@ async function assertAccountDataExport(
 async function assertDefaultPrivacy(profile: ProfileService, identity: AuthenticatedIdentity) {
   const me = await profile.getProfile(identity);
 
-  assert(me.privacy.profileVisibility === 'private', 'Profiles should default to private.');
+  assert(me.privacy.profileVisibility === 'public', 'New profiles should default to public.');
   assert(
-    me.privacy.viewingHistoryVisibility === 'private',
-    'Viewing history should default to private.',
+    me.privacy.viewingHistoryVisibility === 'public',
+    'New viewing history should default to public.',
   );
   assert(
-    me.privacy.episodeProgressVisibility === 'private',
-    'Episode progress should default to private.',
+    me.privacy.episodeProgressVisibility === 'public',
+    'New episode progress should default to public.',
   );
-  assert(me.privacy.ratingsVisibility === 'private', 'Standalone ratings should default to private.');
+  assert(me.privacy.ratingsVisibility === 'public', 'New standalone ratings should default to public.');
   assert(
     me.privacy.sharedWatchlistVisibility === 'members',
     'Shared watchlist visibility should default to members.',
@@ -132,7 +132,7 @@ async function assertPublicProfileProjection(
   const keys = Object.keys(publicProfile).sort();
 
   assert(
-    keys.join(',') === 'avatarUrl,canViewContent,displayName,handle,id,media,opinions,profileBackdrop,profileVisibility,stats,viewingStats,watchlists',
+    keys.join(',') === 'avatarUrl,blockRelationship,canViewContent,displayName,handle,id,media,opinions,profileBackdrop,profileVisibility,stats,viewingStats,watchlists',
     `Public profile projection leaked unexpected fields: ${keys.join(',')}`,
   );
   const statsKeys = Object.keys(publicProfile.stats).sort();

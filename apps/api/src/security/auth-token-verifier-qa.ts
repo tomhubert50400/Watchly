@@ -24,6 +24,7 @@ async function main() {
         },
         iat: 0,
         iss: 'https://securetoken.google.com/security-qa',
+        picture: 'https://example.com/avatar.jpg',
         sub: 'qa-user',
         uid: 'qa-user',
       };
@@ -136,6 +137,10 @@ async function main() {
   assert.equal(emulatorIdentity.provider, 'GOOGLE');
   assert.equal(emulatorIdentity.providerUserId, 'ui-review-user');
   assert.equal(emulatorIdentity.email, 'ui-review@watchly.test');
+  assert.equal(emulatorIdentity.photoUrl, null);
+
+  const oauthIdentity = await verifyBearerTokenWithAuth(firebaseAuth, 'qa-token');
+  assert.equal(oauthIdentity.photoUrl, 'https://example.com/avatar.jpg');
 
   console.log('Auth token verifier QA passed.');
 }

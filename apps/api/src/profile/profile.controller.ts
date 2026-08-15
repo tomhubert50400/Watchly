@@ -144,7 +144,7 @@ export class ProfileController {
     @Req() request: AuthenticatedRequest,
     @Body() body: CompleteOnboardingDto,
   ) {
-    return this.profile.completeOnboarding(getIdentity(request), body.handle);
+    return this.profile.completeOnboarding(getIdentity(request), body);
   }
 }
 

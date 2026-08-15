@@ -18,10 +18,18 @@ async function run() {
     onboardingCompleted: false,
   };
   const transactionClient = {
+    dataImport: {
+      findMany: async () => [],
+    },
     user: {
-      findUniqueOrThrow: async () => ({ handle: storedUser.handle }),
-      update: async ({ data }: { data: { onboardingCompleted: boolean } }) => {
-        storedUser.onboardingCompleted = data.onboardingCompleted;
+      findUniqueOrThrow: async () => ({
+        displayName: storedUser.displayName,
+        handle: storedUser.handle,
+        onboardingCompleted: storedUser.onboardingCompleted,
+      }),
+      update: async ({ data }: { data: { displayName?: string | null; onboardingCompleted?: boolean } }) => {
+        if (data.displayName) storedUser.displayName = data.displayName;
+        if (data.onboardingCompleted !== undefined) storedUser.onboardingCompleted = data.onboardingCompleted;
         return { ...storedUser };
       },
       updateMany: async ({ data }: { data: { handle: string } }) => {
@@ -29,6 +37,9 @@ async function run() {
         storedUser.handle = data.handle;
         return { count: 1 };
       },
+    },
+    userContentState: {
+      upsert: async () => ({}),
     },
   };
   const prisma = {
@@ -47,7 +58,11 @@ async function run() {
   const service = createService(prisma);
   const identity = { providerUserId: 'viewer' } as never;
 
-  assert.deepEqual(await service.completeOnboarding(identity, '@Cinema_Fan'), {
+  assert.deepEqual(await service.completeOnboarding(identity, {
+    displayName: 'Handle tester',
+    handle: '@Cinema_Fan',
+    tasteItems: [{ contentType: 'movie', tmdbId: 603 }],
+  }), {
     displayName: 'Handle tester',
     handle: 'cinema_fan',
     id: 'viewer-id',

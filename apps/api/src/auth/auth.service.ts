@@ -68,6 +68,7 @@ export class AuthService {
           displayName: existingIdentity.user.displayName,
           handle: existingIdentity.user.handle,
           onboardingCompleted: existingIdentity.user.onboardingCompleted,
+          photoUrl: identity.photoUrl ?? null,
           provider: existingIdentity.provider,
         };
       }
@@ -93,6 +94,7 @@ export class AuthService {
         displayName: user.displayName,
         handle: user.handle,
         onboardingCompleted: user.onboardingCompleted,
+        photoUrl: identity.photoUrl ?? null,
         provider: identity.provider,
       };
     });
