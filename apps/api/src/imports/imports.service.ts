@@ -40,12 +40,14 @@ type PreparedImportItem = ParsedImportItem & {
 };
 
 type ImportSummary = {
+  favorites: number;
   needsAttention: number;
   ratings: number;
   ready: number;
   reviews: number;
   total: number;
   watched: number;
+  watching: number;
   watchlisted: number;
 };
 
@@ -66,7 +68,7 @@ type StoredImportPreview = {
   result?: ImportResult;
   source: ImportSourceValue;
   summary: ImportSummary;
-  version: 1;
+  version: 2;
 };
 
 export type ImportUpload = {
@@ -118,7 +120,7 @@ export class ImportsService {
       items,
       source,
       summary: buildImportSummary(items),
-      version: 1,
+      version: 2,
     };
     const record = await this.prisma.withConnectionRetry(() =>
       this.prisma.dataImport.create({
@@ -249,6 +251,21 @@ export class ImportsService {
       }
     }
 
+    if (item.tvdbId) {
+      const response = await this.catalogue.findByTvdbId(item.tvdbId);
+      const candidates = response.items.filter(
+        (candidate) => candidate.mediaType === 'series',
+      );
+
+      if (candidates.length === 1) {
+        return { match: toImportMatch(candidates[0]), status: 'ready' };
+      }
+
+      if (candidates.length > 1) {
+        return { issue: 'The TVDB ID matched more than one TMDB series.', status: 'ambiguous' };
+      }
+    }
+
     if (!item.sourceTitle || item.sourceTitle.startsWith('Title ')) {
       return { issue: 'No usable title or external ID was provided.', status: 'unmatched' };
     }
@@ -353,9 +370,11 @@ export async function commitPreparedItems(
     const existing = stateByKey.get(key);
     const importedStatus = item.watched
       ? UserContentStatus.WATCHED
-      : item.watchlisted
-        ? UserContentStatus.WATCHLISTED
-        : null;
+      : item.watching
+        ? UserContentStatus.WATCHING
+        : item.watchlisted
+          ? UserContentStatus.WATCHLISTED
+          : null;
 
     if (!importedStatus) continue;
 
@@ -364,6 +383,7 @@ export async function commitPreparedItems(
         data: {
           contentType,
           createdAt: toActivityDate(item.activityDate),
+          favorite: item.favorite,
           status: importedStatus,
           tmdbId: item.match.tmdbId,
           updatedAt: toActivityDate(item.activityDate),
@@ -372,12 +392,16 @@ export async function commitPreparedItems(
       });
       stateByKey.set(key, state);
       statesChanged += 1;
-    } else if (
-      importedStatus === UserContentStatus.WATCHED
-      && existing.status === UserContentStatus.WATCHLISTED
-    ) {
+    } else {
+      const nextStatus = shouldPromoteImportedStatus(existing.status, importedStatus)
+        ? importedStatus
+        : existing.status;
+      const nextFavorite = existing.favorite || item.favorite;
+
+      if (nextStatus === existing.status && nextFavorite === existing.favorite) continue;
+
       const state = await transaction.userContentState.update({
-        data: { status: UserContentStatus.WATCHED },
+        data: { favorite: nextFavorite, status: nextStatus },
         where: { id: existing.id },
       });
       stateByKey.set(key, state);
@@ -433,12 +457,14 @@ function buildImportSummary(items: PreparedImportItem[]): ImportSummary {
   );
 
   return {
+    favorites: ready.filter((item) => item.favorite).length,
     needsAttention: items.length - ready.length,
     ratings: ready.filter((item) => item.rating !== null && item.match.contentType === 'movie').length,
     ready: ready.length,
     reviews: ready.filter((item) => item.review !== null && item.match.contentType === 'movie').length,
     total: items.length,
     watched: ready.filter((item) => item.watched).length,
+    watching: ready.filter((item) => item.watching).length,
     watchlisted: ready.filter((item) => item.watchlisted).length,
   };
 }
@@ -456,7 +482,9 @@ function toPublicPreview(importId: string, preview: StoredImportPreview) {
           ? Math.max(1, item.watchedDates.length)
           : 0,
         watched: item.watched,
+        watching: item.watching,
         watchlisted: item.watchlisted,
+        favorite: item.favorite,
       },
       issues: item.issues,
       match: item.match,
@@ -472,7 +500,7 @@ function toPublicPreview(importId: string, preview: StoredImportPreview) {
 function readStoredPreview(value: Prisma.JsonValue): StoredImportPreview {
   const preview = value as unknown as Partial<StoredImportPreview>;
 
-  if (preview.version !== 1 || !Array.isArray(preview.items) || !preview.summary) {
+  if (preview.version !== 2 || !Array.isArray(preview.items) || !preview.summary) {
     throw new BadRequestException('This import preview is no longer supported.');
   }
 
@@ -497,7 +525,25 @@ function toImportMatch(item: {
 }
 
 function toDataImportSource(source: ImportSourceValue) {
-  return source === 'letterboxd' ? DataImportSource.LETTERBOXD : DataImportSource.IMDB;
+  if (source === 'letterboxd') return DataImportSource.LETTERBOXD;
+  if (source === 'tv-time') return DataImportSource.TV_TIME;
+  return DataImportSource.IMDB;
+}
+
+function shouldPromoteImportedStatus(
+  existing: UserContentStatus | null,
+  imported: UserContentStatus,
+) {
+  if (existing === UserContentStatus.DROPPED) return false;
+
+  return getStatusPriority(imported) > getStatusPriority(existing);
+}
+
+function getStatusPriority(status: UserContentStatus | null) {
+  if (status === UserContentStatus.WATCHED) return 3;
+  if (status === UserContentStatus.WATCHING) return 2;
+  if (status === UserContentStatus.WATCHLISTED) return 1;
+  return 0;
 }
 
 function toTrackedContentType(contentType: ImportMatch['contentType']) {

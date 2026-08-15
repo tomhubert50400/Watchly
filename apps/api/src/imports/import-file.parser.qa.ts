@@ -21,6 +21,7 @@ const heat = letterboxd.items.find((item) => item.sourceTitle === 'Heat');
 assert.deepEqual(parisTexas, {
   activityDate: '2026-02-03',
   contentHint: 'movie',
+  favorite: false,
   imdbId: null,
   rating: 5,
   review: 'Even better\non a rewatch.',
@@ -28,8 +29,10 @@ assert.deepEqual(parisTexas, {
   sourceTitle: 'Paris, Texas',
   sourceYear: 1984,
   tmdbId: null,
+  tvdbId: null,
   watched: true,
   watchedDates: ['2026-01-02', '2026-02-03'],
+  watching: false,
   watchlisted: false,
   warnings: [],
 });
@@ -52,5 +55,36 @@ assert.equal(imdb.items[0].rating, 4);
 assert.equal(imdb.items[0].watched, true);
 assert.deepEqual(imdb.items[0].watchedDates, []);
 assert.equal(imdb.items[1].contentHint, 'series');
+
+const tvTimeZip = Buffer.from(zipSync({
+  'access_token.csv': strToU8('access_token\ndo-not-parse-or-import'),
+  'device_token.csv': strToU8('device_token\ndo-not-parse-or-import'),
+  'tracking-prod-records.csv': strToU8([
+    'uuid,type,entity_type,movie_name,release_date,watch_date,user_id',
+    'movie-watched,follow,movie,Heat,1995-12-15,,private-user-id',
+    'movie-watched,watch,movie,Heat,1995-12-15,2025-04-03,private-user-id',
+    'movie-planned,follow,movie,Dune: Part Two,2024-02-27,,private-user-id',
+    'movie-planned,towatch,movie,Dune: Part Two,2024-02-27,,private-user-id',
+  ].join('\n')),
+  'user_tv_show_data.csv': strToU8([
+    'tv_show_id,is_followed,is_favorited,nb_episodes_seen,tv_show_name,user_id',
+    '81189,1,1,12,Breaking Bad,private-user-id',
+    '70682,1,0,0,Oz,private-user-id',
+  ].join('\n')),
+}));
+const tvTime = parseImportFile('tv-time', 'gdpr-data.zip', tvTimeZip);
+
+assert.equal(tvTime.ignoredFileCount, 2, 'sensitive and unrelated CSV files must be ignored before parsing');
+assert.equal(tvTime.items.length, 3);
+const tvTimeSeries = tvTime.items.find((item) => item.tvdbId === 81189);
+assert.equal(tvTimeSeries?.watching, true);
+assert.equal(tvTimeSeries?.favorite, true);
+assert.equal(tvTime.items.some((item) => item.sourceTitle === 'Oz'), false);
+assert.equal(tvTime.items.find((item) => item.sourceTitle === 'Heat')?.watched, true);
+assert.deepEqual(
+  tvTime.items.find((item) => item.sourceTitle === 'Heat')?.watchedDates,
+  ['2025-04-03'],
+);
+assert.equal(tvTime.items.find((item) => item.sourceTitle === 'Dune: Part Two')?.watchlisted, true);
 
 console.log('Import file parser QA passed.');

@@ -23,12 +23,13 @@ async function main() {
   try {
     const user = await auth.getOrCreateUser(identity);
     userId = user.id;
+    const persistedUserId = user.id;
     const preview = await imports.preview(identity, 'letterboxd', {
       buffer: Buffer.from([
         'tmdbID,Title,Year,Rating,WatchedDate,Review',
         '949,Heat,1995,4.5,2025-01-02,"Import smoke review."',
       ].join('\n')),
-      originalname: 'watchly-import-smoke.csv',
+      originalname: 'diary.csv',
       size: 115,
     });
 
@@ -39,21 +40,29 @@ async function main() {
     assert(result.reviewsCreated === 1, 'The import should create the review.');
     assert(result.viewingEventsCreated === 1, 'The import should preserve the viewing date.');
 
-    const [rating, review, state, viewing, batch] = await Promise.all([
-      prisma.userMovieRating.findUnique({ where: { userId_tmdbId: { tmdbId: 949, userId } } }),
-      prisma.userMovieReview.findUnique({ where: { userId_tmdbId: { tmdbId: 949, userId } } }),
+    const rating = await prisma.withConnectionRetry(() =>
+      prisma.userMovieRating.findUnique({ where: { userId_tmdbId: { tmdbId: 949, userId: persistedUserId } } }),
+    );
+    const review = await prisma.withConnectionRetry(() =>
+      prisma.userMovieReview.findUnique({ where: { userId_tmdbId: { tmdbId: 949, userId: persistedUserId } } }),
+    );
+    const state = await prisma.withConnectionRetry(() =>
       prisma.userContentState.findUnique({
         where: {
           userId_contentType_tmdbId: {
             contentType: TrackedContentType.MOVIE,
             tmdbId: 949,
-            userId,
+            userId: persistedUserId,
           },
         },
       }),
-      prisma.viewingEvent.findFirst({ where: { tmdbId: 949, userId } }),
+    );
+    const viewing = await prisma.withConnectionRetry(() =>
+      prisma.viewingEvent.findFirst({ where: { tmdbId: 949, userId: persistedUserId } }),
+    );
+    const batch = await prisma.withConnectionRetry(() =>
       prisma.dataImport.findUnique({ where: { id: preview.importId } }),
-    ]);
+    );
 
     assert(rating?.scoreHalfSteps === 9, 'The 4.5 rating should be stored as nine half-steps.');
     assert(review?.body === 'Import smoke review.', 'The review body should be preserved.');

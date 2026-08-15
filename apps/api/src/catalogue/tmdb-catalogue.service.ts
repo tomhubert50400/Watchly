@@ -458,14 +458,25 @@ export class TmdbCatalogueService {
   ) {}
 
   async findByImdbId(imdbId: string) {
+    return this.findByExternalId(imdbId, 'imdb_id');
+  }
+
+  async findByTvdbId(tvdbId: number) {
+    return this.findByExternalId(String(tvdbId), 'tvdb_id');
+  }
+
+  private async findByExternalId(
+    externalId: string,
+    source: 'imdb_id' | 'tvdb_id',
+  ) {
     const accessToken = this.config.get<string>('TMDB_ACCESS_TOKEN');
 
     if (!accessToken) {
       throw new ServiceUnavailableException('TMDB_ACCESS_TOKEN is not configured.');
     }
 
-    const endpoint = new URL(`${this.tmdbBaseUrl}/find/${encodeURIComponent(imdbId)}`);
-    endpoint.searchParams.set('external_source', 'imdb_id');
+    const endpoint = new URL(`${this.tmdbBaseUrl}/find/${encodeURIComponent(externalId)}`);
+    endpoint.searchParams.set('external_source', source);
     endpoint.searchParams.set('language', TMDB_LANGUAGE);
 
     try {

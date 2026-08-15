@@ -3,11 +3,12 @@ import { parse } from 'csv-parse/sync';
 import { strFromU8, unzipSync } from 'fflate';
 import { basename } from 'node:path';
 
-export type ImportSourceValue = 'imdb' | 'letterboxd';
+export type ImportSourceValue = 'imdb' | 'letterboxd' | 'tv-time';
 
 export type ParsedImportItem = {
   activityDate: string | null;
   contentHint: 'episode' | 'movie' | 'series';
+  favorite: boolean;
   imdbId: string | null;
   rating: number | null;
   review: string | null;
@@ -15,8 +16,10 @@ export type ParsedImportItem = {
   sourceTitle: string;
   sourceYear: number | null;
   tmdbId: number | null;
+  tvdbId: number | null;
   watched: boolean;
   watchedDates: string[];
+  watching: boolean;
   watchlisted: boolean;
   warnings: string[];
 };
@@ -41,10 +44,12 @@ export function parseImportFile(
   const { files, ignoredFileCount } = readCsvFiles(source, fileName, buffer);
   const items = source === 'letterboxd'
     ? parseLetterboxdFiles(files)
-    : parseImdbFiles(files);
+    : source === 'tv-time'
+      ? parseTvTimeFiles(files)
+      : parseImdbFiles(files);
 
   if (items.length === 0) {
-    throw new BadRequestException(`No supported ${source === 'imdb' ? 'IMDb' : 'Letterboxd'} rows were found.`);
+    throw new BadRequestException(`No supported ${getSourceLabel(source)} rows were found.`);
   }
 
   if (items.length > MAX_IMPORT_ITEMS) {
@@ -60,6 +65,11 @@ function readCsvFiles(source: ImportSourceValue, fileName: string, buffer: Buffe
   if (!isZip(fileName, buffer)) {
     if (!fileName.toLowerCase().endsWith('.csv')) {
       throw new BadRequestException('Choose a CSV or ZIP export file.');
+    }
+
+    const entryBaseName = basename(fileName).toLowerCase();
+    if (!isSupportedSourceFile(source, entryBaseName)) {
+      throw new BadRequestException(`Choose a supported ${getSourceLabel(source)} CSV export file.`);
     }
 
     return {
@@ -85,9 +95,9 @@ function readCsvFiles(source: ImportSourceValue, fileName: string, buffer: Buffe
     const entryBaseName = basename(normalizedName);
     const isCsv = entryBaseName.endsWith('.csv');
     const isDeleted = normalizedName.startsWith('deleted/') || normalizedName.includes('/deleted/');
-    const isSupportedLetterboxdFile = LETTERBOXD_EXPORT_FILES.has(entryBaseName);
+    const isSupportedFile = isSupportedSourceFile(source, entryBaseName);
 
-    if (!isCsv || isDeleted || (source === 'letterboxd' && !isSupportedLetterboxdFile)) {
+    if (!isCsv || isDeleted || !isSupportedFile) {
       if (isCsv) ignoredFileCount += 1;
       continue;
     }
@@ -203,9 +213,86 @@ function parseImdbFiles(files: CsvFile[]) {
   return finalizeItems(items);
 }
 
+function parseTvTimeFiles(files: CsvFile[]) {
+  const items = new Map<string, MutableParsedImportItem>();
+
+  files.forEach((file) => {
+    const fileName = basename(file.name).toLowerCase();
+
+    if (fileName === 'user_tv_show_data.csv') {
+      file.records.forEach((record) => {
+        const tvdbId = readPositiveInteger(record.tvshowid);
+        const sourceTitle = record.tvshowname?.trim() ?? '';
+        const episodesSeen = readNonNegativeInteger(record.nbepisodesseen);
+
+        if (!tvdbId || !sourceTitle || episodesSeen === 0) return;
+
+        const sourceKey = `tvdb:${tvdbId}`;
+        const item = items.get(sourceKey) ?? createMutableItem({
+          contentHint: 'series',
+          imdbId: null,
+          sourceKey,
+          sourceTitle,
+          sourceYear: null,
+          tmdbId: null,
+          tvdbId,
+        });
+        item.favorite ||= readBooleanFlag(record.isfavorited);
+        item.watching = true;
+        items.set(sourceKey, item);
+      });
+      return;
+    }
+
+    const movieRows = new Map<string, CsvRecord[]>();
+    file.records.forEach((record) => {
+      if (record.entitytype?.trim().toLowerCase() !== 'movie') return;
+
+      const uuid = record.uuid?.trim();
+      if (!uuid) return;
+
+      const rows = movieRows.get(uuid) ?? [];
+      rows.push(record);
+      movieRows.set(uuid, rows);
+    });
+
+    movieRows.forEach((records, uuid) => {
+      const sourceTitle = records.find((record) => record.moviename?.trim())?.moviename.trim() ?? '';
+      const actionTypes = new Set(records.map((record) => record.type?.trim().toLowerCase()));
+      const watched = actionTypes.has('watch');
+      const watchlisted = actionTypes.has('towatch');
+
+      if (!sourceTitle || (!watched && !watchlisted)) return;
+
+      const sourceKey = `tv-time:${uuid}`;
+      const item = items.get(sourceKey) ?? createMutableItem({
+        contentHint: 'movie',
+        imdbId: null,
+        sourceKey,
+        sourceTitle,
+        sourceYear: readYearFromDate(records.find((record) => record.releasedate)?.releasedate),
+        tmdbId: null,
+        tvdbId: null,
+      });
+      item.watched ||= watched;
+      item.watchlisted ||= watchlisted;
+      records.forEach((record) => {
+        const watchedDate = readDate(record.watchdate);
+        if (watchedDate && record.type?.trim().toLowerCase() === 'watch') {
+          item.watchedDates.add(watchedDate);
+          item.activityDate = laterDate(item.activityDate, watchedDate);
+        }
+      });
+      items.set(sourceKey, item);
+    });
+  });
+
+  return finalizeItems(items);
+}
+
 type ImportMetadata = Pick<
   ParsedImportItem,
-  'contentHint' | 'imdbId' | 'sourceKey' | 'sourceTitle' | 'sourceYear' | 'tmdbId'
+  'contentHint' | 'imdbId' | 'sourceKey' | 'sourceTitle' | 'sourceYear' | 'tmdbId' | 'tvdbId'
 >;
 
 type MutableParsedImportItem = Omit<ParsedImportItem, 'watchedDates'> & {
@@ -245,6 +332,7 @@ function readMetadata(
     sourceTitle: sourceTitle || `Title ${index + 1}`,
     sourceYear,
     tmdbId,
+    tvdbId: null,
   };
 }
 
@@ -252,10 +340,12 @@ function createMutableItem(metadata: ImportMetadata): MutableParsedImportItem {
   return {
     ...metadata,
     activityDate: null,
+    favorite: false,
     rating: null,
     review: null,
     watched: false,
     watchedDates: new Set<string>(),
+    watching: false,
     watchlisted: false,
     warnings: [],
   };
@@ -271,6 +361,7 @@ function mergeMetadata(item: MutableParsedImportItem, metadata: ImportMetadata) 
   item.imdbId ??= metadata.imdbId;
   item.sourceYear ??= metadata.sourceYear;
   item.tmdbId ??= metadata.tmdbId;
+  item.tvdbId ??= metadata.tvdbId;
   if (item.sourceTitle.startsWith('Title ')) item.sourceTitle = metadata.sourceTitle;
 }
 
@@ -278,7 +369,8 @@ function finalizeItems(items: Map<string, MutableParsedImportItem>): ParsedImpor
   return [...items.values()].map((item) => ({
     ...item,
     watchedDates: [...item.watchedDates].sort(),
-    watchlisted: item.watchlisted && !item.watched,
+    watching: item.watching && !item.watched,
+    watchlisted: item.watchlisted && !item.watched && !item.watching,
   }));
 }
 
@@ -335,6 +427,20 @@ function readYear(value: string | undefined) {
 function readPositiveInteger(value: string | undefined) {
   const integer = Number(value);
   return Number.isInteger(integer) && integer > 0 ? integer : null;
+}
+
+function readNonNegativeInteger(value: string | undefined) {
+  const integer = Number(value);
+  return Number.isInteger(integer) && integer >= 0 ? integer : 0;
+}
+
+function readBooleanFlag(value: string | undefined) {
+  return value?.trim() === '1' || value?.trim().toLowerCase() === 'true';
+}
+
+function readYearFromDate(value: string | undefined) {
+  const year = Number(value?.trim().slice(0, 4));
+  return Number.isInteger(year) && year >= 1870 && year <= 2200 ? year : null;
 }
 
 function readImdbId(value: string | undefined) {
@@ -453,6 +559,21 @@ const LETTERBOXD_EXPORT_FILES = new Set([
   'watched.csv',
   'watchlist.csv',
 ]);
+const TV_TIME_EXPORT_FILES = new Set([
+  'tracking-prod-records.csv',
+  'user_tv_show_data.csv',
+]);
+
+function isSupportedSourceFile(source: ImportSourceValue, fileName: string) {
+  if (source === 'letterboxd') return LETTERBOXD_EXPORT_FILES.has(fileName);
+  if (source === 'tv-time') return TV_TIME_EXPORT_FILES.has(fileName);
+  return fileName.endsWith('.csv');
+}
+
+function getSourceLabel(source: ImportSourceValue) {
+  if (source === 'tv-time') return 'TV Time';
+  return source === 'imdb' ? 'IMDb' : 'Letterboxd';
+}
 const MAX_CSV_FILES = 20;
 const MAX_EXTRACTED_BYTES = 15 * 1024 * 1024;
 const ZIP_CENTRAL_HEADER_BYTES = 46;

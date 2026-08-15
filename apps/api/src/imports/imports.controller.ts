@@ -43,8 +43,8 @@ export class ImportsController {
 }
 
 function parseSource(source: string): ImportSourceValue {
-  if (source !== 'letterboxd' && source !== 'imdb') {
-    throw new BadRequestException('Supported import sources are Letterboxd and IMDb.');
+  if (source !== 'letterboxd' && source !== 'imdb' && source !== 'tv-time') {
+    throw new BadRequestException('Supported import sources are Letterboxd, IMDb, and TV Time.');
   }
 
   return source;
