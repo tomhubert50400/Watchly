@@ -70,6 +70,16 @@ export type PublicProfile = {
   }>;
 };
 
+export type CompleteOnboardingInput = {
+  completedImportIds?: string[];
+  displayName?: string | null;
+  handle: string;
+  tasteItems?: Array<{
+    contentType: 'movie' | 'series';
+    tmdbId: number;
+  }>;
+};
+
 export type ProfileSearchItem = {
   avatarUrl: string | null;
   displayName: string;
@@ -288,11 +298,11 @@ export function deleteAccount(firebaseIdToken: string) {
 
 export function completeOnboarding(
   firebaseIdToken: string,
-  handle: string,
+  input: CompleteOnboardingInput,
 ): Promise<OnboardingCompletion> {
   return apiPut<OnboardingCompletion>(
     '/profile/me/onboarding-completed',
-    { handle },
+    input,
     { token: firebaseIdToken },
   );
 }

@@ -34,6 +34,7 @@ import {
   updatePrivacy,
   updateProfile,
 } from '../api/profile';
+import { OnboardingResetMode, resetOnboarding } from '../api/dev';
 import {
   listWatchlists,
   PersonalWatchlistSummary,
@@ -52,11 +53,12 @@ import { colors, radii, shadows, spacing, touchTargets, typography } from '../de
 import { hapticError, hapticSuccess } from '../feedback/haptics';
 import type { LegalDocumentId } from '../legal/legalDocuments';
 import type { RootStackParamList } from '../navigation/types';
+import { clearOnboardingDraft } from '../onboarding/onboardingDraft';
 import appConfig from '../../app.json';
 import { chooseAndUploadProfileAvatar } from './uploadProfileAvatar';
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
-type AccountAction = 'delete' | 'export' | 'signOut' | null;
+type AccountAction = 'delete' | 'export' | 'resetFull' | 'resetLegacy' | 'signOut' | null;
 type SettingsNavigation = NativeStackNavigationProp<RootStackParamList>;
 type SavedSettings = {
   displayName: string;
@@ -64,12 +66,12 @@ type SavedSettings = {
 };
 
 const defaultPrivacy: ProfilePrivacy = {
-  episodeProgressVisibility: 'private',
-  profileVisibility: 'private',
-  ratingsVisibility: 'private',
+  episodeProgressVisibility: 'public',
+  profileVisibility: 'public',
+  ratingsVisibility: 'public',
   reviewsFollowProfileVisibility: true,
   sharedWatchlistVisibility: 'members',
-  viewingHistoryVisibility: 'private',
+  viewingHistoryVisibility: 'public',
 };
 
 export function SettingsScreen() {
@@ -347,6 +349,43 @@ export function SettingsScreen() {
     }
   }
 
+  function requestOnboardingReset(mode: OnboardingResetMode) {
+    const isLegacy = mode === 'legacy';
+
+    Alert.alert(
+      isLegacy ? 'Replay handle recovery?' : 'Replay full onboarding?',
+      'Your profile photo, library, imports, privacy, and other account data will be preserved.',
+      [
+        { style: 'cancel', text: 'Cancel' },
+        {
+          onPress: () => void performOnboardingReset(mode),
+          text: 'Replay',
+        },
+      ],
+    );
+  }
+
+  async function performOnboardingReset(mode: OnboardingResetMode) {
+    if (!firebaseIdToken || !currentUser || accountAction) return;
+
+    setAccountAction(mode === 'legacy' ? 'resetLegacy' : 'resetFull');
+    setMessage(null);
+
+    try {
+      await resetOnboarding(firebaseIdToken, mode);
+      await clearOnboardingDraft(currentUser.id);
+      await refreshCurrentUser();
+    } catch (error) {
+      setMessage({
+        text: error instanceof Error ? error.message : 'Could not reset onboarding.',
+        tone: 'error',
+      });
+      hapticError();
+    } finally {
+      setAccountAction(null);
+    }
+  }
+
   const openLegalDocument = (document: LegalDocumentId) => {
     navigation.navigate('LegalDocument', { document });
   };
@@ -553,6 +592,31 @@ export function SettingsScreen() {
               />
             </View>
           </SettingsSection>
+
+          {__DEV__ ? (
+            <SettingsSection
+              subtitle="Replay onboarding without deleting profile data. Device notification permission is not reset."
+              title="Developer tools"
+            >
+              <View style={styles.group}>
+                <SettingsActionRow
+                  body="Start again from profile, import, Taste, and notifications."
+                  icon={Code2}
+                  label="Replay full onboarding"
+                  loading={accountAction === 'resetFull'}
+                  onPress={() => requestOnboardingReset('full')}
+                />
+                <SettingsActionRow
+                  body="Test an existing account that still needs a permanent handle."
+                  icon={User}
+                  label="Replay legacy handle recovery"
+                  last
+                  loading={accountAction === 'resetLegacy'}
+                  onPress={() => requestOnboardingReset('legacy')}
+                />
+              </View>
+            </SettingsSection>
+          ) : null}
 
           <LegalSection onOpen={openLegalDocument} />
 

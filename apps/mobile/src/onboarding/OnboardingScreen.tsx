@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -8,14 +9,23 @@ import {
   Text,
   View,
 } from 'react-native';
-import { CheckCircle2 } from 'lucide-react-native';
+import {
+  BellRing,
+  Camera,
+  CheckCircle2,
+  Database,
+  ShieldCheck,
+} from 'lucide-react-native';
 import {
   CatalogueSearchItem,
   CatalogueSearchType,
   searchCatalogue,
 } from '../api/catalogue';
-import { completeOnboarding, getHandleAvailability, updateProfile } from '../api/profile';
-import { upsertTrackingState } from '../api/tracking';
+import {
+  completeOnboarding,
+  getHandleAvailability,
+  getProfile,
+} from '../api/profile';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
@@ -23,14 +33,32 @@ import { LoadingState } from '../components/LoadingState';
 import { MediaPoster } from '../components/MediaPoster';
 import { Screen } from '../components/Screen';
 import { TextInput } from '../components/TextInput';
+import { UserAvatar } from '../components/UserAvatar';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { hapticError, hapticSuccess } from '../feedback/haptics';
+import { ImportDataScreen } from '../imports/ImportDataScreen';
+import {
+  enableAllPushFromOnboarding,
+  ReleasePushSetupResult,
+} from '../notifications/nativePushNotifications';
+import {
+  copyRemoteProfileAvatar,
+  chooseAndUploadProfileAvatar,
+} from '../profile/uploadProfileAvatar';
 import {
   getProfileHandleError,
   normalizeProfileHandleInput,
 } from '../profile/profileHandle';
+import {
+  clearOnboardingDraft,
+  OnboardingDraft,
+  OnboardingStep,
+  OnboardingTasteItem,
+  readOnboardingDraft,
+  writeOnboardingDraft,
+} from './onboardingDraft';
 
-type OnboardingStep = 0 | 1 | 2;
-
+const steps: readonly OnboardingStep[] = ['profile', 'import', 'taste', 'notifications'];
 const filters: { label: string; type: CatalogueSearchType }[] = [
   { label: 'All', type: 'all' },
   { label: 'Films', type: 'movie' },
@@ -41,161 +69,258 @@ export function OnboardingScreen() {
   const {
     currentUser,
     firebaseIdToken,
+    notifySocialChanged,
     notifyTrackingChanged,
     refreshCurrentUser,
   } = useAuthSession();
+  const isHandleClaim = Boolean(currentUser?.onboardingCompleted && !currentUser.handle);
+  const [avatarUploadsEnabled, setAvatarUploadsEnabled] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(currentUser?.photoUrl ?? null);
+  const [avatarStatus, setAvatarStatus] = useState<'idle' | 'saving'>('idle');
+  const [avatarMessage, setAvatarMessage] = useState<string | null>(null);
+  const [completedImportIds, setCompletedImportIds] = useState<string[]>([]);
   const [displayName, setDisplayName] = useState(currentUser?.displayName ?? '');
+  const [draftReady, setDraftReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [handle, setHandle] = useState(currentUser?.handle ?? '');
   const [handleTouched, setHandleTouched] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [importSatisfied, setImportSatisfied] = useState(false);
   const [isCheckingHandle, setIsCheckingHandle] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
-  const [items, setItems] = useState<CatalogueSearchItem[]>([]);
-  const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState<CatalogueSearchItem[]>([]);
-  const [selectedType, setSelectedType] = useState<CatalogueSearchType>('all');
-  const [step, setStep] = useState<OnboardingStep>(0);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const trimmedQuery = query.trim();
-  const handleError = getProfileHandleError(handle);
-  const isHandleClaim = Boolean(currentUser?.onboardingCompleted && !currentUser.handle);
-  const progress = useMemo(() => `${step + 1} / 3`, [step]);
+  const [notificationOutcome, setNotificationOutcome] = useState<ReleasePushSetupResult | null>(null);
+  const [notificationStatus, setNotificationStatus] = useState<'idle' | 'requesting'>('idle');
+  const [step, setStep] = useState<OnboardingStep>('profile');
+  const [tasteItems, setTasteItems] = useState<OnboardingTasteItem[]>([]);
+  const copyAttempted = useRef(false);
 
   useEffect(() => {
-    if (trimmedQuery.length < 2) {
-      setItems([]);
-      setSearchError(null);
-      setSearchLoading(false);
+    if (!currentUser) return;
+
+    let active = true;
+    copyAttempted.current = false;
+    setAvatarUrl(currentUser.photoUrl);
+
+    void Promise.all([
+      readOnboardingDraft(currentUser.id).catch(() => null),
+      firebaseIdToken ? getProfile(firebaseIdToken).catch(() => null) : Promise.resolve(null),
+    ]).then(async ([draft, profile]) => {
+      if (!active) return;
+
+      setAvatarUploadsEnabled(Boolean(profile?.avatarUploadsEnabled));
+      setAvatarUrl(profile?.avatarUrl ?? draft?.avatarUrl ?? currentUser.photoUrl);
+      setCompletedImportIds(draft?.completedImportIds ?? []);
+      setDisplayName(draft?.displayName ?? currentUser.displayName ?? '');
+      setHandle(draft?.handle ?? currentUser.handle ?? '');
+      setImportSatisfied(draft?.importSatisfied ?? false);
+      setStep(isHandleClaim ? 'profile' : normalizeDraftStep(draft));
+      setTasteItems(draft?.tasteItems ?? []);
+      setDraftReady(true);
+
+      if (
+        !isHandleClaim
+        && firebaseIdToken
+        && currentUser.photoUrl
+        && profile?.avatarUploadsEnabled
+        && !profile.avatarUrl
+        && !copyAttempted.current
+      ) {
+        copyAttempted.current = true;
+        setAvatarStatus('saving');
+
+        try {
+          const savedProfile = await copyRemoteProfileAvatar(firebaseIdToken, currentUser.photoUrl);
+          if (!active) return;
+          setAvatarUrl(savedProfile.avatarUrl);
+          notifySocialChanged();
+        } catch {
+          if (!active) return;
+          setAvatarMessage('We could not copy your sign-in photo. Choose another photo or continue without one.');
+        } finally {
+          if (active) setAvatarStatus('idle');
+        }
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    currentUser?.displayName,
+    currentUser?.handle,
+    currentUser?.id,
+    currentUser?.photoUrl,
+    firebaseIdToken,
+    isHandleClaim,
+  ]);
+
+  useEffect(() => {
+    if (!currentUser || !draftReady || isHandleClaim) return;
+
+    const draft: OnboardingDraft = {
+      avatarUrl,
+      completedImportIds,
+      displayName,
+      handle,
+      importSatisfied,
+      step,
+      tasteItems,
+      version: 1,
+    };
+
+    void writeOnboardingDraft(currentUser.id, draft);
+  }, [
+    avatarUrl,
+    completedImportIds,
+    currentUser,
+    displayName,
+    draftReady,
+    handle,
+    importSatisfied,
+    isHandleClaim,
+    step,
+    tasteItems,
+  ]);
+
+  if (!currentUser || !draftReady) {
+    return (
+      <Screen title="">
+        <LoadingState label="Preparing your profile" />
+      </Screen>
+    );
+  }
+
+  const handleError = getProfileHandleError(handle);
+
+  async function continueProfile() {
+    if (!firebaseIdToken || isCheckingHandle) return;
+
+    const trimmedName = displayName.trim();
+    if (!trimmedName) {
+      setError('Enter a display name to continue.');
       return;
     }
 
-    let isCurrent = true;
-    const handle = setTimeout(() => {
-      setSearchError(null);
-      setSearchLoading(true);
-
-      searchCatalogue(trimmedQuery, selectedType)
-        .then((response) => {
-          if (isCurrent) {
-            setItems(response.items);
-          }
-        })
-        .catch((caughtError) => {
-          if (isCurrent) {
-            setItems([]);
-            setSearchError(
-              caughtError instanceof Error ? caughtError.message : 'Catalogue search failed.',
-            );
-          }
-        })
-        .finally(() => {
-          if (isCurrent) {
-            setSearchLoading(false);
-          }
-        });
-    }, 350);
-
-    return () => {
-      isCurrent = false;
-      clearTimeout(handle);
-    };
-  }, [selectedType, trimmedQuery]);
-
-  function toggleSelected(item: CatalogueSearchItem) {
-    setSelected((current) => {
-      const exists = current.some(
-        (selectedItem) =>
-          selectedItem.mediaType === item.mediaType && selectedItem.tmdbId === item.tmdbId,
-      );
-
-      if (exists) {
-        return current.filter(
-          (selectedItem) =>
-            selectedItem.mediaType !== item.mediaType || selectedItem.tmdbId !== item.tmdbId,
-        );
-      }
-
-      return [...current, item];
-    });
-  }
-
-  async function continueOnboarding() {
-    if (step === 0 && handleError) {
+    if (handleError) {
       setHandleTouched(true);
       setError(handleError);
       return;
     }
 
-    if (step === 0) {
-      if (!firebaseIdToken || isCheckingHandle) return;
-
-      setIsCheckingHandle(true);
-      setError(null);
-
-      try {
-        const availability = await getHandleAvailability(
-          firebaseIdToken,
-          normalizeProfileHandleInput(handle),
-        );
-
-        if (!availability.available) {
-          setHandleTouched(true);
-          setError('This handle is already taken.');
-          return;
-        }
-      } catch (caughtError) {
-        setError(
-          caughtError instanceof Error
-            ? caughtError.message
-            : 'Could not check this handle. Try again.',
-        );
-        return;
-      } finally {
-        setIsCheckingHandle(false);
-      }
-    }
-
     setError(null);
-    setStep((current) => (current + 1) as OnboardingStep);
+    setIsCheckingHandle(true);
+
+    try {
+      const availability = await getHandleAvailability(
+        firebaseIdToken,
+        normalizeProfileHandleInput(handle),
+      );
+
+      if (!availability.available) {
+        setHandleTouched(true);
+        setError('This handle is already taken.');
+        return;
+      }
+
+      setStep('import');
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Could not check this handle.');
+    } finally {
+      setIsCheckingHandle(false);
+    }
   }
 
-  async function finishOnboarding() {
-    if (!firebaseIdToken || isFinishing) {
+  async function changeAvatar() {
+    if (!firebaseIdToken || !avatarUploadsEnabled || avatarStatus === 'saving') return;
+
+    setAvatarStatus('saving');
+    setAvatarMessage(null);
+
+    try {
+      const profile = await chooseAndUploadProfileAvatar(firebaseIdToken);
+      if (!profile) return;
+
+      setAvatarUrl(profile.avatarUrl);
+      notifySocialChanged();
+      hapticSuccess();
+    } catch (caughtError) {
+      setAvatarMessage(
+        caughtError instanceof Error ? caughtError.message : 'Could not update your profile photo.',
+      );
+      hapticError();
+    } finally {
+      setAvatarStatus('idle');
+    }
+  }
+
+  function continueImport() {
+    setError(null);
+    setStep(importSatisfied ? 'notifications' : 'taste');
+  }
+
+  function continueTaste() {
+    if (tasteItems.length < 1 || tasteItems.length > 3) {
+      setError('Choose 1 to 3 titles you have already watched.');
       return;
     }
 
     setError(null);
-    setIsFinishing(true);
+    setStep('notifications');
+  }
+
+  function goBack() {
+    setError(null);
+    if (step === 'import') setStep('profile');
+    if (step === 'taste') setStep('import');
+    if (step === 'notifications') setStep(importSatisfied ? 'import' : 'taste');
+  }
+
+  async function allowNotifications() {
+    if (!firebaseIdToken || !currentUser || notificationStatus === 'requesting' || isFinishing) return;
+
+    setNotificationStatus('requesting');
+    setNotificationOutcome(null);
+    setError(null);
 
     try {
-      if (handleError) {
-        setHandleTouched(true);
-        setStep(0);
-        throw new Error(handleError);
+      const outcome = await enableAllPushFromOnboarding(firebaseIdToken, currentUser.id);
+      setNotificationOutcome(outcome);
+
+      if (outcome.status === 'enabled') {
+        await finishOnboarding();
       }
-
-      const trimmedDisplayName = displayName.trim();
-
-      await updateProfile(firebaseIdToken, {
-        displayName: trimmedDisplayName.length > 0 ? trimmedDisplayName : null,
+    } catch (caughtError) {
+      setNotificationOutcome({
+        message: caughtError instanceof Error
+          ? caughtError.message
+          : 'Notifications are unavailable in this build.',
+        status: 'unavailable',
       });
+      hapticError();
+    } finally {
+      setNotificationStatus('idle');
+    }
+  }
 
-      await Promise.all(
-        selected.map((item) =>
-          upsertTrackingState(firebaseIdToken, {
-            contentType: item.mediaType,
-            status: 'watchlisted',
+  async function finishOnboarding() {
+    if (!firebaseIdToken || !currentUser || isFinishing) return;
+
+    setIsFinishing(true);
+    setError(null);
+
+    try {
+      await completeOnboarding(firebaseIdToken, {
+        completedImportIds,
+        displayName: displayName.trim(),
+        handle: normalizeProfileHandleInput(handle),
+        tasteItems: importSatisfied
+          ? []
+          : tasteItems.map((item) => ({
+            contentType: item.contentType,
             tmdbId: item.tmdbId,
-          }),
-        ),
-      );
-
-      if (selected.length > 0) {
-        notifyTrackingChanged();
-      }
-
-      await completeOnboarding(firebaseIdToken, normalizeProfileHandleInput(handle));
+          })),
+      });
+      await clearOnboardingDraft(currentUser.id);
+      if (!importSatisfied && tasteItems.length > 0) notifyTrackingChanged();
       await refreshCurrentUser();
     } catch (caughtError) {
       const message = caughtError instanceof Error
@@ -203,17 +328,18 @@ export function OnboardingScreen() {
         : 'Could not finish onboarding. Try again.';
 
       if (message.toLowerCase().includes('handle')) {
-        setStep(0);
         setHandleTouched(true);
+        setStep('profile');
       }
 
       setError(message);
       setIsFinishing(false);
+      hapticError();
     }
   }
 
   async function finishHandleClaim() {
-    if (!firebaseIdToken || isFinishing) return;
+    if (!firebaseIdToken || !currentUser || isFinishing) return;
 
     setHandleTouched(true);
     setError(null);
@@ -226,14 +352,14 @@ export function OnboardingScreen() {
     setIsFinishing(true);
 
     try {
-      await completeOnboarding(firebaseIdToken, normalizeProfileHandleInput(handle));
+      await completeOnboarding(firebaseIdToken, {
+        displayName: currentUser.displayName,
+        handle: normalizeProfileHandleInput(handle),
+      });
+      await clearOnboardingDraft(currentUser.id);
       await refreshCurrentUser();
     } catch (caughtError) {
-      setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : 'Could not save your handle. Try again.',
-      );
+      setError(caughtError instanceof Error ? caughtError.message : 'Could not save your handle.');
       setIsFinishing(false);
     }
   }
@@ -275,126 +401,253 @@ export function OnboardingScreen() {
     );
   }
 
+  const stepIndex = steps.indexOf(step);
+
   return (
-      <Screen
-        eyebrow={`Onboarding ${progress}`}
-        footer={(
-          <>
-            <View style={styles.actions}>
-              {step > 0 ? (
-                <Button
-                  accessibilityLabel="Go back"
-                  disabled={isFinishing}
-                  label="Back"
-                  onPress={() => setStep((current) => (current - 1) as OnboardingStep)}
-                  variant="secondary"
-                />
-              ) : null}
-              {step < 2 ? (
-                <Button
-                  accessibilityLabel="Continue onboarding"
-                  loading={step === 0 && isCheckingHandle}
-                  label="Continue"
-                  onPress={() => void continueOnboarding()}
-                />
-              ) : (
-                <Button
-                  accessibilityLabel={
-                    selected.length > 0 ? 'Finish onboarding' : 'Skip starter interests and finish'
-                  }
-                  disabled={isFinishing}
-                  label={selected.length > 0 ? 'Finish onboarding' : 'Skip and finish'}
-                  onPress={finishOnboarding}
-                />
-              )}
-            </View>
-            {isFinishing ? (
-              <View style={styles.savingRow}>
-                <ActivityIndicator color={colors.accent} />
-                <Text style={styles.mutedText}>Saving onboarding.</Text>
+    <Screen
+      eyebrow={`Onboarding ${stepIndex + 1} / ${steps.length}`}
+      footer={(
+        <OnboardingFooter
+          error={error}
+          importSatisfied={importSatisfied}
+          isCheckingHandle={isCheckingHandle}
+          isFinishing={isFinishing}
+          notificationOutcome={notificationOutcome}
+          notificationStatus={notificationStatus}
+          onAllowNotifications={() => void allowNotifications()}
+          onBack={goBack}
+          onContinue={() => {
+            if (step === 'profile') void continueProfile();
+            if (step === 'import') continueImport();
+            if (step === 'taste') continueTaste();
+          }}
+          onFinishWithoutNotifications={() => void finishOnboarding()}
+          step={step}
+        />
+      )}
+      title={getStepTitle(step)}
+    >
+      <ScrollView
+        automaticallyAdjustKeyboardInsets
+        contentContainerStyle={styles.content}
+        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View accessibilityLabel={`Step ${stepIndex + 1} of ${steps.length}`} style={styles.progressTrack}>
+          {steps.map((item, index) => (
+            <View
+              key={item}
+              style={[styles.progressSegment, index <= stepIndex ? styles.progressSegmentActive : null]}
+            />
+          ))}
+        </View>
+
+        <StepHero step={step} />
+
+        {step === 'profile' ? (
+          <ProfileStep
+            avatarStatus={avatarStatus}
+            avatarUploadsEnabled={avatarUploadsEnabled}
+            avatarUrl={avatarUrl}
+            displayName={displayName}
+            handle={handle}
+            handleError={handleTouched ? handleError : null}
+            message={avatarMessage}
+            onChangeAvatar={() => void changeAvatar()}
+            onChangeDisplayName={(value) => {
+              setDisplayName(value);
+              setError(null);
+            }}
+            onChangeHandle={(value) => {
+              setHandle(value.toLowerCase().replace(/^@/, ''));
+              setHandleTouched(true);
+              setError(null);
+            }}
+          />
+        ) : null}
+
+        {step === 'import' ? (
+          <View style={styles.importCard}>
+            <Text style={styles.importLead}>
+              Import as many files as you need. If at least one title is added, Watchly will skip Taste.
+            </Text>
+            {importSatisfied ? (
+              <View style={styles.successPanel}>
+                <CheckCircle2 color={colors.success} size={20} />
+                <Text style={styles.successText}>Your profile has enough titles to get started.</Text>
               </View>
             ) : null}
-          </>
-        )}
-        title={getStepTitle(step)}
-      >
-        <ScrollView
-          automaticallyAdjustKeyboardInsets
-          contentContainerStyle={styles.content}
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.progressTrack}>
-            {[0, 1, 2].map((index) => (
-              <View
-                key={index}
-                style={[styles.progressSegment, index <= step ? styles.progressSegmentActive : null]}
-              />
-            ))}
-          </View>
-          <OnboardingHero selected={selected} step={step} />
-
-          {step === 0 ? (
-            <ProfileBasicsStep
-              displayName={displayName}
-              handle={handle}
-              handleError={handleTouched ? handleError : null}
-              onChangeDisplayName={setDisplayName}
-              onChangeHandle={(value) => {
-                setHandle(value.toLowerCase().replace(/^@/, ''));
-                setHandleTouched(true);
+            <ImportDataScreen
+              embedded
+              onImportCompleted={({ importId, result }) => {
+                if (result.titlesProcessed < 1) return;
+                setCompletedImportIds((current) => current.includes(importId) ? current : [...current, importId]);
+                setImportSatisfied(true);
                 setError(null);
               }}
+              workingSourcesOnly
             />
-          ) : null}
+          </View>
+        ) : null}
 
-          {step === 1 ? <PrivacyDefaultsStep /> : null}
+        {step === 'taste' ? (
+          <TasteStep
+            onChange={(items) => {
+              setTasteItems(items);
+              setError(null);
+            }}
+            selected={tasteItems}
+          />
+        ) : null}
 
-          {step === 2 ? (
-            <StarterInterestsStep
-              items={items}
-              onChangeQuery={setQuery}
-              onChangeType={setSelectedType}
-              onToggleSelected={toggleSelected}
-              query={query}
-              searchError={searchError}
-              searchLoading={searchLoading}
-              selected={selected}
-              selectedType={selectedType}
-            />
-          ) : null}
-
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-        </ScrollView>
-      </Screen>
+        {step === 'notifications' ? (
+          <NotificationsStep outcome={notificationOutcome} />
+        ) : null}
+      </ScrollView>
+    </Screen>
   );
 }
 
-function ProfileBasicsStep({
+function OnboardingFooter({
+  error,
+  importSatisfied,
+  isCheckingHandle,
+  isFinishing,
+  notificationOutcome,
+  notificationStatus,
+  onAllowNotifications,
+  onBack,
+  onContinue,
+  onFinishWithoutNotifications,
+  step,
+}: {
+  error: string | null;
+  importSatisfied: boolean;
+  isCheckingHandle: boolean;
+  isFinishing: boolean;
+  notificationOutcome: ReleasePushSetupResult | null;
+  notificationStatus: 'idle' | 'requesting';
+  onAllowNotifications: () => void;
+  onBack: () => void;
+  onContinue: () => void;
+  onFinishWithoutNotifications: () => void;
+  step: OnboardingStep;
+}) {
+  const notificationBlocked = notificationOutcome?.status === 'denied'
+    || notificationOutcome?.status === 'unavailable';
+
+  return (
+    <View style={styles.footer}>
+      {error ? <Text accessibilityLiveRegion="polite" style={styles.errorText}>{error}</Text> : null}
+      {step === 'notifications' ? (
+        <>
+          {notificationBlocked ? (
+            <View style={styles.actions}>
+              <Button disabled={isFinishing} label="Back" onPress={onBack} variant="secondary" />
+              <Button
+                label="Continue without notifications"
+                loading={isFinishing}
+                onPress={onFinishWithoutNotifications}
+              />
+            </View>
+          ) : (
+            <>
+              <View style={styles.actions}>
+                <Button disabled={isFinishing} label="Back" onPress={onBack} variant="secondary" />
+                <Button
+                  label="Allow notifications"
+                  loading={notificationStatus === 'requesting' || isFinishing}
+                  onPress={onAllowNotifications}
+                />
+              </View>
+              <Button
+                disabled={notificationStatus === 'requesting' || isFinishing}
+                fullWidth
+                label="Not now"
+                onPress={onFinishWithoutNotifications}
+                variant="ghost"
+              />
+            </>
+          )}
+        </>
+      ) : (
+        <View style={styles.actions}>
+          {step !== 'profile' ? (
+            <Button label="Back" onPress={onBack} variant="secondary" />
+          ) : null}
+          <Button
+            label={step === 'import' && !importSatisfied ? 'Continue to Taste' : 'Continue'}
+            loading={step === 'profile' && isCheckingHandle}
+            onPress={onContinue}
+          />
+        </View>
+      )}
+    </View>
+  );
+}
+
+function ProfileStep({
+  avatarStatus,
+  avatarUploadsEnabled,
+  avatarUrl,
   displayName,
   handle,
   handleError,
+  message,
+  onChangeAvatar,
   onChangeDisplayName,
   onChangeHandle,
 }: {
+  avatarStatus: 'idle' | 'saving';
+  avatarUploadsEnabled: boolean;
+  avatarUrl: string | null;
   displayName: string;
   handle: string;
   handleError: string | null;
+  message: string | null;
+  onChangeAvatar: () => void;
   onChangeDisplayName: (value: string) => void;
   onChangeHandle: (value: string) => void;
 }) {
   return (
     <View style={styles.card}>
-      <Text style={styles.sectionTitle}>Make the profile readable</Text>
-      <Text style={styles.bodyText}>
-        Keep the display name from sign-in or choose a short name people will recognize.
-      </Text>
+      <View style={styles.avatarRow}>
+        <View>
+          <UserAvatar avatarUrl={avatarUrl} displayName={displayName} size={88} />
+          {avatarStatus === 'saving' ? (
+            <View style={styles.avatarBusy}>
+              <ActivityIndicator color={colors.accentText} size="small" />
+            </View>
+          ) : null}
+        </View>
+        <View style={styles.avatarCopy}>
+          <Text style={styles.sectionTitle}>Your Watchly profile</Text>
+          <Text style={styles.bodyText}>
+            We start with your sign-in photo. You can replace it now or anytime in Settings.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !avatarUploadsEnabled || avatarStatus === 'saving' }}
+            disabled={!avatarUploadsEnabled || avatarStatus === 'saving'}
+            onPress={onChangeAvatar}
+            style={({ pressed }) => [styles.photoAction, pressed ? styles.pressed : null]}
+          >
+            <Camera color={colors.accentText} size={17} />
+            <Text style={styles.photoActionText}>
+              {avatarUploadsEnabled ? 'Change photo' : 'Photo changes unavailable'}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {message ? <Text style={styles.warningText}>{message}</Text> : null}
+
       <TextInput
         autoCapitalize="words"
-        helperText="You can edit this whenever you want."
+        helperText="You can change this later."
         label="Display name"
+        maxLength={80}
         onChangeText={onChangeDisplayName}
         value={displayName}
       />
@@ -417,7 +670,7 @@ function HandleField({
       autoCapitalize="none"
       autoCorrect={false}
       error={error ?? undefined}
-      helperText="Shown as @handle. Use 3-20 letters, numbers, or underscores. This cannot be changed later."
+      helperText="Use 3-20 letters, numbers, or underscores. Your @handle is permanent."
       label="Permanent handle"
       maxLength={21}
       onChangeText={onChange}
@@ -427,90 +680,113 @@ function HandleField({
   );
 }
 
-function PrivacyDefaultsStep() {
-  return (
-    <View style={styles.card}>
-      <Text style={styles.sectionTitle}>Privacy starts conservative</Text>
-      <PrivacyFact label="Public by default" value="Profile and written reviews" />
-      <PrivacyFact
-        label="Private by default"
-        value="Viewing history, episode progress, standalone ratings, and personal watchlists"
-      />
-      <PrivacyFact label="Member-only by default" value="Shared watchlists and votes" />
-      <Text style={styles.bodyText}>
-        You can change these later from Profile settings. This step only explains the defaults.
-      </Text>
-    </View>
-  );
-}
-
-function PrivacyFact({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.factRow}>
-      <CheckCircle2 color={colors.success} size={20} strokeWidth={2} />
-      <View style={styles.factCopy}>
-        <Text style={styles.factLabel}>{label}</Text>
-        <Text style={styles.mutedText}>{value}</Text>
-      </View>
-    </View>
-  );
-}
-
-function StarterInterestsStep({
-  items,
-  onChangeQuery,
-  onChangeType,
-  onToggleSelected,
-  query,
-  searchError,
-  searchLoading,
+function TasteStep({
+  onChange,
   selected,
-  selectedType,
 }: {
-  items: CatalogueSearchItem[];
-  onChangeQuery: (value: string) => void;
-  onChangeType: (value: CatalogueSearchType) => void;
-  onToggleSelected: (item: CatalogueSearchItem) => void;
-  query: string;
-  searchError: string | null;
-  searchLoading: boolean;
-  selected: CatalogueSearchItem[];
-  selectedType: CatalogueSearchType;
+  onChange: (items: OnboardingTasteItem[]) => void;
+  selected: OnboardingTasteItem[];
 }) {
+  const [items, setItems] = useState<CatalogueSearchItem[]>([]);
+  const [query, setQuery] = useState('');
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [selectedType, setSelectedType] = useState<CatalogueSearchType>('all');
+  const trimmedQuery = query.trim();
+
+  useEffect(() => {
+    if (trimmedQuery.length < 2) {
+      setItems([]);
+      setSearchError(null);
+      setSearchLoading(false);
+      return;
+    }
+
+    let active = true;
+    const timeout = setTimeout(() => {
+      setSearchLoading(true);
+      setSearchError(null);
+
+      void searchCatalogue(trimmedQuery, selectedType)
+        .then((response) => {
+          if (active) setItems(response.items);
+        })
+        .catch((caughtError) => {
+          if (!active) return;
+          setItems([]);
+          setSearchError(caughtError instanceof Error ? caughtError.message : 'Catalogue search failed.');
+        })
+        .finally(() => {
+          if (active) setSearchLoading(false);
+        });
+    }, 350);
+
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+    };
+  }, [selectedType, trimmedQuery]);
+
+  function toggle(item: CatalogueSearchItem) {
+    const existing = selected.some((selectedItem) =>
+      selectedItem.contentType === item.mediaType && selectedItem.tmdbId === item.tmdbId
+    );
+
+    if (existing) {
+      onChange(selected.filter((selectedItem) =>
+        selectedItem.contentType !== item.mediaType || selectedItem.tmdbId !== item.tmdbId
+      ));
+      return;
+    }
+
+    if (selected.length >= 3) {
+      setSearchError('You can choose up to 3 titles. Remove one to add another.');
+      return;
+    }
+
+    onChange([...selected, {
+      contentType: item.mediaType,
+      posterUrl: item.posterUrl,
+      title: item.title,
+      tmdbId: item.tmdbId,
+    }]);
+  }
+
   return (
     <View style={styles.card}>
-      <Text style={styles.sectionTitle}>Start with a few titles</Text>
-      <Text style={styles.bodyText}>
-        Search films or series you already want to track. Selected titles will start in My TV as
-        watchlisted.
-      </Text>
+      <View style={styles.tasteNotice}>
+        <ShieldCheck color={colors.accentText} size={20} />
+        <Text style={styles.tasteNoticeText}>
+          Choose 1 to 3 titles you have already seen. They will be added as Watched, without an invented viewing date.
+        </Text>
+      </View>
+
       <TextInput
         autoCapitalize="none"
         autoCorrect={false}
         label="Search"
-        onChangeText={onChangeQuery}
+        onChangeText={setQuery}
         placeholder="Search a film or series"
         returnKeyType="search"
         value={query}
       />
+
       <View style={styles.filters}>
         {filters.map((filter) => {
-          const isSelected = selectedType === filter.type;
-
+          const active = selectedType === filter.type;
           return (
             <Pressable
-              accessibilityLabel={`Show ${filter.label}`}
               accessibilityRole="button"
-              accessibilityState={{ selected: isSelected }}
+              accessibilityState={{ selected: active }}
               key={filter.type}
-              onPress={() => onChangeType(filter.type)}
+              onPress={() => setSelectedType(filter.type)}
               style={({ pressed }) => [
                 styles.filter,
-                isSelected ? styles.filterSelected : null,
-                pressed ? styles.filterPressed : null,
+                active ? styles.filterSelected : null,
+                pressed ? styles.pressed : null,
               ]}
             >
-              <Text style={[styles.filterLabel, isSelected ? styles.filterLabelSelected : null]}>
+              <Text style={[styles.filterLabel, active ? styles.filterLabelSelected : null]}>
                 {filter.label}
               </Text>
             </Pressable>
@@ -518,103 +794,142 @@ function StarterInterestsStep({
         })}
       </View>
 
+      <Chip label={`${selected.length} of 3 selected`} tone={selected.length > 0 ? 'success' : 'accent'} />
+
       {selected.length > 0 ? (
-        <Chip label={`${selected.length} selected for My TV`} tone="success" />
+        <View style={styles.selectedStrip}>
+          {selected.map((item) => (
+            <Pressable
+              accessibilityLabel={`Remove ${item.title}`}
+              accessibilityRole="button"
+              key={`${item.contentType}:${item.tmdbId}`}
+              onPress={() => onChange(selected.filter((selectedItem) =>
+                selectedItem.contentType !== item.contentType || selectedItem.tmdbId !== item.tmdbId
+              ))}
+              style={({ pressed }) => [styles.selectedPoster, pressed ? styles.pressed : null]}
+            >
+              <MediaPoster posterUrl={item.posterUrl} style={styles.selectedPosterImage} />
+              <View style={styles.selectedCheck}>
+                <CheckCircle2 color={colors.success} size={18} />
+              </View>
+            </Pressable>
+          ))}
+        </View>
       ) : null}
 
-      {searchLoading && items.length === 0 ? (
-        <LoadingState label="Searching TMDB" />
-      ) : null}
-
+      {searchLoading && items.length === 0 ? <LoadingState label="Searching TMDB" /> : null}
       {searchError ? <Text style={styles.errorText}>{searchError}</Text> : null}
 
       {items.map((item) => (
-        <StarterResultCard
-          isSelected={selected.some(
-            (selectedItem) =>
-              selectedItem.mediaType === item.mediaType && selectedItem.tmdbId === item.tmdbId,
-          )}
+        <TasteResult
           item={item}
           key={item.id}
-          onPress={() => onToggleSelected(item)}
+          onPress={() => toggle(item)}
+          selected={selected.some((selectedItem) =>
+            selectedItem.contentType === item.mediaType && selectedItem.tmdbId === item.tmdbId
+          )}
         />
       ))}
     </View>
   );
 }
 
-function StarterResultCard({
-  isSelected,
+function TasteResult({
   item,
   onPress,
+  selected,
 }: {
-  isSelected: boolean;
   item: CatalogueSearchItem;
   onPress: () => void;
+  selected: boolean;
 }) {
-  const year = item.releaseDate ? item.releaseDate.slice(0, 4) : null;
-  const mediaLabel = item.mediaType === 'movie' ? 'Film' : 'Series';
-
   return (
     <Pressable
-      accessibilityLabel={`${isSelected ? 'Remove' : 'Add'} ${item.title}`}
+      accessibilityLabel={`${selected ? 'Remove' : 'Add'} ${item.title}`}
       accessibilityRole="button"
-      accessibilityState={{ selected: isSelected }}
+      accessibilityState={{ selected }}
       onPress={onPress}
       style={({ pressed }) => [
         styles.resultCard,
-        isSelected ? styles.resultCardSelected : null,
-        pressed ? styles.resultCardPressed : null,
+        selected ? styles.resultCardSelected : null,
+        pressed ? styles.pressed : null,
       ]}
     >
-      <MediaPoster
-        accessibilityLabel={`${item.title} poster`}
-        posterUrl={item.posterUrl}
-        style={styles.poster}
-      />
+      <MediaPoster posterUrl={item.posterUrl} style={styles.poster} />
       <View style={styles.resultCopy}>
-        <Text numberOfLines={2} style={styles.resultTitle}>
-          {item.title}
-        </Text>
+        <Text numberOfLines={2} style={styles.resultTitle}>{item.title}</Text>
         <Text style={styles.resultMeta}>
-          {mediaLabel}
-          {year ? ` / ${year}` : ''}
+          {item.mediaType === 'movie' ? 'Film' : 'Series'}
+          {item.releaseDate ? ` / ${item.releaseDate.slice(0, 4)}` : ''}
         </Text>
       </View>
-      {isSelected ? <CheckCircle2 color={colors.success} size={22} strokeWidth={2} /> : null}
+      {selected ? <CheckCircle2 color={colors.success} size={22} /> : null}
     </Pressable>
   );
 }
 
-function OnboardingHero({
-  selected,
-  step,
-}: {
-  selected: CatalogueSearchItem[];
-  step: OnboardingStep;
-}) {
-  const heroItems = selected.slice(0, 3);
+function NotificationsStep({ outcome }: { outcome: ReleasePushSetupResult | null }) {
+  const blocked = outcome?.status === 'denied' || outcome?.status === 'unavailable';
+
+  return (
+    <View style={styles.card}>
+      <View style={styles.permissionIcon}>
+        <BellRing color={colors.accentText} size={30} />
+      </View>
+      <Text style={styles.sectionTitle}>One permission, all useful updates</Text>
+      <Text style={styles.bodyText}>
+        Allow Watchly notifications to receive release, social, and system updates, including future functional notification types. Promotional messages stay separate.
+      </Text>
+      <View style={styles.factList}>
+        <PermissionFact label="Release alerts for titles you follow" />
+        <PermissionFact label="Social and shared-list activity" />
+        <PermissionFact label="Important Watchly system updates" />
+      </View>
+      <Text style={styles.settingsHint}>
+        If you choose Not now, you can enable them later in Profile, Settings, Notifications.
+      </Text>
+
+      {blocked ? (
+        <View style={styles.warningPanel}>
+          <Text style={styles.warningText}>{outcome.message}</Text>
+          {outcome.status === 'denied' ? (
+            <Button
+              fullWidth
+              label="Open device settings"
+              onPress={() => void Linking.openSettings()}
+              variant="secondary"
+            />
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function PermissionFact({ label }: { label: string }) {
+  return (
+    <View style={styles.factRow}>
+      <CheckCircle2 color={colors.success} size={19} />
+      <Text style={styles.factText}>{label}</Text>
+    </View>
+  );
+}
+
+function StepHero({ step }: { step: OnboardingStep }) {
+  const Icon = step === 'profile'
+    ? Camera
+    : step === 'import'
+      ? Database
+      : step === 'taste'
+        ? CheckCircle2
+        : BellRing;
 
   return (
     <View style={styles.heroCard}>
-      <View style={styles.posterStack}>
-        {[0, 1, 2].map((index) => (
-          <MediaPoster
-            accessibilityLabel={
-              heroItems[index] ? `${heroItems[index].title} poster` : 'Starter media poster slot'
-            }
-            key={index}
-            posterUrl={heroItems[index]?.posterUrl ?? null}
-            style={[
-              styles.heroPoster,
-              index === 1 ? styles.heroPosterRaised : null,
-              index === 2 ? styles.heroPosterDimmed : null,
-            ]}
-          />
-        ))}
+      <View style={styles.heroIcon}>
+        <Icon color={colors.accentText} size={27} />
       </View>
       <View style={styles.heroCopy}>
-        <Chip label={`Step ${step + 1} of 3`} tone="accent" />
         <Text style={styles.heroTitle}>{getStepTitle(step)}</Text>
         <Text style={styles.heroBody}>{getStepSubtitle(step)}</Text>
       </View>
@@ -622,28 +937,24 @@ function OnboardingHero({
   );
 }
 
+function normalizeDraftStep(draft: OnboardingDraft | null): OnboardingStep {
+  if (!draft) return 'profile';
+  if (draft.importSatisfied && draft.step === 'taste') return 'notifications';
+  return steps.includes(draft.step) ? draft.step : 'profile';
+}
+
 function getStepTitle(step: OnboardingStep) {
-  if (step === 0) {
-    return 'Profile basics';
-  }
-
-  if (step === 1) {
-    return 'Privacy defaults';
-  }
-
-  return 'Starter watch interests';
+  if (step === 'profile') return 'Make it yours';
+  if (step === 'import') return 'Bring your history';
+  if (step === 'taste') return 'Start your Taste';
+  return 'Stay in the loop';
 }
 
 function getStepSubtitle(step: OnboardingStep) {
-  if (step === 0) {
-    return 'Give your public reviews a readable byline before the library fills in.';
-  }
-
-  if (step === 1) {
-    return 'Keep tracking private by default while your public review profile stays readable.';
-  }
-
-  return 'Choose a few posters to anchor My TV before you start browsing.';
+  if (step === 'profile') return 'Set the identity people will recognize across Watchly.';
+  if (step === 'import') return 'Move titles from a tracker you already used.';
+  if (step === 'taste') return 'Give your new profile a first signal from titles you know.';
+  return 'Choose whether Watchly can reach you outside the app.';
 }
 
 const styles = StyleSheet.create({
@@ -651,15 +962,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.md,
   },
+  avatarBusy: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(8, 10, 14, 0.72)',
+    borderRadius: 44,
+    bottom: 0,
+    justifyContent: 'center',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  avatarCopy: {
+    flex: 1,
+    gap: spacing.sm,
+    minWidth: 0,
+  },
+  avatarRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.lg,
+  },
   bodyText: {
     ...typography.body,
-    color: colors.muted,
+    color: colors.textMuted,
   },
   card: {
     ...shadows.panel,
     backgroundColor: colors.panelElevated,
     borderColor: colors.border,
-    borderRadius: radii.md,
+    borderRadius: radii.lg,
     borderWidth: 1,
     gap: spacing.lg,
     padding: spacing.lg,
@@ -673,20 +1005,19 @@ const styles = StyleSheet.create({
     color: colors.danger,
     fontWeight: '700',
   },
-  factCopy: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  factLabel: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0,
+  factList: {
+    gap: spacing.md,
   },
   factRow: {
-    alignItems: 'flex-start',
+    alignItems: 'center',
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.sm,
+  },
+  factText: {
+    ...typography.body,
+    color: colors.text,
+    flex: 1,
+    fontWeight: '700',
   },
   filter: {
     alignItems: 'center',
@@ -700,16 +1031,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   filterLabel: {
-    color: colors.muted,
+    color: colors.textMuted,
     fontSize: 13,
     fontWeight: '800',
-    letterSpacing: 0,
   },
   filterLabelSelected: {
     color: colors.accentText,
-  },
-  filterPressed: {
-    opacity: 0.76,
   },
   filters: {
     flexDirection: 'row',
@@ -719,53 +1046,77 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentSoft,
     borderColor: colors.accentBorder,
   },
+  footer: {
+    gap: spacing.sm,
+  },
   heroBody: {
     ...typography.body,
-    color: colors.muted,
+    color: colors.textMuted,
   },
   heroCard: {
-    ...shadows.panel,
     alignItems: 'center',
     backgroundColor: colors.panelSoft,
     borderColor: colors.borderStrong,
     borderRadius: radii.lg,
     borderWidth: 1,
     flexDirection: 'row',
-    gap: spacing.lg,
+    gap: spacing.md,
     padding: spacing.lg,
   },
   heroCopy: {
     flex: 1,
-    gap: spacing.sm,
-    minWidth: 0,
+    gap: spacing.xs,
   },
-  heroPoster: {
-    height: 116,
-    width: 76,
-  },
-  heroPosterDimmed: {
-    marginLeft: -spacing.xl,
-    opacity: 0.64,
-  },
-  heroPosterRaised: {
-    marginLeft: -spacing.xl,
-    marginTop: -spacing.md,
+  heroIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
+    borderRadius: 24,
+    borderWidth: 1,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
   },
   heroTitle: {
     ...typography.title,
     color: colors.text,
   },
-  posterStack: {
-    flexDirection: 'row',
-    paddingLeft: spacing.sm,
+  importCard: {
+    gap: spacing.md,
   },
-  mutedText: {
+  importLead: {
     ...typography.body,
-    color: colors.muted,
+    color: colors.textMuted,
+    paddingHorizontal: spacing.xs,
+  },
+  permissionIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
+    borderRadius: 30,
+    borderWidth: 1,
+    height: 60,
+    justifyContent: 'center',
+    width: 60,
+  },
+  photoAction: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minHeight: 40,
+  },
+  photoActionText: {
+    color: colors.accentText,
+    fontSize: 14,
+    fontWeight: '800',
   },
   poster: {
     height: 84,
     width: 56,
+  },
+  pressed: {
+    opacity: 0.76,
   },
   progressSegment: {
     backgroundColor: colors.border,
@@ -790,9 +1141,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.md,
   },
-  resultCardPressed: {
-    opacity: 0.78,
-  },
   resultCardSelected: {
     backgroundColor: colors.successBackground,
     borderColor: colors.successBorder,
@@ -805,7 +1153,6 @@ const styles = StyleSheet.create({
     color: colors.accentText,
     fontSize: 12,
     fontWeight: '800',
-    letterSpacing: 0,
     marginTop: spacing.xs,
     textTransform: 'uppercase',
   },
@@ -813,17 +1160,76 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 16,
     fontWeight: '800',
-    letterSpacing: 0,
     lineHeight: 21,
-  },
-  savingRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.sm,
   },
   sectionTitle: {
     ...typography.title,
     color: colors.text,
+  },
+  selectedCheck: {
+    backgroundColor: colors.panel,
+    borderRadius: 10,
+    position: 'absolute',
+    right: 4,
+    top: 4,
+  },
+  selectedPoster: {
+    borderRadius: radii.sm,
+  },
+  selectedPosterImage: {
+    height: 96,
+    width: 64,
+  },
+  selectedStrip: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  settingsHint: {
+    ...typography.meta,
+    color: colors.textSubtle,
+  },
+  successPanel: {
+    alignItems: 'center',
+    backgroundColor: colors.successBackground,
+    borderColor: colors.successBorder,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.md,
+  },
+  successText: {
+    ...typography.body,
+    color: colors.success,
+    flex: 1,
+    fontWeight: '700',
+  },
+  tasteNotice: {
+    alignItems: 'flex-start',
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.md,
+  },
+  tasteNoticeText: {
+    ...typography.body,
+    color: colors.text,
+    flex: 1,
+  },
+  warningPanel: {
+    backgroundColor: colors.dangerBackground,
+    borderColor: colors.dangerBorder,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    gap: spacing.md,
+    padding: spacing.md,
+  },
+  warningText: {
+    ...typography.body,
+    color: colors.danger,
+    fontWeight: '600',
   },
 });

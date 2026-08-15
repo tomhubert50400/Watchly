@@ -28,7 +28,7 @@ assert.match(
 );
 assert.match(
   onboardingSource,
-  /getHandleAvailability\([\s\S]*completeOnboarding\(firebaseIdToken, normalizeProfileHandleInput\(handle\)\)/,
+  /getHandleAvailability\([\s\S]*completeOnboarding\(firebaseIdToken, \{[\s\S]*handle: normalizeProfileHandleInput\(handle\)/,
   'onboarding must check availability and submit the permanent handle',
 );
 assert.match(

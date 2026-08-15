@@ -45,13 +45,13 @@ type ImportSource = {
 
 const importSources: readonly ImportSource[] = [
   {
-    body: 'Watch history, ratings, and lists',
+    body: 'Watched films, planned films, series progress, and favorites',
     brand: 'tvtime',
     exportLinks: [],
-    format: 'Archived ZIP or CSV export',
+    format: 'Official GDPR ZIP or supported CSV',
     guide: [
       {
-        body: 'Find the original TV Time export you downloaded before the service closed.',
+        body: 'Find the original GDPR export you downloaded from your TV Time account.',
         title: 'Locate your export',
       },
       {
@@ -63,6 +63,7 @@ const importSources: readonly ImportSource[] = [
         title: 'Review in Watchly',
       },
     ],
+    importSource: 'tv-time',
     name: 'TV Time',
   },
   {
@@ -139,7 +140,15 @@ const importSources: readonly ImportSource[] = [
   },
 ];
 
-export function ImportDataScreen() {
+export function ImportDataScreen({
+  embedded = false,
+  onImportCompleted,
+  workingSourcesOnly = false,
+}: {
+  embedded?: boolean;
+  onImportCompleted?: (completion: { importId: string; result: ImportResult }) => void;
+  workingSourcesOnly?: boolean;
+} = {}) {
   const {
     firebaseIdToken,
     notifySocialChanged,
@@ -151,6 +160,9 @@ export function ImportDataScreen() {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [selectedSource, setSelectedSource] = useState<ImportSource | null>(null);
   const [status, setStatus] = useState<'confirming' | 'idle' | 'picking' | 'previewing'>('idle');
+  const visibleSources = workingSourcesOnly
+    ? importSources.filter((source) => source.importSource)
+    : importSources;
 
   const chooseFile = async (source: ImportSource) => {
     if (status !== 'idle') return;
@@ -180,7 +192,7 @@ export function ImportDataScreen() {
       const selection = await DocumentPicker.getDocumentAsync({
         copyToCacheDirectory: true,
         multiple: false,
-        type: source.importSource === 'letterboxd'
+        type: source.importSource === 'letterboxd' || source.importSource === 'tv-time'
           ? ['text/csv', 'application/zip', 'application/x-zip-compressed', 'application/octet-stream']
           : ['text/csv', 'text/comma-separated-values', 'application/vnd.ms-excel'],
       });
@@ -220,6 +232,7 @@ export function ImportDataScreen() {
     setStatus('confirming');
     try {
       const importResult = await confirmDataImport(firebaseIdToken, preview.importId);
+      onImportCompleted?.({ importId: preview.importId, result: importResult });
       setResult(importResult);
       setPreview(null);
       notifySocialChanged();
@@ -246,8 +259,8 @@ export function ImportDataScreen() {
     );
   };
 
-  return (
-    <Screen title="">
+  const content = (
+    <>
       <View style={styles.page}>
         <View style={styles.intro}>
           <Text accessibilityRole="header" style={styles.title}>Import your library</Text>
@@ -259,7 +272,7 @@ export function ImportDataScreen() {
         <Text style={styles.instruction}>Choose a service to see how to export and import your data.</Text>
 
         <View style={styles.sourceList}>
-          {importSources.map((source) => (
+          {visibleSources.map((source) => (
             <ImportSourceRow
               busy={status === 'previewing' && activeSource === source.brand}
               disabled={status !== 'idle'}
@@ -303,8 +316,10 @@ export function ImportDataScreen() {
         onClose={() => setSelectedSource(null)}
         source={selectedSource}
       />
-    </Screen>
+    </>
   );
+
+  return embedded ? content : <Screen title="">{content}</Screen>;
 }
 
 function ImportSourceRow({
@@ -471,9 +486,19 @@ function ImportPreviewPanel({
       </View>
 
       <View style={styles.summaryRow}>
-        <SummaryValue label="Ratings" value={preview.summary.ratings} />
-        <SummaryValue label="Reviews" value={preview.summary.reviews} />
-        <SummaryValue label="Watched" value={preview.summary.watched} />
+        {preview.source === 'tv-time' ? (
+          <>
+            <SummaryValue label="Watched" value={preview.summary.watched} />
+            <SummaryValue label="Watching" value={preview.summary.watching} />
+            <SummaryValue label="Planned" value={preview.summary.watchlisted} />
+          </>
+        ) : (
+          <>
+            <SummaryValue label="Ratings" value={preview.summary.ratings} />
+            <SummaryValue label="Reviews" value={preview.summary.reviews} />
+            <SummaryValue label="Watched" value={preview.summary.watched} />
+          </>
+        )}
         <SummaryValue label="Attention" value={preview.summary.needsAttention} warning />
       </View>
 
@@ -521,7 +546,9 @@ function ImportMatchRow({ item }: { item: ImportPreviewItem }) {
     item.actions.rating !== null ? `${item.actions.rating}/5` : null,
     item.actions.hasReview ? 'Review' : null,
     item.actions.watched ? 'Watched' : null,
-    item.actions.watchlisted ? 'Watchlist' : null,
+    item.actions.watching ? 'Watching' : null,
+    item.actions.watchlisted ? 'Want to watch' : null,
+    item.actions.favorite ? 'Favorite' : null,
   ].filter((label): label is string => Boolean(label));
 
   return (
@@ -562,14 +589,6 @@ function ImportResultPanel({ result }: { result: ImportResult }) {
 }
 
 function showUnavailableSource(source: ImportSource) {
-  if (source.brand === 'tvtime') {
-    Alert.alert(
-      'TV Time sample needed',
-      'Send one real TV Time ZIP or CSV export so its fields can be mapped without risking incorrect history.',
-    );
-    return;
-  }
-
   Alert.alert(
     'Trakt sample needed',
     'Send one real Trakt ZIP export so its JSON files can be mapped without risking incorrect history.',

@@ -141,7 +141,11 @@ assert.match(
   /footer=\{isDirty \|\| status === 'saving' \? \([\s\S]*label="Save changes"/,
   'settings save must use the screen footer only while changes are pending',
 );
-assert.match(onboarding, /footer=\{\([\s\S]*Continue onboarding/, 'onboarding actions must use the screen footer');
+assert.match(
+  onboarding,
+  /footer=\{\([\s\S]*<OnboardingFooter/,
+  'onboarding actions must use the screen footer',
+);
 assert.match(explore, /automaticallyAdjustKeyboardInsets/, 'catalogue search must adjust around the keyboard');
 
 console.log('Keyboard avoidance QA passed.');

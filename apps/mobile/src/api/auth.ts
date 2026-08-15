@@ -5,6 +5,7 @@ export type CurrentUser = {
   handle: string | null;
   id: string;
   onboardingCompleted: boolean;
+  photoUrl: string | null;
   provider: 'GOOGLE' | 'APPLE' | 'MICROSOFT';
 };
 

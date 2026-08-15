@@ -81,6 +81,22 @@ export async function enablePushFromSettings(
   return { status: 'enabled' };
 }
 
+export async function enableAllPushFromOnboarding(
+  apiToken: string,
+  userId: string,
+): Promise<ReleasePushSetupResult> {
+  const result = await enablePushFromSettings(apiToken, userId);
+
+  if (result.status === 'enabled') {
+    await updatePushPreferences(apiToken, {
+      pushEnabled: true,
+      releasePushEnabled: true,
+    });
+  }
+
+  return result;
+}
+
 export async function disablePushFromSettings(apiToken: string) {
   const preferences = await updatePushPreferences(apiToken, { pushEnabled: false });
   await revokeStoredPushDevice(apiToken).catch(() => false);

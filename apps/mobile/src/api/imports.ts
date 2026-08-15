@@ -1,14 +1,16 @@
 import type { DocumentPickerAsset } from 'expo-document-picker';
 import { apiPost, apiPostFormData } from './client';
 
-export type SupportedImportSource = 'imdb' | 'letterboxd';
+export type SupportedImportSource = 'imdb' | 'letterboxd' | 'tv-time';
 
 export type ImportPreviewItem = {
   actions: {
     hasReview: boolean;
+    favorite: boolean;
     rating: number | null;
     viewingCount: number;
     watched: boolean;
+    watching: boolean;
     watchlisted: boolean;
   };
   issues: string[];
@@ -31,12 +33,14 @@ export type ImportPreview = {
   items: ImportPreviewItem[];
   source: SupportedImportSource;
   summary: {
+    favorites: number;
     needsAttention: number;
     ratings: number;
     ready: number;
     reviews: number;
     total: number;
     watched: number;
+    watching: number;
     watchlisted: number;
   };
 };

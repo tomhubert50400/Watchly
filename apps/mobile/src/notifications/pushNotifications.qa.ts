@@ -9,6 +9,7 @@ const appSource = readFileSync(new URL('../../App.tsx', import.meta.url), 'utf8'
 const alertSource = readFileSync(new URL('./ReleaseAlertControl.tsx', import.meta.url), 'utf8');
 const nativeSource = readFileSync(new URL('./nativePushNotifications.ts', import.meta.url), 'utf8');
 const observerSource = readFileSync(new URL('./PushNavigationObserver.tsx', import.meta.url), 'utf8');
+const onboardingSource = readFileSync(new URL('../onboarding/OnboardingScreen.tsx', import.meta.url), 'utf8');
 const settingsSource = readFileSync(new URL('../profile/SettingsScreen.tsx', import.meta.url), 'utf8');
 
 assert.ok(
@@ -16,6 +17,14 @@ assert.ok(
     Array.isArray(plugin) && plugin[0] === 'expo-notifications'
   ),
   'The native notification config plugin must be part of the Watchly build.',
+);
+assert.ok(
+  nativeSource.includes('enableAllPushFromOnboarding') &&
+    nativeSource.includes('releasePushEnabled: true') &&
+    onboardingSource.includes('Profile, Settings, Notifications') &&
+    onboardingSource.includes('Linking.openSettings()') &&
+    onboardingSource.includes('Continue without notifications'),
+  'Onboarding must enable every current functional category and explain both refusal recovery paths.',
 );
 assert.ok(
   alertSource.includes('maybeEnableReleasePushFromAlert') &&

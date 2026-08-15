@@ -31,9 +31,45 @@ export async function chooseAndUploadProfileAvatar(
 
   if (selection.canceled) return null;
 
+  return uploadProfileAvatarFromUri(firebaseIdToken, selection.assets[0].uri);
+}
+
+export async function copyRemoteProfileAvatar(
+  firebaseIdToken: string,
+  remoteUrl: string,
+): Promise<UserProfile> {
+  const parsedUrl = new URL(remoteUrl);
+  if (parsedUrl.protocol !== 'https:') {
+    throw new Error('The sign-in provider returned an unsupported profile photo URL.');
+  }
+
+  const FileSystem = await import('expo-file-system/legacy');
+  if (!FileSystem.cacheDirectory) {
+    throw new Error('Profile photo cache is unavailable in this build.');
+  }
+
+  const localUri = `${FileSystem.cacheDirectory}watchly-oauth-avatar-${Date.now()}.img`;
+
+  try {
+    const download = await FileSystem.downloadAsync(remoteUrl, localUri);
+    if (download.status < 200 || download.status >= 300) {
+      throw new Error('Could not download your sign-in profile photo.');
+    }
+
+    return await uploadProfileAvatarFromUri(firebaseIdToken, download.uri);
+  } finally {
+    await FileSystem.deleteAsync(localUri, { idempotent: true }).catch(() => undefined);
+  }
+}
+
+export async function uploadProfileAvatarFromUri(
+  firebaseIdToken: string,
+  uri: string,
+): Promise<UserProfile> {
+
   const { manipulateAsync, SaveFormat } = await import('expo-image-manipulator');
   const image = await manipulateAsync(
-    selection.assets[0].uri,
+    uri,
     [{ resize: { height: PROFILE_AVATAR_EDGE_PX, width: PROFILE_AVATAR_EDGE_PX } }],
     { compress: 0.78, format: SaveFormat.JPEG },
   );

@@ -52,11 +52,12 @@ assert(
 assert(
   importScreenSource.includes("importSource: 'letterboxd'") &&
     importScreenSource.includes("importSource: 'imdb'") &&
+    importScreenSource.includes("importSource: 'tv-time'") &&
     /requireOptionalNativeModule\('ExpoDocumentPicker'\)[\s\S]*require\('expo-document-picker'\)/.test(importScreenSource) &&
     importScreenSource.includes('ExecutionEnvironment.StoreClient') &&
     importScreenSource.includes('Rebuild and reinstall Watchly') &&
     !importScreenSource.includes("import('expo-document-picker')"),
-  'Letterboxd and IMDb must guard the native picker and identify which client needs updating.',
+  'Letterboxd, IMDb, and TV Time must guard the native picker and identify which client needs updating.',
 );
 const documentPickerCall = importScreenSource.indexOf('await DocumentPicker.getDocumentAsync');
 const previewUploadCall = importScreenSource.indexOf('await previewDataImport', documentPickerCall);
@@ -79,8 +80,10 @@ assert(
   'The user must review matches and overwrite behavior before importing.',
 );
 assert(
-  !onboardingSource.includes('ImportData') && !onboardingSource.includes('Import your data'),
-  'Import must remain in Settings until the onboarding flow is designed.',
+  onboardingSource.includes('<ImportDataScreen') &&
+    onboardingSource.includes('workingSourcesOnly') &&
+    onboardingSource.includes("setStep(importSatisfied ? 'notifications' : 'taste')"),
+  'Onboarding must expose only working imports and skip Taste after a successful import.',
 );
 
 console.log('Import data placement QA passed.');
