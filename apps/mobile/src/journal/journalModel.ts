@@ -1,7 +1,6 @@
-import type { EpisodeProgress } from '../api/progress';
 import type { ProfileOpinion } from '../api/profile';
 import type { MovieRating } from '../api/ratings';
-import type { TrackingState } from '../api/tracking';
+import type { JournalViewing } from '../api/viewings';
 
 export type JournalFilter = 'all' | 'movies' | 'reviews' | 'series';
 export type JournalEpisode = { episodeNumber: number; seasonNumber: number; watchedAt: string };
@@ -20,40 +19,47 @@ export type JournalMonth = { entries: JournalEntry[]; key: string };
 type BuildJournalInput = {
   movieRatings: MovieRating[];
   opinions: ProfileOpinion[];
-  progress: EpisodeProgress[];
-  trackingStates: TrackingState[];
+  viewings: JournalViewing[];
 };
 
 export function buildJournal(input: BuildJournalInput): JournalModel {
   const movieIds = new Set<number>();
-  input.trackingStates.filter((state) => state.contentType === 'movie' && state.status === 'watched').forEach((state) => movieIds.add(state.tmdbId));
+  input.viewings.filter((viewing) => viewing.contentType === 'movie').forEach((viewing) => movieIds.add(viewing.tmdbId));
   input.movieRatings.forEach((rating) => movieIds.add(rating.tmdbId));
   input.opinions.forEach((opinion) => {
     if (opinion.content.contentType === 'movie') movieIds.add(opinion.content.tmdbId);
   });
 
   const movieEntries = [...movieIds].map((tmdbId): JournalEntry => {
-    const state = input.trackingStates.find((item) => item.contentType === 'movie' && item.tmdbId === tmdbId);
+    const viewingDates = input.viewings
+      .filter((item) => item.contentType === 'movie' && item.tmdbId === tmdbId)
+      .map((item) => item.watchedAt);
     const rating = input.movieRatings.find((item) => item.tmdbId === tmdbId);
     const review = input.opinions.find((item): item is Extract<ProfileOpinion, { type: 'movieReview' }> => item.type === 'movieReview' && item.content.tmdbId === tmdbId);
     const opinionRating = input.opinions.find((item): item is Extract<ProfileOpinion, { type: 'movieRating' }> => item.type === 'movieRating' && item.content.tmdbId === tmdbId);
     return {
-      date: latestDate([state?.updatedAt, rating?.updatedAt, review?.updatedAt, opinionRating?.updatedAt]),
+      date: latestDate([...viewingDates, rating?.updatedAt, review?.updatedAt, opinionRating?.updatedAt]),
       episodes: [], key: `movie:${tmdbId}`, kind: 'movie',
       ratingScore: rating?.score ?? opinionRating?.score ?? review?.score ?? null,
       reviewBody: review?.body ?? null, tmdbId,
     };
   });
 
-  const progressBySeries = new Map<number, EpisodeProgress[]>();
-  input.progress.forEach((episode) => progressBySeries.set(episode.seriesTmdbId, [...(progressBySeries.get(episode.seriesTmdbId) ?? []), episode]));
-  const seriesEntries = [...progressBySeries.entries()].map(([tmdbId, episodes]): JournalEntry => {
+  const viewingsBySeries = new Map<number, JournalViewing[]>();
+  input.viewings.filter((viewing) => viewing.contentType === 'episode').forEach((viewing) =>
+    viewingsBySeries.set(viewing.tmdbId, [...(viewingsBySeries.get(viewing.tmdbId) ?? []), viewing])
+  );
+  const seriesEntries = [...viewingsBySeries.entries()].map(([tmdbId, episodes]): JournalEntry => {
     const opinions = input.opinions.filter((opinion) => opinion.content.contentType === 'episode' && opinion.content.seriesTmdbId === tmdbId);
     const scores = opinions.flatMap((opinion) => opinion.score === null ? [] : [opinion.score]);
     const reviews = opinions.filter((opinion) => opinion.type === 'episodeReview');
-    const orderedEpisodes = episodes.slice().sort((a, b) => a.seasonNumber - b.seasonNumber || a.episodeNumber - b.episodeNumber);
+    const orderedEpisodes = episodes
+      .filter((episode): episode is JournalViewing & { episodeNumber: number; seasonNumber: number } =>
+        episode.episodeNumber !== null && episode.seasonNumber !== null
+      )
+      .sort((a, b) => a.seasonNumber - b.seasonNumber || a.episodeNumber - b.episodeNumber);
     return {
-      date: latestDate(episodes.map((episode) => episode.watchedAt || episode.updatedAt)),
+      date: latestDate(episodes.map((episode) => episode.watchedAt)),
       episodes: orderedEpisodes.map(({ episodeNumber, seasonNumber, watchedAt }) => ({ episodeNumber, seasonNumber, watchedAt })),
       key: `series:${tmdbId}`, kind: 'series',
       ratingScore: scores.length ? scores.reduce((sum, score) => sum + score, 0) / scores.length : null,

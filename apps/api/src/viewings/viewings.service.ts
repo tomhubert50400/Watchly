@@ -19,6 +19,35 @@ export class ViewingsService {
     return this.getStatsForUser(userId);
   }
 
+  async listJournal(identity: AuthenticatedIdentity) {
+    const userId = await this.getUserId(identity);
+    const items = await this.prisma.withConnectionRetry(() =>
+      this.prisma.viewingEvent.findMany({
+        orderBy: [{ watchedAt: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          contentType: true,
+          episodeNumber: true,
+          id: true,
+          seasonNumber: true,
+          tmdbId: true,
+          watchedAt: true,
+        },
+        where: { userId, watchedAt: { not: null } },
+      }),
+    );
+
+    return {
+      items: items.map((item) => ({
+        contentType: item.contentType === 'MOVIE' ? 'movie' as const : 'episode' as const,
+        episodeNumber: item.episodeNumber,
+        id: item.id,
+        seasonNumber: item.seasonNumber,
+        tmdbId: item.tmdbId,
+        watchedAt: item.watchedAt!.toISOString(),
+      })),
+    };
+  }
+
   async getStatsForUser(userId: string) {
 
     await this.enrichMissingMetadata(userId);

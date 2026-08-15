@@ -40,6 +40,7 @@ import {
   dedupeProfileMediaItems,
   getProfileMediaItems,
   getProfileMediaPreviews,
+  isProfileBackdropCandidate,
 } from './profileMediaModel';
 import { chooseAndUploadProfileAvatar } from './uploadProfileAvatar';
 import { useHydratedProfileMediaItems } from './useHydratedProfileMediaItems';
@@ -144,7 +145,7 @@ export function ProfileScreen() {
   const backdropCandidates = useMemo(() => dedupeProfileMediaItems([
     ...getProfileMediaItems(mediaItems, 'series'),
     ...getProfileMediaItems(mediaItems, 'movies'),
-  ]), [mediaItems]);
+  ]).filter(isProfileBackdropCandidate), [mediaItems]);
   const backdropPickerSources = backdropPickerOpen
     ? backdropCandidates
     : EMPTY_PROFILE_MEDIA_ITEMS;

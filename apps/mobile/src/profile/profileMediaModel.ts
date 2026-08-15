@@ -31,9 +31,16 @@ export function getProfileMediaStatus(
   ) {
     return 'inProgress';
   }
-  if (item.favorite || item.hasReleaseAlert) return 'planned';
+  if (item.status === 'watchlisted' || item.favorite || item.hasReleaseAlert) return 'planned';
 
   return null;
+}
+
+export function isProfileBackdropCandidate(item: LibraryMediaItem) {
+  if (item.favorite || item.hasReleaseAlert || item.status === 'watched') return true;
+  if (item.contentType === 'movie') return false;
+
+  return item.status === 'watching' || item.watchedEpisodeCount > 0;
 }
 
 export function getProfileMediaItems(

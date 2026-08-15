@@ -9,6 +9,7 @@ import {
   getProfileMediaPreviews,
   getProfileMediaStatus,
   groupProfileMediaByStatus,
+  isProfileBackdropCandidate,
 } from './profileMediaModel';
 
 function media(
@@ -68,8 +69,13 @@ assert.equal(getProfileMediaStatus(media('movie:5', { favorite: true })), 'plann
 assert.equal(getProfileMediaStatus(media('series:6', { hasReleaseAlert: true })), 'planned');
 assert.equal(
   getProfileMediaStatus(media('movie:7', { status: 'watchlisted' })),
-  null,
-  'a bare legacy watchlist state is not enough to make a title planned',
+  'planned',
+  'Want to watch titles must appear in Planned',
+);
+assert.equal(
+  isProfileBackdropCandidate(media('movie:7', { status: 'watchlisted' })),
+  false,
+  'Want to watch alone must not become a profile backdrop',
 );
 
 const recent = Array.from({ length: 12 }, (_, index) => media(`movie:${index + 10}`, {

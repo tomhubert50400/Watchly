@@ -15,11 +15,11 @@ const journal = buildJournal({
     { body: 'Still precise.', content: { contentType: 'movie' as const, tmdbId: 10 }, id: 'review', score: 4.5, type: 'movieReview' as const, updatedAt: '2026-07-10T13:00:00Z' },
     { content: { contentType: 'episode' as const, episodeNumber: 2, seasonNumber: 1, seriesTmdbId: 20 }, id: 'er', score: 4, type: 'episodeRating' as const, updatedAt: '2026-06-29T12:00:00Z' },
   ],
-  progress: [
-    { episodeNumber: 1, id: 'p1', seasonNumber: 1, seriesTmdbId: 20, updatedAt: '2026-07-09T12:00:00Z', watchedAt: '2026-07-09T12:00:00Z' },
-    { episodeNumber: 2, id: 'p2', seasonNumber: 1, seriesTmdbId: 20, updatedAt: '2026-07-08T12:00:00Z', watchedAt: '2026-07-08T12:00:00Z' },
+  viewings: [
+    { contentType: 'movie', episodeNumber: null, id: 'vm', seasonNumber: null, tmdbId: 10, watchedAt: '2026-07-10T11:00:00Z' },
+    { contentType: 'episode', episodeNumber: 1, id: 'p1', seasonNumber: 1, tmdbId: 20, watchedAt: '2026-07-09T12:00:00Z' },
+    { contentType: 'episode', episodeNumber: 2, id: 'p2', seasonNumber: 1, tmdbId: 20, watchedAt: '2026-07-08T12:00:00Z' },
   ],
-  trackingStates: [{ contentType: 'movie' as const, favorite: false, id: 't', status: 'watched' as const, tmdbId: 10, updatedAt: '2026-07-10T11:00:00Z' }],
 });
 assert.equal(journal.entries.length, 2, 'movie events are deduplicated and series episodes grouped');
 assert.deepEqual(journal.entries.map((entry) => entry.kind), ['movie', 'series']);
@@ -36,4 +36,7 @@ assert.equal(filterJournalEntriesByDate(journal.entries, '2026-07-10').length, 1
 assert.equal(filterJournalEntriesByDate(journal.entries, '2026-07-09').length, 1);
 assert.equal(filterJournalEntriesByDate(journal.entries, '2026-07-08').length, 0);
 assert.equal(filterJournalEntriesByDate(journal.entries, null).length, 2);
+
+const tasteOnly = buildJournal({ movieRatings: [], opinions: [], viewings: [] });
+assert.equal(tasteOnly.entries.length, 0, 'Taste states without real viewing dates must stay out of Journal');
 console.log('Journal model QA passed.');

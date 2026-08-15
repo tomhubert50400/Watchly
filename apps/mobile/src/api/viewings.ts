@@ -49,6 +49,19 @@ export type SeriesViewingSummary = {
   watchedEpisodeCount: number;
 };
 
+export type JournalViewing = {
+  contentType: 'episode' | 'movie';
+  episodeNumber: number | null;
+  id: string;
+  seasonNumber: number | null;
+  tmdbId: number;
+  watchedAt: string;
+};
+
+export function listJournalViewings(token: string) {
+  return apiGet<{ items: JournalViewing[] }>('/viewings/journal', { token });
+}
+
 export function getViewingStats(token: string) {
   return apiGet<ViewingStats>('/viewings/stats', { token, timeoutMs: 30_000 });
 }

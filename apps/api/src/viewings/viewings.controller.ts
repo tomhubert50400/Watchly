@@ -23,6 +23,11 @@ export class ViewingsController {
     return this.viewings.getStats(getIdentity(request));
   }
 
+  @Get('journal')
+  getJournal(@Req() request: AuthenticatedRequest) {
+    return this.viewings.listJournal(getIdentity(request));
+  }
+
   @Get('movies/:tmdbId')
   getMovie(@Req() request: AuthenticatedRequest, @Param('tmdbId') tmdbId: string) {
     return this.viewings.getMovieSummary(getIdentity(request), parsePositiveInteger(tmdbId, 'tmdbId'));
