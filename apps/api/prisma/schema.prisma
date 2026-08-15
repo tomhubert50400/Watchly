@@ -137,6 +137,7 @@ enum AdminAuditAction {
 enum DataImportSource {
   LETTERBOXD
   IMDB
+  TV_TIME
 }
 
 enum DataImportStatus {
@@ -204,11 +205,11 @@ model AuthIdentity {
 
 model PrivacySettings {
   userId                    String                    @id @db.Uuid
-  profileVisibility         PrivacyVisibility         @default(PRIVATE)
-  viewingHistoryVisibility  PrivacyVisibility         @default(PRIVATE)
-  episodeProgressVisibility PrivacyVisibility         @default(PRIVATE)
-  reviewsVisibility         PrivacyVisibility         @default(PRIVATE)
-  ratingsVisibility         PrivacyVisibility         @default(PRIVATE)
+  profileVisibility         PrivacyVisibility         @default(PUBLIC)
+  viewingHistoryVisibility  PrivacyVisibility         @default(PUBLIC)
+  episodeProgressVisibility PrivacyVisibility         @default(PUBLIC)
+  reviewsVisibility         PrivacyVisibility         @default(PUBLIC)
+  ratingsVisibility         PrivacyVisibility         @default(PUBLIC)
   sharedWatchlistVisibility SharedWatchlistVisibility @default(MEMBERS)
   createdAt                 DateTime                  @default(now())
   updatedAt                 DateTime                  @updatedAt
