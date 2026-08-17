@@ -168,7 +168,7 @@ assert.match(
 );
 assert.match(
   onboarding,
-  /scrollResponderScrollNativeHandleToKeyboard\([\s\S]*event\.target,[\s\S]*ONBOARDING_KEYBOARD_ACCESSORY_HEIGHT \+ spacing\.xl/,
+  /scrollResponderScrollNativeHandleToKeyboard\([\s\S]*event\.target,[\s\S]*ONBOARDING_KEYBOARD_ACCESSORY_HEIGHT \+ spacing\.xl \+ ONBOARDING_KEYBOARD_FIELD_GAP/,
   'the focused onboarding field must animate to the edge of the keyboard accessory',
 );
 assert.match(

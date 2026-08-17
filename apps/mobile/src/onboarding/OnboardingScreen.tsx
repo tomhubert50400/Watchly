@@ -70,6 +70,7 @@ const filters: { label: string; type: CatalogueSearchType }[] = [
 ];
 const ONBOARDING_INPUT_ACCESSORY_ID = 'onboarding-profile-keyboard-accessory';
 const ONBOARDING_KEYBOARD_ACCESSORY_HEIGHT = 38;
+const ONBOARDING_KEYBOARD_FIELD_GAP = spacing.lg;
 
 export function OnboardingScreen() {
   const {
@@ -202,7 +203,7 @@ export function OnboardingScreen() {
     setIsProfileEditing(true);
     scrollViewRef.current?.scrollResponderScrollNativeHandleToKeyboard(
       event.target,
-      ONBOARDING_KEYBOARD_ACCESSORY_HEIGHT + spacing.xl,
+      ONBOARDING_KEYBOARD_ACCESSORY_HEIGHT + spacing.xl + ONBOARDING_KEYBOARD_FIELD_GAP,
       true,
     );
   };
