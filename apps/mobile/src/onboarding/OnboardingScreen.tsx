@@ -5,6 +5,7 @@ import {
   InputAccessoryView,
   Keyboard,
   Linking,
+  PixelRatio,
   Platform,
   Pressable,
   ScrollView,
@@ -70,7 +71,7 @@ const filters: { label: string; type: CatalogueSearchType }[] = [
 ];
 const ONBOARDING_INPUT_ACCESSORY_ID = 'onboarding-profile-keyboard-accessory';
 const ONBOARDING_KEYBOARD_ACCESSORY_HEIGHT = 38;
-const ONBOARDING_KEYBOARD_FIELD_GAP = spacing.lg;
+const ONBOARDING_KEYBOARD_FIELD_GAP = 200 / PixelRatio.get();
 
 export function OnboardingScreen() {
   const {

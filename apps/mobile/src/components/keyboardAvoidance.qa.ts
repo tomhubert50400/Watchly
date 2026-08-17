@@ -173,6 +173,11 @@ assert.match(
 );
 assert.match(
   onboarding,
+  /const ONBOARDING_KEYBOARD_FIELD_GAP = 200 \/ PixelRatio\.get\(\)/,
+  'the onboarding field must keep a 200 physical-pixel gap above the keyboard accessory',
+);
+assert.match(
+  onboarding,
   /footer=\{\s*isProfileEditing \? undefined : \(/,
   'onboarding must hide its large action footer as soon as a profile field receives focus',
 );
