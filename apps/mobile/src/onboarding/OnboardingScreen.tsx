@@ -425,6 +425,7 @@ export function OnboardingScreen() {
           step={step}
         />
       )}
+      key={step}
       title={getStepTitle(step)}
     >
       <ScrollView
