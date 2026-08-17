@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  FocusEvent,
+  InputAccessoryView,
+  Keyboard,
   Linking,
   Platform,
   Pressable,
@@ -13,6 +16,7 @@ import {
   BellRing,
   Camera,
   CheckCircle2,
+  ChevronDown,
   Database,
   ShieldCheck,
 } from 'lucide-react-native';
@@ -64,6 +68,8 @@ const filters: { label: string; type: CatalogueSearchType }[] = [
   { label: 'Films', type: 'movie' },
   { label: 'Series', type: 'series' },
 ];
+const ONBOARDING_INPUT_ACCESSORY_ID = 'onboarding-profile-keyboard-accessory';
+const ONBOARDING_KEYBOARD_ACCESSORY_HEIGHT = 38;
 
 export function OnboardingScreen() {
   const {
@@ -87,11 +93,13 @@ export function OnboardingScreen() {
   const [importSatisfied, setImportSatisfied] = useState(false);
   const [isCheckingHandle, setIsCheckingHandle] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
+  const [isProfileEditing, setIsProfileEditing] = useState(false);
   const [notificationOutcome, setNotificationOutcome] = useState<ReleasePushSetupResult | null>(null);
   const [notificationStatus, setNotificationStatus] = useState<'idle' | 'requesting'>('idle');
   const [step, setStep] = useState<OnboardingStep>('profile');
   const [tasteItems, setTasteItems] = useState<OnboardingTasteItem[]>([]);
   const copyAttempted = useRef(false);
+  const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -190,6 +198,14 @@ export function OnboardingScreen() {
   }
 
   const handleError = getProfileHandleError(handle);
+  const focusProfileField = (event: FocusEvent) => {
+    setIsProfileEditing(true);
+    scrollViewRef.current?.scrollResponderScrollNativeHandleToKeyboard(
+      event.target,
+      ONBOARDING_KEYBOARD_ACCESSORY_HEIGHT + spacing.xl,
+      true,
+    );
+  };
 
   async function continueProfile() {
     if (!firebaseIdToken || isCheckingHandle) return;
@@ -366,147 +382,187 @@ export function OnboardingScreen() {
 
   if (isHandleClaim) {
     return (
-      <Screen
-        eyebrow="Profile identity"
-        footer={(
-          <Button
-            fullWidth
-            label="Save permanent handle"
-            loading={isFinishing}
-            onPress={() => void finishHandleClaim()}
-          />
-        )}
-        title="Choose your @handle"
-      >
-        <View style={styles.content}>
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>One permanent identifier</Text>
-            <Text style={styles.bodyText}>
-              Your display name can keep changing. Your handle uniquely identifies your profile
-              and cannot be changed after you save it.
-            </Text>
-            <HandleField
-              error={handleTouched ? handleError : null}
-              handle={handle}
-              onChange={(value) => {
-                setHandle(value.toLowerCase().replace(/^@/, ''));
-                setHandleTouched(true);
-                setError(null);
-              }}
-            />
+      <View style={styles.root}>
+        <Screen
+          eyebrow="Profile identity"
+          footer={
+            isProfileEditing ? undefined : (
+              <Button
+                fullWidth
+                label="Save permanent handle"
+                loading={isFinishing}
+                onPress={() => void finishHandleClaim()}
+              />
+            )
+          }
+          nativeKeyboardInsetsOnly
+          scrollViewRef={scrollViewRef}
+          title="Choose your @handle"
+        >
+          <View style={styles.content}>
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>One permanent identifier</Text>
+              <Text style={styles.bodyText}>
+                Your display name can keep changing. Your handle uniquely identifies your profile
+                and cannot be changed after you save it.
+              </Text>
+              <HandleField
+                error={handleTouched ? handleError : null}
+                handle={handle}
+                inputAccessoryViewID={ONBOARDING_INPUT_ACCESSORY_ID}
+                onBlur={() => setIsProfileEditing(false)}
+                onChange={(value) => {
+                  setHandle(value.toLowerCase().replace(/^@/, ''));
+                  setHandleTouched(true);
+                  setError(null);
+                }}
+                onFocus={focusProfileField}
+              />
+            </View>
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
           </View>
-          {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        </View>
-      </Screen>
+        </Screen>
+        <OnboardingKeyboardAccessory onDismiss={() => setIsProfileEditing(false)} />
+      </View>
     );
   }
 
   const stepIndex = steps.indexOf(step);
 
   return (
-    <Screen
-      eyebrow={`Onboarding ${stepIndex + 1} / ${steps.length}`}
-      footer={(
-        <OnboardingFooter
-          error={error}
-          importSatisfied={importSatisfied}
-          isCheckingHandle={isCheckingHandle}
-          isFinishing={isFinishing}
-          notificationOutcome={notificationOutcome}
-          notificationStatus={notificationStatus}
-          onAllowNotifications={() => void allowNotifications()}
-          onBack={goBack}
-          onContinue={() => {
-            if (step === 'profile') void continueProfile();
-            if (step === 'import') continueImport();
-            if (step === 'taste') continueTaste();
-          }}
-          onFinishWithoutNotifications={() => void finishOnboarding()}
-          step={step}
-        />
-      )}
-      key={step}
-      title={getStepTitle(step)}
-    >
-      <ScrollView
-        automaticallyAdjustKeyboardInsets
-        contentContainerStyle={styles.content}
-        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <View accessibilityLabel={`Step ${stepIndex + 1} of ${steps.length}`} style={styles.progressTrack}>
-          {steps.map((item, index) => (
-            <View
-              key={item}
-              style={[styles.progressSegment, index <= stepIndex ? styles.progressSegmentActive : null]}
+    <View style={styles.root}>
+      <Screen
+        eyebrow={`Onboarding ${stepIndex + 1} / ${steps.length}`}
+        footer={
+          isProfileEditing ? undefined : (
+            <OnboardingFooter
+              error={error}
+              importSatisfied={importSatisfied}
+              isCheckingHandle={isCheckingHandle}
+              isFinishing={isFinishing}
+              notificationOutcome={notificationOutcome}
+              notificationStatus={notificationStatus}
+              onAllowNotifications={() => void allowNotifications()}
+              onBack={goBack}
+              onContinue={() => {
+                if (step === 'profile') void continueProfile();
+                if (step === 'import') continueImport();
+                if (step === 'taste') continueTaste();
+              }}
+              onFinishWithoutNotifications={() => void finishOnboarding()}
+              step={step}
             />
-          ))}
-        </View>
+          )
+        }
+        key={step}
+        nativeKeyboardInsetsOnly
+        scrollViewRef={scrollViewRef}
+        title={getStepTitle(step)}
+      >
+        <View style={styles.content}>
+          <View
+            accessibilityLabel={`Step ${stepIndex + 1} of ${steps.length}`}
+            style={styles.progressTrack}
+          >
+            {steps.map((item, index) => (
+              <View
+                key={item}
+                style={[styles.progressSegment, index <= stepIndex ? styles.progressSegmentActive : null]}
+              />
+            ))}
+          </View>
 
-        <StepHero step={step} />
+          <StepHero step={step} />
 
-        {step === 'profile' ? (
-          <ProfileStep
-            avatarStatus={avatarStatus}
-            avatarUploadsEnabled={avatarUploadsEnabled}
-            avatarUrl={avatarUrl}
-            displayName={displayName}
-            handle={handle}
-            handleError={handleTouched ? handleError : null}
-            message={avatarMessage}
-            onChangeAvatar={() => void changeAvatar()}
-            onChangeDisplayName={(value) => {
-              setDisplayName(value);
-              setError(null);
-            }}
-            onChangeHandle={(value) => {
-              setHandle(value.toLowerCase().replace(/^@/, ''));
-              setHandleTouched(true);
-              setError(null);
-            }}
-          />
-        ) : null}
-
-        {step === 'import' ? (
-          <View style={styles.importCard}>
-            <Text style={styles.importLead}>
-              Import as many files as you need. If at least one title is added, Watchly will skip Taste.
-            </Text>
-            {importSatisfied ? (
-              <View style={styles.successPanel}>
-                <CheckCircle2 color={colors.success} size={20} />
-                <Text style={styles.successText}>Your profile has enough titles to get started.</Text>
-              </View>
-            ) : null}
-            <ImportDataScreen
-              embedded
-              onImportCompleted={({ importId, result }) => {
-                if (result.titlesProcessed < 1) return;
-                setCompletedImportIds((current) => current.includes(importId) ? current : [...current, importId]);
-                setImportSatisfied(true);
+          {step === 'profile' ? (
+            <ProfileStep
+              avatarStatus={avatarStatus}
+              avatarUploadsEnabled={avatarUploadsEnabled}
+              avatarUrl={avatarUrl}
+              displayName={displayName}
+              handle={handle}
+              handleError={handleTouched ? handleError : null}
+              inputAccessoryViewID={ONBOARDING_INPUT_ACCESSORY_ID}
+              message={avatarMessage}
+              onChangeAvatar={() => void changeAvatar()}
+              onChangeDisplayName={(value) => {
+                setDisplayName(value);
                 setError(null);
               }}
-              workingSourcesOnly
+              onChangeHandle={(value) => {
+                setHandle(value.toLowerCase().replace(/^@/, ''));
+                setHandleTouched(true);
+                setError(null);
+              }}
+              onFieldBlur={() => setIsProfileEditing(false)}
+              onFieldFocus={focusProfileField}
             />
-          </View>
-        ) : null}
+          ) : null}
 
-        {step === 'taste' ? (
-          <TasteStep
-            onChange={(items) => {
-              setTasteItems(items);
-              setError(null);
-            }}
-            selected={tasteItems}
-          />
-        ) : null}
+          {step === 'import' ? (
+            <View style={styles.importCard}>
+              <Text style={styles.importLead}>
+                Import as many files as you need. If at least one title is added, Watchly will skip Taste.
+              </Text>
+              {importSatisfied ? (
+                <View style={styles.successPanel}>
+                  <CheckCircle2 color={colors.success} size={20} />
+                  <Text style={styles.successText}>Your profile has enough titles to get started.</Text>
+                </View>
+              ) : null}
+              <ImportDataScreen
+                embedded
+                onImportCompleted={({ importId, result }) => {
+                  if (result.titlesProcessed < 1) return;
+                  setCompletedImportIds((current) => current.includes(importId) ? current : [...current, importId]);
+                  setImportSatisfied(true);
+                  setError(null);
+                }}
+                workingSourcesOnly
+              />
+            </View>
+          ) : null}
 
-        {step === 'notifications' ? (
-          <NotificationsStep outcome={notificationOutcome} />
-        ) : null}
-      </ScrollView>
-    </Screen>
+          {step === 'taste' ? (
+            <TasteStep
+              onChange={(items) => {
+                setTasteItems(items);
+                setError(null);
+              }}
+              selected={tasteItems}
+            />
+          ) : null}
+
+          {step === 'notifications' ? (
+            <NotificationsStep outcome={notificationOutcome} />
+          ) : null}
+        </View>
+      </Screen>
+      <OnboardingKeyboardAccessory onDismiss={() => setIsProfileEditing(false)} />
+    </View>
+  );
+}
+
+function OnboardingKeyboardAccessory({ onDismiss }: { onDismiss: () => void }) {
+  if (Platform.OS !== 'ios') return null;
+
+  return (
+    <InputAccessoryView nativeID={ONBOARDING_INPUT_ACCESSORY_ID}>
+      <View style={styles.keyboardAccessory}>
+        <Pressable
+          accessibilityLabel="Dismiss keyboard"
+          accessibilityRole="button"
+          hitSlop={6}
+          onPress={() => {
+            onDismiss();
+            Keyboard.dismiss();
+          }}
+          style={({ pressed }) => [styles.keyboardDismiss, pressed ? styles.pressed : null]}
+        >
+          <ChevronDown color={colors.text} size={18} strokeWidth={2.25} />
+        </Pressable>
+      </View>
+    </InputAccessoryView>
   );
 }
 
@@ -595,10 +651,13 @@ function ProfileStep({
   displayName,
   handle,
   handleError,
+  inputAccessoryViewID,
   message,
   onChangeAvatar,
   onChangeDisplayName,
   onChangeHandle,
+  onFieldBlur,
+  onFieldFocus,
 }: {
   avatarStatus: 'idle' | 'saving';
   avatarUploadsEnabled: boolean;
@@ -606,10 +665,13 @@ function ProfileStep({
   displayName: string;
   handle: string;
   handleError: string | null;
+  inputAccessoryViewID: string;
   message: string | null;
   onChangeAvatar: () => void;
   onChangeDisplayName: (value: string) => void;
   onChangeHandle: (value: string) => void;
+  onFieldBlur: () => void;
+  onFieldFocus: (event: FocusEvent) => void;
 }) {
   return (
     <View style={styles.card}>
@@ -647,12 +709,22 @@ function ProfileStep({
       <TextInput
         autoCapitalize="words"
         helperText="You can change this later."
+        inputAccessoryViewID={inputAccessoryViewID}
         label="Display name"
         maxLength={80}
+        onBlur={onFieldBlur}
         onChangeText={onChangeDisplayName}
+        onFocus={onFieldFocus}
         value={displayName}
       />
-      <HandleField error={handleError} handle={handle} onChange={onChangeHandle} />
+      <HandleField
+        error={handleError}
+        handle={handle}
+        inputAccessoryViewID={inputAccessoryViewID}
+        onBlur={onFieldBlur}
+        onChange={onChangeHandle}
+        onFocus={onFieldFocus}
+      />
     </View>
   );
 }
@@ -660,11 +732,17 @@ function ProfileStep({
 function HandleField({
   error,
   handle,
+  inputAccessoryViewID,
+  onBlur,
   onChange,
+  onFocus,
 }: {
   error: string | null;
   handle: string;
+  inputAccessoryViewID: string;
+  onBlur: () => void;
   onChange: (value: string) => void;
+  onFocus: (event: FocusEvent) => void;
 }) {
   return (
     <TextInput
@@ -672,9 +750,12 @@ function HandleField({
       autoCorrect={false}
       error={error ?? undefined}
       helperText="Use 3-20 letters, numbers, or underscores. Your @handle is permanent."
+      inputAccessoryViewID={inputAccessoryViewID}
       label="Permanent handle"
       maxLength={21}
+      onBlur={onBlur}
       onChangeText={onChange}
+      onFocus={onFocus}
       placeholder="cinema_fan"
       value={handle}
     />
@@ -1090,6 +1171,23 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     paddingHorizontal: spacing.xs,
   },
+  keyboardAccessory: {
+    alignItems: 'flex-end',
+    backgroundColor: '#101116',
+    height: ONBOARDING_KEYBOARD_ACCESSORY_HEIGHT,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+  },
+  keyboardDismiss: {
+    alignItems: 'center',
+    backgroundColor: colors.panelElevated,
+    borderColor: colors.borderStrong,
+    borderRadius: 16,
+    borderWidth: 1,
+    height: 32,
+    justifyContent: 'center',
+    width: 32,
+  },
   permissionIcon: {
     alignItems: 'center',
     backgroundColor: colors.accentSoft,
@@ -1127,6 +1225,9 @@ const styles = StyleSheet.create({
   },
   progressSegmentActive: {
     backgroundColor: colors.accent,
+  },
+  root: {
+    flex: 1,
   },
   progressTrack: {
     flexDirection: 'row',

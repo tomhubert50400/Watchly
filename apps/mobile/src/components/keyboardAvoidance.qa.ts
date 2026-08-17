@@ -143,8 +143,43 @@ assert.match(
 );
 assert.match(
   onboarding,
-  /footer=\{\([\s\S]*<OnboardingFooter/,
+  /footer=\{\s*isProfileEditing \? undefined : \([\s\S]*<OnboardingFooter/,
   'onboarding actions must use the screen footer',
+);
+assert.match(
+  screen,
+  /nativeKeyboardInsetsOnly\?: boolean/,
+  'forms that use a native input accessory must be able to opt out of KeyboardAvoidingView padding',
+);
+assert.match(
+  screen,
+  /behavior=\{!nativeKeyboardInsetsOnly && Platform\.OS === 'ios' \? 'padding' : undefined\}/,
+  'native keyboard inset screens must not stack KeyboardAvoidingView padding',
+);
+assert.match(
+  onboarding,
+  /<InputAccessoryView nativeID=\{ONBOARDING_INPUT_ACCESSORY_ID\}>[\s\S]*accessibilityLabel="Dismiss keyboard"[\s\S]*Keyboard\.dismiss/,
+  'onboarding must use a native keyboard accessory for its compact dismiss control',
+);
+assert.match(
+  onboarding,
+  /inputAccessoryViewID=\{ONBOARDING_INPUT_ACCESSORY_ID\}[\s\S]*onFocus=\{onFieldFocus\}/,
+  'onboarding profile fields must attach to the native accessory before the keyboard animates',
+);
+assert.match(
+  onboarding,
+  /scrollResponderScrollNativeHandleToKeyboard\([\s\S]*event\.target,[\s\S]*ONBOARDING_KEYBOARD_ACCESSORY_HEIGHT \+ spacing\.xl/,
+  'the focused onboarding field must animate to the edge of the keyboard accessory',
+);
+assert.match(
+  onboarding,
+  /footer=\{\s*isProfileEditing \? undefined : \(/,
+  'onboarding must hide its large action footer as soon as a profile field receives focus',
+);
+assert.doesNotMatch(
+  onboarding,
+  /<ScrollView\s*\n/,
+  'onboarding must let Screen own keyboard-aware scrolling instead of nesting a second scroller',
 );
 assert.match(explore, /automaticallyAdjustKeyboardInsets/, 'catalogue search must adjust around the keyboard');
 

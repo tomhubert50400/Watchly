@@ -1,5 +1,5 @@
 import { useScrollToTop } from '@react-navigation/native';
-import { PropsWithChildren, ReactNode, useRef } from 'react';
+import { PropsWithChildren, ReactNode, RefObject, useRef } from 'react';
 import {
   GestureResponderHandlers,
   KeyboardAvoidingView,
@@ -21,7 +21,9 @@ type ScreenProps = PropsWithChildren<{
   headerMode?: 'regular' | 'sticky';
   horizontalPadding?: boolean | number;
   leading?: ReactNode;
+  nativeKeyboardInsetsOnly?: boolean;
   refreshControl?: ScrollViewProps['refreshControl'];
+  scrollViewRef?: RefObject<ScrollView | null>;
   statusBanner?: ReactNode;
   tabBarPadding?: boolean | number;
   title: string;
@@ -37,13 +39,16 @@ export function Screen({
   headerMode = 'regular',
   horizontalPadding = true,
   leading,
+  nativeKeyboardInsetsOnly = false,
   refreshControl,
+  scrollViewRef: providedScrollViewRef,
   statusBanner,
   tabBarPadding = false,
   title,
   trailing,
 }: ScreenProps) {
-  const scrollViewRef = useRef<ScrollView>(null);
+  const fallbackScrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = providedScrollViewRef ?? fallbackScrollViewRef;
   const insets = useSafeAreaInsets();
   const sidePadding = typeof horizontalPadding === 'number'
     ? horizontalPadding
@@ -68,7 +73,7 @@ export function Screen({
     <SafeAreaView edges={['top']} style={styles.safeArea} {...gestureHandlers}>
       {background ? <View pointerEvents="none" style={styles.background}>{background}</View> : null}
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={!nativeKeyboardInsetsOnly && Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardAvoider}
       >
         <ScrollView
