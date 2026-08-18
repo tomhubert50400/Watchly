@@ -32,6 +32,7 @@ import {
   getProfile,
 } from '../api/profile';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { BrandWordmark } from '../brand/BrandWordmark';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
 import { LoadingState } from '../components/LoadingState';
@@ -434,7 +435,6 @@ export function OnboardingScreen() {
   return (
     <View style={styles.root}>
       <Screen
-        eyebrow={`Onboarding ${stepIndex + 1} / ${steps.length}`}
         footer={
           isProfileEditing ? undefined : (
             <OnboardingFooter
@@ -459,9 +459,9 @@ export function OnboardingScreen() {
         key={step}
         nativeKeyboardInsetsOnly
         scrollViewRef={scrollViewRef}
-        title={getStepTitle(step)}
+        title={step === 'profile' ? '' : getStepTitle(step)}
       >
-        <View style={styles.content}>
+        <View style={[styles.content, step === 'profile' ? styles.profileScreenContent : null]}>
           <View
             accessibilityLabel={`Step ${stepIndex + 1} of ${steps.length}`}
             style={styles.progressTrack}
@@ -474,7 +474,14 @@ export function OnboardingScreen() {
             ))}
           </View>
 
-          <StepHero step={step} />
+          {step === 'profile' ? (
+            <View style={styles.profileHeading}>
+              <Text style={styles.profileHeadingText}>Personalize your</Text>
+              <BrandWordmark height={32} />
+            </View>
+          ) : null}
+
+          {step !== 'profile' ? <StepHero step={step} /> : null}
 
           {step === 'profile' ? (
             <ProfileStep
@@ -631,11 +638,12 @@ function OnboardingFooter({
           )}
         </>
       ) : (
-        <View style={styles.actions}>
+        <View style={[styles.actions, step === 'profile' ? styles.profileActions : null]}>
           {step !== 'profile' ? (
             <Button label="Back" onPress={onBack} variant="secondary" />
           ) : null}
           <Button
+            fullWidth={step === 'profile'}
             label={step === 'import' && !importSatisfied ? 'Continue to Taste' : 'Continue'}
             loading={step === 'profile' && isCheckingHandle}
             onPress={onContinue}
@@ -676,7 +684,7 @@ function ProfileStep({
   onFieldFocus: (event: FocusEvent) => void;
 }) {
   return (
-    <View style={styles.card}>
+    <View style={styles.profileContent}>
       <View style={styles.avatarRow}>
         <View>
           <UserAvatar avatarUrl={avatarUrl} displayName={displayName} size={88} />
@@ -687,10 +695,6 @@ function ProfileStep({
           ) : null}
         </View>
         <View style={styles.avatarCopy}>
-          <Text style={styles.sectionTitle}>Your Watchly profile</Text>
-          <Text style={styles.bodyText}>
-            We start with your sign-in photo. You can replace it now or anytime in Settings.
-          </Text>
           <Pressable
             accessibilityRole="button"
             accessibilityState={{ disabled: !avatarUploadsEnabled || avatarStatus === 'saving' }}
@@ -751,14 +755,14 @@ function HandleField({
       autoCapitalize="none"
       autoCorrect={false}
       error={error ?? undefined}
-      helperText="Use 3-20 letters, numbers, or underscores. Your @handle is permanent."
+      helperText="Use 3-20 letters, numbers, or underscores. Your username is permanent."
       inputAccessoryViewID={inputAccessoryViewID}
-      label="Permanent handle"
+      label="Username"
       maxLength={21}
       onBlur={onBlur}
       onChangeText={onChange}
       onFocus={onFocus}
-      placeholder="cinema_fan"
+      placeholder="@watchly"
       value={handle}
     />
   );
@@ -1211,6 +1215,24 @@ const styles = StyleSheet.create({
     color: colors.accentText,
     fontSize: 14,
     fontWeight: '800',
+  },
+  profileActions: {
+    flexDirection: 'column',
+  },
+  profileContent: {
+    gap: spacing.lg,
+  },
+  profileHeading: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  profileHeadingText: {
+    ...typography.title,
+    color: colors.accentText,
+  },
+  profileScreenContent: {
+    paddingTop: spacing.xl,
   },
   poster: {
     height: 84,
