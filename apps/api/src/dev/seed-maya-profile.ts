@@ -84,6 +84,7 @@ async function getOrCreateTestUser() {
     data: {
       ...profile,
       authIdentities: { create: identityKey },
+      firebaseUid: identityKey.providerUserId,
       privacySettings: { create: privacy },
     },
   });

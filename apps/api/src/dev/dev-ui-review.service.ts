@@ -135,6 +135,7 @@ export class DevUiReviewService {
         data: {
           authIdentities: { create: identityKey },
           displayName: this.sampleFriendName,
+          firebaseUid: identityKey.providerUserId,
           handle: this.sampleFriendHandle,
           onboardingCompleted: true,
           privacySettings: { create: publicReviewPrivacy() },

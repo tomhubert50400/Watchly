@@ -339,6 +339,8 @@ async function assertNotFound<T>(operation: () => Promise<T>, message: string) {
 function createIdentity(providerUserId: string): AuthenticatedIdentity {
   return {
     displayName: 'Privacy smoke user',
+    emailVerified: false,
+    firebaseUid: providerUserId,
     provider: AuthProvider.GOOGLE,
     providerUserId,
   };

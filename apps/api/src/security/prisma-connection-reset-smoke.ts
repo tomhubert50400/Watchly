@@ -13,10 +13,13 @@ import { SharedWatchlistsService } from '../shared-watchlists/shared-watchlists.
 import { TrackingService } from '../tracking/tracking.service';
 import { WatchlistsService } from '../watchlists/watchlists.service';
 
+const providerUserId = `__prisma_reset_smoke_${Date.now()}`;
 const identity: AuthenticatedIdentity = {
   displayName: 'Prisma reset smoke user',
+  emailVerified: false,
+  firebaseUid: providerUserId,
   provider: AuthProvider.GOOGLE,
-  providerUserId: `__prisma_reset_smoke_${Date.now()}`,
+  providerUserId,
 };
 
 async function main() {

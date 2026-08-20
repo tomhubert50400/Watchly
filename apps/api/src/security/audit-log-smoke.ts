@@ -67,6 +67,8 @@ async function main() {
 function createIdentity(providerUserId: string): AuthenticatedIdentity {
   return {
     displayName: 'Audit smoke user',
+    emailVerified: false,
+    firebaseUid: providerUserId,
     provider: AuthProvider.GOOGLE,
     providerUserId,
   };

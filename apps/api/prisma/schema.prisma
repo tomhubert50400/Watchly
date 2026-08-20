@@ -12,6 +12,8 @@ enum AuthProvider {
   GOOGLE
   APPLE
   MICROSOFT
+  FACEBOOK
+  DISCORD
 }
 
 enum PrivacyVisibility {
@@ -147,6 +149,7 @@ enum DataImportStatus {
 
 model User {
   id                         String                     @id @default(uuid()) @db.Uuid
+  firebaseUid                String                     @unique @db.VarChar(128)
   avatarObjectKey            String?
   profileBackdropContentType TrackedContentType?
   profileBackdropTmdbId      Int?
@@ -190,15 +193,18 @@ model User {
 }
 
 model AuthIdentity {
-  id             String       @id @default(uuid()) @db.Uuid
-  userId         String       @db.Uuid
-  provider       AuthProvider
-  providerUserId String
-  email          String?      @db.VarChar(320)
-  createdAt      DateTime     @default(now())
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String       @id @default(uuid()) @db.Uuid
+  userId          String       @db.Uuid
+  provider        AuthProvider
+  providerUserId  String
+  email           String?      @db.VarChar(320)
+  emailNormalized String?      @db.VarChar(320)
+  createdAt       DateTime     @default(now())
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerUserId])
+  @@unique([userId, provider])
+  @@index([emailNormalized])
   @@index([userId])
   @@map("auth_identities")
 }

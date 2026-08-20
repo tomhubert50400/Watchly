@@ -19,11 +19,13 @@ async function main() {
         auth_time: 0,
         exp: 1,
         firebase: {
-          identities: {},
+          identities: { 'google.com': ['google-subject-qa'] },
           sign_in_provider: 'google.com',
         },
         iat: 0,
         iss: 'https://securetoken.google.com/security-qa',
+        email: 'qa@example.com',
+        email_verified: true,
         picture: 'https://example.com/avatar.jpg',
         sub: 'qa-user',
         uid: 'qa-user',
@@ -135,12 +137,33 @@ async function main() {
     allowPasswordProvider: true,
   });
   assert.equal(emulatorIdentity.provider, 'GOOGLE');
+  assert.equal(emulatorIdentity.firebaseUid, 'ui-review-user');
   assert.equal(emulatorIdentity.providerUserId, 'ui-review-user');
   assert.equal(emulatorIdentity.email, 'ui-review@watchly.test');
   assert.equal(emulatorIdentity.photoUrl, null);
 
   const oauthIdentity = await verifyBearerTokenWithAuth(firebaseAuth, 'qa-token');
+  assert.equal(oauthIdentity.emailVerified, true);
+  assert.equal(oauthIdentity.firebaseUid, 'qa-user');
+  assert.equal(oauthIdentity.providerUserId, 'google-subject-qa');
   assert.equal(oauthIdentity.photoUrl, 'https://example.com/avatar.jpg');
+
+  for (const [signInProvider, expectedProvider] of [
+    ['apple.com', 'APPLE'],
+    ['facebook.com', 'FACEBOOK'],
+    ['microsoft.com', 'MICROSOFT'],
+  ] as const) {
+    const identity = await verifyBearerTokenWithAuth({
+      verifyIdToken: async () => ({
+        aud: 'security-qa', auth_time: 0, exp: 1,
+        firebase: { identities: { [signInProvider]: [`${expectedProvider.toLowerCase()}-subject`] }, sign_in_provider: signInProvider },
+        iat: 0, iss: 'https://securetoken.google.com/security-qa', sub: 'linked-user', uid: 'linked-user',
+      }),
+    }, `${expectedProvider.toLowerCase()}-token`);
+
+    assert.equal(identity.provider, expectedProvider);
+    assert.equal(identity.providerUserId, `${expectedProvider.toLowerCase()}-subject`);
+  }
 
   console.log('Auth token verifier QA passed.');
 }

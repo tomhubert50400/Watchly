@@ -143,6 +143,7 @@ async function getOrCreateTestUser() {
     data: {
       authIdentities: { create: identityKey },
       displayName: sampleFriendName,
+      firebaseUid: identityKey.providerUserId,
       handle: sampleFriendHandle,
       onboardingCompleted: true,
       privacySettings: { create: publicReviewPrivacy() },

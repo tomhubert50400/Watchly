@@ -267,6 +267,8 @@ async function assertBadRequest<T>(operation: () => Promise<T>, message: string)
 function createIdentity(providerUserId: string): AuthenticatedIdentity {
   return {
     displayName: 'Shared watchlist smoke user',
+    emailVerified: false,
+    firebaseUid: providerUserId,
     provider: AuthProvider.GOOGLE,
     providerUserId,
   };

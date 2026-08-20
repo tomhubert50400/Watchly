@@ -6,15 +6,17 @@ async function run() {
   let suspendedAt: Date | null = null;
   let suspendedUntil: Date | null = null;
   const prisma = {
-    authIdentity: {
-      findUnique: async () => ({ user: { suspendedAt, suspendedUntil } }),
+    user: {
+      findUnique: async () => ({ suspendedAt, suspendedUntil }),
     },
     withConnectionRetry: async (operation: () => Promise<unknown>) => operation(),
   };
   const service = new AuthService(prisma as never);
   const identity = {
+    emailVerified: false,
+    firebaseUid: 'firebase-user-1',
     provider: 'GOOGLE',
-    providerUserId: 'firebase-user-1',
+    providerUserId: 'google-subject-1',
   } as never;
 
   await service.assertActiveIdentity(identity);

@@ -19,6 +19,8 @@ async function main() {
   const uid = `account-deletion-smoke-${Date.now()}`;
   const identity = {
     displayName: 'Deletion smoke user',
+    emailVerified: false,
+    firebaseUid: uid,
     provider: AuthProvider.GOOGLE,
     providerUserId: uid,
   };

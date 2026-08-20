@@ -62,6 +62,8 @@ async function main() {
 function createIdentity(providerUserId: string): AuthenticatedIdentity {
   return {
     displayName: 'Onboarding smoke user',
+    emailVerified: false,
+    firebaseUid: providerUserId,
     provider: AuthProvider.GOOGLE,
     providerUserId,
   };

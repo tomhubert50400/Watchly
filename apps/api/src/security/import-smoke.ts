@@ -8,10 +8,13 @@ import { AuthProvider, DataImportStatus, TrackedContentType, UserContentStatus }
 import { ImportsService } from '../imports/imports.service';
 
 async function main() {
+  const providerUserId = `__import_smoke_${Date.now()}`;
   const identity: AuthenticatedIdentity = {
     displayName: 'Import smoke user',
+    emailVerified: false,
+    firebaseUid: providerUserId,
     provider: AuthProvider.GOOGLE,
-    providerUserId: `__import_smoke_${Date.now()}`,
+    providerUserId,
   };
   const config = new ConfigService(process.env);
   const prisma = new PrismaService(config);

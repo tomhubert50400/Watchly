@@ -70,9 +70,11 @@ export async function verifyBearerTokenWithAuth(
   return {
     displayName: typeof decodedToken.name === 'string' ? decodedToken.name : null,
     email: typeof decodedToken.email === 'string' ? decodedToken.email : null,
+    emailVerified: decodedToken.email_verified === true,
+    firebaseUid: decodedToken.uid,
     photoUrl: typeof decodedToken.picture === 'string' ? decodedToken.picture : null,
     provider,
-    providerUserId: decodedToken.uid,
+    providerUserId: getProviderUserId(decodedToken),
   };
 }
 
@@ -139,9 +141,21 @@ function mapFirebaseProvider(
       return AuthProvider.APPLE;
     case 'microsoft.com':
       return AuthProvider.MICROSOFT;
+    case 'facebook.com':
+      return AuthProvider.FACEBOOK;
     case 'password':
       return allowPasswordProvider ? AuthProvider.GOOGLE : null;
     default:
       return null;
   }
+}
+
+function getProviderUserId(decodedToken: DecodedIdToken) {
+  const signInProvider = decodedToken.firebase.sign_in_provider;
+  const providerIdentities = decodedToken.firebase.identities?.[signInProvider];
+  const providerUserId = Array.isArray(providerIdentities) ? providerIdentities[0] : undefined;
+
+  return typeof providerUserId === 'string' && providerUserId.length > 0
+    ? providerUserId
+    : decodedToken.uid;
 }

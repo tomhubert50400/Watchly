@@ -291,40 +291,35 @@ export class ProfileService {
   }
 
   async deleteAccount(identity: AuthenticatedIdentity) {
-    const authIdentity = await this.prisma.withConnectionRetry(() =>
-      this.prisma.authIdentity.findUnique({
+    const user = await this.prisma.withConnectionRetry(() =>
+      this.prisma.user.findUnique({
         select: {
-          user: { select: { avatarObjectKey: true } },
-          userId: true,
+          avatarObjectKey: true,
+          id: true,
         },
-        where: {
-          provider_providerUserId: {
-            provider: identity.provider,
-            providerUserId: identity.providerUserId,
-          },
-        },
+        where: { firebaseUid: identity.firebaseUid },
       }),
     );
 
-    if (authIdentity) {
+    if (user) {
       await this.prisma.withConnectionRetry(() =>
         this.prisma.$transaction([
           this.prisma.auditLog.deleteMany({
             where: {
               OR: [
-                { actorUserId: authIdentity.userId },
-                { targetUserId: authIdentity.userId },
+                { actorUserId: user.id },
+                { targetUserId: user.id },
               ],
             },
           }),
-          this.prisma.user.delete({ where: { id: authIdentity.userId } }),
+          this.prisma.user.delete({ where: { id: user.id } }),
         ]),
       );
-      await this.avatarStorage.deleteObjectBestEffort(authIdentity.user.avatarObjectKey);
+      await this.avatarStorage.deleteObjectBestEffort(user.avatarObjectKey);
     }
 
     try {
-      await getAuth().deleteUser(identity.providerUserId);
+      await getAuth().deleteUser(identity.firebaseUid);
     } catch (error) {
       if (!isFirebaseUserNotFound(error)) {
         throw new ServiceUnavailableException(
@@ -473,6 +468,7 @@ export class ProfileService {
           create: identityKey,
         },
         displayName: 'Test profile',
+        firebaseUid: identityKey.providerUserId,
         handle: 'watchly_test',
         privacySettings: {
           create: {
