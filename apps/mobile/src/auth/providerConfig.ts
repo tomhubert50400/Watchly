@@ -1,7 +1,7 @@
 export type AuthProviderConfig = {
-  id: 'apple' | 'discord' | 'facebook' | 'google' | 'microsoft';
+  id: 'apple' | 'discord' | 'google' | 'microsoft';
   isWired: boolean;
-  name: 'Apple' | 'Discord' | 'Facebook' | 'Google' | 'Microsoft';
+  name: 'Apple' | 'Discord' | 'Google' | 'Microsoft';
   presentation: 'primary' | 'secondary';
 };
 
@@ -10,5 +10,4 @@ export const authProviders: readonly AuthProviderConfig[] = [
   { id: 'apple', isWired: true, name: 'Apple', presentation: 'primary' },
   { id: 'microsoft', isWired: true, name: 'Microsoft', presentation: 'secondary' },
   { id: 'discord', isWired: true, name: 'Discord', presentation: 'secondary' },
-  { id: 'facebook', isWired: true, name: 'Facebook', presentation: 'secondary' },
 ] as const;

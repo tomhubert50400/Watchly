@@ -1,7 +1,7 @@
 import { CurrentUser } from './auth';
 import { apiPost } from './client';
 
-export type ExternalAuthProvider = 'discord' | 'facebook';
+export type ExternalAuthProvider = 'discord';
 
 export function startExternalOAuth(provider: ExternalAuthProvider, firebaseIdToken?: string) {
   return apiPost<{ authorizationUrl: string; redirectUri: string }>(

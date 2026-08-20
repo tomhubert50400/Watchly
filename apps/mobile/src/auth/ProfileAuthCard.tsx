@@ -259,7 +259,7 @@ export function ProfileAuthCard({
       await startMicrosoftSignIn();
       return;
     }
-    if (provider.id === 'discord' || provider.id === 'facebook') {
+    if (provider.id === 'discord') {
       await startExternalSignIn(provider.id);
       return;
     }
@@ -419,7 +419,6 @@ export function ProfileAuthCard({
                       styles.roundProvider,
                       provider.id === 'microsoft' ? styles.microsoft : null,
                       provider.id === 'discord' ? styles.discord : null,
-                      provider.id === 'facebook' ? styles.facebook : null,
                       pressed ? styles.pressed : null,
                     ]}
                   >
@@ -495,16 +494,9 @@ function ProviderLogo({ id }: { id: AuthProviderConfig['id'] }) {
       </Svg>
     );
   }
-  if (id === 'discord') {
-    return (
-      <Svg height={23} viewBox="0 0 24 24" width={23}>
-        <Path d="M19.5 5.5A17 17 0 0 0 15.2 4l-.5 1c-1.8-.3-3.6-.3-5.4 0l-.5-1a17 17 0 0 0-4.3 1.5C1.8 9.5 1.1 13.4 1.4 17.2A17.4 17.4 0 0 0 6.7 20l1.1-1.8c-.6-.2-1.1-.5-1.6-.8l.4-.3a12.3 12.3 0 0 0 10.8 0l.4.3c-.5.3-1 .6-1.6.8l1.1 1.8a17.4 17.4 0 0 0 5.3-2.8c.4-4.4-.7-8.2-3.1-11.7zM8.7 15.1c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2zm6.6 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2z" fill="#FFFFFF" />
-      </Svg>
-    );
-  }
   return (
     <Svg height={23} viewBox="0 0 24 24" width={23}>
-      <Path d="M14.1 8.4h2V5h-2.8C10.5 5 9 6.8 9 9.5V12H7v3.4h2V22h3.8v-6.6h2.6L16 12h-3.2V9.8c0-.9.4-1.4 1.3-1.4z" fill="#FFFFFF" />
+      <Path d="M19.5 5.5A17 17 0 0 0 15.2 4l-.5 1c-1.8-.3-3.6-.3-5.4 0l-.5-1a17 17 0 0 0-4.3 1.5C1.8 9.5 1.1 13.4 1.4 17.2A17.4 17.4 0 0 0 6.7 20l1.1-1.8c-.6-.2-1.1-.5-1.6-.8l.4-.3a12.3 12.3 0 0 0 10.8 0l.4.3c-.5.3-1 .6-1.6.8l1.1 1.8a17.4 17.4 0 0 0 5.3-2.8c.4-4.4-.7-8.2-3.1-11.7zM8.7 15.1c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2zm6.6 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2z" fill="#FFFFFF" />
     </Svg>
   );
 }
@@ -536,7 +528,6 @@ const styles = StyleSheet.create({
   connecting: { ...typography.meta, color: colors.accentText, marginTop: spacing.md, textAlign: 'center' },
   disabled: { opacity: 0.48 },
   discord: { backgroundColor: '#5865F2', borderColor: '#5865F2' },
-  facebook: { backgroundColor: '#1877F2', borderColor: '#1877F2' },
   glow: { backgroundColor: colors.accentSoft, borderRadius: 155, height: 310, left: '10%', opacity: 0.7, position: 'absolute', top: 14, width: '80%' },
   googleLogoAsset: { height: 40, left: -10, position: 'absolute', top: -10, width: 40 },
   googleLogoCrop: { height: 20, overflow: 'hidden', width: 20 },

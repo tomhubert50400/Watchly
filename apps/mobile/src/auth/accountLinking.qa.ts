@@ -11,9 +11,10 @@ const settingsSource = readFileSync(new URL('../profile/SettingsScreen.tsx', imp
 for (const provider of ['Google', 'Apple', 'Microsoft']) {
   assert.match(firebaseSource, new RegExp(`linkWith${provider}`));
 }
-for (const provider of ['Google', 'Apple', 'Microsoft', 'Discord', 'Facebook']) {
+for (const provider of ['Google', 'Apple', 'Microsoft', 'Discord']) {
   assert.match(settingsSource, new RegExp(provider));
 }
+assert.doesNotMatch(settingsSource, /Facebook|FACEBOOK/);
 assert.match(contextSource, /ACCOUNT_LINK_REQUIRED/);
 assert.match(contextSource, /completeExternalOAuthLink/);
 assert.match(contextSource, /linkWithPendingFirebaseCredential/);

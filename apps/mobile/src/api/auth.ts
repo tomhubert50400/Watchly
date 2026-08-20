@@ -10,7 +10,7 @@ export type CurrentUser = {
   providers: AuthProvider[];
 };
 
-export type AuthProvider = 'APPLE' | 'DISCORD' | 'FACEBOOK' | 'GOOGLE' | 'MICROSOFT';
+export type AuthProvider = 'APPLE' | 'DISCORD' | 'GOOGLE' | 'MICROSOFT';
 
 export function getCurrentUser(firebaseIdToken: string): Promise<CurrentUser> {
   return apiGet<CurrentUser>('/auth/me', { token: firebaseIdToken });

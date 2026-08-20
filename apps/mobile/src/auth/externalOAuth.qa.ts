@@ -14,6 +14,8 @@ assert.match(apiSource, /\/auth\/oauth\/exchange/);
 assert.match(apiSource, /\/auth\/oauth\/link/);
 assert.match(firebaseSource, /signInWithCustomToken/);
 assert.match(contextSource, /pendingAccountLinkRef/);
+assert.doesNotMatch(apiSource, /facebook/i);
+assert.doesNotMatch(oauthSource, /facebook/i);
 assert.doesNotMatch(
   contextSource,
   /AsyncStorage/,

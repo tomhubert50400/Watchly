@@ -5,12 +5,12 @@ import { authProviders } from './providerConfig';
 
 assert.deepEqual(
   authProviders.map((provider) => provider.name),
-  ['Google', 'Apple', 'Microsoft', 'Discord', 'Facebook'],
+  ['Google', 'Apple', 'Microsoft', 'Discord'],
   'the visitor profile must keep every approved provider visible and ordered',
 );
 assert.deepEqual(
   authProviders.filter((provider) => provider.isWired).map((provider) => provider.name),
-  ['Google', 'Apple', 'Microsoft', 'Discord', 'Facebook'],
+  ['Google', 'Apple', 'Microsoft', 'Discord'],
   'only genuinely connected providers may be marked wired',
 );
 assert.deepEqual(

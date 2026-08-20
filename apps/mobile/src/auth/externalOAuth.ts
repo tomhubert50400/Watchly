@@ -28,5 +28,8 @@ export async function requestExternalOAuthTicket(
 }
 
 export function providerName(provider: ExternalAuthProvider) {
-  return provider === 'discord' ? 'Discord' : 'Facebook';
+  switch (provider) {
+    case 'discord':
+      return 'Discord';
+  }
 }

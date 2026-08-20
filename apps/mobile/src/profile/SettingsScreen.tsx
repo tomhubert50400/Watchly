@@ -37,7 +37,6 @@ import {
   updatePrivacy,
   updateProfile,
 } from '../api/profile';
-import type { ExternalAuthProvider } from '../api/externalAuth';
 import { OnboardingResetMode, resetOnboarding } from '../api/dev';
 import {
   listWatchlists,
@@ -65,7 +64,7 @@ import appConfig from '../../app.json';
 import { chooseAndUploadProfileAvatar } from './uploadProfileAvatar';
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
-type AccountAction = 'delete' | 'export' | 'linkApple' | 'linkDiscord' | 'linkFacebook' | 'linkGoogle' | 'linkMicrosoft' | 'resetFull' | 'resetLegacy' | 'signOut' | null;
+type AccountAction = 'delete' | 'export' | 'linkApple' | 'linkDiscord' | 'linkGoogle' | 'linkMicrosoft' | 'resetFull' | 'resetLegacy' | 'signOut' | null;
 type SettingsNavigation = NativeStackNavigationProp<RootStackParamList>;
 type SavedSettings = {
   displayName: string;
@@ -376,23 +375,20 @@ export function SettingsScreen() {
     }
   }
 
-  async function connectExternal(provider: ExternalAuthProvider) {
-    const providerLabel = provider === 'discord' ? 'Discord' : 'Facebook';
-    const providerKey = provider === 'discord' ? 'DISCORD' : 'FACEBOOK';
-    const action: AccountAction = provider === 'discord' ? 'linkDiscord' : 'linkFacebook';
-    if (accountAction || currentUser?.providers?.includes(providerKey)) return;
+  async function connectDiscord() {
+    if (accountAction || currentUser?.providers?.includes('DISCORD')) return;
 
-    setAccountAction(action);
+    setAccountAction('linkDiscord');
     setMessage(null);
 
     try {
-      const linked = await linkExternal(provider);
+      const linked = await linkExternal('discord');
       if (!linked) return;
 
-      setMessage({ text: `${providerLabel} is now linked to your Watchly account.`, tone: 'success' });
+      setMessage({ text: 'Discord is now linked to your Watchly account.', tone: 'success' });
       hapticSuccess();
     } catch (error) {
-      setMessage({ text: getProviderLinkError(error, providerLabel), tone: 'error' });
+      setMessage({ text: getProviderLinkError(error, 'Discord'), tone: 'error' });
       hapticError();
     } finally {
       setAccountAction(null);
@@ -753,20 +749,9 @@ export function SettingsScreen() {
                 label={currentUser?.providers?.includes('DISCORD')
                   ? 'Discord connected'
                   : 'Link Discord'}
-                loading={accountAction === 'linkDiscord'}
-                onPress={() => { void connectExternal('discord'); }}
-              />
-              <SettingsActionRow
-                body={currentUser?.providers?.includes('FACEBOOK')
-                  ? 'Connected to this Watchly account.'
-                  : 'Authenticate with Facebook to link it securely.'}
-                icon={ShieldCheck}
-                label={currentUser?.providers?.includes('FACEBOOK')
-                  ? 'Facebook connected'
-                  : 'Link Facebook'}
                 last
-                loading={accountAction === 'linkFacebook'}
-                onPress={() => { void connectExternal('facebook'); }}
+                loading={accountAction === 'linkDiscord'}
+                onPress={() => { void connectDiscord(); }}
               />
             </View>
           </SettingsSection>
