@@ -8,6 +8,7 @@
     "orientation": "portrait",
     "plugins": [
       "@sentry/react-native/expo",
+      "expo-apple-authentication",
       [
         "expo-notifications",
         {
@@ -33,6 +34,7 @@
     "ios": {
       "bundleIdentifier": "com.tom.tvapp.dev",
       "supportsTablet": true,
+      "usesAppleSignIn": true,
       "infoPlist": {
         "CFBundleDevelopmentRegion": "en",
         "ITSAppUsesNonExemptEncryption": false,

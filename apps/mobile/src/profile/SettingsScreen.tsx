@@ -1,5 +1,7 @@
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
 import {
   Check,
   CheckCircle2,
@@ -58,7 +60,7 @@ import appConfig from '../../app.json';
 import { chooseAndUploadProfileAvatar } from './uploadProfileAvatar';
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
-type AccountAction = 'delete' | 'export' | 'resetFull' | 'resetLegacy' | 'signOut' | null;
+type AccountAction = 'delete' | 'export' | 'linkApple' | 'resetFull' | 'resetLegacy' | 'signOut' | null;
 type SettingsNavigation = NativeStackNavigationProp<RootStackParamList>;
 type SavedSettings = {
   displayName: string;
@@ -79,12 +81,14 @@ export function SettingsScreen() {
   const {
     currentUser,
     firebaseIdToken,
+    linkApple,
     notifySocialChanged,
     refreshCurrentUser,
     signOut,
     status: authStatus,
   } = useAuthSession();
   const [accountAction, setAccountAction] = useState<AccountAction>(null);
+  const [appleAvailable, setAppleAvailable] = useState(false);
   const [avatarStatus, setAvatarStatus] = useState<'idle' | 'saving'>('idle');
   const [avatarUploadsEnabled, setAvatarUploadsEnabled] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -101,6 +105,16 @@ export function SettingsScreen() {
   const [status, setStatus] = useState<LoadStatus>('idle');
   const [watchlistLoadAttempt, setWatchlistLoadAttempt] = useState(0);
   const [watchlistsStatus, setWatchlistsStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    void AppleAuthentication.isAvailableAsync().then((available) => {
+      if (isMounted) setAppleAvailable(available);
+    });
+
+    return () => { isMounted = false; };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -248,6 +262,40 @@ export function SettingsScreen() {
       hapticSuccess();
     } catch {
       setMessage({ text: 'Could not create your data export.', tone: 'error' });
+      hapticError();
+    } finally {
+      setAccountAction(null);
+    }
+  }
+
+  async function connectApple() {
+    if (!appleAvailable || accountAction || currentUser?.providers?.includes('APPLE')) return;
+
+    setAccountAction('linkApple');
+    setMessage(null);
+
+    try {
+      const rawNonce = Crypto.randomUUID();
+      const nonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
+      const credential = await AppleAuthentication.signInAsync({
+        nonce,
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      if (!credential.identityToken) {
+        throw new Error('Apple did not return an identity token.');
+      }
+
+      await linkApple(credential.identityToken, rawNonce);
+      setMessage({ text: 'Apple is now linked to your Watchly account.', tone: 'success' });
+      hapticSuccess();
+    } catch (error) {
+      if (isAppleCancellation(error)) return;
+
+      setMessage({ text: getProviderLinkError(error), tone: 'error' });
       hapticError();
     } finally {
       setAccountAction(null);
@@ -516,6 +564,45 @@ export function SettingsScreen() {
                 last
                 onPress={() => navigation.navigate('NotificationPreferences')}
               />
+            </View>
+          </SettingsSection>
+
+          <SettingsSection
+            subtitle="Add another provider now so you can use either one to access the same account."
+            title="Sign-in methods"
+          >
+            <View style={styles.group}>
+              <View style={styles.connectionRow}>
+                <View style={styles.connectionCopy}>
+                  <Text style={styles.connectionTitle}>Apple</Text>
+                  <Text style={styles.connectionBody}>
+                    {currentUser?.providers?.includes('APPLE')
+                      ? 'Connected to this Watchly account.'
+                      : 'Authenticate with Apple to link it securely.'}
+                  </Text>
+                </View>
+                {currentUser?.providers?.includes('APPLE') ? (
+                  <View style={styles.connectedPill}>
+                    <Check color={colors.success} size={15} strokeWidth={2.4} />
+                    <Text style={styles.connectedPillText}>Connected</Text>
+                  </View>
+                ) : appleAvailable ? (
+                  <View
+                    pointerEvents={accountAction ? 'none' : 'auto'}
+                    style={accountAction === 'linkApple' ? styles.disabled : null}
+                  >
+                    <AppleAuthentication.AppleAuthenticationButton
+                      buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE_OUTLINE}
+                      buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                      cornerRadius={radii.md}
+                      onPress={() => { void connectApple(); }}
+                      style={styles.appleConnectionButton}
+                    />
+                  </View>
+                ) : (
+                  <Text style={styles.connectionUnavailable}>Unavailable</Text>
+                )}
+              </View>
             </View>
           </SettingsSection>
 
@@ -1043,6 +1130,29 @@ function getProviderLabel(provider?: string) {
   return `Signed in with ${label}`;
 }
 
+function getProviderLinkError(error: unknown) {
+  const code = getErrorCode(error);
+
+  if (code === 'auth/credential-already-in-use') {
+    return 'This Apple account is already connected to another Watchly account.';
+  }
+  if (code === 'auth/provider-already-linked') {
+    return 'Apple is already connected to this Watchly account.';
+  }
+
+  return error instanceof Error ? error.message : 'Could not link Apple. Try again.';
+}
+
+function getErrorCode(error: unknown) {
+  return error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+    ? error.code
+    : null;
+}
+
+function isAppleCancellation(error: unknown) {
+  return getErrorCode(error) === 'ERR_REQUEST_CANCELED';
+}
+
 function toWatchlistVisibilities(watchlists: PersonalWatchlistSummary[]) {
   return Object.fromEntries(
     watchlists.map((watchlist) => [watchlist.id, watchlist.visibility]),
@@ -1059,6 +1169,10 @@ const styles = StyleSheet.create({
     minHeight: 78,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
+  },
+  appleConnectionButton: {
+    height: 44,
+    width: 142,
   },
   avatarBadge: {
     alignItems: 'center',
@@ -1092,6 +1206,50 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     minHeight: 76,
     padding: spacing.md,
+  },
+  connectedPill: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(58, 181, 124, 0.12)',
+    borderColor: 'rgba(58, 181, 124, 0.3)',
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  connectedPillText: {
+    color: colors.success,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  connectionBody: {
+    ...typography.meta,
+    color: colors.textSubtle,
+    marginTop: 3,
+  },
+  connectionCopy: {
+    flex: 1,
+    paddingRight: spacing.sm,
+  },
+  connectionRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    minHeight: 76,
+    padding: spacing.md,
+  },
+  connectionTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  connectionUnavailable: {
+    color: colors.textSubtle,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  disabled: {
+    opacity: 0.48,
   },
   compactStateBody: {
     ...typography.meta,

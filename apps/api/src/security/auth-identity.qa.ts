@@ -41,6 +41,10 @@ async function main() {
   const created = await service.getOrCreateUser(googleIdentity as never);
   const linked = await service.getOrCreateUser({
     ...googleIdentity,
+    linkedProviders: [
+      { provider: 'GOOGLE', providerUserId: 'google-subject-1' },
+      { provider: 'APPLE', providerUserId: 'apple-subject-1' },
+    ],
     provider: 'APPLE',
     providerUserId: 'apple-subject-1',
   } as never);

@@ -34,28 +34,28 @@ export class AuthService {
 
   async getOrCreateUser(identity: AuthenticatedIdentity) {
     const emailNormalized = normalizeProviderEmail(identity.email);
+    const providerIdentities = getProviderIdentities(identity);
 
     return this.prisma.withConnectionRetry(() =>
       this.prisma.$transaction(async (transaction) => {
-        const providerCollision = await transaction.authIdentity.findUnique({
-          select: {
-            user: {
-              select: {
-                authIdentities: { select: { provider: true } },
-                firebaseUid: true,
+        for (const providerIdentity of providerIdentities) {
+          const providerCollision = await transaction.authIdentity.findUnique({
+            select: {
+              user: {
+                select: {
+                  authIdentities: { select: { provider: true } },
+                  firebaseUid: true,
+                },
               },
             },
-          },
-          where: {
-            provider_providerUserId: {
-              provider: identity.provider,
-              providerUserId: identity.providerUserId,
+            where: {
+              provider_providerUserId: providerIdentity,
             },
-          },
-        });
+          });
 
-        if (providerCollision && providerCollision.user.firebaseUid !== identity.firebaseUid) {
-          throwAccountLinkRequired(providerCollision.user.authIdentities);
+          if (providerCollision && providerCollision.user.firebaseUid !== identity.firebaseUid) {
+            throwAccountLinkRequired(providerCollision.user.authIdentities);
+          }
         }
 
         if (emailNormalized && identity.emailVerified) {
@@ -93,29 +93,31 @@ export class AuthService {
           update: {},
           where: { firebaseUid: identity.firebaseUid },
         });
-        const emailUpdate = identity.email
-          ? { email: identity.email, emailNormalized }
-          : {};
+        for (const providerIdentity of providerIdentities) {
+          const isActiveProvider = providerIdentity.provider === identity.provider;
+          const emailUpdate = isActiveProvider && identity.email
+            ? { email: identity.email, emailNormalized }
+            : {};
 
-        await transaction.authIdentity.upsert({
-          create: {
-            email: identity.email,
-            emailNormalized,
-            provider: identity.provider,
-            providerUserId: identity.providerUserId,
-            userId: user.id,
-          },
-          update: {
-            ...emailUpdate,
-            providerUserId: identity.providerUserId,
-          },
-          where: {
-            userId_provider: {
-              provider: identity.provider,
+          await transaction.authIdentity.upsert({
+            create: {
+              email: isActiveProvider ? identity.email : undefined,
+              emailNormalized: isActiveProvider ? emailNormalized : null,
+              ...providerIdentity,
               userId: user.id,
             },
-          },
-        });
+            update: {
+              ...emailUpdate,
+              providerUserId: providerIdentity.providerUserId,
+            },
+            where: {
+              userId_provider: {
+                provider: providerIdentity.provider,
+                userId: user.id,
+              },
+            },
+          });
+        }
 
         const providers = await transaction.authIdentity.findMany({
           orderBy: { provider: 'asc' },
@@ -132,6 +134,18 @@ export class AuthService {
       }),
     );
   }
+}
+
+function getProviderIdentities(identity: AuthenticatedIdentity) {
+  const identities = new Map(
+    (identity.linkedProviders ?? []).map((linkedIdentity) => [
+      linkedIdentity.provider,
+      linkedIdentity.providerUserId,
+    ]),
+  );
+  identities.set(identity.provider, identity.providerUserId);
+
+  return [...identities].map(([provider, providerUserId]) => ({ provider, providerUserId }));
 }
 
 function normalizeProviderEmail(email: string | null | undefined) {

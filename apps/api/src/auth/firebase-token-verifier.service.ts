@@ -72,6 +72,10 @@ export async function verifyBearerTokenWithAuth(
     email: typeof decodedToken.email === 'string' ? decodedToken.email : null,
     emailVerified: decodedToken.email_verified === true,
     firebaseUid: decodedToken.uid,
+    linkedProviders: getLinkedProviderIdentities(
+      decodedToken,
+      options.allowPasswordProvider === true,
+    ),
     photoUrl: typeof decodedToken.picture === 'string' ? decodedToken.picture : null,
     provider,
     providerUserId: getProviderUserId(decodedToken),
@@ -158,4 +162,32 @@ function getProviderUserId(decodedToken: DecodedIdToken) {
   return typeof providerUserId === 'string' && providerUserId.length > 0
     ? providerUserId
     : decodedToken.uid;
+}
+
+function getLinkedProviderIdentities(
+  decodedToken: DecodedIdToken,
+  allowPasswordProvider: boolean,
+) {
+  const identities = new Map<AuthProvider, string>();
+
+  for (const [firebaseProvider, providerUserIds] of Object.entries(
+    decodedToken.firebase.identities ?? {},
+  )) {
+    const provider = mapFirebaseProvider(firebaseProvider, allowPasswordProvider);
+    const providerUserId = Array.isArray(providerUserIds) ? providerUserIds[0] : undefined;
+
+    if (provider && typeof providerUserId === 'string' && providerUserId.length > 0) {
+      identities.set(provider, providerUserId);
+    }
+  }
+
+  const activeProvider = mapFirebaseProvider(
+    decodedToken.firebase.sign_in_provider,
+    allowPasswordProvider,
+  );
+  if (activeProvider && !identities.has(activeProvider)) {
+    identities.set(activeProvider, getProviderUserId(decodedToken));
+  }
+
+  return [...identities].map(([provider, providerUserId]) => ({ provider, providerUserId }));
 }

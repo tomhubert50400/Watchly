@@ -2,13 +2,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FirebaseOptions, getApp, getApps, initializeApp } from 'firebase/app';
 import {
   Auth,
+  AuthCredential,
   connectAuthEmulator,
   getAuth,
   getMultiFactorResolver,
   GoogleAuthProvider,
   initializeAuth,
+  linkWithCredential,
   MultiFactorError,
   NextOrObserver,
+  OAuthProvider,
   onIdTokenChanged,
   signInWithCredential,
   signInWithEmailAndPassword,
@@ -46,7 +49,7 @@ export type FirebaseTotpChallenge = {
   verify: (oneTimePassword: string) => Promise<FirebaseSession>;
 };
 
-export type FirebaseGoogleSignInResult =
+export type FirebaseProviderSignInResult =
   | { session: FirebaseSession; type: 'signedIn' }
   | { challenge: FirebaseTotpChallenge; type: 'totpRequired' };
 
@@ -68,8 +71,43 @@ export function getMissingFirebaseConfig(): string[] {
   return firebaseConfigKeys.filter((key) => !firebaseConfig[key]);
 }
 
-export async function signInWithGoogleIdToken(googleIdToken: string): Promise<FirebaseGoogleSignInResult> {
+export async function signInWithGoogleIdToken(googleIdToken: string): Promise<FirebaseProviderSignInResult> {
   const credential = GoogleAuthProvider.credential(googleIdToken);
+
+  return signInWithFirebaseCredential(credential);
+}
+
+export async function signInWithAppleIdentityToken(
+  identityToken: string,
+  rawNonce: string,
+): Promise<FirebaseProviderSignInResult> {
+  const provider = new OAuthProvider('apple.com');
+  const credential = provider.credential({ idToken: identityToken, rawNonce });
+
+  return signInWithFirebaseCredential(credential);
+}
+
+export async function linkWithAppleIdentityToken(
+  identityToken: string,
+  rawNonce: string,
+): Promise<FirebaseSession> {
+  const auth = getAuthInstance();
+  const user = auth.currentUser;
+
+  if (!user) {
+    throw new Error('Sign in to your Watchly account before linking Apple.');
+  }
+
+  const provider = new OAuthProvider('apple.com');
+  const credential = provider.credential({ idToken: identityToken, rawNonce });
+  const linkedUser = await linkWithCredential(user, credential);
+
+  return getFirebaseSessionFromUser(linkedUser.user, true);
+}
+
+async function signInWithFirebaseCredential(
+  credential: AuthCredential,
+): Promise<FirebaseProviderSignInResult> {
   const auth = getAuthInstance();
 
   try {
@@ -136,8 +174,11 @@ export async function getFreshFirebaseIdToken(): Promise<string | null> {
   return user.getIdToken();
 }
 
-export async function getFirebaseSessionFromUser(user: User): Promise<FirebaseSession> {
-  const firebaseIdToken = await user.getIdToken();
+export async function getFirebaseSessionFromUser(
+  user: User,
+  forceRefresh = false,
+): Promise<FirebaseSession> {
+  const firebaseIdToken = await user.getIdToken(forceRefresh);
 
   return {
     displayName: user.displayName,

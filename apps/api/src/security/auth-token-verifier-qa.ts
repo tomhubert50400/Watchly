@@ -19,7 +19,10 @@ async function main() {
         auth_time: 0,
         exp: 1,
         firebase: {
-          identities: { 'google.com': ['google-subject-qa'] },
+          identities: {
+            'apple.com': ['apple-subject-qa'],
+            'google.com': ['google-subject-qa'],
+          },
           sign_in_provider: 'google.com',
         },
         iat: 0,
@@ -146,6 +149,10 @@ async function main() {
   assert.equal(oauthIdentity.emailVerified, true);
   assert.equal(oauthIdentity.firebaseUid, 'qa-user');
   assert.equal(oauthIdentity.providerUserId, 'google-subject-qa');
+  assert.deepEqual(oauthIdentity.linkedProviders, [
+    { provider: 'APPLE', providerUserId: 'apple-subject-qa' },
+    { provider: 'GOOGLE', providerUserId: 'google-subject-qa' },
+  ]);
   assert.equal(oauthIdentity.photoUrl, 'https://example.com/avatar.jpg');
 
   for (const [signInProvider, expectedProvider] of [

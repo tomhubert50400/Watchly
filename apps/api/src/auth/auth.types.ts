@@ -5,7 +5,13 @@ export type AuthenticatedIdentity = {
   email?: string | null;
   emailVerified: boolean;
   firebaseUid: string;
+  linkedProviders?: AuthenticatedProviderIdentity[];
   photoUrl?: string | null;
+  provider: AuthProvider;
+  providerUserId: string;
+};
+
+export type AuthenticatedProviderIdentity = {
   provider: AuthProvider;
   providerUserId: string;
 };

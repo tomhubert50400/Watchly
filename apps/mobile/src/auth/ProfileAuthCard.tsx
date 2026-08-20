@@ -1,5 +1,7 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Google from 'expo-auth-session/providers/google';
+import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 import { Image, Keyboard, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
@@ -10,7 +12,7 @@ import { TextInput } from '../components/TextInput';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { useAuthSession } from './AuthSessionContext';
-import type { TotpSignInChallenge } from './AuthSessionContext';
+import type { ProviderSignInResult, TotpSignInChallenge } from './AuthSessionContext';
 import { getMissingFirebaseConfig } from './firebase';
 import { getMissingGoogleClientConfig, googleClientIds } from './googleAuthConfig';
 import { authProviders, type AuthProviderConfig } from './providerConfig';
@@ -37,20 +39,31 @@ export function ProfileAuthCard({
   embedded = false,
   title = 'Your Watchly starts here',
 }: ProfileAuthCardProps = {}) {
-  const { authErrorMessage, signInWithGoogle, status: sessionStatus } = useAuthSession();
+  const { authErrorMessage, signInWithApple, signInWithGoogle, status: sessionStatus } = useAuthSession();
+  const [appleAvailable, setAppleAvailable] = useState(false);
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
   const [localStatus, setLocalStatus] = useState<AuthStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const [totpChallenge, setTotpChallenge] = useState<TotpSignInChallenge | null>(null);
   const [totpCode, setTotpCode] = useState('');
   const [totpError, setTotpError] = useState<string | null>(null);
-  const missingConfig = useMemo(
-    () => [...getMissingFirebaseConfig(), ...getMissingGoogleClientConfig(Platform.OS)],
-    [],
-  );
+  const missingFirebaseConfig = useMemo(() => getMissingFirebaseConfig(), []);
+  const missingGoogleConfig = useMemo(() => getMissingGoogleClientConfig(Platform.OS), []);
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest(
     { ...googleRequestClientIds, selectAccount: true },
   );
+
+  useEffect(() => {
+    let mounted = true;
+
+    if (Platform.OS === 'ios') {
+      void AppleAuthentication.isAvailableAsync().then((available) => {
+        if (mounted) setAppleAvailable(available);
+      });
+    }
+
+    return () => { mounted = false; };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -112,10 +125,76 @@ export function ProfileAuthCard({
 
   const status = sessionStatus === 'loading' ? 'loading' : localStatus;
   const displayedMessage = message ?? (sessionStatus === 'error' ? authErrorMessage : null);
-  const canUseGoogle = missingConfig.length === 0 && Boolean(request) && status !== 'loading';
+  const canUseApple = appleAvailable && missingFirebaseConfig.length === 0 && status !== 'loading';
+  const canUseGoogle = missingFirebaseConfig.length === 0
+    && missingGoogleConfig.length === 0
+    && Boolean(request)
+    && status !== 'loading';
+
+  async function startAppleSignIn() {
+    if (!canUseApple) {
+      setMessage('Apple sign-in is available on supported Apple devices.');
+      return;
+    }
+
+    setConnectingProvider('Apple');
+    setLocalStatus('loading');
+    setMessage(null);
+
+    try {
+      const rawNonce = Crypto.randomUUID();
+      const nonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
+      const credential = await AppleAuthentication.signInAsync({
+        nonce,
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      if (!credential.identityToken) {
+        throw new Error('Apple did not return an identity token.');
+      }
+
+      const result = await signInWithApple(credential.identityToken, rawNonce);
+      applyProviderResult(result);
+    } catch (error) {
+      if (isAppleCancellation(error)) {
+        setConnectingProvider(null);
+        setLocalStatus('idle');
+        return;
+      }
+
+      hapticError();
+      console.warn('Apple sign-in failed', safeError(error));
+      setConnectingProvider(null);
+      setLocalStatus('error');
+      setMessage(accountError(error));
+    }
+  }
+
+  function applyProviderResult(result: ProviderSignInResult) {
+    if (result.type === 'totpRequired') {
+      setConnectingProvider(null);
+      setLocalStatus('idle');
+      setTotpChallenge(result.challenge);
+      setTotpCode('');
+      setTotpError(null);
+      return;
+    }
+
+    hapticSuccess();
+    setConnectingProvider(null);
+    setLocalStatus('idle');
+    setMessage(null);
+  }
 
   async function selectProvider(provider: AuthProviderConfig) {
     setMessage(null);
+    if (provider.id === 'apple') {
+      await startAppleSignIn();
+      return;
+    }
     if (!provider.isWired) {
       setConnectingProvider(null);
       setLocalStatus('idle');
@@ -187,9 +266,9 @@ export function ProfileAuthCard({
             : body}
         </Text>
 
-        {!totpChallenge && missingConfig.length > 0 ? (
+        {!totpChallenge && (missingFirebaseConfig.length > 0 || missingGoogleConfig.length > 0) ? (
           <Text accessibilityLiveRegion="polite" style={styles.configWarning}>
-            Google setup is incomplete: {missingConfig.join(', ')}
+            Sign-in setup is incomplete: {[...missingFirebaseConfig, ...missingGoogleConfig].join(', ')}
           </Text>
         ) : null}
         {!totpChallenge && displayedMessage ? <Text accessibilityLiveRegion="polite" style={styles.setupMessage}>{displayedMessage}</Text> : null}
@@ -237,14 +316,26 @@ export function ProfileAuthCard({
           <>
             <View style={styles.primaryList}>
               {primaryProviders.map((provider) => (
-                <ProviderButton
-                  disabled={provider.id === 'google' && !canUseGoogle}
-                  key={provider.id}
-                  label={`Continue with ${provider.name}`}
-                  logo={<ProviderLogo id={provider.id} />}
-                  onPress={() => { void selectProvider(provider); }}
-                  white={provider.id === 'google'}
-                />
+                provider.id === 'apple' && appleAvailable ? (
+                  <View key={provider.id} pointerEvents={canUseApple ? 'auto' : 'none'} style={!canUseApple ? styles.disabled : null}>
+                    <AppleAuthentication.AppleAuthenticationButton
+                      buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE_OUTLINE}
+                      buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                      cornerRadius={radii.md}
+                      onPress={() => { void startAppleSignIn(); }}
+                      style={styles.appleButton}
+                    />
+                  </View>
+                ) : (
+                  <ProviderButton
+                    disabled={provider.id === 'google' ? !canUseGoogle : !canUseApple}
+                    key={provider.id}
+                    label={`Continue with ${provider.name}`}
+                    logo={<ProviderLogo id={provider.id} />}
+                    onPress={() => { void selectProvider(provider); }}
+                    white={provider.id === 'google'}
+                  />
+                )
               ))}
             </View>
 
@@ -351,6 +442,9 @@ function ProviderLogo({ id }: { id: AuthProviderConfig['id'] }) {
 }
 
 function accountError(error: unknown) {
+  if (isFirebaseAuthError(error, 'auth/account-exists-with-different-credential')) {
+    return 'This email already belongs to a Watchly account. Sign in with a connected method, then add this provider in Settings.';
+  }
   if (error instanceof ApiError && error.status === 403) return error.message;
   if (error instanceof ApiError && error.status) return `Backend account check failed with status ${error.status}.`;
   if (error instanceof ApiError) return error.message;
@@ -358,7 +452,12 @@ function accountError(error: unknown) {
 }
 function safeError(error: unknown) { return error instanceof Error ? error.message : String(error); }
 
+function isFirebaseAuthError(error: unknown, code: string) {
+  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === code);
+}
+
 const styles = StyleSheet.create({
+  appleButton: { height: 50, width: '100%' },
   body: { ...typography.body, color: colors.textMuted, marginTop: spacing.sm, textAlign: 'center' },
   card: { backgroundColor: 'rgba(15, 19, 29, 0.92)', borderColor: colors.border, borderRadius: radii.xl, borderWidth: 1, padding: spacing.lg },
   configWarning: { ...typography.meta, color: colors.danger, marginTop: spacing.md, textAlign: 'center' },
@@ -390,3 +489,12 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 25, fontWeight: '900', lineHeight: 30, marginTop: spacing.md, textAlign: 'center' },
   totpForm: { gap: spacing.sm, marginTop: spacing.lg },
 });
+
+function isAppleCancellation(error: unknown) {
+  return Boolean(
+    error
+    && typeof error === 'object'
+    && 'code' in error
+    && error.code === 'ERR_REQUEST_CANCELED',
+  );
+}

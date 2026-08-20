@@ -10,7 +10,7 @@ assert.deepEqual(
 );
 assert.deepEqual(
   authProviders.filter((provider) => provider.isWired).map((provider) => provider.name),
-  ['Google'],
+  ['Google', 'Apple'],
   'only genuinely connected providers may be marked wired',
 );
 assert.deepEqual(

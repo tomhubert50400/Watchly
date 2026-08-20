@@ -5,9 +5,12 @@ import { clearPrivateCacheForUser } from '../cache/persistedCache';
 import { revokeStoredPushDevice } from '../notifications/nativePushNotifications';
 import { createAuthTransitionGuard, performGuaranteedSignOut } from './authTransition';
 import {
+  type FirebaseProviderSignInResult,
   getFreshFirebaseIdToken,
   getFirebaseSessionFromUser,
+  linkWithAppleIdentityToken,
   signInWithConfiguredDevAccount,
+  signInWithAppleIdentityToken,
   signInWithGoogleIdToken,
   signOutFromFirebase,
   subscribeToFirebaseIdTokenState,
@@ -20,7 +23,7 @@ export type TotpSignInChallenge = {
   verify: (oneTimePassword: string) => Promise<void>;
 };
 
-export type GoogleSignInResult =
+export type ProviderSignInResult =
   | { type: 'signedIn' }
   | { challenge: TotpSignInChallenge; type: 'totpRequired' };
 
@@ -31,8 +34,10 @@ type AuthSessionContextValue = {
   notifySocialChanged: () => void;
   firebaseIdToken: string | null;
   notifyTrackingChanged: () => void;
+  linkApple: (identityToken: string, rawNonce: string) => Promise<void>;
   refreshCurrentUser: () => Promise<void>;
-  signInWithGoogle: (googleIdToken: string) => Promise<GoogleSignInResult>;
+  signInWithApple: (identityToken: string, rawNonce: string) => Promise<ProviderSignInResult>;
+  signInWithGoogle: (googleIdToken: string) => Promise<ProviderSignInResult>;
   signOut: () => Promise<void>;
   status: AuthSessionStatus;
   trackingRevision: number;
@@ -186,12 +191,14 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     };
   }, [applyFirebaseSession]);
 
-  const signInWithGoogle = useCallback(async (googleIdToken: string) => {
+  const finishProviderSignIn = useCallback(async (
+    signIn: () => Promise<FirebaseProviderSignInResult>,
+  ): Promise<ProviderSignInResult> => {
     const transition = authTransitionsRef.current.begin();
     explicitSignOutRef.current = false;
     setStatus('loading');
     try {
-      const result = await signInWithGoogleIdToken(googleIdToken);
+      const result = await signIn();
 
       if (result.type === 'totpRequired') {
         if (authTransitionsRef.current.isCurrent(transition)) setStatus('idle');
@@ -232,6 +239,30 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       return { type: 'signedIn' as const };
     } catch (error) {
       if (authTransitionsRef.current.isCurrent(transition)) setStatus('error');
+      throw error;
+    }
+  }, [applyFirebaseSession]);
+  const signInWithApple = useCallback(
+    (identityToken: string, rawNonce: string) =>
+      finishProviderSignIn(() => signInWithAppleIdentityToken(identityToken, rawNonce)),
+    [finishProviderSignIn],
+  );
+  const signInWithGoogle = useCallback(
+    (googleIdToken: string) => finishProviderSignIn(() => signInWithGoogleIdToken(googleIdToken)),
+    [finishProviderSignIn],
+  );
+  const linkApple = useCallback(async (identityToken: string, rawNonce: string) => {
+    const transition = authTransitionsRef.current.begin();
+    setStatus('loading');
+
+    try {
+      const session = await linkWithAppleIdentityToken(identityToken, rawNonce);
+
+      if (!authTransitionsRef.current.isCurrent(transition)) return;
+
+      await applyFirebaseSession(session.firebaseIdToken, transition);
+    } catch (error) {
+      if (authTransitionsRef.current.isCurrent(transition)) setStatus('signedIn');
       throw error;
     }
   }, [applyFirebaseSession]);
@@ -281,9 +312,11 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       currentUser,
       firebaseIdToken,
       getFirebaseIdToken,
+      linkApple,
       notifySocialChanged,
       notifyTrackingChanged,
       refreshCurrentUser,
+      signInWithApple,
       signInWithGoogle,
       signOut,
       status,
@@ -294,9 +327,11 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       currentUser,
       firebaseIdToken,
       getFirebaseIdToken,
+      linkApple,
       notifySocialChanged,
       notifyTrackingChanged,
       refreshCurrentUser,
+      signInWithApple,
       signInWithGoogle,
       signOut,
       status,

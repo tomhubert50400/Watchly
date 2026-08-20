@@ -6,8 +6,11 @@ export type CurrentUser = {
   id: string;
   onboardingCompleted: boolean;
   photoUrl: string | null;
-  provider: 'GOOGLE' | 'APPLE' | 'MICROSOFT';
+  provider: AuthProvider;
+  providers: AuthProvider[];
 };
+
+export type AuthProvider = 'APPLE' | 'DISCORD' | 'FACEBOOK' | 'GOOGLE' | 'MICROSOFT';
 
 export function getCurrentUser(firebaseIdToken: string): Promise<CurrentUser> {
   return apiGet<CurrentUser>('/auth/me', { token: firebaseIdToken });
