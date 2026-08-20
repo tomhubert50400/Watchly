@@ -49,6 +49,26 @@ function Invoke-PnpmChecked {
   }
 }
 
+function Get-DevelopmentClientScheme {
+  Push-Location $repoRoot
+  try {
+    $configJson = & $pnpmPath --filter mobile exec expo config --type public --json
+    if ($LASTEXITCODE -ne 0) {
+      throw "Could not resolve the Expo config."
+    }
+  } finally {
+    Pop-Location
+  }
+
+  $config = ($configJson -join [Environment]::NewLine) | ConvertFrom-Json
+  $slug = [string]$config.slug
+  if ([string]::IsNullOrWhiteSpace($slug)) {
+    throw "Expo config did not contain a slug for the development-client scheme."
+  }
+
+  return "exp+$slug"
+}
+
 function Stop-WatchlyServer {
   param(
     [int]$Port,
@@ -234,7 +254,9 @@ if (-not $Ip) {
 
 $apiUrl = "http://$Ip`:3000"
 $metroUrl = "http://$Ip`:8081"
-$expoUrl = "exp://$Ip`:8081"
+$developmentClientScheme = Get-DevelopmentClientScheme
+$encodedMetroUrl = [Uri]::EscapeDataString($metroUrl)
+$expoUrl = "${developmentClientScheme}://expo-development-client/?url=$encodedMetroUrl"
 
 Write-Host "Using PC LAN IP: $Ip"
 
@@ -305,13 +327,13 @@ if ($apiLocalHealth.service -ne "api" -or $apiLanHealth.service -ne "api") {
 }
 Write-Host "API health: local $($apiLocalResponse.StatusCode), LAN $($apiLanResponse.StatusCode)"
 
-Write-Host "Starting Metro in Expo Go mode..."
+Write-Host "Starting Metro for the installed Watchly development client..."
 $previousPackagerHostname = $env:REACT_NATIVE_PACKAGER_HOSTNAME
 $env:REACT_NATIVE_PACKAGER_HOSTNAME = $Ip
 try {
   $metroProcess = Start-Process `
     -FilePath $pnpmPath `
-    -ArgumentList @("--filter", "mobile", "exec", "expo", "start", "--go", "--host", "lan", "--port", "8081", "--clear") `
+    -ArgumentList @("--filter", "mobile", "exec", "expo", "start", "--dev-client", "--host", "lan", "--port", "8081", "--clear") `
     -WorkingDirectory $repoRoot `
     -WindowStyle Hidden `
     -RedirectStandardOutput (Join-Path $runDirectory "metro.out.log") `
@@ -338,8 +360,8 @@ if ($metroStatus -ne "packager-status:running") {
 $metroListener = Get-NetTCPConnection -State Listen -LocalPort 8081 |
   Select-Object -First 1
 $metroCommand = (Get-CimInstance Win32_Process -Filter "ProcessId=$($metroListener.OwningProcess)").CommandLine
-if ($metroCommand -notmatch "--go") {
-  throw "Metro is not running in Expo Go mode: $metroCommand"
+if ($metroCommand -notmatch "--dev-client" -or $metroCommand -match "(?:^|\s)--go(?:\s|$)") {
+  throw "Metro is not running in Watchly development-client mode: $metroCommand"
 }
 
 Write-Host "Requesting Expo manifest and iOS bundle..."
@@ -369,7 +391,7 @@ if ($LASTEXITCODE -ne 0 -or $bundleStatus -ne "200") {
 }
 
 Write-Host ""
-Write-Host "Watchly is ready in Expo Go."
-Write-Host "Expo URL: $expoUrl"
+Write-Host "Watchly is ready in the installed development client."
+Write-Host "Open URL: $expoUrl"
 Write-Host "API URL:  $apiUrl"
 Write-Host "PIDs:     API launcher $($apiProcess.Id), Metro launcher $($metroProcess.Id)"

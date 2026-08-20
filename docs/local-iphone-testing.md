@@ -29,9 +29,11 @@ The script will:
 - detect a local IPv4 address
 - update `apps/mobile/.env` with `EXPO_PUBLIC_API_URL=http://<PC_IP>:3000`
 - ensure Prisma dev is running, then restart the API and Metro without duplicate processes
-- run Metro in Expo Go mode on the LAN
+- run Metro in development-client mode for the installed Watchly app
 - verify the database, API health, Expo manifest, and iOS bundle
-- print the `exp://<PC_IP>:8081` URL and the background-process log directory
+- resolve the current Expo slug, then print the `exp+<slug>://expo-development-client/?url=...` URL and the background-process log directory
+
+This local loop reuses the installed Watchly binary and never runs EAS Build.
 
 If the detected IP is wrong, pass it manually:
 
@@ -113,7 +115,7 @@ Terminal 4:
 ```powershell
 cd C:\Users\t\Desktop\Projects\tv-app
 $env:REACT_NATIVE_PACKAGER_HOSTNAME="172.30.1.44"
-pnpm --filter mobile exec expo start --go --host lan --port 8081 --clear
+pnpm --filter mobile exec expo start --dev-client --host lan --port 8081 --clear
 ```
 
 Keep this terminal open.
@@ -121,10 +123,10 @@ Keep this terminal open.
 ### 7. Open On iPhone
 
 - Put the iPhone on the same Wi-Fi as the PC.
-- Open Expo Go on the iPhone.
-- Use the QR code shown by Expo, or open the LAN URL shown in the terminal.
+- Scan the QR code with the iPhone Camera so it opens the installed Watchly app.
+- Use the development-client URL shown by Expo or printed by the launcher.
 
-Use the installed Watchly development build only when testing behavior that specifically requires `expo-dev-client`.
+Reuse the installed Watchly development build for JavaScript, TypeScript, UI, API, and bundled asset changes. Create a new EAS build only after a native dependency, Expo plugin, native app configuration, Expo SDK, or React Native version changes.
 
 ## Functional Test Checklist
 
