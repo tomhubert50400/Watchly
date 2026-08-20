@@ -6,7 +6,24 @@ import { readFileSync } from 'node:fs';
 
 const signInSheetSource = readFileSync(new URL('./SignInRequired.tsx', import.meta.url), 'utf8');
 const authSessionSource = readFileSync(new URL('./AuthSessionContext.tsx', import.meta.url), 'utf8');
+const firebaseSource = readFileSync(new URL('./firebase.ts', import.meta.url), 'utf8');
 const profileAuthCardSource = readFileSync(new URL('./ProfileAuthCard.tsx', import.meta.url), 'utf8');
+
+assert.match(
+  firebaseSource,
+  /onIdTokenChanged[\s\S]*subscribeToFirebaseIdTokenState[\s\S]*return onIdTokenChanged\(getAuthInstance\(\), callback\)/,
+  'Firebase sessions must observe automatic ID-token renewal, not only sign-in state changes',
+);
+assert.doesNotMatch(
+  firebaseSource,
+  /onAuthStateChanged/,
+  'the mobile session must not retain an expired token until the user signs in again',
+);
+assert.match(
+  authSessionSource,
+  /subscribeToFirebaseIdTokenState\(\(firebaseUser\) =>/,
+  'the auth provider must apply every refreshed Firebase ID token',
+);
 
 assert.match(
   authSessionSource,

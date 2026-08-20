@@ -10,7 +10,7 @@ import {
   signInWithConfiguredDevAccount,
   signInWithGoogleIdToken,
   signOutFromFirebase,
-  subscribeToFirebaseAuthState,
+  subscribeToFirebaseIdTokenState,
 } from './firebase';
 
 type AuthSessionStatus = 'idle' | 'loading' | 'signedIn' | 'error';
@@ -127,7 +127,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
 
     setStatus('loading');
 
-    const unsubscribe = subscribeToFirebaseAuthState((firebaseUser) => {
+    const unsubscribe = subscribeToFirebaseIdTokenState((firebaseUser) => {
       const transition = authTransitionsRef.current.begin();
       void (async () => {
         if (!isMounted || !authTransitionsRef.current.isCurrent(transition)) return;

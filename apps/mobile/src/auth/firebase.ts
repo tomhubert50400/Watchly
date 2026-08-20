@@ -9,7 +9,7 @@ import {
   initializeAuth,
   MultiFactorError,
   NextOrObserver,
-  onAuthStateChanged,
+  onIdTokenChanged,
   signInWithCredential,
   signInWithEmailAndPassword,
   signOut,
@@ -122,8 +122,8 @@ export function signOutFromFirebase(): Promise<void> {
   return signOut(getAuthInstance());
 }
 
-export function subscribeToFirebaseAuthState(callback: NextOrObserver<User>) {
-  return onAuthStateChanged(getAuthInstance(), callback);
+export function subscribeToFirebaseIdTokenState(callback: NextOrObserver<User>) {
+  return onIdTokenChanged(getAuthInstance(), callback);
 }
 
 export async function getFreshFirebaseIdToken(): Promise<string | null> {
