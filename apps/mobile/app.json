@@ -2,7 +2,7 @@
   "expo": {
     "name": "Watchly",
     "slug": "tv-app",
-    "scheme": ["tvapp", "com.tom.tvapp.dev"],
+    "scheme": ["tvapp", "com.tom.tvapp.dev", "msauth.com.tom.tvapp.dev"],
     "version": "1.0.0",
     "newArchEnabled": true,
     "orientation": "portrait",

@@ -15,6 +15,7 @@ import { useAuthSession } from './AuthSessionContext';
 import type { ProviderSignInResult, TotpSignInChallenge } from './AuthSessionContext';
 import { getMissingFirebaseConfig } from './firebase';
 import { getMissingGoogleClientConfig, googleClientIds } from './googleAuthConfig';
+import { useMicrosoftAuth } from './microsoftAuth';
 import { authProviders, type AuthProviderConfig } from './providerConfig';
 import { getTotpErrorMessage, isValidTotpCode, normalizeTotpCode } from './totpChallenge';
 
@@ -39,7 +40,14 @@ export function ProfileAuthCard({
   embedded = false,
   title = 'Your Watchly starts here',
 }: ProfileAuthCardProps = {}) {
-  const { authErrorMessage, signInWithApple, signInWithGoogle, status: sessionStatus } = useAuthSession();
+  const {
+    authErrorMessage,
+    signInWithApple,
+    signInWithGoogle,
+    signInWithMicrosoft,
+    status: sessionStatus,
+  } = useAuthSession();
+  const microsoftAuth = useMicrosoftAuth();
   const [appleAvailable, setAppleAvailable] = useState(false);
   const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
   const [localStatus, setLocalStatus] = useState<AuthStatus>('idle');
@@ -189,10 +197,44 @@ export function ProfileAuthCard({
     setMessage(null);
   }
 
+  async function startMicrosoftSignIn() {
+    if (!microsoftAuth.isConfigured) {
+      setMessage('Microsoft setup is incomplete: EXPO_PUBLIC_MICROSOFT_CLIENT_ID.');
+      return;
+    }
+    if (!microsoftAuth.isReady || status === 'loading') return;
+
+    setConnectingProvider('Microsoft');
+    setLocalStatus('loading');
+    setMessage(null);
+
+    try {
+      const tokens = await microsoftAuth.authenticate();
+      if (!tokens) {
+        setConnectingProvider(null);
+        setLocalStatus('idle');
+        return;
+      }
+
+      const result = await signInWithMicrosoft(tokens);
+      applyProviderResult(result);
+    } catch (error) {
+      hapticError();
+      console.warn('Microsoft sign-in failed', safeError(error));
+      setConnectingProvider(null);
+      setLocalStatus('error');
+      setMessage(accountError(error));
+    }
+  }
+
   async function selectProvider(provider: AuthProviderConfig) {
     setMessage(null);
     if (provider.id === 'apple') {
       await startAppleSignIn();
+      return;
+    }
+    if (provider.id === 'microsoft') {
+      await startMicrosoftSignIn();
       return;
     }
     if (!provider.isWired) {

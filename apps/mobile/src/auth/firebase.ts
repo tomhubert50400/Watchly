@@ -22,6 +22,7 @@ import {
 import * as FirebaseAuth from '@firebase/auth';
 import { publicEnv } from '../config/publicEnv';
 import { resolveDevAuthConfig } from './devAuthConfig';
+import type { MicrosoftTokens } from './microsoftAuth';
 import { selectTotpFactor } from './totpChallenge';
 
 const firebaseConfigKeys = [
@@ -87,22 +88,24 @@ export async function signInWithAppleIdentityToken(
   return signInWithFirebaseCredential(credential);
 }
 
+export async function signInWithMicrosoftTokens(
+  tokens: MicrosoftTokens,
+): Promise<FirebaseProviderSignInResult> {
+  return signInWithFirebaseCredential(createMicrosoftCredential(tokens));
+}
+
 export async function linkWithAppleIdentityToken(
   identityToken: string,
   rawNonce: string,
 ): Promise<FirebaseSession> {
-  const auth = getAuthInstance();
-  const user = auth.currentUser;
-
-  if (!user) {
-    throw new Error('Sign in to your Watchly account before linking Apple.');
-  }
-
   const provider = new OAuthProvider('apple.com');
   const credential = provider.credential({ idToken: identityToken, rawNonce });
-  const linkedUser = await linkWithCredential(user, credential);
 
-  return getFirebaseSessionFromUser(linkedUser.user, true);
+  return linkWithFirebaseCredential(credential);
+}
+
+export async function linkWithMicrosoftTokens(tokens: MicrosoftTokens): Promise<FirebaseSession> {
+  return linkWithFirebaseCredential(createMicrosoftCredential(tokens));
 }
 
 async function signInWithFirebaseCredential(
@@ -140,6 +143,27 @@ async function signInWithFirebaseCredential(
       type: 'totpRequired',
     };
   }
+}
+
+async function linkWithFirebaseCredential(credential: AuthCredential) {
+  const user = getAuthInstance().currentUser;
+
+  if (!user) {
+    throw new Error('Sign in to your Watchly account before linking another provider.');
+  }
+
+  const linkedUser = await linkWithCredential(user, credential);
+
+  return getFirebaseSessionFromUser(linkedUser.user, true);
+}
+
+function createMicrosoftCredential(tokens: MicrosoftTokens) {
+  const provider = new OAuthProvider('microsoft.com');
+
+  return provider.credential({
+    accessToken: tokens.accessToken ?? undefined,
+    idToken: tokens.idToken ?? undefined,
+  });
 }
 
 export async function signInWithConfiguredDevAccount(): Promise<FirebaseSession | null> {

@@ -34,7 +34,7 @@ else process.env.EXPO_PUBLIC_APP_ENV = previousPublicEnvironment;
 
 assert.deepEqual(
   stagingConfig.scheme,
-  ['tvapp', 'com.tom.tvapp.staging'],
+  ['tvapp', 'com.tom.tvapp.staging', 'msauth.com.tom.tvapp.staging'],
   'The staging build must register the staging application ID as its OAuth redirect scheme',
 );
 

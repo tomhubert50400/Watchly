@@ -9,12 +9,15 @@ import {
   getFreshFirebaseIdToken,
   getFirebaseSessionFromUser,
   linkWithAppleIdentityToken,
+  linkWithMicrosoftTokens,
   signInWithConfiguredDevAccount,
   signInWithAppleIdentityToken,
   signInWithGoogleIdToken,
+  signInWithMicrosoftTokens,
   signOutFromFirebase,
   subscribeToFirebaseIdTokenState,
 } from './firebase';
+import type { MicrosoftTokens } from './microsoftAuth';
 
 type AuthSessionStatus = 'idle' | 'loading' | 'signedIn' | 'error';
 
@@ -35,9 +38,11 @@ type AuthSessionContextValue = {
   firebaseIdToken: string | null;
   notifyTrackingChanged: () => void;
   linkApple: (identityToken: string, rawNonce: string) => Promise<void>;
+  linkMicrosoft: (tokens: MicrosoftTokens) => Promise<void>;
   refreshCurrentUser: () => Promise<void>;
   signInWithApple: (identityToken: string, rawNonce: string) => Promise<ProviderSignInResult>;
   signInWithGoogle: (googleIdToken: string) => Promise<ProviderSignInResult>;
+  signInWithMicrosoft: (tokens: MicrosoftTokens) => Promise<ProviderSignInResult>;
   signOut: () => Promise<void>;
   status: AuthSessionStatus;
   trackingRevision: number;
@@ -251,12 +256,12 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     (googleIdToken: string) => finishProviderSignIn(() => signInWithGoogleIdToken(googleIdToken)),
     [finishProviderSignIn],
   );
-  const linkApple = useCallback(async (identityToken: string, rawNonce: string) => {
+  const linkProvider = useCallback(async (link: () => Promise<{ firebaseIdToken: string }>) => {
     const transition = authTransitionsRef.current.begin();
     setStatus('loading');
 
     try {
-      const session = await linkWithAppleIdentityToken(identityToken, rawNonce);
+      const session = await link();
 
       if (!authTransitionsRef.current.isCurrent(transition)) return;
 
@@ -266,6 +271,19 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       throw error;
     }
   }, [applyFirebaseSession]);
+  const linkApple = useCallback(
+    (identityToken: string, rawNonce: string) =>
+      linkProvider(() => linkWithAppleIdentityToken(identityToken, rawNonce)),
+    [linkProvider],
+  );
+  const linkMicrosoft = useCallback(
+    (tokens: MicrosoftTokens) => linkProvider(() => linkWithMicrosoftTokens(tokens)),
+    [linkProvider],
+  );
+  const signInWithMicrosoft = useCallback(
+    (tokens: MicrosoftTokens) => finishProviderSignIn(() => signInWithMicrosoftTokens(tokens)),
+    [finishProviderSignIn],
+  );
   const refreshCurrentUser = useCallback(async () => {
     if (!firebaseIdToken) return;
 
@@ -313,11 +331,13 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       firebaseIdToken,
       getFirebaseIdToken,
       linkApple,
+      linkMicrosoft,
       notifySocialChanged,
       notifyTrackingChanged,
       refreshCurrentUser,
       signInWithApple,
       signInWithGoogle,
+      signInWithMicrosoft,
       signOut,
       status,
       trackingRevision,
@@ -328,11 +348,13 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       firebaseIdToken,
       getFirebaseIdToken,
       linkApple,
+      linkMicrosoft,
       notifySocialChanged,
       notifyTrackingChanged,
       refreshCurrentUser,
       signInWithApple,
       signInWithGoogle,
+      signInWithMicrosoft,
       signOut,
       status,
       trackingRevision,

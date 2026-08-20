@@ -43,6 +43,7 @@ import {
   updateWatchlistVisibility,
 } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { useMicrosoftAuth } from '../auth/microsoftAuth';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { BottomActionSheet, BottomActionSheetScrollView } from '../components/BottomActionSheet';
 import { Button } from '../components/Button';
@@ -60,7 +61,7 @@ import appConfig from '../../app.json';
 import { chooseAndUploadProfileAvatar } from './uploadProfileAvatar';
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
-type AccountAction = 'delete' | 'export' | 'linkApple' | 'resetFull' | 'resetLegacy' | 'signOut' | null;
+type AccountAction = 'delete' | 'export' | 'linkApple' | 'linkMicrosoft' | 'resetFull' | 'resetLegacy' | 'signOut' | null;
 type SettingsNavigation = NativeStackNavigationProp<RootStackParamList>;
 type SavedSettings = {
   displayName: string;
@@ -78,10 +79,12 @@ const defaultPrivacy: ProfilePrivacy = {
 
 export function SettingsScreen() {
   const navigation = useNavigation<SettingsNavigation>();
+  const microsoftAuth = useMicrosoftAuth();
   const {
     currentUser,
     firebaseIdToken,
     linkApple,
+    linkMicrosoft,
     notifySocialChanged,
     refreshCurrentUser,
     signOut,
@@ -295,7 +298,35 @@ export function SettingsScreen() {
     } catch (error) {
       if (isAppleCancellation(error)) return;
 
-      setMessage({ text: getProviderLinkError(error), tone: 'error' });
+      setMessage({ text: getProviderLinkError(error, 'Apple'), tone: 'error' });
+      hapticError();
+    } finally {
+      setAccountAction(null);
+    }
+  }
+
+  async function connectMicrosoft() {
+    if (accountAction || currentUser?.providers?.includes('MICROSOFT')) return;
+    if (!microsoftAuth.isConfigured) {
+      setMessage({
+        text: 'Microsoft setup is incomplete: EXPO_PUBLIC_MICROSOFT_CLIENT_ID.',
+        tone: 'error',
+      });
+      return;
+    }
+
+    setAccountAction('linkMicrosoft');
+    setMessage(null);
+
+    try {
+      const tokens = await microsoftAuth.authenticate();
+      if (!tokens) return;
+
+      await linkMicrosoft(tokens);
+      setMessage({ text: 'Microsoft is now linked to your Watchly account.', tone: 'success' });
+      hapticSuccess();
+    } catch (error) {
+      setMessage({ text: getProviderLinkError(error, 'Microsoft'), tone: 'error' });
       hapticError();
     } finally {
       setAccountAction(null);
@@ -572,7 +603,7 @@ export function SettingsScreen() {
             title="Sign-in methods"
           >
             <View style={styles.group}>
-              <View style={styles.connectionRow}>
+              <View style={[styles.connectionRow, styles.connectionDivider]}>
                 <View style={styles.connectionCopy}>
                   <Text style={styles.connectionTitle}>Apple</Text>
                   <Text style={styles.connectionBody}>
@@ -603,6 +634,18 @@ export function SettingsScreen() {
                   <Text style={styles.connectionUnavailable}>Unavailable</Text>
                 )}
               </View>
+              <SettingsActionRow
+                body={currentUser?.providers?.includes('MICROSOFT')
+                  ? 'Connected to this Watchly account.'
+                  : 'Authenticate with Microsoft to link it securely.'}
+                icon={ShieldCheck}
+                label={currentUser?.providers?.includes('MICROSOFT')
+                  ? 'Microsoft connected'
+                  : 'Link Microsoft'}
+                last
+                loading={accountAction === 'linkMicrosoft'}
+                onPress={() => { void connectMicrosoft(); }}
+              />
             </View>
           </SettingsSection>
 
@@ -1130,17 +1173,17 @@ function getProviderLabel(provider?: string) {
   return `Signed in with ${label}`;
 }
 
-function getProviderLinkError(error: unknown) {
+function getProviderLinkError(error: unknown, providerName: string) {
   const code = getErrorCode(error);
 
   if (code === 'auth/credential-already-in-use') {
-    return 'This Apple account is already connected to another Watchly account.';
+    return `This ${providerName} account is already connected to another Watchly account.`;
   }
   if (code === 'auth/provider-already-linked') {
-    return 'Apple is already connected to this Watchly account.';
+    return `${providerName} is already connected to this Watchly account.`;
   }
 
-  return error instanceof Error ? error.message : 'Could not link Apple. Try again.';
+  return error instanceof Error ? error.message : `Could not link ${providerName}. Try again.`;
 }
 
 function getErrorCode(error: unknown) {
@@ -1231,6 +1274,10 @@ const styles = StyleSheet.create({
   connectionCopy: {
     flex: 1,
     paddingRight: spacing.sm,
+  },
+  connectionDivider: {
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   connectionRow: {
     alignItems: 'center',

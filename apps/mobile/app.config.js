@@ -47,8 +47,11 @@ function getApplicationSchemes(configuredSchemes, configuredApplicationId, appli
       : [];
 
   return [...new Set([
-    ...schemes.filter((scheme) => scheme !== configuredApplicationId),
+    ...schemes.filter((scheme) => (
+      scheme !== configuredApplicationId && scheme !== `msauth.${configuredApplicationId}`
+    )),
     applicationId,
+    `msauth.${applicationId}`,
   ])];
 }
 
