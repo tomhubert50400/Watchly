@@ -13,7 +13,7 @@ assert.match(oauthSource, /openAuthSessionAsync/);
 assert.match(apiSource, /\/auth\/oauth\/exchange/);
 assert.match(apiSource, /\/auth\/oauth\/link/);
 assert.match(firebaseSource, /signInWithCustomToken/);
-assert.match(contextSource, /pendingExternalLinkRef/);
+assert.match(contextSource, /pendingAccountLinkRef/);
 assert.doesNotMatch(
   contextSource,
   /AsyncStorage/,

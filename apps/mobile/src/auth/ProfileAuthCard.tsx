@@ -84,23 +84,7 @@ export function ProfileAuthCard({
       setMessage(null);
       try {
         const result = await signInWithGoogle(idToken);
-
-        if (result.type === 'totpRequired') {
-          if (mounted) {
-            setConnectingProvider(null);
-            setLocalStatus('idle');
-            setTotpChallenge(result.challenge);
-            setTotpCode('');
-            setTotpError(null);
-          }
-          return;
-        }
-
-        hapticSuccess();
-        if (mounted) {
-          setConnectingProvider(null);
-          setLocalStatus('idle');
-        }
+        if (mounted) applyProviderResult(result);
       } catch (error) {
         hapticError();
         if (mounted) {
@@ -197,7 +181,7 @@ export function ProfileAuthCard({
       setConnectingProvider(null);
       setLocalStatus('idle');
       setMessage(
-        `A Watchly account already uses this email. Continue with ${existingMethods} now, then ${providerName(result.provider)} will be linked to the same account.`,
+        `A Watchly account already uses this email. Continue with ${existingMethods} now, then ${formatProvider(result.provider)} will be linked to the same account.`,
       );
       return;
     }

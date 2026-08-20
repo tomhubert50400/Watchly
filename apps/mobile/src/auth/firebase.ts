@@ -51,7 +51,10 @@ export type FirebaseTotpChallenge = {
   verify: (oneTimePassword: string) => Promise<FirebaseSession>;
 };
 
+export type FirebaseCredentialProvider = 'apple' | 'google' | 'microsoft';
+
 export type FirebaseProviderSignInResult =
+  | { credential: AuthCredential; provider: FirebaseCredentialProvider; type: 'linkRequired' }
   | { session: FirebaseSession; type: 'signedIn' }
   | { challenge: FirebaseTotpChallenge; type: 'totpRequired' };
 
@@ -76,7 +79,7 @@ export function getMissingFirebaseConfig(): string[] {
 export async function signInWithGoogleIdToken(googleIdToken: string): Promise<FirebaseProviderSignInResult> {
   const credential = GoogleAuthProvider.credential(googleIdToken);
 
-  return signInWithFirebaseCredential(credential);
+  return signInWithFirebaseCredential(credential, 'google');
 }
 
 export async function signInWithAppleIdentityToken(
@@ -86,13 +89,13 @@ export async function signInWithAppleIdentityToken(
   const provider = new OAuthProvider('apple.com');
   const credential = provider.credential({ idToken: identityToken, rawNonce });
 
-  return signInWithFirebaseCredential(credential);
+  return signInWithFirebaseCredential(credential, 'apple');
 }
 
 export async function signInWithMicrosoftTokens(
   tokens: MicrosoftTokens,
 ): Promise<FirebaseProviderSignInResult> {
-  return signInWithFirebaseCredential(createMicrosoftCredential(tokens));
+  return signInWithFirebaseCredential(createMicrosoftCredential(tokens), 'microsoft');
 }
 
 export async function signInWithWatchlyCustomToken(
@@ -121,8 +124,13 @@ export async function linkWithMicrosoftTokens(tokens: MicrosoftTokens): Promise<
   return linkWithFirebaseCredential(createMicrosoftCredential(tokens));
 }
 
+export function linkWithPendingFirebaseCredential(credential: AuthCredential) {
+  return linkWithFirebaseCredential(credential);
+}
+
 async function signInWithFirebaseCredential(
   credential: AuthCredential,
+  provider: FirebaseCredentialProvider,
 ): Promise<FirebaseProviderSignInResult> {
   const auth = getAuthInstance();
 
@@ -134,6 +142,9 @@ async function signInWithFirebaseCredential(
       type: 'signedIn',
     };
   } catch (error) {
+    if (isAccountExistsWithDifferentCredential(error)) {
+      return { credential, provider, type: 'linkRequired' };
+    }
     if (!isMultiFactorError(error)) throw error;
 
     const resolver = getMultiFactorResolver(auth, error);
@@ -268,5 +279,14 @@ function isMultiFactorError(error: unknown): error is MultiFactorError {
     && typeof error === 'object'
     && 'code' in error
     && error.code === 'auth/multi-factor-auth-required',
+  );
+}
+
+function isAccountExistsWithDifferentCredential(error: unknown) {
+  return Boolean(
+    error
+    && typeof error === 'object'
+    && 'code' in error
+    && error.code === 'auth/account-exists-with-different-credential',
   );
 }

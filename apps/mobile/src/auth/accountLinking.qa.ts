@@ -16,5 +16,12 @@ for (const provider of ['Google', 'Apple', 'Microsoft', 'Discord', 'Facebook']) 
 }
 assert.match(contextSource, /ACCOUNT_LINK_REQUIRED/);
 assert.match(contextSource, /completeExternalOAuthLink/);
+assert.match(contextSource, /linkWithPendingFirebaseCredential/);
+assert.match(firebaseSource, /auth\/account-exists-with-different-credential/);
+assert.doesNotMatch(
+  contextSource,
+  /AsyncStorage/,
+  'pending native provider credentials must remain in memory',
+);
 
 console.log('Account linking mobile QA passed.');

@@ -10,12 +10,14 @@ import { clearPrivateCacheForUser } from '../cache/persistedCache';
 import { revokeStoredPushDevice } from '../notifications/nativePushNotifications';
 import { createAuthTransitionGuard, performGuaranteedSignOut } from './authTransition';
 import {
+  type FirebaseCredentialProvider,
   type FirebaseProviderSignInResult,
   getFreshFirebaseIdToken,
   getFirebaseSessionFromUser,
   linkWithAppleIdentityToken,
   linkWithGoogleIdToken,
   linkWithMicrosoftTokens,
+  linkWithPendingFirebaseCredential,
   signInWithConfiguredDevAccount,
   signInWithAppleIdentityToken,
   signInWithGoogleIdToken,
@@ -37,7 +39,11 @@ export type TotpSignInChallenge = {
 export type ProviderSignInResult =
   | { type: 'cancelled' }
   | { type: 'signedIn' }
-  | { existingProviders: string[]; provider: ExternalAuthProvider; type: 'linkRequired' }
+  | {
+    existingProviders: string[];
+    provider: ExternalAuthProvider | FirebaseCredentialProvider;
+    type: 'linkRequired';
+  }
   | { challenge: TotpSignInChallenge; type: 'totpRequired' };
 
 type AuthSessionContextValue = {
@@ -74,7 +80,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   const explicitSignOutRef = useRef(false);
   const devSignInAttemptedRef = useRef(false);
   const latestFirebaseIdTokenRef = useRef<string | null>(null);
-  const pendingExternalLinkRef = useRef<{ provider: ExternalAuthProvider; ticket: string } | null>(null);
+  const pendingAccountLinkRef = useRef<PendingAccountLink | null>(null);
   const authTransitionsRef = useRef(createAuthTransitionGuard());
 
   useEffect(() => {
@@ -127,11 +133,22 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     let user: CurrentUser;
 
     try {
-      const pendingLink = pendingExternalLinkRef.current;
+      const pendingLink = pendingAccountLinkRef.current;
 
       if (pendingLink) {
-        user = await completeExternalOAuthLink(pendingLink.ticket, nextFirebaseIdToken);
-        pendingExternalLinkRef.current = null;
+        pendingAccountLinkRef.current = null;
+        try {
+          if (pendingLink.kind === 'external') {
+            user = await completeExternalOAuthLink(pendingLink.ticket, nextFirebaseIdToken);
+          } else {
+            const linkedSession = await linkWithPendingFirebaseCredential(pendingLink.credential);
+            nextFirebaseIdToken = linkedSession.firebaseIdToken;
+            user = await getCurrentUser(nextFirebaseIdToken);
+          }
+        } catch (error) {
+          pendingAccountLinkRef.current = pendingLink;
+          throw error;
+        }
       } else {
         user = await getCurrentUser(nextFirebaseIdToken);
       }
@@ -225,6 +242,19 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     setStatus('loading');
     try {
       const result = await signIn();
+
+      if (result.type === 'linkRequired') {
+        const pendingLink = pendingAccountLinkRef.current ?? {
+          credential: result.credential,
+          existingProviders: [],
+          kind: 'firebase' as const,
+          provider: result.provider,
+        };
+        pendingAccountLinkRef.current = pendingLink;
+        if (authTransitionsRef.current.isCurrent(transition)) setStatus('idle');
+
+        return toLinkRequiredResult(pendingLink);
+      }
 
       if (result.type === 'totpRequired') {
         if (authTransitionsRef.current.isCurrent(transition)) setStatus('idle');
@@ -329,14 +359,16 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
         exchange = await exchangeExternalOAuth(ticket);
       } catch (error) {
         if (error instanceof ApiError && error.code === 'ACCOUNT_LINK_REQUIRED') {
-          pendingExternalLinkRef.current = { provider, ticket };
+          const pendingLink = pendingAccountLinkRef.current ?? {
+            existingProviders: getExistingProviders(error),
+            kind: 'external' as const,
+            provider,
+            ticket,
+          };
+          pendingAccountLinkRef.current = pendingLink;
           if (authTransitionsRef.current.isCurrent(transition)) setStatus('idle');
 
-          return {
-            existingProviders: getExistingProviders(error),
-            provider,
-            type: 'linkRequired',
-          };
+          return toLinkRequiredResult(pendingLink);
         }
 
         throw error;
@@ -395,7 +427,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     const transition = authTransitionsRef.current.begin();
     setStatus('loading');
     explicitSignOutRef.current = true;
-    pendingExternalLinkRef.current = null;
+    pendingAccountLinkRef.current = null;
     const signedOutUserId = currentUser?.id;
     const signedOutFirebaseIdToken = latestFirebaseIdTokenRef.current;
     latestFirebaseIdTokenRef.current = null;
@@ -484,6 +516,28 @@ function getExistingProviders(error: ApiError) {
   return Array.isArray(providers)
     ? providers.filter((provider): provider is string => typeof provider === 'string')
     : [];
+}
+
+type PendingAccountLink =
+  | {
+    credential: Parameters<typeof linkWithPendingFirebaseCredential>[0];
+    existingProviders: string[];
+    kind: 'firebase';
+    provider: FirebaseCredentialProvider;
+  }
+  | {
+    existingProviders: string[];
+    kind: 'external';
+    provider: ExternalAuthProvider;
+    ticket: string;
+  };
+
+function toLinkRequiredResult(pendingLink: PendingAccountLink): ProviderSignInResult {
+  return {
+    existingProviders: pendingLink.existingProviders,
+    provider: pendingLink.provider,
+    type: 'linkRequired',
+  };
 }
 
 export function useAuthSession() {
