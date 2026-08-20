@@ -5,8 +5,6 @@ import {
   Animated,
   Easing,
   FocusEvent,
-  Image,
-  type ImageSourcePropType,
   InputAccessoryView,
   Keyboard,
   Linking,
@@ -84,25 +82,21 @@ const tasteMediaOptions: { label: string; value: 'movie' | 'series' }[] = [
   { label: 'TV Shows', value: 'series' },
 ];
 const notificationPreviews: {
-  fallbackSource: ImageSourcePropType;
   fallbackText: string;
   label: string;
   titlePrefix: string;
 }[] = [
   {
-    fallbackSource: require('../../assets/icon.png'),
     fallbackText: 'A title you follow is available today.',
     label: 'NEW RELEASE',
     titlePrefix: 'Now available:',
   },
   {
-    fallbackSource: require('../../assets/watchly-w-ui.png'),
     fallbackText: 'Someone liked your latest review.',
     label: 'SOCIAL',
     titlePrefix: 'New activity around',
   },
   {
-    fallbackSource: require('../../assets/watchly-popcorn-ui.png'),
     fallbackText: 'Your shared watchlist has a new pick.',
     label: 'WATCHLY',
     titlePrefix: 'A new update for',
@@ -1284,6 +1278,39 @@ function NotificationsStep({
   tasteItems: OnboardingTasteItem[];
 }) {
   const blocked = outcome?.status === 'denied' || outcome?.status === 'unavailable';
+  const [cataloguePosterItems, setCataloguePosterItems] = useState<OnboardingTasteItem[]>([]);
+  const tastePosterItems = tasteItems.filter((item) => item.posterUrl);
+  const previewItems = [...tastePosterItems, ...cataloguePosterItems]
+    .filter((item, index, items) => items.findIndex((candidate) =>
+      candidate.contentType === item.contentType && candidate.tmdbId === item.tmdbId
+    ) === index)
+    .slice(0, notificationPreviews.length);
+
+  useEffect(() => {
+    if (tastePosterItems.length >= notificationPreviews.length) return;
+
+    let active = true;
+    void getOnboardingTasteOptions()
+      .then((response) => {
+        if (!active) return;
+        setCataloguePosterItems(response.movies
+          .filter((item) => item.posterUrl)
+          .slice(0, notificationPreviews.length)
+          .map((item) => ({
+            contentType: item.mediaType,
+            posterUrl: item.posterUrl,
+            title: item.title,
+            tmdbId: item.tmdbId,
+          })));
+      })
+      .catch(() => {
+        if (active) setCataloguePosterItems([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [tastePosterItems.length]);
 
   return (
     <View style={styles.notificationsContent}>
@@ -1295,9 +1322,8 @@ function NotificationsStep({
       <View style={styles.notificationPreviewList}>
         {notificationPreviews.map((preview, index) => (
           <NotificationPreview
-            fallbackSource={preview.fallbackSource}
             fallbackText={preview.fallbackText}
-            item={tasteItems[index]}
+            item={previewItems[index]}
             key={preview.label}
             label={preview.label}
             titlePrefix={preview.titlePrefix}
@@ -1357,13 +1383,11 @@ function NotificationsStep({
 }
 
 function NotificationPreview({
-  fallbackSource,
   fallbackText,
   item,
   label,
   titlePrefix,
 }: {
-  fallbackSource: ImageSourcePropType;
   fallbackText: string;
   item: OnboardingTasteItem | undefined;
   label: string;
@@ -1379,13 +1403,7 @@ function NotificationPreview({
         />
       ) : (
         <View style={styles.notificationPreviewImageFallback}>
-          <Image
-            accessibilityIgnoresInvertColors
-            accessibilityLabel={`${label} notification artwork`}
-            resizeMode="contain"
-            source={fallbackSource}
-            style={styles.notificationPreviewImageLocal}
-          />
+          <ActivityIndicator color={colors.accentText} size="small" />
         </View>
       )}
       <View style={styles.notificationPreviewCopy}>
@@ -1653,10 +1671,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
     width: 52,
-  },
-  notificationPreviewImageLocal: {
-    height: 42,
-    width: 42,
   },
   notificationPreviewLabel: {
     color: colors.accentText,

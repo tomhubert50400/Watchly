@@ -34,13 +34,18 @@ assert.doesNotMatch(
 );
 assert.match(
   source,
-  /notificationPreviews\.map\(\(preview, index\)[\s\S]*<NotificationPreview[\s\S]*item=\{tasteItems\[index\]\}/,
-  'the page must render three notification examples using the user Taste when available',
+  /getOnboardingTasteOptions\(\)[\s\S]*response\.movies[\s\S]*item\.posterUrl[\s\S]*setCataloguePosterItems[\s\S]*notificationPreviews\.map\(\(preview, index\)[\s\S]*<NotificationPreview[\s\S]*item=\{previewItems\[index\]\}/,
+  'the page must fill notification examples with Taste posters or current TMDB movie posters',
 );
 assert.match(
   source,
-  /item\?\.posterUrl[\s\S]*<MediaPoster[\s\S]*accessibilityLabel=\{`Artwork for \$\{item\.title\}`\}[\s\S]*<Image[\s\S]*source=\{fallbackSource\}/,
-  'notification examples must show selected posters with local Watchly image fallbacks',
+  /item\?\.posterUrl[\s\S]*<MediaPoster[\s\S]*accessibilityLabel=\{`Artwork for \$\{item\.title\}`\}[\s\S]*<ActivityIndicator/,
+  'notification examples must show posters with a neutral loading placeholder',
+);
+assert.doesNotMatch(
+  source,
+  /watchly-w-ui|watchly-popcorn-ui|assets\/icon\.png|fallbackSource|<Image/,
+  'notification examples must never fall back to Watchly logos',
 );
 assert.match(
   source,
