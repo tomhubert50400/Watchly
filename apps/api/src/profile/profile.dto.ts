@@ -53,7 +53,7 @@ export class CompleteOnboardingDto {
   @IsString()
   @MaxLength(PROFILE_HANDLE_INPUT_MAX_LENGTH)
   @Matches(PROFILE_HANDLE_INPUT_PATTERN, {
-    message: 'handle must use 3 to 20 letters, numbers, or underscores',
+    message: 'handle must use 1 to 20 letters, numbers, or underscores',
   })
   handle!: string;
 

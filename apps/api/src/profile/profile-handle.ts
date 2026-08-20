@@ -2,15 +2,15 @@ import { BadRequestException } from '@nestjs/common';
 
 export const PROFILE_HANDLE_MAX_LENGTH = 20;
 export const PROFILE_HANDLE_INPUT_MAX_LENGTH = PROFILE_HANDLE_MAX_LENGTH + 1;
-export const PROFILE_HANDLE_INPUT_PATTERN = /^@?[a-zA-Z0-9_]{3,20}$/;
-export const PROFILE_HANDLE_PATTERN = /^[a-z0-9_]{3,20}$/;
+export const PROFILE_HANDLE_INPUT_PATTERN = /^@?[a-zA-Z0-9_]{1,20}$/;
+export const PROFILE_HANDLE_PATTERN = /^[a-z0-9_]{1,20}$/;
 
 export function normalizeProfileHandle(value: string) {
   const handle = value.trim().replace(/^@/, '').toLowerCase();
 
   if (!PROFILE_HANDLE_PATTERN.test(handle)) {
     throw new BadRequestException(
-      'Handle must use 3 to 20 letters, numbers, or underscores.',
+      'Handle must use 1 to 20 letters, numbers, or underscores.',
     );
   }
 

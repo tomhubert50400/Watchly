@@ -58,6 +58,11 @@ async function run() {
   const service = createService(prisma);
   const identity = { providerUserId: 'viewer' } as never;
 
+  assert.deepEqual(await service.getHandleAvailability(identity, 'a'), {
+    available: true,
+    handle: 'a',
+  });
+
   await assert.rejects(
     () => service.completeOnboarding(identity, {
       displayName: 'Handle tester',
@@ -108,7 +113,7 @@ async function run() {
     'unique handle conflicts must return a clear conflict response',
   );
 
-  for (const invalid of ['ab', 'with space', 'punctuation!', 'a'.repeat(21)]) {
+  for (const invalid of ['', 'with space', 'punctuation!', 'a'.repeat(21)]) {
     await assert.rejects(
       () => service.completeOnboarding(identity, invalid),
       BadRequestException,

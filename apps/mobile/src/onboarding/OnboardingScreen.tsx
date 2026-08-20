@@ -919,7 +919,7 @@ function HandleField({
       autoCapitalize="none"
       autoCorrect={false}
       error={error ?? undefined}
-      helperText="Use 3-20 letters, numbers, or underscores. Your username is permanent."
+      helperText="Use 1-20 letters, numbers, or underscores. Your username is permanent."
       inputAccessoryViewID={inputAccessoryViewID}
       label="Username"
       maxLength={21}

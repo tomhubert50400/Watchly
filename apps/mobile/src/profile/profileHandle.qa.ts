@@ -13,7 +13,10 @@ assert.equal(normalizeProfileHandleInput(' @Cinema_Fan '), 'cinema_fan');
 assert.equal(formatProfileHandle('cinema_fan'), '@cinema_fan');
 assert.equal(formatProfileHandle(null), null);
 assert.equal(getProfileHandleError('cinema_fan'), null);
-assert.match(getProfileHandleError('ab') ?? '', /at least 3/);
+assert.equal(getProfileHandleError('a'), null);
+assert.equal(getProfileHandleError('1'), null);
+assert.equal(getProfileHandleError('_'), null);
+assert.match(getProfileHandleError('') ?? '', /at least 1/);
 assert.match(getProfileHandleError('with space') ?? '', /letters, numbers, and underscores/);
 assert.match(getProfileHandleError('a'.repeat(21)) ?? '', /no more than 20/);
 
