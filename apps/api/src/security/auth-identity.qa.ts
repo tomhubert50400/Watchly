@@ -62,8 +62,8 @@ async function main() {
     ...googleIdentity,
     email: 'person@example.com',
     firebaseUid: 'firebase-user-2',
-    provider: 'FACEBOOK',
-    providerUserId: 'facebook-subject-2',
+    provider: 'DISCORD',
+    providerUserId: 'discord-subject-2',
   } as never).then(
     () => null,
     (error: unknown) => error,

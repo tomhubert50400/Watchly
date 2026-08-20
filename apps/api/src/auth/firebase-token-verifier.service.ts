@@ -150,8 +150,6 @@ function mapFirebaseProvider(
       return AuthProvider.APPLE;
     case 'microsoft.com':
       return AuthProvider.MICROSOFT;
-    case 'facebook.com':
-      return AuthProvider.FACEBOOK;
     case 'password':
       return allowPasswordProvider ? AuthProvider.GOOGLE : null;
     default:
@@ -216,9 +214,7 @@ function resolveFirebaseProvider(
 
   return decodedToken.watchlyProvider === AuthProvider.DISCORD
     ? AuthProvider.DISCORD
-    : decodedToken.watchlyProvider === AuthProvider.FACEBOOK
-      ? AuthProvider.FACEBOOK
-      : null;
+    : null;
 }
 
 function getStringClaim(decodedToken: DecodedIdToken, key: string) {

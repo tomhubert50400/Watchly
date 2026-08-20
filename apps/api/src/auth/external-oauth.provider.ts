@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { createHash } from 'node:crypto';
 import { AuthProvider } from '../generated/prisma/enums';
 
-export type ExternalOAuthProvider = 'discord' | 'facebook';
+export type ExternalOAuthProvider = 'discord';
 
 export type ExternalProviderIdentity = {
   displayName: string | null;
@@ -24,11 +24,14 @@ type ProviderSettings = {
 };
 
 export function parseExternalOAuthProvider(value: string): ExternalOAuthProvider | null {
-  return value === 'discord' || value === 'facebook' ? value : null;
+  return value === 'discord' ? value : null;
 }
 
 export function toAuthProvider(provider: ExternalOAuthProvider) {
-  return provider === 'discord' ? AuthProvider.DISCORD : AuthProvider.FACEBOOK;
+  switch (provider) {
+    case 'discord':
+      return AuthProvider.DISCORD;
+  }
 }
 
 export function buildExternalAuthorizationUrl(
@@ -56,35 +59,20 @@ export async function exchangeExternalAuthorizationCode(
   const settings = getExternalProviderSettings(config, provider);
   const token = await requestAccessToken(settings, code, callbackUrl);
 
-  return provider === 'discord'
-    ? requestDiscordIdentity(settings.userEndpoint, token)
-    : requestFacebookIdentity(settings.userEndpoint, token);
+  return requestDiscordIdentity(settings.userEndpoint, token);
 }
 
 export function getExternalProviderSettings(
   config: ConfigService,
-  provider: ExternalOAuthProvider,
+  _provider: ExternalOAuthProvider,
 ): ProviderSettings {
-  if (provider === 'discord') {
-    return requireProviderSettings({
-      authorizationEndpoint: 'https://discord.com/oauth2/authorize',
-      clientId: config.get<string>('DISCORD_OAUTH_CLIENT_ID'),
-      clientSecret: config.get<string>('DISCORD_OAUTH_CLIENT_SECRET'),
-      scopes: ['identify', 'email'],
-      tokenEndpoint: 'https://discord.com/api/oauth2/token',
-      userEndpoint: 'https://discord.com/api/users/@me',
-    });
-  }
-
-  const graphVersion = config.get<string>('FACEBOOK_GRAPH_API_VERSION')?.trim() || 'v24.0';
-
   return requireProviderSettings({
-    authorizationEndpoint: `https://www.facebook.com/${graphVersion}/dialog/oauth`,
-    clientId: config.get<string>('FACEBOOK_OAUTH_CLIENT_ID'),
-    clientSecret: config.get<string>('FACEBOOK_OAUTH_CLIENT_SECRET'),
-    scopes: ['public_profile', 'email'],
-    tokenEndpoint: `https://graph.facebook.com/${graphVersion}/oauth/access_token`,
-    userEndpoint: `https://graph.facebook.com/${graphVersion}/me?fields=id,name,email,picture.width(200)`,
+    authorizationEndpoint: 'https://discord.com/oauth2/authorize',
+    clientId: config.get<string>('DISCORD_OAUTH_CLIENT_ID'),
+    clientSecret: config.get<string>('DISCORD_OAUTH_CLIENT_SECRET'),
+    scopes: ['identify', 'email'],
+    tokenEndpoint: 'https://discord.com/api/oauth2/token',
+    userEndpoint: 'https://discord.com/api/users/@me',
   });
 }
 
@@ -147,33 +135,6 @@ async function requestDiscordIdentity(endpoint: string, accessToken: string) {
       ? `https://cdn.discordapp.com/avatars/${payload.id}/${payload.avatar}.png`
       : null,
     provider: AuthProvider.DISCORD,
-    providerUserId: payload.id,
-  } satisfies ExternalProviderIdentity;
-}
-
-async function requestFacebookIdentity(endpoint: string, accessToken: string) {
-  const response = await fetch(endpoint, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  const payload = await readJson(response) as {
-    email?: unknown;
-    id?: unknown;
-    name?: unknown;
-    picture?: { data?: { url?: unknown } };
-  };
-
-  if (!response.ok || typeof payload.id !== 'string') {
-    throw new ServiceUnavailableException('Facebook did not return a valid identity.');
-  }
-
-  const email = typeof payload.email === 'string' ? payload.email : null;
-
-  return {
-    displayName: typeof payload.name === 'string' ? payload.name : null,
-    email,
-    emailVerified: Boolean(email),
-    photoUrl: typeof payload.picture?.data?.url === 'string' ? payload.picture.data.url : null,
-    provider: AuthProvider.FACEBOOK,
     providerUserId: payload.id,
   } satisfies ExternalProviderIdentity;
 }

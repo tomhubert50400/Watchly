@@ -12,9 +12,6 @@ import {
 const config = new ConfigService({
   DISCORD_OAUTH_CLIENT_ID: 'discord-client',
   DISCORD_OAUTH_CLIENT_SECRET: 'discord-secret',
-  FACEBOOK_GRAPH_API_VERSION: 'v24.0',
-  FACEBOOK_OAUTH_CLIENT_ID: 'facebook-client',
-  FACEBOOK_OAUTH_CLIENT_SECRET: 'facebook-secret',
 });
 const callbackUrl = 'https://api.trywatchly.com/auth/oauth/discord/callback';
 const authorizationUrl = new URL(buildExternalAuthorizationUrl(
@@ -35,17 +32,12 @@ assert.equal(
   getExternalFirebaseUid('discord', 'provider-user'),
   'the same external subject must always resolve to the same Firebase UID',
 );
-assert.notEqual(
-  getExternalFirebaseUid('discord', 'provider-user'),
-  getExternalFirebaseUid('facebook', 'provider-user'),
-  'provider namespaces must remain isolated',
-);
-
 const providerSource = readFileSync(
   resolve(process.cwd(), 'src/auth/external-oauth.provider.ts'),
   'utf8',
 );
 assert(!providerSource.includes("searchParams.set('access_token'"), 'access tokens must stay out of URLs');
 assert(providerSource.includes('Authorization: `Bearer ${accessToken}`'));
+assert(!providerSource.toLowerCase().includes('facebook'));
 
 console.log('External OAuth QA passed.');

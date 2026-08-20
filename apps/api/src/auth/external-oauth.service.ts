@@ -344,7 +344,6 @@ function getCustomTokenClaims(identity: AuthenticatedIdentity) {
 
 function toExternalProvider(provider: AuthProvider): ExternalOAuthProvider {
   if (provider === AuthProvider.DISCORD) return 'discord';
-  if (provider === AuthProvider.FACEBOOK) return 'facebook';
 
   throw invalidTicket();
 }

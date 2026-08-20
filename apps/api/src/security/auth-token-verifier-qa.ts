@@ -157,7 +157,6 @@ async function main() {
 
   for (const [signInProvider, expectedProvider] of [
     ['apple.com', 'APPLE'],
-    ['facebook.com', 'FACEBOOK'],
     ['microsoft.com', 'MICROSOFT'],
   ] as const) {
     const identity = await verifyBearerTokenWithAuth({
