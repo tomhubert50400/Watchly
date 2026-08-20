@@ -13,6 +13,7 @@ import {
   NextOrObserver,
   OAuthProvider,
   onIdTokenChanged,
+  reauthenticateWithCredential,
   signInWithCredential,
   signInWithCustomToken,
   signInWithEmailAndPassword,
@@ -126,6 +127,43 @@ export async function linkWithMicrosoftTokens(tokens: MicrosoftTokens): Promise<
 
 export function linkWithPendingFirebaseCredential(credential: AuthCredential) {
   return linkWithFirebaseCredential(credential);
+}
+
+export async function reauthenticateAndRevokeApple(
+  identityToken: string,
+  rawNonce: string,
+  authorizationCode: string,
+) {
+  const auth = getAuthInstance();
+  const user = auth.currentUser;
+  const apiKey = firebaseConfig.EXPO_PUBLIC_FIREBASE_API_KEY;
+
+  if (!user) throw new Error('Sign in again before deleting your Watchly account.');
+  if (!apiKey) throw new Error('Firebase is not configured for Apple token revocation.');
+
+  const provider = new OAuthProvider('apple.com');
+  const credential = provider.credential({ idToken: identityToken, rawNonce });
+  const reauthenticated = await reauthenticateWithCredential(user, credential);
+  const firebaseIdToken = await reauthenticated.user.getIdToken(true);
+  const response = await fetch(
+    `https://identitytoolkit.googleapis.com/v2/accounts:revokeToken?key=${encodeURIComponent(apiKey)}`,
+    {
+      body: JSON.stringify({
+        idToken: firebaseIdToken,
+        providerId: 'apple.com',
+        token: authorizationCode,
+        tokenType: 'CODE',
+      }),
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error('Apple authorization could not be revoked. Your account was not deleted.');
+  }
+
+  return firebaseIdToken;
 }
 
 async function signInWithFirebaseCredential(

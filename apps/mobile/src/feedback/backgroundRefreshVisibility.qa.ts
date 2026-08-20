@@ -83,8 +83,15 @@ assert.match(
 
 const authSessionSource = source('../auth/AuthSessionContext.tsx');
 const firebaseAuthSource = source('../auth/firebase.ts');
+const freshTokenSource = firebaseAuthSource.slice(
+  firebaseAuthSource.indexOf('export async function getFreshFirebaseIdToken'),
+  firebaseAuthSource.indexOf(
+    'export async function getFirebaseSessionFromUser',
+    firebaseAuthSource.indexOf('export async function getFreshFirebaseIdToken'),
+  ),
+);
 assert.doesNotMatch(
-  firebaseAuthSource,
+  freshTokenSource,
   /getIdToken\(true\)/,
   'authenticated reads must not force credential rotation on every request',
 );

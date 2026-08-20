@@ -45,6 +45,7 @@ import {
   updateWatchlistVisibility,
 } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { reauthenticateAndRevokeApple } from '../auth/firebase';
 import { useMicrosoftAuth } from '../auth/microsoftAuth';
 import { getMissingGoogleClientConfig, googleClientIds } from '../auth/googleAuthConfig';
 import { SignInRequiredCard } from '../auth/SignInRequired';
@@ -450,14 +451,37 @@ export function SettingsScreen() {
     setAccountAction('delete');
     setMessage(null);
     try {
-      await deleteAccount(firebaseIdToken);
+      let deletionFirebaseIdToken = firebaseIdToken;
+
+      if (currentUser?.providers?.includes('APPLE')) {
+        if (Platform.OS !== 'ios' || !appleAvailable) {
+          throw new Error('Delete this Apple-linked account from Watchly on a supported Apple device.');
+        }
+
+        const rawNonce = Crypto.randomUUID();
+        const nonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
+        const appleCredential = await AppleAuthentication.signInAsync({ nonce });
+        if (!appleCredential.identityToken || !appleCredential.authorizationCode) {
+          throw new Error('Apple did not return the authorization needed to delete this account.');
+        }
+
+        deletionFirebaseIdToken = await reauthenticateAndRevokeApple(
+          appleCredential.identityToken,
+          rawNonce,
+          appleCredential.authorizationCode,
+        );
+      }
+
+      await deleteAccount(deletionFirebaseIdToken);
       setIsDeleteOpen(false);
       await signOut();
       hapticSuccess();
       if (navigation.canGoBack()) navigation.goBack();
     } catch (error) {
       setMessage({
-        text: error instanceof Error ? error.message : 'Could not delete your account.',
+        text: isAppleCancellation(error)
+          ? 'Apple confirmation was cancelled. Your account was not deleted.'
+          : error instanceof Error ? error.message : 'Could not delete your account.',
         tone: 'error',
       });
       hapticError();
@@ -893,7 +917,7 @@ export function SettingsScreen() {
           <Text style={styles.deleteBody}>
             Watchly will permanently remove your profile, viewing activity, ratings, reviews,
             follows, personal lists, and shared lists you own. Other members will lose access to
-            shared lists that you created.
+            shared lists that you created. If Apple is linked, Apple will ask you to confirm first.
           </Text>
         </BottomActionSheetScrollView>
       </BottomActionSheet>
