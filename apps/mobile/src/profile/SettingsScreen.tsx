@@ -1,6 +1,7 @@
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Google from 'expo-auth-session/providers/google';
 import * as Crypto from 'expo-crypto';
 import {
   Check,
@@ -25,7 +26,7 @@ import {
   Users,
 } from 'lucide-react-native';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import {
   deleteAccount,
   exportAccountData,
@@ -36,6 +37,7 @@ import {
   updatePrivacy,
   updateProfile,
 } from '../api/profile';
+import type { ExternalAuthProvider } from '../api/externalAuth';
 import { OnboardingResetMode, resetOnboarding } from '../api/dev';
 import {
   listWatchlists,
@@ -44,6 +46,7 @@ import {
 } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { useMicrosoftAuth } from '../auth/microsoftAuth';
+import { getMissingGoogleClientConfig, googleClientIds } from '../auth/googleAuthConfig';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { BottomActionSheet, BottomActionSheetScrollView } from '../components/BottomActionSheet';
 import { Button } from '../components/Button';
@@ -61,7 +64,7 @@ import appConfig from '../../app.json';
 import { chooseAndUploadProfileAvatar } from './uploadProfileAvatar';
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
-type AccountAction = 'delete' | 'export' | 'linkApple' | 'linkMicrosoft' | 'resetFull' | 'resetLegacy' | 'signOut' | null;
+type AccountAction = 'delete' | 'export' | 'linkApple' | 'linkDiscord' | 'linkFacebook' | 'linkGoogle' | 'linkMicrosoft' | 'resetFull' | 'resetLegacy' | 'signOut' | null;
 type SettingsNavigation = NativeStackNavigationProp<RootStackParamList>;
 type SavedSettings = {
   displayName: string;
@@ -80,10 +83,18 @@ const defaultPrivacy: ProfilePrivacy = {
 export function SettingsScreen() {
   const navigation = useNavigation<SettingsNavigation>();
   const microsoftAuth = useMicrosoftAuth();
+  const [googleRequest, , promptGoogleAsync] = Google.useIdTokenAuthRequest({
+    androidClientId: googleClientIds.androidClientId ?? 'missing-android-client-id',
+    iosClientId: googleClientIds.iosClientId ?? 'missing-ios-client-id',
+    selectAccount: true,
+    webClientId: googleClientIds.webClientId ?? 'missing-web-client-id',
+  });
   const {
     currentUser,
     firebaseIdToken,
     linkApple,
+    linkExternal,
+    linkGoogle,
     linkMicrosoft,
     notifySocialChanged,
     refreshCurrentUser,
@@ -305,6 +316,37 @@ export function SettingsScreen() {
     }
   }
 
+  async function connectGoogle() {
+    if (accountAction || currentUser?.providers?.includes('GOOGLE')) return;
+
+    const missingConfig = getMissingGoogleClientConfig(Platform.OS);
+    if (missingConfig.length > 0 || !googleRequest) {
+      setMessage({ text: `Google setup is incomplete: ${missingConfig.join(', ')}.`, tone: 'error' });
+      return;
+    }
+
+    setAccountAction('linkGoogle');
+    setMessage(null);
+
+    try {
+      const response = await promptGoogleAsync();
+      if (response.type === 'cancel' || response.type === 'dismiss') return;
+      const idToken = response.type === 'success' ? response.params.id_token : null;
+      if (typeof idToken !== 'string' || idToken.length === 0) {
+        throw new Error('Google did not return an ID token.');
+      }
+
+      await linkGoogle(idToken);
+      setMessage({ text: 'Google is now linked to your Watchly account.', tone: 'success' });
+      hapticSuccess();
+    } catch (error) {
+      setMessage({ text: getProviderLinkError(error, 'Google'), tone: 'error' });
+      hapticError();
+    } finally {
+      setAccountAction(null);
+    }
+  }
+
   async function connectMicrosoft() {
     if (accountAction || currentUser?.providers?.includes('MICROSOFT')) return;
     if (!microsoftAuth.isConfigured) {
@@ -327,6 +369,29 @@ export function SettingsScreen() {
       hapticSuccess();
     } catch (error) {
       setMessage({ text: getProviderLinkError(error, 'Microsoft'), tone: 'error' });
+      hapticError();
+    } finally {
+      setAccountAction(null);
+    }
+  }
+
+  async function connectExternal(provider: ExternalAuthProvider) {
+    const providerLabel = provider === 'discord' ? 'Discord' : 'Facebook';
+    const providerKey = provider === 'discord' ? 'DISCORD' : 'FACEBOOK';
+    const action: AccountAction = provider === 'discord' ? 'linkDiscord' : 'linkFacebook';
+    if (accountAction || currentUser?.providers?.includes(providerKey)) return;
+
+    setAccountAction(action);
+    setMessage(null);
+
+    try {
+      const linked = await linkExternal(provider);
+      if (!linked) return;
+
+      setMessage({ text: `${providerLabel} is now linked to your Watchly account.`, tone: 'success' });
+      hapticSuccess();
+    } catch (error) {
+      setMessage({ text: getProviderLinkError(error, providerLabel), tone: 'error' });
       hapticError();
     } finally {
       setAccountAction(null);
@@ -603,6 +668,17 @@ export function SettingsScreen() {
             title="Sign-in methods"
           >
             <View style={styles.group}>
+              <SettingsActionRow
+                body={currentUser?.providers?.includes('GOOGLE')
+                  ? 'Connected to this Watchly account.'
+                  : 'Authenticate with Google to link it securely.'}
+                icon={ShieldCheck}
+                label={currentUser?.providers?.includes('GOOGLE')
+                  ? 'Google connected'
+                  : 'Link Google'}
+                loading={accountAction === 'linkGoogle'}
+                onPress={() => { void connectGoogle(); }}
+              />
               <View style={[styles.connectionRow, styles.connectionDivider]}>
                 <View style={styles.connectionCopy}>
                   <Text style={styles.connectionTitle}>Apple</Text>
@@ -642,9 +718,31 @@ export function SettingsScreen() {
                 label={currentUser?.providers?.includes('MICROSOFT')
                   ? 'Microsoft connected'
                   : 'Link Microsoft'}
-                last
                 loading={accountAction === 'linkMicrosoft'}
                 onPress={() => { void connectMicrosoft(); }}
+              />
+              <SettingsActionRow
+                body={currentUser?.providers?.includes('DISCORD')
+                  ? 'Connected to this Watchly account.'
+                  : 'Authenticate with Discord to link it securely.'}
+                icon={ShieldCheck}
+                label={currentUser?.providers?.includes('DISCORD')
+                  ? 'Discord connected'
+                  : 'Link Discord'}
+                loading={accountAction === 'linkDiscord'}
+                onPress={() => { void connectExternal('discord'); }}
+              />
+              <SettingsActionRow
+                body={currentUser?.providers?.includes('FACEBOOK')
+                  ? 'Connected to this Watchly account.'
+                  : 'Authenticate with Facebook to link it securely.'}
+                icon={ShieldCheck}
+                label={currentUser?.providers?.includes('FACEBOOK')
+                  ? 'Facebook connected'
+                  : 'Link Facebook'}
+                last
+                loading={accountAction === 'linkFacebook'}
+                onPress={() => { void connectExternal('facebook'); }}
               />
             </View>
           </SettingsSection>

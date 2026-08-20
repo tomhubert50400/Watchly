@@ -1,5 +1,10 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getCurrentUser, CurrentUser } from '../api/auth';
+import {
+  exchangeExternalOAuth,
+  ExternalAuthProvider,
+  linkExternalOAuth as completeExternalOAuthLink,
+} from '../api/externalAuth';
 import { ApiError } from '../api/client';
 import { clearPrivateCacheForUser } from '../cache/persistedCache';
 import { revokeStoredPushDevice } from '../notifications/nativePushNotifications';
@@ -9,14 +14,17 @@ import {
   getFreshFirebaseIdToken,
   getFirebaseSessionFromUser,
   linkWithAppleIdentityToken,
+  linkWithGoogleIdToken,
   linkWithMicrosoftTokens,
   signInWithConfiguredDevAccount,
   signInWithAppleIdentityToken,
   signInWithGoogleIdToken,
   signInWithMicrosoftTokens,
+  signInWithWatchlyCustomToken,
   signOutFromFirebase,
   subscribeToFirebaseIdTokenState,
 } from './firebase';
+import { requestExternalOAuthTicket } from './externalOAuth';
 import type { MicrosoftTokens } from './microsoftAuth';
 
 type AuthSessionStatus = 'idle' | 'loading' | 'signedIn' | 'error';
@@ -27,7 +35,9 @@ export type TotpSignInChallenge = {
 };
 
 export type ProviderSignInResult =
+  | { type: 'cancelled' }
   | { type: 'signedIn' }
+  | { existingProviders: string[]; provider: ExternalAuthProvider; type: 'linkRequired' }
   | { challenge: TotpSignInChallenge; type: 'totpRequired' };
 
 type AuthSessionContextValue = {
@@ -38,10 +48,13 @@ type AuthSessionContextValue = {
   firebaseIdToken: string | null;
   notifyTrackingChanged: () => void;
   linkApple: (identityToken: string, rawNonce: string) => Promise<void>;
+  linkExternal: (provider: ExternalAuthProvider) => Promise<boolean>;
+  linkGoogle: (googleIdToken: string) => Promise<void>;
   linkMicrosoft: (tokens: MicrosoftTokens) => Promise<void>;
   refreshCurrentUser: () => Promise<void>;
   signInWithApple: (identityToken: string, rawNonce: string) => Promise<ProviderSignInResult>;
   signInWithGoogle: (googleIdToken: string) => Promise<ProviderSignInResult>;
+  signInWithExternal: (provider: ExternalAuthProvider) => Promise<ProviderSignInResult>;
   signInWithMicrosoft: (tokens: MicrosoftTokens) => Promise<ProviderSignInResult>;
   signOut: () => Promise<void>;
   status: AuthSessionStatus;
@@ -61,6 +74,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   const explicitSignOutRef = useRef(false);
   const devSignInAttemptedRef = useRef(false);
   const latestFirebaseIdTokenRef = useRef<string | null>(null);
+  const pendingExternalLinkRef = useRef<{ provider: ExternalAuthProvider; ticket: string } | null>(null);
   const authTransitionsRef = useRef(createAuthTransitionGuard());
 
   useEffect(() => {
@@ -113,7 +127,14 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     let user: CurrentUser;
 
     try {
-      user = await getCurrentUser(nextFirebaseIdToken);
+      const pendingLink = pendingExternalLinkRef.current;
+
+      if (pendingLink) {
+        user = await completeExternalOAuthLink(pendingLink.ticket, nextFirebaseIdToken);
+        pendingExternalLinkRef.current = null;
+      } else {
+        user = await getCurrentUser(nextFirebaseIdToken);
+      }
     } catch (error) {
       if (authTransitionsRef.current.isCurrent(transition)) {
         setAuthErrorMessage(getSessionAccessMessage(error));
@@ -280,10 +301,86 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     (tokens: MicrosoftTokens) => linkProvider(() => linkWithMicrosoftTokens(tokens)),
     [linkProvider],
   );
+  const linkGoogle = useCallback(
+    (googleIdToken: string) => linkProvider(() => linkWithGoogleIdToken(googleIdToken)),
+    [linkProvider],
+  );
   const signInWithMicrosoft = useCallback(
     (tokens: MicrosoftTokens) => finishProviderSignIn(() => signInWithMicrosoftTokens(tokens)),
     [finishProviderSignIn],
   );
+  const signInWithExternal = useCallback(async (
+    provider: ExternalAuthProvider,
+  ): Promise<ProviderSignInResult> => {
+    const transition = authTransitionsRef.current.begin();
+    explicitSignOutRef.current = false;
+    setStatus('loading');
+
+    try {
+      const ticket = await requestExternalOAuthTicket(provider);
+      if (!ticket) {
+        if (authTransitionsRef.current.isCurrent(transition)) setStatus('idle');
+        return { type: 'cancelled' };
+      }
+
+      let exchange: { firebaseCustomToken: string };
+
+      try {
+        exchange = await exchangeExternalOAuth(ticket);
+      } catch (error) {
+        if (error instanceof ApiError && error.code === 'ACCOUNT_LINK_REQUIRED') {
+          pendingExternalLinkRef.current = { provider, ticket };
+          if (authTransitionsRef.current.isCurrent(transition)) setStatus('idle');
+
+          return {
+            existingProviders: getExistingProviders(error),
+            provider,
+            type: 'linkRequired',
+          };
+        }
+
+        throw error;
+      }
+
+      const session = await signInWithWatchlyCustomToken(exchange.firebaseCustomToken);
+      if (authTransitionsRef.current.isCurrent(transition)) {
+        await applyFirebaseSession(session.firebaseIdToken, transition);
+      }
+
+      return { type: 'signedIn' };
+    } catch (error) {
+      if (authTransitionsRef.current.isCurrent(transition)) setStatus('error');
+      throw error;
+    }
+  }, [applyFirebaseSession]);
+  const linkExternal = useCallback(async (provider: ExternalAuthProvider) => {
+    const transition = authTransitionsRef.current.begin();
+    setStatus('loading');
+
+    try {
+      const firebaseToken = await getFreshFirebaseIdToken();
+      if (!firebaseToken) throw new Error('Sign in before linking another provider.');
+
+      const ticket = await requestExternalOAuthTicket(provider, firebaseToken);
+      if (!ticket) {
+        if (authTransitionsRef.current.isCurrent(transition)) setStatus('signedIn');
+        return false;
+      }
+
+      const user = await completeExternalOAuthLink(ticket, firebaseToken);
+      if (authTransitionsRef.current.isCurrent(transition)) {
+        latestFirebaseIdTokenRef.current = firebaseToken;
+        setFirebaseIdToken(firebaseToken);
+        setCurrentUser(user);
+        setStatus('signedIn');
+      }
+
+      return true;
+    } catch (error) {
+      if (authTransitionsRef.current.isCurrent(transition)) setStatus('signedIn');
+      throw error;
+    }
+  }, []);
   const refreshCurrentUser = useCallback(async () => {
     if (!firebaseIdToken) return;
 
@@ -298,6 +395,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     const transition = authTransitionsRef.current.begin();
     setStatus('loading');
     explicitSignOutRef.current = true;
+    pendingExternalLinkRef.current = null;
     const signedOutUserId = currentUser?.id;
     const signedOutFirebaseIdToken = latestFirebaseIdTokenRef.current;
     latestFirebaseIdTokenRef.current = null;
@@ -331,11 +429,14 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       firebaseIdToken,
       getFirebaseIdToken,
       linkApple,
+      linkExternal,
+      linkGoogle,
       linkMicrosoft,
       notifySocialChanged,
       notifyTrackingChanged,
       refreshCurrentUser,
       signInWithApple,
+      signInWithExternal,
       signInWithGoogle,
       signInWithMicrosoft,
       signOut,
@@ -348,11 +449,14 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       firebaseIdToken,
       getFirebaseIdToken,
       linkApple,
+      linkExternal,
+      linkGoogle,
       linkMicrosoft,
       notifySocialChanged,
       notifyTrackingChanged,
       refreshCurrentUser,
       signInWithApple,
+      signInWithExternal,
       signInWithGoogle,
       signInWithMicrosoft,
       signOut,
@@ -372,6 +476,14 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
 
 function getSessionAccessMessage(error: unknown) {
   return error instanceof ApiError && error.status === 403 ? error.message : null;
+}
+
+function getExistingProviders(error: ApiError) {
+  const providers = error.details?.existingProviders;
+
+  return Array.isArray(providers)
+    ? providers.filter((provider): provider is string => typeof provider === 'string')
+    : [];
 }
 
 export function useAuthSession() {

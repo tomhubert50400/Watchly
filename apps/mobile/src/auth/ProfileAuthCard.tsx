@@ -6,6 +6,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Image, Keyboard, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { ApiError } from '../api/client';
+import type { ExternalAuthProvider } from '../api/externalAuth';
 import { BrandLogo } from '../brand/BrandLogo';
 import { Button } from '../components/Button';
 import { TextInput } from '../components/TextInput';
@@ -14,6 +15,7 @@ import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { useAuthSession } from './AuthSessionContext';
 import type { ProviderSignInResult, TotpSignInChallenge } from './AuthSessionContext';
 import { getMissingFirebaseConfig } from './firebase';
+import { providerName } from './externalOAuth';
 import { getMissingGoogleClientConfig, googleClientIds } from './googleAuthConfig';
 import { useMicrosoftAuth } from './microsoftAuth';
 import { authProviders, type AuthProviderConfig } from './providerConfig';
@@ -43,6 +45,7 @@ export function ProfileAuthCard({
   const {
     authErrorMessage,
     signInWithApple,
+    signInWithExternal,
     signInWithGoogle,
     signInWithMicrosoft,
     status: sessionStatus,
@@ -182,6 +185,22 @@ export function ProfileAuthCard({
   }
 
   function applyProviderResult(result: ProviderSignInResult) {
+    if (result.type === 'cancelled') {
+      setConnectingProvider(null);
+      setLocalStatus('idle');
+      return;
+    }
+    if (result.type === 'linkRequired') {
+      const existingMethods = result.existingProviders.length > 0
+        ? result.existingProviders.map(formatProvider).join(' or ')
+        : 'a method already connected to your account';
+      setConnectingProvider(null);
+      setLocalStatus('idle');
+      setMessage(
+        `A Watchly account already uses this email. Continue with ${existingMethods} now, then ${providerName(result.provider)} will be linked to the same account.`,
+      );
+      return;
+    }
     if (result.type === 'totpRequired') {
       setConnectingProvider(null);
       setLocalStatus('idle');
@@ -195,6 +214,25 @@ export function ProfileAuthCard({
     setConnectingProvider(null);
     setLocalStatus('idle');
     setMessage(null);
+  }
+
+  async function startExternalSignIn(provider: ExternalAuthProvider) {
+    if (status === 'loading') return;
+
+    setConnectingProvider(providerName(provider));
+    setLocalStatus('loading');
+    setMessage(null);
+
+    try {
+      const result = await signInWithExternal(provider);
+      applyProviderResult(result);
+    } catch (error) {
+      hapticError();
+      console.warn(`${providerName(provider)} sign-in failed`, safeError(error));
+      setConnectingProvider(null);
+      setLocalStatus('error');
+      setMessage(accountError(error));
+    }
   }
 
   async function startMicrosoftSignIn() {
@@ -235,6 +273,10 @@ export function ProfileAuthCard({
     }
     if (provider.id === 'microsoft') {
       await startMicrosoftSignIn();
+      return;
+    }
+    if (provider.id === 'discord' || provider.id === 'facebook') {
+      await startExternalSignIn(provider.id);
       return;
     }
     if (!provider.isWired) {
@@ -403,7 +445,7 @@ export function ProfileAuthCard({
                 </View>
               ))}
             </View>
-            <Text style={styles.note}>Choose the sign-in method you prefer. Providers that still need setup remain visible and never simulate success.</Text>
+            <Text style={styles.note}>Choose any connected method. Add more methods later in Settings to keep one Watchly account.</Text>
           </>
         )}
       </View>
@@ -496,6 +538,10 @@ function safeError(error: unknown) { return error instanceof Error ? error.messa
 
 function isFirebaseAuthError(error: unknown, code: string) {
   return Boolean(error && typeof error === 'object' && 'code' in error && error.code === code);
+}
+
+function formatProvider(provider: string) {
+  return provider.charAt(0) + provider.slice(1).toLowerCase();
 }
 
 const styles = StyleSheet.create({

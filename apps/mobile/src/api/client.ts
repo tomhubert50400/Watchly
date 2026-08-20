@@ -16,6 +16,8 @@ export class ApiError extends Error {
     message: string,
     readonly status?: number,
     readonly serverMessage?: string,
+    readonly code?: string,
+    readonly details?: Record<string, unknown>,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -73,18 +75,20 @@ async function apiRequest<T>(method: string, path: string, options: ApiRequestOp
     });
 
     if (!response.ok) {
-      const serverMessage = await getServerMessage(response);
+      const serverError = await getServerError(response);
 
       if (controller.signal.aborted) {
         throw new ApiError('API request timed out.');
       }
 
-      const message = sanitizeServerMessage(serverMessage, response.status);
+      const message = sanitizeServerMessage(serverError.message, response.status);
 
       throw new ApiError(
         message,
         response.status,
-        serverMessage,
+        serverError.message,
+        serverError.code,
+        serverError.details,
       );
     }
 
@@ -117,22 +121,27 @@ async function apiRequest<T>(method: string, path: string, options: ApiRequestOp
   }
 }
 
-async function getServerMessage(response: Response) {
+async function getServerError(response: Response) {
   try {
-    const body = (await response.json()) as { message?: unknown };
+    const body = (await response.json()) as Record<string, unknown>;
+    const code = typeof body.code === 'string' ? body.code : undefined;
 
     if (typeof body.message === 'string') {
-      return body.message;
+      return { code, details: body, message: body.message };
     }
 
     if (Array.isArray(body.message)) {
-      return body.message.filter((item) => typeof item === 'string').join(' ');
+      return {
+        code,
+        details: body,
+        message: body.message.filter((item) => typeof item === 'string').join(' '),
+      };
     }
   } catch {
-    return undefined;
+    return {};
   }
 
-  return undefined;
+  return {};
 }
 
 function sanitizeServerMessage(message: string | undefined, status: number) {

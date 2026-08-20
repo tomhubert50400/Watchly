@@ -14,6 +14,7 @@ import {
   OAuthProvider,
   onIdTokenChanged,
   signInWithCredential,
+  signInWithCustomToken,
   signInWithEmailAndPassword,
   signOut,
   TotpMultiFactorGenerator,
@@ -94,6 +95,14 @@ export async function signInWithMicrosoftTokens(
   return signInWithFirebaseCredential(createMicrosoftCredential(tokens));
 }
 
+export async function signInWithWatchlyCustomToken(
+  customToken: string,
+): Promise<FirebaseSession> {
+  const userCredential = await signInWithCustomToken(getAuthInstance(), customToken);
+
+  return getFirebaseSessionFromUser(userCredential.user);
+}
+
 export async function linkWithAppleIdentityToken(
   identityToken: string,
   rawNonce: string,
@@ -102,6 +111,10 @@ export async function linkWithAppleIdentityToken(
   const credential = provider.credential({ idToken: identityToken, rawNonce });
 
   return linkWithFirebaseCredential(credential);
+}
+
+export async function linkWithGoogleIdToken(googleIdToken: string): Promise<FirebaseSession> {
+  return linkWithFirebaseCredential(GoogleAuthProvider.credential(googleIdToken));
 }
 
 export async function linkWithMicrosoftTokens(tokens: MicrosoftTokens): Promise<FirebaseSession> {

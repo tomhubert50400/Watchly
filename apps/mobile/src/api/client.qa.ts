@@ -142,6 +142,25 @@ async function main() {
         === 'development',
       'Every mobile API request must identify its app environment.',
     );
+
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      code: 'ACCOUNT_LINK_REQUIRED',
+      existingProviders: ['GOOGLE'],
+      message: 'Sign in with an existing provider.',
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 409,
+    })) as typeof fetch;
+    const structuredError = await apiGet('/qa-structured-error').then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+    assert(structuredError instanceof ApiError);
+    assert(structuredError.code === 'ACCOUNT_LINK_REQUIRED');
+    assert(
+      Array.isArray(structuredError.details?.existingProviders),
+      'Structured auth conflicts must preserve the existing provider list.',
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
