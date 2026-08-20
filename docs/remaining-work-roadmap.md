@@ -160,7 +160,7 @@ Travail prévu:
 - Ajouter Sign in with Apple et sa configuration Firebase, Apple Developer et native.
 - Définir et implémenter la liaison de plusieurs fournisseurs au même compte Watchly.
 - Gérer annulation, refus, erreur, jeton expiré, reconnexion et suppression de compte.
-- Masquer Microsoft, Discord et Facebook tant qu'ils ne sont pas réellement connectés.
+- Maintenir uniquement Google, Apple, Microsoft et Discord comme fournisseurs de connexion.
 - Vérifier le respect des exigences Apple lorsque d'autres fournisseurs sociaux sont proposés.
 
 Critères de validation:
@@ -284,7 +284,7 @@ Travail prévu:
 Travail prévu:
 
 - Étudier Microsoft OAuth après Google et Apple.
-- Ajouter Discord et Facebook uniquement si leur valeur produit est démontrée.
+- Conserver Discord et Microsoft comme fournisseurs secondaires; Facebook reste hors périmètre.
 - Masquer chaque fournisseur jusqu'à son implémentation et sa validation réelle.
 
 ### 13. Connexions Trakt ou services de streaming
