@@ -262,14 +262,18 @@ export function ImportDataScreen({
   const content = (
     <>
       <View style={styles.page}>
-        <View style={styles.intro}>
-          <Text accessibilityRole="header" style={styles.title}>Import your library</Text>
-          <Text style={styles.body}>
-            Bring in your watch history, ratings, and reviews from another tracker.
-          </Text>
-        </View>
+        {!embedded ? (
+          <>
+            <View style={styles.intro}>
+              <Text accessibilityRole="header" style={styles.title}>Import your library</Text>
+              <Text style={styles.body}>
+                Bring in your watch history, ratings, and reviews from another tracker.
+              </Text>
+            </View>
 
-        <Text style={styles.instruction}>Choose a service to see how to export and import your data.</Text>
+            <Text style={styles.instruction}>Choose a service to see how to export and import your data.</Text>
+          </>
+        ) : null}
 
         <View style={styles.sourceList}>
           {visibleSources.map((source) => (
@@ -278,6 +282,7 @@ export function ImportDataScreen({
               disabled={status !== 'idle'}
               key={source.name}
               onPress={() => setSelectedSource(source)}
+              showDescription={!embedded}
               source={source}
             />
           ))}
@@ -300,14 +305,18 @@ export function ImportDataScreen({
 
         {result ? <ImportResultPanel result={result} /> : null}
 
-        <View style={styles.note}>
-          <ShieldCheck color={colors.textSubtle} size={18} strokeWidth={2} />
-          <Text style={styles.noteText}>
-            Review every match before confirming. Original dates and privacy settings are preserved, and existing Watchly ratings or reviews are never overwritten.
-          </Text>
-        </View>
+        {!embedded ? (
+          <>
+            <View style={styles.note}>
+              <ShieldCheck color={colors.textSubtle} size={18} strokeWidth={2} />
+              <Text style={styles.noteText}>
+                Review every match before confirming. Original dates and privacy settings are preserved, and existing Watchly ratings or reviews are never overwritten.
+              </Text>
+            </View>
 
-        <Text style={styles.disclaimer}>Watchly is not affiliated with these services.</Text>
+            <Text style={styles.disclaimer}>Watchly is not affiliated with these services.</Text>
+          </>
+        ) : null}
       </View>
 
       <ImportGuideSheet
@@ -326,11 +335,13 @@ function ImportSourceRow({
   busy,
   disabled,
   onPress,
+  showDescription,
   source,
 }: {
   busy: boolean;
   disabled: boolean;
   onPress: () => void;
+  showDescription: boolean;
   source: ImportSource;
 }) {
   return (
@@ -350,7 +361,7 @@ function ImportSourceRow({
       <BrandLogo brand={source.brand} />
       <View style={styles.sourceCopy}>
         <Text style={styles.sourceName}>{source.name}</Text>
-        <Text style={styles.sourceBody}>{source.body}</Text>
+        {showDescription ? <Text style={styles.sourceBody}>{source.body}</Text> : null}
       </View>
       {busy
         ? <ActivityIndicator color={colors.accentText} size="small" />

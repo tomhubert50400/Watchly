@@ -58,6 +58,20 @@ async function run() {
   const service = createService(prisma);
   const identity = { providerUserId: 'viewer' } as never;
 
+  await assert.rejects(
+    () => service.completeOnboarding(identity, {
+      displayName: 'Handle tester',
+      handle: '@Cinema_Fan',
+      tasteItems: Array.from({ length: 6 }, (_, index) => ({
+        contentType: 'movie' as const,
+        tmdbId: index + 1,
+      })),
+    }),
+    (error: unknown) => error instanceof BadRequestException
+      && error.message === 'Choose up to 5 movies and 5 TV shows, or complete an import.',
+    'onboarding must reject more than five selections from one media type',
+  );
+
   assert.deepEqual(await service.completeOnboarding(identity, {
     displayName: 'Handle tester',
     handle: '@Cinema_Fan',

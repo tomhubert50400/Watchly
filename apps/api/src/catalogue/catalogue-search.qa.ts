@@ -9,6 +9,8 @@ import {
 } from './catalogue-spotlight';
 import {
   buildDiscoveryEndpoint,
+  buildGenreMovieEndpoint,
+  buildPopularEndpoint,
   compareAnnouncedCandidates,
   isAnnouncedReleaseDate,
   selectTmdbLogoAsset,
@@ -18,6 +20,8 @@ import {
 async function main() {
   testAnnouncedSelection();
   testDiscoveryEndpoints();
+  testGenreMovieEndpoints();
+  testPopularEndpoints();
   testLogoSelection();
   testWeeklySpotlightSelection();
 
@@ -47,7 +51,12 @@ async function main() {
     }
 
     if (url.includes('/genre/movie/list?')) {
-      return jsonResponse({ genres: [{ id: 18, name: 'Drama' }] });
+      return jsonResponse({
+        genres: [
+          { id: 18, name: 'Drama' },
+          { id: 28, name: 'Action' },
+        ],
+      });
     }
 
     if (url.includes('/genre/tv/list?')) {
@@ -77,9 +86,49 @@ async function main() {
       });
     }
 
+    if (url.includes('/movie/popular?')) {
+      const page = Number(new URL(url).searchParams.get('page') ?? '1');
+
+      return jsonResponse({
+        results: Array.from({ length: 20 }, (_, index) => ({
+          id: page * 1000 + index,
+          poster_path: `/popular-movie-${page}-${index}.jpg`,
+          release_date: '2000-01-01',
+          title: `Popular Movie ${page}-${index}`,
+        })),
+      });
+    }
+
+    if (url.includes('/tv/popular?')) {
+      const page = Number(new URL(url).searchParams.get('page') ?? '1');
+
+      return jsonResponse({
+        results: Array.from({ length: 20 }, (_, index) => ({
+          first_air_date: '2000-01-01',
+          id: page * 2000 + index,
+          name: `Popular Series ${page}-${index}`,
+          poster_path: `/popular-series-${page}-${index}.jpg`,
+        })),
+      });
+    }
+
     if (url.includes('/discover/tv?')) {
       return jsonResponse({
         results: [{ first_air_date: '2099-01-01', genre_ids: [18], id: 13, name: 'Upcoming Series' }],
+      });
+    }
+
+    if (url.includes('/discover/movie?') && new URL(url).searchParams.has('with_genres')) {
+      const page = Number(new URL(url).searchParams.get('page') ?? '1');
+
+      return jsonResponse({
+        results: Array.from({ length: 20 }, (_, index) => ({
+          genre_ids: [18],
+          id: page * 3000 + index,
+          poster_path: `/genre-movie-${page}-${index}.jpg`,
+          release_date: '2000-01-01',
+          title: `Drama Movie ${page}-${index}`,
+        })),
       });
     }
 
@@ -326,6 +375,44 @@ async function main() {
     assertEnglishTmdbRequests(requestedUrls, 'extended catalogue discovery');
 
     requestedUrls.length = 0;
+    const tasteOptions = await service.onboardingTasteOptions();
+    assert.equal(tasteOptions.movies.length, 21);
+    assert.equal(tasteOptions.series.length, 21);
+    assert.deepEqual(tasteOptions.movieGenres, [
+      { id: 28, name: 'Action' },
+      { id: 18, name: 'Drama' },
+    ]);
+    assert.equal(tasteOptions.movies[0]?.title, 'Popular Movie 1-0');
+    assert.equal(tasteOptions.series[20]?.title, 'Popular Series 2-0');
+    assert.deepEqual(
+      requestedUrls
+        .filter((url) => url.includes('/popular?'))
+        .map((url) => new URL(url).searchParams.get('page'))
+        .sort(),
+      ['1', '1', '2', '2'],
+      'taste options must load two pages for each media type to produce 21 cards',
+    );
+    assertEnglishTmdbRequests(requestedUrls, 'onboarding taste options');
+
+    requestedUrls.length = 0;
+    const dramaTasteOptions = await service.onboardingTasteOptions(18);
+    assert.equal(dramaTasteOptions.movies.length, 21);
+    assert.equal(dramaTasteOptions.movies[0]?.title, 'Drama Movie 1-0');
+    assert.equal(dramaTasteOptions.series.length, 21);
+    assert.equal(
+      requestedUrls.filter((url) => url.includes('/discover/movie?')).length,
+      2,
+      'genre Taste options must load two discover pages for 21 movie cards',
+    );
+    assert(
+      requestedUrls
+        .filter((url) => url.includes('/discover/movie?'))
+        .every((url) => new URL(url).searchParams.get('with_genres') === '18'),
+      'genre Taste options must apply the selected TMDB genre to every movie page',
+    );
+    assertEnglishTmdbRequests(requestedUrls, 'genre onboarding taste options');
+
+    requestedUrls.length = 0;
     const movieDetails = await service.getMovie(603);
     assert.equal(movieDetails.item.budget, 63000000);
     assert.deepEqual(movieDetails.item.directors, ['Lana Wachowski']);
@@ -524,6 +611,29 @@ function testDiscoveryEndpoints() {
   assert.equal(upcomingSeries.pathname, '/3/discover/tv');
   assert.equal(upcomingSeries.searchParams.get('sort_by'), 'first_air_date.asc');
   assert(upcomingSeries.searchParams.get('first_air_date.gte'));
+}
+
+function testPopularEndpoints() {
+  const baseUrl = 'https://api.themoviedb.org/3';
+  const movie = new URL(buildPopularEndpoint(baseUrl, 'movie', 1));
+  const series = new URL(buildPopularEndpoint(baseUrl, 'series', 2));
+
+  assert.equal(movie.pathname, '/3/movie/popular');
+  assert.equal(movie.searchParams.get('page'), '1');
+  assert.equal(series.pathname, '/3/tv/popular');
+  assert.equal(series.searchParams.get('page'), '2');
+}
+
+function testGenreMovieEndpoints() {
+  const endpoint = new URL(buildGenreMovieEndpoint('https://api.themoviedb.org/3', 18, 2));
+
+  assert.equal(endpoint.pathname, '/3/discover/movie');
+  assert.equal(endpoint.searchParams.get('include_adult'), 'false');
+  assert.equal(endpoint.searchParams.get('include_video'), 'false');
+  assert.equal(endpoint.searchParams.get('page'), '2');
+  assert.equal(endpoint.searchParams.get('sort_by'), 'popularity.desc');
+  assert.equal(endpoint.searchParams.get('with_genres'), '18');
+  assert(endpoint.searchParams.get('primary_release_date.lte'));
 }
 
 function testWeeklySpotlightSelection() {

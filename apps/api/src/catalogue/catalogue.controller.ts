@@ -38,6 +38,26 @@ export class CatalogueController {
     return this.catalogue.movieSections();
   }
 
+  @Get('onboarding-taste-options')
+  async onboardingTasteOptions(@Query('movieGenreId') movieGenreId?: string) {
+    const trimmedGenreId = movieGenreId?.trim();
+
+    if (trimmedGenreId === undefined || trimmedGenreId === '') {
+      return this.catalogue.onboardingTasteOptions();
+    }
+
+    if (!/^\d+$/.test(trimmedGenreId)) {
+      throw new BadRequestException('movieGenreId must be a positive integer.');
+    }
+
+    const parsedGenreId = Number(trimmedGenreId);
+    if (!Number.isSafeInteger(parsedGenreId) || parsedGenreId <= 0) {
+      throw new BadRequestException('movieGenreId must be a positive integer.');
+    }
+
+    return this.catalogue.onboardingTasteOptions(parsedGenreId);
+  }
+
   @Get('discovery')
   async discovery(@Query('section') section?: string, @Query('type') type?: string) {
     if (section !== 'trending' && section !== 'announced') {

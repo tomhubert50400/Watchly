@@ -21,19 +21,23 @@ assert.match(
 assert.doesNotMatch(source, /eyebrow=\{`Onboarding /, 'onboarding must not repeat its step count in the header');
 assert.match(
   source,
-  /title=\{step === 'profile' \? '' : getStepTitle\(step\)\}/,
+  /pageStep === 'profile' \|\| pageStep === 'import' \|\| pageStep === 'taste'[\s\S]*\? ''[\s\S]*: getStepTitle\(pageStep\)/,
   'the profile step must not render the redundant Make it yours screen title',
 );
 assert.match(
   source,
-  /\{step !== 'profile' \? <StepHero step=\{step\} \/> : null\}/,
+  /\{pageStep !== 'profile' && pageStep !== 'import' && pageStep !== 'taste'[\s\S]*<StepHero step=\{pageStep\} \/>[\s\S]*: null\}/,
   'the profile step must not render the duplicate hero card',
 );
 assert.doesNotMatch(source, /Your Watchly profile/, 'the profile form must not repeat its purpose');
 assert.doesNotMatch(source, /We start with your sign-in photo/, 'the profile form must keep its photo copy concise');
 assert.match(source, /<View style=\{styles\.profileContent\}>/, 'profile content must sit directly on the background');
 assert.match(source, /label="Username"/, 'the permanent identifier field must be labelled Username');
-assert.match(source, /placeholder="@watchly"/, 'the username field must use the Watchly placeholder');
+assert.match(
+  source,
+  /onChangeText=\{\(value\) => onChange\(value\.replace\(\/\^@\/, ''\)\)\}[\s\S]*value=\{`@\$\{handle\}`\}/,
+  'the username field must keep a visible at-sign while storing only the username',
+);
 assert.match(
   source,
   /style=\{\[styles\.actions, step === 'profile' \? styles\.profileActions : null\]\}[\s\S]*fullWidth=\{step === 'profile'\}/,

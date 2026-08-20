@@ -568,6 +568,58 @@ export class TmdbCatalogueService {
     };
   }
 
+  async onboardingTasteOptions(movieGenreId?: number) {
+    const accessToken = this.getAccessToken();
+    const movieEndpoint = (page: number) => movieGenreId
+      ? buildGenreMovieEndpoint(this.tmdbBaseUrl, movieGenreId, page)
+      : buildPopularEndpoint(this.tmdbBaseUrl, 'movie', page);
+    const movieLabel = movieGenreId ? `genre ${movieGenreId} movies` : 'popular movies';
+    const [movieGenres, moviePageOne, moviePageTwo, seriesPageOne, seriesPageTwo] = await Promise.all([
+      this.fetchTmdb<TmdbGenreResponse>(
+        `${this.tmdbBaseUrl}/genre/movie/list?${new URLSearchParams({ language: TMDB_LANGUAGE }).toString()}`,
+        accessToken,
+        'movie genres',
+      ),
+      this.fetchTmdb<TmdbSearchResponse>(
+        movieEndpoint(1),
+        accessToken,
+        `${movieLabel} page 1`,
+      ),
+      this.fetchTmdb<TmdbSearchResponse>(
+        movieEndpoint(2),
+        accessToken,
+        `${movieLabel} page 2`,
+      ),
+      this.fetchTmdb<TmdbSearchResponse>(
+        buildPopularEndpoint(this.tmdbBaseUrl, 'series', 1),
+        accessToken,
+        'popular series page 1',
+      ),
+      this.fetchTmdb<TmdbSearchResponse>(
+        buildPopularEndpoint(this.tmdbBaseUrl, 'series', 2),
+        accessToken,
+        'popular series page 2',
+      ),
+    ]);
+    const toOptions = (
+      payloads: readonly TmdbSearchResponse[],
+      mediaType: 'movie' | 'series',
+    ) => deduplicateTmdbResults(payloads.flatMap((payload) => payload.results ?? []))
+      .map((item) => this.toCatalogueItem(item, mediaType))
+      .filter((item): item is CatalogueSearchItem => Boolean(item))
+      .filter((item) => isReleasedDate(item.releaseDate))
+      .slice(0, 21);
+
+    return {
+      movieGenres: [...(movieGenres.genres ?? [])]
+        .filter((genre) => Number.isInteger(genre.id) && genre.id > 0 && Boolean(genre.name.trim()))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+      movies: toOptions([moviePageOne, moviePageTwo], 'movie'),
+      provider: 'tmdb' as const,
+      series: toOptions([seriesPageOne, seriesPageTwo], 'series'),
+    };
+  }
+
   async trending() {
     const accessToken = this.getAccessToken();
     const params = new URLSearchParams({ language: TMDB_LANGUAGE });
@@ -1506,6 +1558,31 @@ export function buildDiscoveryEndpoint(
   }
 
   return `${tmdbBaseUrl}/discover/movie?${buildAnnouncedMovieParams(page).toString()}`;
+}
+
+export function buildPopularEndpoint(
+  tmdbBaseUrl: string,
+  mediaType: CatalogueDiscoveryMediaType,
+  page: number,
+) {
+  const tmdbMediaType = mediaType === 'series' ? 'tv' : 'movie';
+  const params = new URLSearchParams({ language: TMDB_LANGUAGE, page: String(page) });
+
+  return `${tmdbBaseUrl}/${tmdbMediaType}/popular?${params.toString()}`;
+}
+
+export function buildGenreMovieEndpoint(tmdbBaseUrl: string, genreId: number, page: number) {
+  const params = new URLSearchParams({
+    include_adult: 'false',
+    include_video: 'false',
+    language: TMDB_LANGUAGE,
+    page: String(page),
+    'primary_release_date.lte': getTodayDateKey(),
+    sort_by: 'popularity.desc',
+    with_genres: String(genreId),
+  });
+
+  return `${tmdbBaseUrl}/discover/movie?${params.toString()}`;
 }
 
 function deduplicateTmdbResults(items: readonly TmdbSearchResult[]) {

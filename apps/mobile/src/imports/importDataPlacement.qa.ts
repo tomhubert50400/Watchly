@@ -82,8 +82,33 @@ assert(
 assert(
   onboardingSource.includes('<ImportDataScreen') &&
     onboardingSource.includes('workingSourcesOnly') &&
-    onboardingSource.includes("setStep(importSatisfied ? 'notifications' : 'taste')"),
+    onboardingSource.includes("moveToStep(importSatisfied ? 'notifications' : 'taste')"),
   'Onboarding must expose only working imports and skip Taste after a successful import.',
+);
+assert(
+  onboardingSource.includes('<Text style={styles.importHeading}>Bring in your tastes</Text>') &&
+    /importHeading: \{\s*\.\.\.typography\.title,\s*color: colors\.accentText,\s*\}/.test(onboardingSource) &&
+    !onboardingSource.includes('Bring your history') &&
+    !onboardingSource.includes('Bring your tastes'),
+  'The import step must show Bring in your tastes in pink below the progress bars.',
+);
+assert(
+  !onboardingSource.includes('Import as many files as you need.') &&
+    !onboardingSource.includes('Your profile has enough titles to get started.'),
+  'The import step must not repeat explanatory or success copy above the providers.',
+);
+assert(
+  /label=\{step === 'import' && !importSatisfied \? 'Skip' : 'Continue'\}/.test(onboardingSource) &&
+    /importBackAction: \{\s*flex: 1,\s*\}/.test(onboardingSource) &&
+    /importPrimaryAction: \{\s*flex: 2,\s*\}/.test(onboardingSource),
+  'The import actions must keep Back beside a two-thirds Skip or Continue button.',
+);
+assert(
+  /\{!embedded \? \([\s\S]*Import your library[\s\S]*Choose a service[\s\S]*\) : null\}/.test(importScreenSource) &&
+    importScreenSource.includes('showDescription={!embedded}') &&
+    /\{showDescription \? <Text style=\{styles\.sourceBody\}>\{source\.body\}<\/Text> : null\}/.test(importScreenSource) &&
+    /\{!embedded \? \([\s\S]*styles\.note[\s\S]*styles\.disclaimer[\s\S]*\) : null\}/.test(importScreenSource),
+  'Embedded onboarding imports must leave only the provider boxes before functional feedback appears.',
 );
 
 console.log('Import data placement QA passed.');

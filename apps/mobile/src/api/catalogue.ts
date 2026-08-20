@@ -31,6 +31,13 @@ export type CatalogueMovieSectionsResponse = {
   trendingSeries: CatalogueSearchItem[];
 };
 
+export type OnboardingTasteOptionsResponse = {
+  movieGenres: { id: number; name: string }[];
+  movies: CatalogueSearchItem[];
+  provider: 'tmdb';
+  series: CatalogueSearchItem[];
+};
+
 export type CatalogueDiscoveryItem = CatalogueSearchItem & {
   genres: string[];
 };
@@ -243,6 +250,14 @@ export function searchCatalogue(query: string, type: CatalogueSearchType) {
 
 export function getCatalogueMovieSections() {
   return apiGet<CatalogueMovieSectionsResponse>('/catalog/movie-sections');
+}
+
+export function getOnboardingTasteOptions(movieGenreId?: number) {
+  const params = movieGenreId === undefined
+    ? ''
+    : `?${new URLSearchParams({ movieGenreId: String(movieGenreId) }).toString()}`;
+
+  return apiGet<OnboardingTasteOptionsResponse>(`/catalog/onboarding-taste-options${params}`);
 }
 
 export function getCatalogueDiscovery(

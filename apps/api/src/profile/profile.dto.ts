@@ -59,7 +59,7 @@ export class CompleteOnboardingDto {
 
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(3)
+  @ArrayMaxSize(10)
   @ValidateNested({ each: true })
   @Type(() => OnboardingTasteItemDto)
   tasteItems?: OnboardingTasteItemDto[];

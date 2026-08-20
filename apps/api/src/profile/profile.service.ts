@@ -771,9 +771,20 @@ export class ProfileService {
               getCompletedImportTitleCount(item.preview) > 0
             );
 
-            if (!importAddedTitles && (tasteItems.length < 1 || tasteItems.length > 3)) {
+            const tasteMovieCount = tasteItems.filter((item) => item.contentType === 'movie').length;
+            const tasteSeriesCount = tasteItems.length - tasteMovieCount;
+
+            if (
+              !importAddedTitles
+              && (
+                tasteItems.length < 1
+                || tasteItems.length > 10
+                || tasteMovieCount > 5
+                || tasteSeriesCount > 5
+              )
+            ) {
               throw new BadRequestException(
-                'Choose 1 to 3 titles you have already watched, or complete an import.',
+                'Choose up to 5 movies and 5 TV shows, or complete an import.',
               );
             }
 

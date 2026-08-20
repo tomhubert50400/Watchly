@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
+  Animated,
+  Easing,
   FocusEvent,
   InputAccessoryView,
   Keyboard,
@@ -11,6 +14,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import {
@@ -19,11 +23,10 @@ import {
   CheckCircle2,
   ChevronDown,
   Database,
-  ShieldCheck,
 } from 'lucide-react-native';
 import {
   CatalogueSearchItem,
-  CatalogueSearchType,
+  getOnboardingTasteOptions,
   searchCatalogue,
 } from '../api/catalogue';
 import {
@@ -33,14 +36,17 @@ import {
 } from '../api/profile';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { BrandWordmark } from '../brand/BrandWordmark';
+import {
+  BottomActionSheet,
+  BottomActionSheetScrollView,
+} from '../components/BottomActionSheet';
 import { Button } from '../components/Button';
-import { Chip } from '../components/Chip';
 import { LoadingState } from '../components/LoadingState';
 import { MediaPoster } from '../components/MediaPoster';
 import { Screen } from '../components/Screen';
 import { TextInput } from '../components/TextInput';
 import { UserAvatar } from '../components/UserAvatar';
-import { colors, radii, shadows, spacing, typography } from '../design/tokens';
+import { colors, radii, shadows, spacing, touchTargets, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { ImportDataScreen } from '../imports/ImportDataScreen';
 import {
@@ -63,16 +69,28 @@ import {
   readOnboardingDraft,
   writeOnboardingDraft,
 } from './onboardingDraft';
+import {
+  canAddOnboardingTasteItem,
+  getOnboardingTasteCount,
+  isOnboardingTasteSelectionValid,
+  ONBOARDING_TASTE_LIMIT_PER_TYPE,
+} from './onboardingTaste';
 
 const steps: readonly OnboardingStep[] = ['profile', 'import', 'taste', 'notifications'];
-const filters: { label: string; type: CatalogueSearchType }[] = [
-  { label: 'All', type: 'all' },
-  { label: 'Films', type: 'movie' },
-  { label: 'Series', type: 'series' },
+const tasteMediaOptions: { label: string; value: 'movie' | 'series' }[] = [
+  { label: 'Movies', value: 'movie' },
+  { label: 'TV Shows', value: 'series' },
 ];
 const ONBOARDING_INPUT_ACCESSORY_ID = 'onboarding-profile-keyboard-accessory';
 const ONBOARDING_KEYBOARD_ACCESSORY_HEIGHT = 38;
 const ONBOARDING_KEYBOARD_FIELD_GAP = 200 / PixelRatio.get();
+const ONBOARDING_STEP_TRANSITION_MS = 280;
+
+type OnboardingStepTransition = {
+  direction: 1 | -1;
+  from: OnboardingStep;
+  to: OnboardingStep;
+};
 
 export function OnboardingScreen() {
   const {
@@ -82,6 +100,7 @@ export function OnboardingScreen() {
     notifyTrackingChanged,
     refreshCurrentUser,
   } = useAuthSession();
+  const { width: windowWidth } = useWindowDimensions();
   const isHandleClaim = Boolean(currentUser?.onboardingCompleted && !currentUser.handle);
   const [avatarUploadsEnabled, setAvatarUploadsEnabled] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(currentUser?.photoUrl ?? null);
@@ -99,10 +118,54 @@ export function OnboardingScreen() {
   const [isProfileEditing, setIsProfileEditing] = useState(false);
   const [notificationOutcome, setNotificationOutcome] = useState<ReleasePushSetupResult | null>(null);
   const [notificationStatus, setNotificationStatus] = useState<'idle' | 'requesting'>('idle');
+  const [reduceMotionEnabled, setReduceMotionEnabled] = useState<boolean | null>(null);
   const [step, setStep] = useState<OnboardingStep>('profile');
+  const [stepTransition, setStepTransition] = useState<OnboardingStepTransition | null>(null);
   const [tasteItems, setTasteItems] = useState<OnboardingTasteItem[]>([]);
   const copyAttempted = useRef(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const stepTransitionProgress = useRef(new Animated.Value(0)).current;
+  const stepTransitioning = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then(
+      (enabled) => {
+        if (active) setReduceMotionEnabled(enabled);
+      },
+      () => {
+        if (active) setReduceMotionEnabled(true);
+      },
+    );
+    const subscription = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      setReduceMotionEnabled,
+    );
+
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!stepTransition) return;
+
+    const animation = Animated.timing(stepTransitionProgress, {
+      duration: ONBOARDING_STEP_TRANSITION_MS,
+      easing: Easing.inOut(Easing.cubic),
+      toValue: 1,
+      useNativeDriver: true,
+    });
+    animation.start(({ finished }) => {
+      if (!finished) return;
+      setStep(stepTransition.to);
+      setStepTransition(null);
+      stepTransitioning.current = false;
+    });
+
+    return () => animation.stop();
+  }, [stepTransition, stepTransitionProgress]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -201,6 +264,23 @@ export function OnboardingScreen() {
   }
 
   const handleError = getProfileHandleError(handle);
+  function moveToStep(nextStep: OnboardingStep) {
+    if (nextStep === step || stepTransitioning.current) return;
+
+    if (reduceMotionEnabled !== false) {
+      setStep(nextStep);
+      return;
+    }
+
+    stepTransitioning.current = true;
+    stepTransitionProgress.setValue(0);
+    setStepTransition({
+      direction: steps.indexOf(nextStep) > steps.indexOf(step) ? 1 : -1,
+      from: step,
+      to: nextStep,
+    });
+  }
+
   const focusProfileField = (event: FocusEvent) => {
     setIsProfileEditing(true);
     scrollViewRef.current?.scrollResponderScrollNativeHandleToKeyboard(
@@ -240,7 +320,7 @@ export function OnboardingScreen() {
         return;
       }
 
-      setStep('import');
+      moveToStep('import');
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Could not check this handle.');
     } finally {
@@ -273,24 +353,24 @@ export function OnboardingScreen() {
 
   function continueImport() {
     setError(null);
-    setStep(importSatisfied ? 'notifications' : 'taste');
+    moveToStep(importSatisfied ? 'notifications' : 'taste');
   }
 
   function continueTaste() {
-    if (tasteItems.length < 1 || tasteItems.length > 3) {
-      setError('Choose 1 to 3 titles you have already watched.');
+    if (!isOnboardingTasteSelectionValid(tasteItems)) {
+      setError('Choose up to 5 movies and 5 TV shows.');
       return;
     }
 
     setError(null);
-    setStep('notifications');
+    moveToStep('notifications');
   }
 
   function goBack() {
     setError(null);
-    if (step === 'import') setStep('profile');
-    if (step === 'taste') setStep('import');
-    if (step === 'notifications') setStep(importSatisfied ? 'import' : 'taste');
+    if (step === 'import') moveToStep('profile');
+    if (step === 'taste') moveToStep('import');
+    if (step === 'notifications') moveToStep(importSatisfied ? 'import' : 'taste');
   }
 
   async function allowNotifications() {
@@ -348,7 +428,7 @@ export function OnboardingScreen() {
 
       if (message.toLowerCase().includes('handle')) {
         setHandleTouched(true);
-        setStep('profile');
+        moveToStep('profile');
       }
 
       setError(message);
@@ -430,123 +510,172 @@ export function OnboardingScreen() {
     );
   }
 
-  const stepIndex = steps.indexOf(step);
+  const transitionSteps: readonly OnboardingStep[] = stepTransition
+    ? stepTransition.direction === 1
+      ? [stepTransition.from, stepTransition.to]
+      : [stepTransition.to, stepTransition.from]
+    : [step];
+  const stepTrackLeft = stepTransition?.direction === -1 ? -windowWidth : 0;
+  const stepTrackTranslateX = stepTransition
+    ? stepTransitionProgress.interpolate({
+        inputRange: [0, 1],
+        outputRange: stepTransition.direction === 1
+          ? [0, -windowWidth]
+          : [0, windowWidth],
+      })
+    : 0;
 
   return (
     <View style={styles.root}>
-      <Screen
-        footer={
-          isProfileEditing ? undefined : (
-            <OnboardingFooter
-              error={error}
-              importSatisfied={importSatisfied}
-              isCheckingHandle={isCheckingHandle}
-              isFinishing={isFinishing}
-              notificationOutcome={notificationOutcome}
-              notificationStatus={notificationStatus}
-              onAllowNotifications={() => void allowNotifications()}
-              onBack={goBack}
-              onContinue={() => {
-                if (step === 'profile') void continueProfile();
-                if (step === 'import') continueImport();
-                if (step === 'taste') continueTaste();
-              }}
-              onFinishWithoutNotifications={() => void finishOnboarding()}
-              step={step}
-            />
-          )
-        }
-        key={step}
-        nativeKeyboardInsetsOnly
-        scrollViewRef={scrollViewRef}
-        title={step === 'profile' ? '' : getStepTitle(step)}
+      <Animated.View
+        style={[
+          styles.stepTrack,
+          {
+            left: stepTrackLeft,
+            transform: [{ translateX: stepTrackTranslateX }],
+            width: windowWidth * transitionSteps.length,
+          },
+        ]}
       >
-        <View style={[styles.content, step === 'profile' ? styles.profileScreenContent : null]}>
-          <View
-            accessibilityLabel={`Step ${stepIndex + 1} of ${steps.length}`}
-            style={styles.progressTrack}
-          >
-            {steps.map((item, index) => (
-              <View
-                key={item}
-                style={[styles.progressSegment, index <= stepIndex ? styles.progressSegmentActive : null]}
-              />
-            ))}
-          </View>
+        {transitionSteps.map((pageStep) => {
+          const pageStepIndex = steps.indexOf(pageStep);
 
-          {step === 'profile' ? (
-            <View style={styles.profileHeading}>
-              <Text style={styles.profileHeadingText}>Personalize your</Text>
-              <BrandWordmark height={32} />
-            </View>
-          ) : null}
+          return (
+            <View
+              accessibilityElementsHidden={Boolean(stepTransition)}
+              importantForAccessibility={stepTransition ? 'no-hide-descendants' : 'auto'}
+              key={pageStep}
+              pointerEvents={stepTransition ? 'none' : 'auto'}
+              style={[styles.stepPage, { width: windowWidth }]}
+            >
+              <Screen
+                footer={
+                  isProfileEditing ? undefined : (
+                    <OnboardingFooter
+                      error={error}
+                      importSatisfied={importSatisfied}
+                      isCheckingHandle={isCheckingHandle}
+                      isFinishing={isFinishing}
+                      notificationOutcome={notificationOutcome}
+                      notificationStatus={notificationStatus}
+                      onAllowNotifications={() => void allowNotifications()}
+                      onBack={goBack}
+                      onContinue={() => {
+                        if (pageStep === 'profile') void continueProfile();
+                        if (pageStep === 'import') continueImport();
+                        if (pageStep === 'taste') continueTaste();
+                      }}
+                      onFinishWithoutNotifications={() => void finishOnboarding()}
+                      step={pageStep}
+                      tasteSelectionCount={tasteItems.length}
+                    />
+                  )
+                }
+                nativeKeyboardInsetsOnly
+                scrollViewRef={scrollViewRef}
+                title={
+                  pageStep === 'profile' || pageStep === 'import' || pageStep === 'taste'
+                    ? ''
+                    : getStepTitle(pageStep)
+                }
+              >
+                <View
+                  style={[
+                    styles.content,
+                    pageStep === 'profile' || pageStep === 'import'
+                      ? styles.profileScreenContent
+                      : null,
+                  ]}
+                >
+                  <View
+                    accessibilityLabel={`Step ${pageStepIndex + 1} of ${steps.length}`}
+                    style={styles.progressTrack}
+                  >
+                    {steps.map((item, index) => (
+                      <View
+                        key={item}
+                        style={[
+                          styles.progressSegment,
+                          index <= pageStepIndex ? styles.progressSegmentActive : null,
+                        ]}
+                      />
+                    ))}
+                  </View>
 
-          {step !== 'profile' ? <StepHero step={step} /> : null}
+                  {pageStep === 'profile' ? (
+                    <View style={styles.profileHeading}>
+                      <Text style={styles.profileHeadingText}>Personalize your</Text>
+                      <BrandWordmark height={32} />
+                    </View>
+                  ) : null}
 
-          {step === 'profile' ? (
-            <ProfileStep
-              avatarStatus={avatarStatus}
-              avatarUploadsEnabled={avatarUploadsEnabled}
-              avatarUrl={avatarUrl}
-              displayName={displayName}
-              handle={handle}
-              handleError={handleTouched ? handleError : null}
-              inputAccessoryViewID={ONBOARDING_INPUT_ACCESSORY_ID}
-              message={avatarMessage}
-              onChangeAvatar={() => void changeAvatar()}
-              onChangeDisplayName={(value) => {
-                setDisplayName(value);
-                setError(null);
-              }}
-              onChangeHandle={(value) => {
-                setHandle(value.toLowerCase().replace(/^@/, ''));
-                setHandleTouched(true);
-                setError(null);
-              }}
-              onFieldBlur={() => setIsProfileEditing(false)}
-              onFieldFocus={focusProfileField}
-            />
-          ) : null}
+                  {pageStep === 'import' ? (
+                    <Text style={styles.importHeading}>Bring in your tastes</Text>
+                  ) : null}
 
-          {step === 'import' ? (
-            <View style={styles.importCard}>
-              <Text style={styles.importLead}>
-                Import as many files as you need. If at least one title is added, Watchly will skip Taste.
-              </Text>
-              {importSatisfied ? (
-                <View style={styles.successPanel}>
-                  <CheckCircle2 color={colors.success} size={20} />
-                  <Text style={styles.successText}>Your profile has enough titles to get started.</Text>
+                  {pageStep !== 'profile' && pageStep !== 'import' && pageStep !== 'taste'
+                    ? <StepHero step={pageStep} />
+                    : null}
+
+                  {pageStep === 'profile' ? (
+                    <ProfileStep
+                      avatarStatus={avatarStatus}
+                      avatarUploadsEnabled={avatarUploadsEnabled}
+                      avatarUrl={avatarUrl}
+                      displayName={displayName}
+                      handle={handle}
+                      handleError={handleTouched ? handleError : null}
+                      inputAccessoryViewID={ONBOARDING_INPUT_ACCESSORY_ID}
+                      message={avatarMessage}
+                      onChangeAvatar={() => void changeAvatar()}
+                      onChangeDisplayName={(value) => {
+                        setDisplayName(value);
+                        setError(null);
+                      }}
+                      onChangeHandle={(value) => {
+                        setHandle(value.toLowerCase().replace(/^@/, ''));
+                        setHandleTouched(true);
+                        setError(null);
+                      }}
+                      onFieldBlur={() => setIsProfileEditing(false)}
+                      onFieldFocus={focusProfileField}
+                    />
+                  ) : null}
+
+                  {pageStep === 'import' ? (
+                    <ImportDataScreen
+                      embedded
+                      onImportCompleted={({ importId, result }) => {
+                        if (result.titlesProcessed < 1) return;
+                        setCompletedImportIds((current) =>
+                          current.includes(importId) ? current : [...current, importId]
+                        );
+                        setImportSatisfied(true);
+                        setError(null);
+                      }}
+                      workingSourcesOnly
+                    />
+                  ) : null}
+
+                  {pageStep === 'taste' ? (
+                    <TasteStep
+                      onChange={(items) => {
+                        setTasteItems(items);
+                        setError(null);
+                      }}
+                      selected={tasteItems}
+                    />
+                  ) : null}
+
+                  {pageStep === 'notifications' ? (
+                    <NotificationsStep outcome={notificationOutcome} />
+                  ) : null}
                 </View>
-              ) : null}
-              <ImportDataScreen
-                embedded
-                onImportCompleted={({ importId, result }) => {
-                  if (result.titlesProcessed < 1) return;
-                  setCompletedImportIds((current) => current.includes(importId) ? current : [...current, importId]);
-                  setImportSatisfied(true);
-                  setError(null);
-                }}
-                workingSourcesOnly
-              />
+              </Screen>
             </View>
-          ) : null}
-
-          {step === 'taste' ? (
-            <TasteStep
-              onChange={(items) => {
-                setTasteItems(items);
-                setError(null);
-              }}
-              selected={tasteItems}
-            />
-          ) : null}
-
-          {step === 'notifications' ? (
-            <NotificationsStep outcome={notificationOutcome} />
-          ) : null}
-        </View>
-      </Screen>
+          );
+        })}
+      </Animated.View>
       <OnboardingKeyboardAccessory onDismiss={() => setIsProfileEditing(false)} />
     </View>
   );
@@ -587,6 +716,7 @@ function OnboardingFooter({
   onContinue,
   onFinishWithoutNotifications,
   step,
+  tasteSelectionCount,
 }: {
   error: string | null;
   importSatisfied: boolean;
@@ -599,6 +729,7 @@ function OnboardingFooter({
   onContinue: () => void;
   onFinishWithoutNotifications: () => void;
   step: OnboardingStep;
+  tasteSelectionCount: number;
 }) {
   const notificationBlocked = notificationOutcome?.status === 'denied'
     || notificationOutcome?.status === 'unavailable';
@@ -639,15 +770,33 @@ function OnboardingFooter({
         </>
       ) : (
         <View style={[styles.actions, step === 'profile' ? styles.profileActions : null]}>
-          {step !== 'profile' ? (
-            <Button label="Back" onPress={onBack} variant="secondary" />
-          ) : null}
-          <Button
-            fullWidth={step === 'profile'}
-            label={step === 'import' && !importSatisfied ? 'Continue to Taste' : 'Continue'}
-            loading={step === 'profile' && isCheckingHandle}
-            onPress={onContinue}
-          />
+          {step === 'import' || step === 'taste' ? (
+            <>
+              <View style={styles.importBackAction}>
+                <Button fullWidth label="Back" onPress={onBack} variant="secondary" />
+              </View>
+              <View style={styles.importPrimaryAction}>
+                <Button
+                  disabled={step === 'taste' && tasteSelectionCount < 1}
+                  fullWidth
+                  label={step === 'import' && !importSatisfied ? 'Skip' : 'Continue'}
+                  onPress={onContinue}
+                />
+              </View>
+            </>
+          ) : (
+            <>
+              {step !== 'profile' ? (
+                <Button label="Back" onPress={onBack} variant="secondary" />
+              ) : null}
+              <Button
+                fullWidth={step === 'profile'}
+                label="Continue"
+                loading={step === 'profile' && isCheckingHandle}
+                onPress={onContinue}
+              />
+            </>
+          )}
         </View>
       )}
     </View>
@@ -760,10 +909,9 @@ function HandleField({
       label="Username"
       maxLength={21}
       onBlur={onBlur}
-      onChangeText={onChange}
+      onChangeText={(value) => onChange(value.replace(/^@/, ''))}
       onFocus={onFocus}
-      placeholder="@watchly"
-      value={handle}
+      value={`@${handle}`}
     />
   );
 }
@@ -775,16 +923,92 @@ function TasteStep({
   onChange: (items: OnboardingTasteItem[]) => void;
   selected: OnboardingTasteItem[];
 }) {
-  const [items, setItems] = useState<CatalogueSearchItem[]>([]);
+  const { width: windowWidth } = useWindowDimensions();
+  const [popularItems, setPopularItems] = useState<{
+    movie: CatalogueSearchItem[];
+    series: CatalogueSearchItem[];
+  }>({ movie: [], series: [] });
+  const [genreMovieItems, setGenreMovieItems] = useState<CatalogueSearchItem[] | null>(null);
+  const [genrePickerOpen, setGenrePickerOpen] = useState(false);
+  const [genreLoading, setGenreLoading] = useState(false);
+  const [movieGenres, setMovieGenres] = useState<{ id: number; name: string }[]>([]);
   const [query, setQuery] = useState('');
+  const [searchItems, setSearchItems] = useState<CatalogueSearchItem[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [selectedType, setSelectedType] = useState<CatalogueSearchType>('all');
+  const [selectionError, setSelectionError] = useState<string | null>(null);
+  const [optionsError, setOptionsError] = useState<string | null>(null);
+  const [optionsLoading, setOptionsLoading] = useState(true);
+  const [selectedMovieGenreId, setSelectedMovieGenreId] = useState<number | null>(null);
+  const [selectedType, setSelectedType] = useState<'movie' | 'series'>('movie');
   const trimmedQuery = query.trim();
+  const activeSelectionCount = getOnboardingTasteCount(selected, selectedType);
+  const selectedMovieGenre = movieGenres?.find((genre) => genre.id === selectedMovieGenreId) ?? null;
+  const tasteCardWidth = Math.floor(
+    (windowWidth - spacing.xl * 2 - spacing.sm * 2) / 3,
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    setOptionsLoading(true);
+    setOptionsError(null);
+    void getOnboardingTasteOptions()
+      .then((response) => {
+        if (!active) return;
+        setMovieGenres(response.movieGenres ?? []);
+        setPopularItems({ movie: response.movies, series: response.series });
+      })
+      .catch((caughtError) => {
+        if (!active) return;
+        setOptionsError(
+          caughtError instanceof Error ? caughtError.message : 'Could not load TMDB titles.',
+        );
+      })
+      .finally(() => {
+        if (active) setOptionsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (selectedMovieGenreId === null) {
+      setGenreMovieItems(null);
+      setGenreLoading(false);
+      return;
+    }
+
+    let active = true;
+    setGenreLoading(true);
+    setOptionsError(null);
+
+    void getOnboardingTasteOptions(selectedMovieGenreId)
+      .then((response) => {
+        if (!active) return;
+        setGenreMovieItems(response.movies);
+      })
+      .catch((caughtError) => {
+        if (!active) return;
+        setOptionsError(
+          caughtError instanceof Error ? caughtError.message : 'Could not load this genre.',
+        );
+        setSelectedMovieGenreId(null);
+      })
+      .finally(() => {
+        if (active) setGenreLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedMovieGenreId]);
 
   useEffect(() => {
     if (trimmedQuery.length < 2) {
-      setItems([]);
+      setSearchItems([]);
       setSearchError(null);
       setSearchLoading(false);
       return;
@@ -797,11 +1021,14 @@ function TasteStep({
 
       void searchCatalogue(trimmedQuery, selectedType)
         .then((response) => {
-          if (active) setItems(response.items);
+          if (!active) return;
+          setSearchItems(response.items.filter((item) =>
+            item.mediaType === selectedType
+            && (!item.releaseDate || item.releaseDate <= new Date().toISOString().slice(0, 10))
+          ));
         })
         .catch((caughtError) => {
           if (!active) return;
-          setItems([]);
           setSearchError(caughtError instanceof Error ? caughtError.message : 'Catalogue search failed.');
         })
         .finally(() => {
@@ -815,6 +1042,26 @@ function TasteStep({
     };
   }, [selectedType, trimmedQuery]);
 
+  const activePopularItems = selectedType === 'movie' && genreMovieItems
+    ? genreMovieItems
+    : popularItems[selectedType];
+  const visibleItems = trimmedQuery.length >= 2
+    ? searchItems
+    : trimmedQuery.length === 1
+      ? activePopularItems.filter((item) =>
+          item.title.toLowerCase().includes(trimmedQuery.toLowerCase())
+        )
+      : activePopularItems;
+
+  function chooseMovieGenre(genreId: number | null) {
+    setGenrePickerOpen(false);
+    setQuery('');
+    setSearchItems([]);
+    setSearchError(null);
+    setSelectionError(null);
+    setSelectedMovieGenreId(genreId);
+  }
+
   function toggle(item: CatalogueSearchItem) {
     const existing = selected.some((selectedItem) =>
       selectedItem.contentType === item.mediaType && selectedItem.tmdbId === item.tmdbId
@@ -824,14 +1071,20 @@ function TasteStep({
       onChange(selected.filter((selectedItem) =>
         selectedItem.contentType !== item.mediaType || selectedItem.tmdbId !== item.tmdbId
       ));
+      setSelectionError(null);
       return;
     }
 
-    if (selected.length >= 3) {
-      setSearchError('You can choose up to 3 titles. Remove one to add another.');
+    if (!canAddOnboardingTasteItem(selected, item.mediaType)) {
+      setSelectionError(
+        `You can choose up to ${ONBOARDING_TASTE_LIMIT_PER_TYPE} ${
+          item.mediaType === 'movie' ? 'movies' : 'TV shows'
+        }.`,
+      );
       return;
     }
 
+    setSelectionError(null);
     onChange([...selected, {
       contentType: item.mediaType,
       posterUrl: item.posterUrl,
@@ -841,11 +1094,11 @@ function TasteStep({
   }
 
   return (
-    <View style={styles.card}>
-      <View style={styles.tasteNotice}>
-        <ShieldCheck color={colors.accentText} size={20} />
-        <Text style={styles.tasteNoticeText}>
-          Choose 1 to 3 titles you have already seen. They will be added as Watched, without an invented viewing date.
+    <View style={styles.tasteContent}>
+      <View style={styles.tasteHeadingRow}>
+        <Text style={styles.tasteHeading}>Show us your taste</Text>
+        <Text style={styles.tasteCounter}>
+          {activeSelectionCount}/{ONBOARDING_TASTE_LIMIT_PER_TYPE}
         </Text>
       </View>
 
@@ -853,21 +1106,32 @@ function TasteStep({
         autoCapitalize="none"
         autoCorrect={false}
         label="Search"
-        onChangeText={setQuery}
-        placeholder="Search a film or series"
+        onChangeText={(value) => {
+          if (value.trim()) {
+            setSelectedMovieGenreId(null);
+          }
+          setQuery(value);
+        }}
+        placeholder={selectedType === 'movie' ? 'Search movies' : 'Search TV shows'}
         returnKeyType="search"
         value={query}
       />
 
       <View style={styles.filters}>
-        {filters.map((filter) => {
-          const active = selectedType === filter.type;
+        {tasteMediaOptions.map((option) => {
+          const active = selectedType === option.value;
           return (
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
-              key={filter.type}
-              onPress={() => setSelectedType(filter.type)}
+              key={option.value}
+              onPress={() => {
+                setSelectedType(option.value);
+                setQuery('');
+                setSearchItems([]);
+                setSearchError(null);
+                setSelectionError(null);
+              }}
               style={({ pressed }) => [
                 styles.filter,
                 active ? styles.filterSelected : null,
@@ -875,58 +1139,94 @@ function TasteStep({
               ]}
             >
               <Text style={[styles.filterLabel, active ? styles.filterLabelSelected : null]}>
-                {filter.label}
+                {option.label}
               </Text>
             </Pressable>
           );
         })}
       </View>
 
-      <Chip label={`${selected.length} of 3 selected`} tone={selected.length > 0 ? 'success' : 'accent'} />
-
-      {selected.length > 0 ? (
-        <View style={styles.selectedStrip}>
-          {selected.map((item) => (
-            <Pressable
-              accessibilityLabel={`Remove ${item.title}`}
-              accessibilityRole="button"
-              key={`${item.contentType}:${item.tmdbId}`}
-              onPress={() => onChange(selected.filter((selectedItem) =>
-                selectedItem.contentType !== item.contentType || selectedItem.tmdbId !== item.tmdbId
-              ))}
-              style={({ pressed }) => [styles.selectedPoster, pressed ? styles.pressed : null]}
-            >
-              <MediaPoster posterUrl={item.posterUrl} style={styles.selectedPosterImage} />
-              <View style={styles.selectedCheck}>
-                <CheckCircle2 color={colors.success} size={18} />
-              </View>
-            </Pressable>
-          ))}
-        </View>
+      {selectedType === 'movie' ? (
+        <Pressable
+          accessibilityLabel="Choose movie genre"
+          accessibilityRole="button"
+          accessibilityState={{ expanded: genrePickerOpen }}
+          onPress={() => setGenrePickerOpen(true)}
+          style={({ pressed }) => [styles.genreTrigger, pressed ? styles.pressed : null]}
+        >
+          <Text numberOfLines={1} style={styles.genreTriggerText}>
+            {selectedMovieGenre?.name ?? 'All genres'}
+          </Text>
+          <View style={styles.genreTriggerRight}>
+            {genreLoading ? <ActivityIndicator color={colors.accentText} size="small" /> : null}
+            <ChevronDown color={colors.textMuted} size={20} strokeWidth={2.25} />
+          </View>
+        </Pressable>
       ) : null}
 
-      {searchLoading && items.length === 0 ? <LoadingState label="Searching TMDB" /> : null}
+      {optionsLoading && popularItems[selectedType].length === 0 && trimmedQuery.length < 2
+        ? <LoadingState label="Loading popular titles" />
+        : null}
+      {searchLoading && searchItems.length === 0 ? <LoadingState label="Searching TMDB" /> : null}
+      {optionsError ? <Text style={styles.errorText}>{optionsError}</Text> : null}
       {searchError ? <Text style={styles.errorText}>{searchError}</Text> : null}
+      {selectionError ? <Text style={styles.errorText}>{selectionError}</Text> : null}
 
-      {items.map((item) => (
-        <TasteResult
-          item={item}
-          key={item.id}
-          onPress={() => toggle(item)}
-          selected={selected.some((selectedItem) =>
-            selectedItem.contentType === item.mediaType && selectedItem.tmdbId === item.tmdbId
-          )}
-        />
-      ))}
+      <View style={styles.tasteGrid}>
+        {visibleItems.map((item) => (
+          <TasteCard
+            cardWidth={tasteCardWidth}
+            item={item}
+            key={item.id}
+            onPress={() => toggle(item)}
+            selected={selected.some((selectedItem) =>
+              selectedItem.contentType === item.mediaType && selectedItem.tmdbId === item.tmdbId
+            )}
+          />
+        ))}
+      </View>
+
+      <BottomActionSheet
+        onClose={() => setGenrePickerOpen(false)}
+        title="Movie genre"
+        visible={genrePickerOpen}
+      >
+        <BottomActionSheetScrollView contentContainerStyle={styles.genreOptions}>
+          {[{ id: null, name: 'All genres' }, ...movieGenres].map((genre) => {
+            const active = selectedMovieGenreId === genre.id;
+            return (
+              <Pressable
+                accessibilityLabel={`Select ${genre.name}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                key={genre.id ?? 'all'}
+                onPress={() => chooseMovieGenre(genre.id)}
+                style={({ pressed }) => [
+                  styles.genreOption,
+                  active ? styles.genreOptionSelected : null,
+                  pressed ? styles.pressed : null,
+                ]}
+              >
+                <Text style={[styles.genreOptionText, active ? styles.genreOptionTextSelected : null]}>
+                  {genre.name}
+                </Text>
+                {active ? <CheckCircle2 color={colors.success} size={20} strokeWidth={2.5} /> : null}
+              </Pressable>
+            );
+          })}
+        </BottomActionSheetScrollView>
+      </BottomActionSheet>
     </View>
   );
 }
 
-function TasteResult({
+function TasteCard({
+  cardWidth,
   item,
   onPress,
   selected,
 }: {
+  cardWidth: number;
   item: CatalogueSearchItem;
   onPress: () => void;
   selected: boolean;
@@ -938,20 +1238,21 @@ function TasteResult({
       accessibilityState={{ selected }}
       onPress={onPress}
       style={({ pressed }) => [
-        styles.resultCard,
-        selected ? styles.resultCardSelected : null,
+        styles.tasteCard,
+        { width: cardWidth },
         pressed ? styles.pressed : null,
       ]}
     >
-      <MediaPoster posterUrl={item.posterUrl} style={styles.poster} />
-      <View style={styles.resultCopy}>
-        <Text numberOfLines={2} style={styles.resultTitle}>{item.title}</Text>
-        <Text style={styles.resultMeta}>
-          {item.mediaType === 'movie' ? 'Film' : 'Series'}
-          {item.releaseDate ? ` / ${item.releaseDate.slice(0, 4)}` : ''}
-        </Text>
+      <View style={[styles.tastePosterFrame, { height: Math.round(cardWidth * 1.5) }]}>
+        <MediaPoster posterUrl={item.posterUrl} style={styles.tastePoster} />
+        {selected ? <View pointerEvents="none" style={styles.tasteSelectedOverlay} /> : null}
+        {selected ? (
+          <View pointerEvents="none" style={styles.tasteSelectedCheck}>
+            <CheckCircle2 color={colors.success} size={19} strokeWidth={2.5} />
+          </View>
+        ) : null}
       </View>
-      {selected ? <CheckCircle2 color={colors.success} size={22} /> : null}
+      <Text numberOfLines={2} style={styles.tasteCardTitle}>{item.title}</Text>
     </Pressable>
   );
 }
@@ -1033,7 +1334,7 @@ function normalizeDraftStep(draft: OnboardingDraft | null): OnboardingStep {
 
 function getStepTitle(step: OnboardingStep) {
   if (step === 'profile') return 'Make it yours';
-  if (step === 'import') return 'Bring your history';
+  if (step === 'import') return 'Bring in your tastes';
   if (step === 'taste') return 'Start your Taste';
   return 'Stay in the loop';
 }
@@ -1137,6 +1438,57 @@ const styles = StyleSheet.create({
   footer: {
     gap: spacing.sm,
   },
+  genreTrigger: {
+    alignItems: 'center',
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minHeight: touchTargets.min,
+    paddingHorizontal: spacing.md,
+  },
+  genreTriggerRight: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  genreTriggerText: {
+    color: colors.text,
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  genreOption: {
+    alignItems: 'center',
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    minHeight: touchTargets.min,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  genreOptionSelected: {
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
+  },
+  genreOptionText: {
+    color: colors.textMuted,
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  genreOptionTextSelected: {
+    color: colors.accentText,
+  },
+  genreOptions: {
+    gap: spacing.sm,
+    paddingBottom: spacing.xl,
+  },
   heroBody: {
     ...typography.body,
     color: colors.textMuted,
@@ -1169,13 +1521,15 @@ const styles = StyleSheet.create({
     ...typography.title,
     color: colors.text,
   },
-  importCard: {
-    gap: spacing.md,
+  importHeading: {
+    ...typography.title,
+    color: colors.accentText,
   },
-  importLead: {
-    ...typography.body,
-    color: colors.textMuted,
-    paddingHorizontal: spacing.xs,
+  importBackAction: {
+    flex: 1,
+  },
+  importPrimaryAction: {
+    flex: 2,
   },
   keyboardAccessory: {
     alignItems: 'flex-end',
@@ -1234,10 +1588,6 @@ const styles = StyleSheet.create({
   profileScreenContent: {
     paddingTop: spacing.xl,
   },
-  poster: {
-    height: 84,
-    width: 56,
-  },
   pressed: {
     opacity: 0.76,
   },
@@ -1251,99 +1601,87 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
   },
   root: {
+    backgroundColor: colors.background,
     flex: 1,
+    overflow: 'hidden',
+  },
+  stepPage: {
+    flexShrink: 0,
+    height: '100%',
+  },
+  stepTrack: {
+    flex: 1,
+    flexDirection: 'row',
   },
   progressTrack: {
     flexDirection: 'row',
     gap: spacing.xs,
   },
-  resultCard: {
-    alignItems: 'center',
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.md,
-  },
-  resultCardSelected: {
-    backgroundColor: colors.successBackground,
-    borderColor: colors.successBorder,
-  },
-  resultCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  resultMeta: {
-    color: colors.accentText,
-    fontSize: 12,
-    fontWeight: '800',
-    marginTop: spacing.xs,
-    textTransform: 'uppercase',
-  },
-  resultTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '800',
-    lineHeight: 21,
-  },
   sectionTitle: {
     ...typography.title,
     color: colors.text,
-  },
-  selectedCheck: {
-    backgroundColor: colors.panel,
-    borderRadius: 10,
-    position: 'absolute',
-    right: 4,
-    top: 4,
-  },
-  selectedPoster: {
-    borderRadius: radii.sm,
-  },
-  selectedPosterImage: {
-    height: 96,
-    width: 64,
-  },
-  selectedStrip: {
-    flexDirection: 'row',
-    gap: spacing.sm,
   },
   settingsHint: {
     ...typography.meta,
     color: colors.textSubtle,
   },
-  successPanel: {
-    alignItems: 'center',
-    backgroundColor: colors.successBackground,
-    borderColor: colors.successBorder,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    padding: spacing.md,
+  tasteCard: {
+    gap: spacing.xs,
   },
-  successText: {
-    ...typography.body,
-    color: colors.success,
-    flex: 1,
-    fontWeight: '700',
-  },
-  tasteNotice: {
-    alignItems: 'flex-start',
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accentBorder,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    padding: spacing.md,
-  },
-  tasteNoticeText: {
-    ...typography.body,
+  tasteCardTitle: {
     color: colors.text,
-    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 16,
+  },
+  tasteContent: {
+    gap: spacing.lg,
+  },
+  tasteCounter: {
+    color: colors.textMuted,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  tasteGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  tasteHeading: {
+    ...typography.title,
+    color: colors.accentText,
+  },
+  tasteHeadingRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  tastePoster: {
+    height: '100%',
+    width: '100%',
+  },
+  tastePosterFrame: {
+    borderRadius: radii.md,
+    overflow: 'hidden',
+    position: 'relative',
+    width: '100%',
+  },
+  tasteSelectedCheck: {
+    alignItems: 'center',
+    backgroundColor: colors.panel,
+    borderColor: colors.successBorder,
+    borderRadius: 14,
+    borderWidth: 1,
+    height: 28,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: spacing.xs,
+    top: spacing.xs,
+    width: 28,
+  },
+  tasteSelectedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(2, 4, 8, 0.64)',
   },
   warningPanel: {
     backgroundColor: colors.dangerBackground,

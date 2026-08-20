@@ -195,8 +195,13 @@ assert.match(
 const onboardingSource = source('../onboarding/OnboardingScreen.tsx');
 assert.match(
   onboardingSource,
-  /searchLoading && items\.length === 0/,
+  /searchLoading && searchItems\.length === 0/,
   'onboarding search must keep existing results visible while the next query loads',
+);
+assert.doesNotMatch(
+  onboardingSource,
+  /setSearchLoading\(true\);\s*setSearchError\(null\);\s*setSearchItems\(\[\]\);/,
+  'onboarding search must not clear visible results before the next query completes',
 );
 
 const streamingSource = source('../catalogue/StreamingAvailabilityPanel.tsx');
