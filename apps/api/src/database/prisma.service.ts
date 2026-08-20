@@ -85,6 +85,10 @@ export class PrismaService implements OnModuleDestroy {
     return this.client.notificationPreference;
   }
 
+  get oAuthAttempt() {
+    return this.client.oAuthAttempt;
+  }
+
   get pushDelivery() {
     return this.client.pushDelivery;
   }

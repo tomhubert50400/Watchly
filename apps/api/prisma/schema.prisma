@@ -192,6 +192,27 @@ model User {
   @@map("users")
 }
 
+model OAuthAttempt {
+  id                     String       @id @default(uuid()) @db.Uuid
+  provider               AuthProvider
+  stateHash              String       @unique @db.VarChar(64)
+  completionHash         String?      @unique @db.VarChar(64)
+  appRedirectUri         String       @db.VarChar(512)
+  initiatedByFirebaseUid String?      @db.VarChar(128)
+  providerUserId         String?
+  email                  String?      @db.VarChar(320)
+  emailVerified          Boolean?
+  displayName            String?
+  photoUrl               String?
+  expiresAt              DateTime
+  completedAt            DateTime?
+  consumedAt             DateTime?
+  createdAt              DateTime     @default(now())
+
+  @@index([expiresAt])
+  @@map("oauth_attempts")
+}
+
 model AuthIdentity {
   id              String       @id @default(uuid()) @db.Uuid
   userId          String       @db.Uuid

@@ -172,6 +172,40 @@ async function main() {
     assert.equal(identity.providerUserId, `${expectedProvider.toLowerCase()}-subject`);
   }
 
+  const discordIdentity = await verifyBearerTokenWithAuth({
+    verifyIdToken: async () => ({
+      aud: 'security-qa', auth_time: 0, exp: 1,
+      firebase: { identities: {}, sign_in_provider: 'custom' },
+      iat: 0, iss: 'https://securetoken.google.com/security-qa', sub: 'watchly-discord-user',
+      uid: 'watchly-discord-user',
+      watchlyDisplayName: 'Discord User',
+      watchlyEmail: 'discord@example.com',
+      watchlyEmailVerified: true,
+      watchlyPhotoUrl: 'https://cdn.discordapp.com/avatar.png',
+      watchlyProvider: 'DISCORD',
+      watchlyProviderUserId: 'discord-subject',
+    }),
+  }, 'discord-custom-token');
+  assert.equal(discordIdentity.provider, 'DISCORD');
+  assert.equal(discordIdentity.providerUserId, 'discord-subject');
+  assert.equal(discordIdentity.firebaseUid, 'watchly-discord-user');
+  assert.equal(discordIdentity.emailVerified, true);
+  assert.deepEqual(discordIdentity.linkedProviders, [
+    { provider: 'DISCORD', providerUserId: 'discord-subject' },
+  ]);
+
+  await assert.rejects(
+    () => verifyBearerTokenWithAuth({
+      verifyIdToken: async () => ({
+        aud: 'security-qa', auth_time: 0, exp: 1,
+        firebase: { identities: {}, sign_in_provider: 'custom' },
+        iat: 0, iss: 'https://securetoken.google.com/security-qa', sub: 'unknown-custom',
+        uid: 'unknown-custom', watchlyProvider: 'UNKNOWN',
+      }),
+    }, 'unknown-custom-token'),
+    UnauthorizedException,
+  );
+
   console.log('Auth token verifier QA passed.');
 }
 

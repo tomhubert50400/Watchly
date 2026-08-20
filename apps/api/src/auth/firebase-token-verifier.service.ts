@@ -58,27 +58,32 @@ export async function verifyBearerTokenWithAuth(
     throw new UnauthorizedException('Invalid auth token.');
   }
 
-  const provider = mapFirebaseProvider(
-    decodedToken.firebase.sign_in_provider,
-    options.allowPasswordProvider === true,
-  );
+  const allowPasswordProvider = options.allowPasswordProvider === true;
+  const provider = resolveFirebaseProvider(decodedToken, allowPasswordProvider);
 
   if (!provider) {
     throw new UnauthorizedException('Auth provider is not allowed.');
   }
 
+  const providerUserId = getProviderUserId(decodedToken, provider);
+  const customProvider = decodedToken.firebase.sign_in_provider === 'custom';
+
   return {
-    displayName: typeof decodedToken.name === 'string' ? decodedToken.name : null,
-    email: typeof decodedToken.email === 'string' ? decodedToken.email : null,
-    emailVerified: decodedToken.email_verified === true,
+    displayName: getStringClaim(decodedToken, customProvider ? 'watchlyDisplayName' : 'name'),
+    email: getStringClaim(decodedToken, customProvider ? 'watchlyEmail' : 'email'),
+    emailVerified: customProvider
+      ? decodedToken.watchlyEmailVerified === true
+      : decodedToken.email_verified === true,
     firebaseUid: decodedToken.uid,
     linkedProviders: getLinkedProviderIdentities(
       decodedToken,
-      options.allowPasswordProvider === true,
+      allowPasswordProvider,
+      provider,
+      providerUserId,
     ),
-    photoUrl: typeof decodedToken.picture === 'string' ? decodedToken.picture : null,
+    photoUrl: getStringClaim(decodedToken, customProvider ? 'watchlyPhotoUrl' : 'picture'),
     provider,
-    providerUserId: getProviderUserId(decodedToken),
+    providerUserId,
   };
 }
 
@@ -154,7 +159,16 @@ function mapFirebaseProvider(
   }
 }
 
-function getProviderUserId(decodedToken: DecodedIdToken) {
+function getProviderUserId(decodedToken: DecodedIdToken, provider?: AuthProvider) {
+  if (
+    decodedToken.firebase.sign_in_provider === 'custom'
+    && provider
+    && typeof decodedToken.watchlyProviderUserId === 'string'
+    && decodedToken.watchlyProviderUserId.length > 0
+  ) {
+    return decodedToken.watchlyProviderUserId;
+  }
+
   const signInProvider = decodedToken.firebase.sign_in_provider;
   const providerIdentities = decodedToken.firebase.identities?.[signInProvider];
   const providerUserId = Array.isArray(providerIdentities) ? providerIdentities[0] : undefined;
@@ -167,6 +181,8 @@ function getProviderUserId(decodedToken: DecodedIdToken) {
 function getLinkedProviderIdentities(
   decodedToken: DecodedIdToken,
   allowPasswordProvider: boolean,
+  activeProvider: AuthProvider,
+  activeProviderUserId: string,
 ) {
   const identities = new Map<AuthProvider, string>();
 
@@ -181,13 +197,32 @@ function getLinkedProviderIdentities(
     }
   }
 
-  const activeProvider = mapFirebaseProvider(
+  identities.set(activeProvider, activeProviderUserId);
+
+  return [...identities].map(([provider, providerUserId]) => ({ provider, providerUserId }));
+}
+
+function resolveFirebaseProvider(
+  decodedToken: DecodedIdToken,
+  allowPasswordProvider: boolean,
+) {
+  const firebaseProvider = mapFirebaseProvider(
     decodedToken.firebase.sign_in_provider,
     allowPasswordProvider,
   );
-  if (activeProvider && !identities.has(activeProvider)) {
-    identities.set(activeProvider, getProviderUserId(decodedToken));
-  }
 
-  return [...identities].map(([provider, providerUserId]) => ({ provider, providerUserId }));
+  if (firebaseProvider) return firebaseProvider;
+  if (decodedToken.firebase.sign_in_provider !== 'custom') return null;
+
+  return decodedToken.watchlyProvider === AuthProvider.DISCORD
+    ? AuthProvider.DISCORD
+    : decodedToken.watchlyProvider === AuthProvider.FACEBOOK
+      ? AuthProvider.FACEBOOK
+      : null;
+}
+
+function getStringClaim(decodedToken: DecodedIdToken, key: string) {
+  const value = decodedToken[key];
+
+  return typeof value === 'string' ? value : null;
 }
