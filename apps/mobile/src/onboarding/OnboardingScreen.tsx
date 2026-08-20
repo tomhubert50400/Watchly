@@ -5,6 +5,8 @@ import {
   Animated,
   Easing,
   FocusEvent,
+  Image,
+  type ImageSourcePropType,
   InputAccessoryView,
   Keyboard,
   Linking,
@@ -22,7 +24,7 @@ import {
   Camera,
   CheckCircle2,
   ChevronDown,
-  Database,
+  ChevronRight,
 } from 'lucide-react-native';
 import {
   CatalogueSearchItem,
@@ -80,6 +82,31 @@ const steps: readonly OnboardingStep[] = ['profile', 'import', 'taste', 'notific
 const tasteMediaOptions: { label: string; value: 'movie' | 'series' }[] = [
   { label: 'Movies', value: 'movie' },
   { label: 'TV Shows', value: 'series' },
+];
+const notificationPreviews: {
+  fallbackSource: ImageSourcePropType;
+  fallbackText: string;
+  label: string;
+  titlePrefix: string;
+}[] = [
+  {
+    fallbackSource: require('../../assets/icon.png'),
+    fallbackText: 'A title you follow is available today.',
+    label: 'NEW RELEASE',
+    titlePrefix: 'Now available:',
+  },
+  {
+    fallbackSource: require('../../assets/watchly-w-ui.png'),
+    fallbackText: 'Someone liked your latest review.',
+    label: 'SOCIAL',
+    titlePrefix: 'New activity around',
+  },
+  {
+    fallbackSource: require('../../assets/watchly-popcorn-ui.png'),
+    fallbackText: 'Your shared watchlist has a new pick.',
+    label: 'WATCHLY',
+    titlePrefix: 'A new update for',
+  },
 ];
 const ONBOARDING_INPUT_ACCESSORY_ID = 'onboarding-profile-keyboard-accessory';
 const ONBOARDING_KEYBOARD_ACCESSORY_HEIGHT = 38;
@@ -558,7 +585,6 @@ export function OnboardingScreen() {
                       isFinishing={isFinishing}
                       notificationOutcome={notificationOutcome}
                       notificationStatus={notificationStatus}
-                      onAllowNotifications={() => void allowNotifications()}
                       onBack={goBack}
                       onContinue={() => {
                         if (pageStep === 'profile') void continueProfile();
@@ -573,11 +599,7 @@ export function OnboardingScreen() {
                 }
                 nativeKeyboardInsetsOnly
                 scrollViewRef={scrollViewRef}
-                title={
-                  pageStep === 'profile' || pageStep === 'import' || pageStep === 'taste'
-                    ? ''
-                    : getStepTitle(pageStep)
-                }
+                title=""
               >
                 <View
                   style={[
@@ -585,6 +607,7 @@ export function OnboardingScreen() {
                     pageStep === 'profile' || pageStep === 'import'
                       ? styles.profileScreenContent
                       : null,
+                    pageStep === 'notifications' ? styles.notificationsScreenContent : null,
                   ]}
                 >
                   <View
@@ -612,10 +635,6 @@ export function OnboardingScreen() {
                   {pageStep === 'import' ? (
                     <Text style={styles.importHeading}>Bring in your tastes</Text>
                   ) : null}
-
-                  {pageStep !== 'profile' && pageStep !== 'import' && pageStep !== 'taste'
-                    ? <StepHero step={pageStep} />
-                    : null}
 
                   {pageStep === 'profile' ? (
                     <ProfileStep
@@ -668,7 +687,12 @@ export function OnboardingScreen() {
                   ) : null}
 
                   {pageStep === 'notifications' ? (
-                    <NotificationsStep outcome={notificationOutcome} />
+                    <NotificationsStep
+                      loading={notificationStatus === 'requesting' || isFinishing}
+                      onEnable={() => void allowNotifications()}
+                      outcome={notificationOutcome}
+                      tasteItems={tasteItems}
+                    />
                   ) : null}
                 </View>
               </Screen>
@@ -711,7 +735,6 @@ function OnboardingFooter({
   isFinishing,
   notificationOutcome,
   notificationStatus,
-  onAllowNotifications,
   onBack,
   onContinue,
   onFinishWithoutNotifications,
@@ -724,7 +747,6 @@ function OnboardingFooter({
   isFinishing: boolean;
   notificationOutcome: ReleasePushSetupResult | null;
   notificationStatus: 'idle' | 'requesting';
-  onAllowNotifications: () => void;
   onBack: () => void;
   onContinue: () => void;
   onFinishWithoutNotifications: () => void;
@@ -739,34 +761,27 @@ function OnboardingFooter({
       {error ? <Text accessibilityLiveRegion="polite" style={styles.errorText}>{error}</Text> : null}
       {step === 'notifications' ? (
         <>
-          {notificationBlocked ? (
-            <View style={styles.actions}>
-              <Button disabled={isFinishing} label="Back" onPress={onBack} variant="secondary" />
-              <Button
-                label="Continue without notifications"
-                loading={isFinishing}
-                onPress={onFinishWithoutNotifications}
-              />
-            </View>
-          ) : (
-            <>
-              <View style={styles.actions}>
-                <Button disabled={isFinishing} label="Back" onPress={onBack} variant="secondary" />
-                <Button
-                  label="Allow notifications"
-                  loading={notificationStatus === 'requesting' || isFinishing}
-                  onPress={onAllowNotifications}
-                />
-              </View>
+          <View style={styles.actions}>
+            <View style={styles.notificationsBackAction}>
               <Button
                 disabled={notificationStatus === 'requesting' || isFinishing}
                 fullWidth
-                label="Not now"
-                onPress={onFinishWithoutNotifications}
-                variant="ghost"
+                label="Back"
+                onPress={onBack}
+                variant="secondary"
               />
-            </>
-          )}
+            </View>
+            <View style={styles.notificationsSkipAction}>
+              <Button
+                disabled={notificationStatus === 'requesting' || isFinishing}
+                fullWidth
+                label={notificationBlocked ? 'Continue without' : 'Not now'}
+                loading={isFinishing}
+                onPress={onFinishWithoutNotifications}
+                variant="secondary"
+              />
+            </View>
+          </View>
         </>
       ) : (
         <View style={[styles.actions, step === 'profile' ? styles.profileActions : null]}>
@@ -1257,70 +1272,130 @@ function TasteCard({
   );
 }
 
-function NotificationsStep({ outcome }: { outcome: ReleasePushSetupResult | null }) {
+function NotificationsStep({
+  loading,
+  onEnable,
+  outcome,
+  tasteItems,
+}: {
+  loading: boolean;
+  onEnable: () => void;
+  outcome: ReleasePushSetupResult | null;
+  tasteItems: OnboardingTasteItem[];
+}) {
   const blocked = outcome?.status === 'denied' || outcome?.status === 'unavailable';
 
   return (
-    <View style={styles.card}>
-      <View style={styles.permissionIcon}>
-        <BellRing color={colors.accentText} size={30} />
-      </View>
-      <Text style={styles.sectionTitle}>One permission, all useful updates</Text>
-      <Text style={styles.bodyText}>
-        Allow Watchly notifications to receive release, social, and system updates, including future functional notification types. Promotional messages stay separate.
+    <View style={styles.notificationsContent}>
+      <Text style={styles.notificationsHeading}>Stay in the loop</Text>
+      <Text style={styles.notificationsIntro}>
+        Get releases, social activity, and every current and future Watchly update with one permission.
       </Text>
-      <View style={styles.factList}>
-        <PermissionFact label="Release alerts for titles you follow" />
-        <PermissionFact label="Social and shared-list activity" />
-        <PermissionFact label="Important Watchly system updates" />
+
+      <View style={styles.notificationPreviewList}>
+        {notificationPreviews.map((preview, index) => (
+          <NotificationPreview
+            fallbackSource={preview.fallbackSource}
+            fallbackText={preview.fallbackText}
+            item={tasteItems[index]}
+            key={preview.label}
+            label={preview.label}
+            titlePrefix={preview.titlePrefix}
+          />
+        ))}
       </View>
-      <Text style={styles.settingsHint}>
-        If you choose Not now, you can enable them later in Profile, Settings, Notifications.
-      </Text>
 
       {blocked ? (
         <View style={styles.warningPanel}>
-          <Text style={styles.warningText}>{outcome.message}</Text>
+          {outcome.status === 'denied' ? (
+            <Text accessibilityLiveRegion="polite" style={styles.warningText}>
+              You can enable notifications in iPhone Settings &gt; Notifications &gt; Watchly.
+            </Text>
+          ) : (
+            <Text accessibilityLiveRegion="polite" style={styles.warningText}>{outcome.message}</Text>
+          )}
           {outcome.status === 'denied' ? (
             <Button
               fullWidth
-              label="Open device settings"
+              label="Open Settings"
               onPress={() => void Linking.openSettings()}
               variant="secondary"
             />
           ) : null}
         </View>
       ) : null}
+
+      <Pressable
+        accessibilityLabel="Enable notifications"
+        accessibilityRole="button"
+        accessibilityState={{ busy: loading, disabled: loading }}
+        disabled={loading}
+        onPress={onEnable}
+        style={({ pressed }) => [
+          styles.notificationEnableAction,
+          loading ? styles.notificationEnableActionDisabled : null,
+          pressed && !loading ? styles.pressed : null,
+        ]}
+      >
+        <View style={styles.notificationEnableIcon}>
+          {loading
+            ? <ActivityIndicator color={colors.textOnAccent} />
+            : <BellRing color={colors.textOnAccent} size={26} strokeWidth={2.2} />}
+        </View>
+        <View style={styles.notificationEnableCopy}>
+          <Text style={styles.notificationEnableLabel}>
+            {loading ? 'Enabling notifications' : 'Enable notifications'}
+          </Text>
+          <Text style={styles.notificationEnableHint}>
+            {loading ? 'Waiting for iPhone permission' : 'Tap to turn on Watchly alerts'}
+          </Text>
+        </View>
+        <ChevronRight color={colors.textOnAccent} size={22} strokeWidth={2.4} />
+      </Pressable>
     </View>
   );
 }
 
-function PermissionFact({ label }: { label: string }) {
+function NotificationPreview({
+  fallbackSource,
+  fallbackText,
+  item,
+  label,
+  titlePrefix,
+}: {
+  fallbackSource: ImageSourcePropType;
+  fallbackText: string;
+  item: OnboardingTasteItem | undefined;
+  label: string;
+  titlePrefix: string;
+}) {
   return (
-    <View style={styles.factRow}>
-      <CheckCircle2 color={colors.success} size={19} />
-      <Text style={styles.factText}>{label}</Text>
-    </View>
-  );
-}
-
-function StepHero({ step }: { step: OnboardingStep }) {
-  const Icon = step === 'profile'
-    ? Camera
-    : step === 'import'
-      ? Database
-      : step === 'taste'
-        ? CheckCircle2
-        : BellRing;
-
-  return (
-    <View style={styles.heroCard}>
-      <View style={styles.heroIcon}>
-        <Icon color={colors.accentText} size={27} />
-      </View>
-      <View style={styles.heroCopy}>
-        <Text style={styles.heroTitle}>{getStepTitle(step)}</Text>
-        <Text style={styles.heroBody}>{getStepSubtitle(step)}</Text>
+    <View style={styles.notificationPreview}>
+      {item?.posterUrl ? (
+        <MediaPoster
+          accessibilityLabel={`Artwork for ${item.title}`}
+          posterUrl={item.posterUrl}
+          style={styles.notificationPreviewImage}
+        />
+      ) : (
+        <View style={styles.notificationPreviewImageFallback}>
+          <Image
+            accessibilityIgnoresInvertColors
+            accessibilityLabel={`${label} notification artwork`}
+            resizeMode="contain"
+            source={fallbackSource}
+            style={styles.notificationPreviewImageLocal}
+          />
+        </View>
+      )}
+      <View style={styles.notificationPreviewCopy}>
+        <View style={styles.notificationPreviewMeta}>
+          <Text style={styles.notificationPreviewLabel}>{label}</Text>
+          <Text style={styles.notificationPreviewTime}>now</Text>
+        </View>
+        <Text numberOfLines={2} style={styles.notificationPreviewText}>
+          {item ? `${titlePrefix} ${item.title}` : fallbackText}
+        </Text>
       </View>
     </View>
   );
@@ -1330,20 +1405,6 @@ function normalizeDraftStep(draft: OnboardingDraft | null): OnboardingStep {
   if (!draft) return 'profile';
   if (draft.importSatisfied && draft.step === 'taste') return 'notifications';
   return steps.includes(draft.step) ? draft.step : 'profile';
-}
-
-function getStepTitle(step: OnboardingStep) {
-  if (step === 'profile') return 'Make it yours';
-  if (step === 'import') return 'Bring in your tastes';
-  if (step === 'taste') return 'Start your Taste';
-  return 'Stay in the loop';
-}
-
-function getStepSubtitle(step: OnboardingStep) {
-  if (step === 'profile') return 'Set the identity people will recognize across Watchly.';
-  if (step === 'import') return 'Move titles from a tracker you already used.';
-  if (step === 'taste') return 'Give your new profile a first signal from titles you know.';
-  return 'Choose whether Watchly can reach you outside the app.';
 }
 
 const styles = StyleSheet.create({
@@ -1392,20 +1453,6 @@ const styles = StyleSheet.create({
   errorText: {
     ...typography.body,
     color: colors.danger,
-    fontWeight: '700',
-  },
-  factList: {
-    gap: spacing.md,
-  },
-  factRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  factText: {
-    ...typography.body,
-    color: colors.text,
-    flex: 1,
     fontWeight: '700',
   },
   filter: {
@@ -1489,38 +1536,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingBottom: spacing.xl,
   },
-  heroBody: {
-    ...typography.body,
-    color: colors.textMuted,
-  },
-  heroCard: {
-    alignItems: 'center',
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.borderStrong,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  heroCopy: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-  heroIcon: {
-    alignItems: 'center',
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accentBorder,
-    borderRadius: 24,
-    borderWidth: 1,
-    height: 48,
-    justifyContent: 'center',
-    width: 48,
-  },
-  heroTitle: {
-    ...typography.title,
-    color: colors.text,
-  },
   importHeading: {
     ...typography.title,
     color: colors.accentText,
@@ -1548,15 +1563,125 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 32,
   },
-  permissionIcon: {
+  notificationsBackAction: {
+    flex: 1,
+  },
+  notificationsContent: {
+    flexGrow: 1,
+    gap: spacing.md,
+  },
+  notificationsHeading: {
+    ...typography.title,
+    color: colors.accentText,
+  },
+  notificationsIntro: {
+    ...typography.body,
+    color: colors.textMuted,
+  },
+  notificationsSkipAction: {
+    flex: 2,
+  },
+  notificationsScreenContent: {
+    flexGrow: 1,
+  },
+  notificationEnableAction: {
+    ...shadows.raised,
     alignItems: 'center',
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accentBorder,
-    borderRadius: 30,
-    borderWidth: 1,
-    height: 60,
+    alignSelf: 'stretch',
+    backgroundColor: colors.accent,
+    borderRadius: radii.lg,
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: 'auto',
+    minHeight: 82,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  notificationEnableActionDisabled: {
+    opacity: 0.58,
+  },
+  notificationEnableCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  notificationEnableIcon: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 24,
+    height: 48,
     justifyContent: 'center',
-    width: 60,
+    width: 48,
+  },
+  notificationEnableHint: {
+    ...typography.meta,
+    color: colors.textOnAccent,
+    opacity: 0.78,
+  },
+  notificationEnableLabel: {
+    color: colors.textOnAccent,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  notificationPreview: {
+    alignItems: 'center',
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.md,
+    minHeight: 70,
+    padding: spacing.sm,
+  },
+  notificationPreviewCopy: {
+    flex: 1,
+    gap: spacing.xs,
+    minWidth: 0,
+  },
+  notificationPreviewImage: {
+    borderRadius: radii.md,
+    height: 52,
+    width: 52,
+  },
+  notificationPreviewImageFallback: {
+    alignItems: 'center',
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    height: 52,
+    justifyContent: 'center',
+    overflow: 'hidden',
+    width: 52,
+  },
+  notificationPreviewImageLocal: {
+    height: 42,
+    width: 42,
+  },
+  notificationPreviewLabel: {
+    color: colors.accentText,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.7,
+  },
+  notificationPreviewList: {
+    gap: spacing.sm,
+  },
+  notificationPreviewMeta: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  notificationPreviewText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
+  notificationPreviewTime: {
+    color: colors.textSubtle,
+    fontSize: 11,
+    fontWeight: '600',
   },
   photoAction: {
     alignItems: 'center',
@@ -1620,10 +1745,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...typography.title,
     color: colors.text,
-  },
-  settingsHint: {
-    ...typography.meta,
-    color: colors.textSubtle,
   },
   tasteCard: {
     gap: spacing.xs,

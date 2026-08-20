@@ -21,9 +21,10 @@ assert.ok(
 assert.ok(
   nativeSource.includes('enableAllPushFromOnboarding') &&
     nativeSource.includes('releasePushEnabled: true') &&
-    onboardingSource.includes('Profile, Settings, Notifications') &&
+    onboardingSource.includes('iPhone Settings &gt; Notifications &gt; Watchly') &&
     onboardingSource.includes('Linking.openSettings()') &&
-    onboardingSource.includes('Continue without notifications'),
+    onboardingSource.includes('Continue without') &&
+    onboardingSource.includes('every current and future Watchly update'),
   'Onboarding must enable every current functional category and explain both refusal recovery paths.',
 );
 assert.ok(

@@ -21,13 +21,13 @@ assert.match(
 assert.doesNotMatch(source, /eyebrow=\{`Onboarding /, 'onboarding must not repeat its step count in the header');
 assert.match(
   source,
-  /pageStep === 'profile' \|\| pageStep === 'import' \|\| pageStep === 'taste'[\s\S]*\? ''[\s\S]*: getStepTitle\(pageStep\)/,
-  'the profile step must not render the redundant Make it yours screen title',
+  /nativeKeyboardInsetsOnly[\s\S]*title=""/,
+  'the onboarding screen must leave its generic title empty because each step owns its heading',
 );
-assert.match(
+assert.doesNotMatch(
   source,
-  /\{pageStep !== 'profile' && pageStep !== 'import' && pageStep !== 'taste'[\s\S]*<StepHero step=\{pageStep\} \/>[\s\S]*: null\}/,
-  'the profile step must not render the duplicate hero card',
+  /StepHero/,
+  'onboarding must not render the removed duplicate hero card',
 );
 assert.doesNotMatch(source, /Your Watchly profile/, 'the profile form must not repeat its purpose');
 assert.doesNotMatch(source, /We start with your sign-in photo/, 'the profile form must keep its photo copy concise');
