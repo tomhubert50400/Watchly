@@ -1,3 +1,14 @@
+type PrismaPoolErrorEmitter = {
+  on(event: 'error', listener: (error: Error) => void): unknown;
+};
+
+export function registerPrismaPoolErrorHandler(
+  pool: PrismaPoolErrorEmitter,
+  onError: (error: Error) => void,
+) {
+  pool.on('error', onError);
+}
+
 export function isPrismaConnectionError(error: unknown) {
   if (!error || typeof error !== 'object') {
     return false;
@@ -22,6 +33,8 @@ export function isPrismaConnectionError(error: unknown) {
     prismaError.code === 'ECONNREFUSED' ||
     prismaError.code === 'P1017' ||
     driverCause?.originalCode === '08P01' ||
+    ((prismaError.code === '34000' || driverCause?.originalCode === '34000') &&
+      message.includes('portal "" does not exist')) ||
     ((prismaError.code === 'P1017' || prismaError.code === 'P2010') &&
       driverCause?.kind === 'ConnectionClosed') ||
     message.includes('Server has closed the connection') ||

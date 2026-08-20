@@ -1,9 +1,9 @@
-import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
 import { PrismaClient } from '../generated/prisma/client';
-import { isPrismaConnectionError } from './prisma-retry';
+import { isPrismaConnectionError, registerPrismaPoolErrorHandler } from './prisma-retry';
 
 @Injectable()
 export class PrismaService implements OnModuleDestroy {
@@ -12,6 +12,7 @@ export class PrismaService implements OnModuleDestroy {
   private static pool: pg.Pool | null = null;
   private static resetPromise: Promise<void> | null = null;
   private readonly connectionString: string;
+  private readonly logger = new Logger(PrismaService.name);
 
   constructor(@Inject(ConfigService) config: ConfigService) {
     this.connectionString = config.getOrThrow<string>('DATABASE_URL');
@@ -238,6 +239,15 @@ export class PrismaService implements OnModuleDestroy {
       idleTimeoutMillis: 30000,
       max: 10,
       maxLifetimeSeconds: 300,
+    });
+    registerPrismaPoolErrorHandler(pool, (error) => {
+      const code = (error as Error & { code?: string }).code;
+      const codeSuffix = code ? ` (${code})` : '';
+
+      this.logger.error(
+        `PostgreSQL pool discarded an idle client${codeSuffix}: ${error.message}`,
+        error.stack,
+      );
     });
 
     return {
