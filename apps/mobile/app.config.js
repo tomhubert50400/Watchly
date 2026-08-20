@@ -16,6 +16,7 @@ module.exports = ({ config }) => {
 
   const applicationId = getApplicationId(variant, config);
   const isDevelopment = variant === 'development';
+  const usesLocalNetworking = isDevelopment || process.env.WATCHLY_DEV_CLIENT === 'true';
 
   return {
     ...config,
@@ -24,7 +25,7 @@ module.exports = ({ config }) => {
     ios: {
       ...config.ios,
       bundleIdentifier: applicationId,
-      infoPlist: isDevelopment
+      infoPlist: usesLocalNetworking
         ? config.ios?.infoPlist
         : withoutLocalNetworkEntitlements(config.ios?.infoPlist),
     },

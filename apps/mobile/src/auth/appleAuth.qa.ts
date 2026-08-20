@@ -7,6 +7,15 @@ import { readFileSync } from 'node:fs';
 const appConfig = JSON.parse(
   readFileSync(new URL('../../app.json', import.meta.url), 'utf8'),
 ) as { expo: { ios?: { usesAppleSignIn?: boolean }; plugins?: unknown[] } };
+const easConfig = JSON.parse(
+  readFileSync(new URL('../../eas.json', import.meta.url), 'utf8'),
+) as {
+  build: Record<string, {
+    developmentClient?: boolean;
+    env?: Record<string, string>;
+    extends?: string;
+  }>;
+};
 const authCardSource = readFileSync(new URL('./ProfileAuthCard.tsx', import.meta.url), 'utf8');
 const firebaseSource = readFileSync(new URL('./firebase.ts', import.meta.url), 'utf8');
 const settingsSource = readFileSync(new URL('../profile/SettingsScreen.tsx', import.meta.url), 'utf8');
@@ -34,4 +43,50 @@ assert.match(settingsSource, /AppleAuthenticationButton/);
 assert.match(settingsSource, /authorizationCode/);
 assert.match(settingsSource, /reauthenticateAndRevokeApple/);
 
+const stagingDevelopmentProfile = easConfig.build['staging-development'];
+assert.equal(stagingDevelopmentProfile.extends, 'staging');
+assert.equal(stagingDevelopmentProfile.developmentClient, true);
+assert.equal(stagingDevelopmentProfile.env?.APP_VARIANT, 'staging');
+assert.equal(stagingDevelopmentProfile.env?.EXPO_PUBLIC_APP_ENV, 'staging');
+assert.equal(stagingDevelopmentProfile.env?.WATCHLY_DEV_CLIENT, 'true');
+
+const previousVariant = process.env.APP_VARIANT;
+const previousPublicEnvironment = process.env.EXPO_PUBLIC_APP_ENV;
+const previousDevClient = process.env.WATCHLY_DEV_CLIENT;
+process.env.APP_VARIANT = 'staging';
+process.env.EXPO_PUBLIC_APP_ENV = 'staging';
+process.env.WATCHLY_DEV_CLIENT = 'true';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const configureApp = require('../../app.config.js');
+const stagingDevelopmentConfig = configureApp({
+  config: {
+    ios: {
+      bundleIdentifier: 'com.tom.tvapp.dev',
+      infoPlist: {
+        NSAppTransportSecurity: { NSAllowsLocalNetworking: true },
+        NSLocalNetworkUsageDescription: 'Watchly connects to Metro during development.',
+      },
+    },
+  },
+});
+
+restoreEnvironment('APP_VARIANT', previousVariant);
+restoreEnvironment('EXPO_PUBLIC_APP_ENV', previousPublicEnvironment);
+restoreEnvironment('WATCHLY_DEV_CLIENT', previousDevClient);
+
+assert.equal(
+  stagingDevelopmentConfig.ios.infoPlist.NSAppTransportSecurity.NSAllowsLocalNetworking,
+  true,
+);
+assert.match(
+  stagingDevelopmentConfig.ios.infoPlist.NSLocalNetworkUsageDescription,
+  /Metro/,
+);
+
 console.log('Apple auth QA passed.');
+
+function restoreEnvironment(key: string, value: string | undefined) {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+}

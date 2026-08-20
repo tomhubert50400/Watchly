@@ -34,6 +34,14 @@ Build the internal staging app with:
 eas build --profile staging --platform ios
 ```
 
+For physical-iPhone testing against local Metro, build the dedicated staging development client:
+
+```powershell
+eas build --profile staging-development --platform ios
+```
+
+The development client uses the same staging application ID and EAS `preview` variables, but keeps iOS local-network access so it can load the current JavaScript bundle from Metro. Installing it replaces the standalone staging app on the device until that standalone build is installed again.
+
 ## Staging API variables
 
 The dedicated API service and database use `APP_ENV=staging` with `NODE_ENV=production`. The health response exposes `environment: staging`, which lets deployment smoke tests detect a wrong target. `ERROR_TRACKING_DSN` and `MONITORING_TEST_KEY` are sealed Railway variables. The API refuses to boot in staging if either is absent.

@@ -30,6 +30,15 @@
         "EXPO_PUBLIC_APP_ENV": "staging"
       }
     },
+    "staging-development": {
+      "extends": "staging",
+      "developmentClient": true,
+      "env": {
+        "APP_VARIANT": "staging",
+        "EXPO_PUBLIC_APP_ENV": "staging",
+        "WATCHLY_DEV_CLIENT": "true"
+      }
+    },
     "preview": {
       "extends": "staging"
     },
