@@ -21,8 +21,10 @@ import {
   getExternalFirebaseUid,
   getExternalProviderSettings,
   hashOAuthSecret,
+  OAuthTicketProvider,
   toAuthProvider,
 } from './external-oauth.provider';
+import { verifyMicrosoftIdentity } from './microsoft-id-token';
 
 const ATTEMPT_LIFETIME_MS = 10 * 60 * 1000;
 
@@ -127,6 +129,34 @@ export class ExternalOAuthService {
     return completed.count === 1
       ? addRedirectTicket(attempt.appRedirectUri, ticket)
       : addRedirectError(attempt.appRedirectUri, 'invalid_state');
+  }
+
+  async completeMicrosoftToken(idToken: string, initiatedByFirebaseUid?: string) {
+    const identity = await verifyMicrosoftIdentity(this.config, idToken);
+    const ticket = createOpaqueSecret();
+    const now = new Date();
+
+    await this.prisma.withConnectionRetry(async () => {
+      await this.prisma.oAuthAttempt.deleteMany({ where: { expiresAt: { lt: now } } });
+      await this.prisma.oAuthAttempt.create({
+        data: {
+          appRedirectUri: 'microsoft-token://watchly',
+          completedAt: now,
+          completionHash: hashOAuthSecret(ticket),
+          displayName: identity.displayName,
+          email: identity.email,
+          emailVerified: identity.emailVerified,
+          expiresAt: new Date(now.getTime() + ATTEMPT_LIFETIME_MS),
+          initiatedByFirebaseUid,
+          photoUrl: identity.photoUrl,
+          provider: identity.provider,
+          providerUserId: identity.providerUserId,
+          stateHash: hashOAuthSecret(idToken),
+        },
+      });
+    });
+
+    return { ticket };
   }
 
   async exchange(ticket: string) {
@@ -342,8 +372,9 @@ function getCustomTokenClaims(identity: AuthenticatedIdentity) {
   };
 }
 
-function toExternalProvider(provider: AuthProvider): ExternalOAuthProvider {
+function toExternalProvider(provider: AuthProvider): OAuthTicketProvider {
   if (provider === AuthProvider.DISCORD) return 'discord';
+  if (provider === AuthProvider.MICROSOFT) return 'microsoft';
 
   throw invalidTicket();
 }

@@ -193,6 +193,22 @@ async function main() {
     { provider: 'DISCORD', providerUserId: 'discord-subject' },
   ]);
 
+  const microsoftCustomIdentity = await verifyBearerTokenWithAuth({
+    verifyIdToken: async () => ({
+      aud: 'security-qa', auth_time: 0, exp: 1,
+      firebase: { identities: {}, sign_in_provider: 'custom' },
+      iat: 0, iss: 'https://securetoken.google.com/security-qa', sub: 'watchly-microsoft-user',
+      uid: 'watchly-microsoft-user',
+      watchlyEmail: 'microsoft@example.com',
+      watchlyEmailVerified: true,
+      watchlyProvider: 'MICROSOFT',
+      watchlyProviderUserId: 'microsoft-subject',
+    }),
+  }, 'microsoft-custom-token');
+  assert.equal(microsoftCustomIdentity.provider, 'MICROSOFT');
+  assert.equal(microsoftCustomIdentity.providerUserId, 'microsoft-subject');
+  assert.equal(microsoftCustomIdentity.email, 'microsoft@example.com');
+
   await assert.rejects(
     () => verifyBearerTokenWithAuth({
       verifyIdToken: async () => ({

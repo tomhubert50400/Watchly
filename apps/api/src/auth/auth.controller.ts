@@ -74,6 +74,19 @@ export class AuthController {
     return this.externalOAuth.exchange(requireTicket(body));
   }
 
+  @Post('oauth/microsoft/token')
+  @HttpCode(200)
+  @UseGuards(OptionalAuthGuard)
+  createMicrosoftOAuthTicket(
+    @Body() body: Record<string, unknown>,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.externalOAuth.completeMicrosoftToken(
+      requireMicrosoftIdToken(body),
+      request.authIdentity?.firebaseUid,
+    );
+  }
+
   @Post('oauth/link')
   @HttpCode(200)
   @UseGuards(AuthGuard)
@@ -103,4 +116,12 @@ function requireTicket(body: Record<string, unknown>) {
   }
 
   return body.ticket;
+}
+
+function requireMicrosoftIdToken(body: Record<string, unknown>) {
+  if (typeof body.idToken !== 'string' || body.idToken.length === 0 || body.idToken.length > 16_384) {
+    throw new BadRequestException('A valid Microsoft ID token is required.');
+  }
+
+  return body.idToken;
 }

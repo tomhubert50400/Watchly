@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { AuthProvider } from '../generated/prisma/enums';
 
 export type ExternalOAuthProvider = 'discord';
+export type OAuthTicketProvider = ExternalOAuthProvider | 'microsoft';
 
 export type ExternalProviderIdentity = {
   displayName: string | null;
@@ -27,10 +28,12 @@ export function parseExternalOAuthProvider(value: string): ExternalOAuthProvider
   return value === 'discord' ? value : null;
 }
 
-export function toAuthProvider(provider: ExternalOAuthProvider) {
+export function toAuthProvider(provider: OAuthTicketProvider) {
   switch (provider) {
     case 'discord':
       return AuthProvider.DISCORD;
+    case 'microsoft':
+      return AuthProvider.MICROSOFT;
   }
 }
 
@@ -80,7 +83,7 @@ export function hashOAuthSecret(value: string) {
   return createHash('sha256').update(value).digest('hex');
 }
 
-export function getExternalFirebaseUid(provider: ExternalOAuthProvider, providerUserId: string) {
+export function getExternalFirebaseUid(provider: OAuthTicketProvider, providerUserId: string) {
   return `watchly:${provider}:${hashOAuthSecret(providerUserId)}`;
 }
 

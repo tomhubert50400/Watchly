@@ -32,6 +32,11 @@ assert.equal(
   getExternalFirebaseUid('discord', 'provider-user'),
   'the same external subject must always resolve to the same Firebase UID',
 );
+assert.equal(
+  getExternalFirebaseUid('microsoft', 'provider-user'),
+  getExternalFirebaseUid('microsoft', 'provider-user'),
+  'the same Microsoft subject must always resolve to the same Firebase UID',
+);
 const providerSource = readFileSync(
   resolve(process.cwd(), 'src/auth/external-oauth.provider.ts'),
   'utf8',

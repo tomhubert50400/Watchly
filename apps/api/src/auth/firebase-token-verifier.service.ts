@@ -212,9 +212,14 @@ function resolveFirebaseProvider(
   if (firebaseProvider) return firebaseProvider;
   if (decodedToken.firebase.sign_in_provider !== 'custom') return null;
 
-  return decodedToken.watchlyProvider === AuthProvider.DISCORD
-    ? AuthProvider.DISCORD
-    : null;
+  switch (decodedToken.watchlyProvider) {
+    case AuthProvider.DISCORD:
+      return AuthProvider.DISCORD;
+    case AuthProvider.MICROSOFT:
+      return AuthProvider.MICROSOFT;
+    default:
+      return null;
+  }
 }
 
 function getStringClaim(decodedToken: DecodedIdToken, key: string) {
