@@ -510,7 +510,15 @@ function accountError(error: unknown) {
   if (error instanceof ApiError) return error.message;
   return 'Sign-in failed. Check Firebase and backend account setup.';
 }
-function safeError(error: unknown) { return error instanceof Error ? error.message : String(error); }
+function safeError(error: unknown) {
+  if (!error || typeof error !== 'object') return { name: typeof error };
+
+  return {
+    ...('code' in error && typeof error.code === 'string' ? { code: error.code } : {}),
+    name: error instanceof Error ? error.name : 'AuthError',
+    ...('status' in error && typeof error.status === 'number' ? { status: error.status } : {}),
+  };
+}
 
 function isFirebaseAuthError(error: unknown, code: string) {
   return Boolean(error && typeof error === 'object' && 'code' in error && error.code === code);
