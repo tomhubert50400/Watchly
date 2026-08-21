@@ -92,6 +92,23 @@ export function getExternalFirebaseUid(provider: OAuthTicketProvider, providerUs
   return `watchly:${provider}:${hashOAuthSecret(providerUserId)}`;
 }
 
+export function getExternalOAuthFailureReason(payload: {
+  error?: unknown;
+  error_description?: unknown;
+}) {
+  const description = typeof payload.error_description === 'string'
+    ? payload.error_description.toLowerCase()
+    : '';
+
+  if (description.includes('code_verifier')) return 'invalid_code_verifier';
+  if (description.includes('redirect_uri')) return 'invalid_redirect_uri';
+  if (description.includes('"code"')) return 'invalid_code';
+  if (payload.error === 'invalid_client') return 'invalid_client';
+  if (payload.error === 'invalid_grant') return 'invalid_grant';
+
+  return 'provider_error';
+}
+
 async function requestAccessToken(
   settings: ProviderSettings,
   code: string,
@@ -111,10 +128,17 @@ async function requestAccessToken(
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     method: 'POST',
   });
-  const payload = await readJson(response) as { access_token?: unknown };
+  const payload = await readJson(response) as {
+    access_token?: unknown;
+    error?: unknown;
+    error_description?: unknown;
+  };
 
   if (!response.ok || typeof payload.access_token !== 'string') {
-    throw new ServiceUnavailableException('The external sign-in provider rejected the callback.');
+    const reason = getExternalOAuthFailureReason(payload);
+    throw new ServiceUnavailableException(
+      `The external sign-in provider rejected the callback (${reason}).`,
+    );
   }
 
   return payload.access_token;

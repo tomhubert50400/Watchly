@@ -6,6 +6,7 @@ import {
   buildExternalAuthorizationUrl,
   getDiscordMobileRedirectUri,
   getExternalFirebaseUid,
+  getExternalOAuthFailureReason,
   getExternalProviderSettings,
   hashOAuthSecret,
 } from '../auth/external-oauth.provider';
@@ -42,6 +43,30 @@ assert.equal(
   getExternalFirebaseUid('microsoft', 'provider-user'),
   'the same Microsoft subject must always resolve to the same Firebase UID',
 );
+assert.equal(
+  getExternalOAuthFailureReason({
+    error: 'invalid_grant',
+    error_description: 'Invalid "code" in request.',
+  }),
+  'invalid_code',
+);
+assert.equal(
+  getExternalOAuthFailureReason({
+    error: 'invalid_grant',
+    error_description: 'Invalid code_verifier in request.',
+  }),
+  'invalid_code_verifier',
+);
+assert.equal(
+  getExternalOAuthFailureReason({
+    error: 'invalid_grant',
+    error_description: 'Invalid redirect_uri in request.',
+  }),
+  'invalid_redirect_uri',
+);
+assert.equal(getExternalOAuthFailureReason({ error: 'invalid_client' }), 'invalid_client');
+assert.equal(getExternalOAuthFailureReason({ error: 'invalid_grant' }), 'invalid_grant');
+assert.equal(getExternalOAuthFailureReason({ error: 'unexpected' }), 'provider_error');
 const providerSource = readFileSync(
   resolve(process.cwd(), 'src/auth/external-oauth.provider.ts'),
   'utf8',
