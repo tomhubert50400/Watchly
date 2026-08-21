@@ -1,4 +1,5 @@
 const allowedVariants = new Set(['development', 'staging', 'production']);
+const discordApplicationId = '1539925787333890090';
 
 module.exports = ({ config }) => {
   const variant = process.env.APP_VARIANT?.trim() || 'development';
@@ -21,13 +22,18 @@ module.exports = ({ config }) => {
   return {
     ...config,
     name: variant === 'staging' ? 'Watchly Staging' : config.name,
-    scheme: getApplicationSchemes(config.scheme, config.ios?.bundleIdentifier, applicationId),
+    scheme: getApplicationSchemes(
+      config.scheme,
+      config.ios?.bundleIdentifier,
+      applicationId,
+      discordApplicationId,
+    ),
     ios: {
       ...config.ios,
       bundleIdentifier: applicationId,
       infoPlist: usesLocalNetworking
-        ? config.ios?.infoPlist
-        : withoutLocalNetworkEntitlements(config.ios?.infoPlist),
+        ? withDiscordQueries(config.ios?.infoPlist)
+        : withoutLocalNetworkEntitlements(withDiscordQueries(config.ios?.infoPlist)),
     },
     android: {
       ...config.android,
@@ -40,7 +46,12 @@ module.exports = ({ config }) => {
   };
 };
 
-function getApplicationSchemes(configuredSchemes, configuredApplicationId, applicationId) {
+function getApplicationSchemes(
+  configuredSchemes,
+  configuredApplicationId,
+  applicationId,
+  discordClientId,
+) {
   const schemes = Array.isArray(configuredSchemes)
     ? configuredSchemes
     : configuredSchemes
@@ -53,7 +64,19 @@ function getApplicationSchemes(configuredSchemes, configuredApplicationId, appli
     )),
     applicationId,
     `msauth.${applicationId}`,
+    `discord-${discordClientId}`,
   ])];
+}
+
+function withDiscordQueries(infoPlist = {}) {
+  const querySchemes = Array.isArray(infoPlist.LSApplicationQueriesSchemes)
+    ? infoPlist.LSApplicationQueriesSchemes
+    : [];
+
+  return {
+    ...infoPlist,
+    LSApplicationQueriesSchemes: [...new Set([...querySchemes, 'discord'])],
+  };
 }
 
 function getApplicationId(variant, config) {

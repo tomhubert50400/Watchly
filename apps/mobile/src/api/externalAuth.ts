@@ -27,6 +27,17 @@ export function createMicrosoftOAuthTicket(
   );
 }
 
+export function createDiscordMobileOAuthTicket(
+  authorization: { code: string; codeVerifier: string; redirectUri: string },
+  firebaseIdToken?: string,
+) {
+  return apiPost<{ ticket: string }>(
+    '/auth/oauth/discord/mobile',
+    authorization,
+    { token: firebaseIdToken },
+  );
+}
+
 export function linkExternalOAuth(ticket: string, firebaseIdToken: string) {
   return apiPost<CurrentUser>('/auth/oauth/link', { ticket }, { token: firebaseIdToken });
 }

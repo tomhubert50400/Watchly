@@ -1,10 +1,24 @@
 import * as WebBrowser from 'expo-web-browser';
-import { ExternalAuthProvider, startExternalOAuth } from '../api/externalAuth';
+import {
+  createDiscordMobileOAuthTicket,
+  ExternalAuthProvider,
+  startExternalOAuth,
+} from '../api/externalAuth';
+import {
+  requestNativeDiscordAuthorization,
+  shouldUseNativeDiscordAuthorization,
+} from './discordNativeAuth';
 
 export async function requestExternalOAuthTicket(
   provider: ExternalAuthProvider,
   firebaseIdToken?: string,
 ) {
+  if (provider === 'discord' && shouldUseNativeDiscordAuthorization()) {
+    const authorization = await requestNativeDiscordAuthorization();
+    const { ticket } = await createDiscordMobileOAuthTicket(authorization, firebaseIdToken);
+    return ticket;
+  }
+
   const flow = await startExternalOAuth(provider, firebaseIdToken);
   const result = await WebBrowser.openAuthSessionAsync(flow.authorizationUrl, flow.redirectUri);
 

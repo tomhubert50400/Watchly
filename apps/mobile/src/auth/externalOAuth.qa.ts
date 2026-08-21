@@ -7,13 +7,23 @@ import { readFileSync } from 'node:fs';
 const apiSource = readFileSync(new URL('../api/externalAuth.ts', import.meta.url), 'utf8');
 const contextSource = readFileSync(new URL('./AuthSessionContext.tsx', import.meta.url), 'utf8');
 const firebaseSource = readFileSync(new URL('./firebase.ts', import.meta.url), 'utf8');
+const discordNativeSource = readFileSync(new URL('./discordNativeAuth.ts', import.meta.url), 'utf8');
 const oauthSource = readFileSync(new URL('./externalOAuth.ts', import.meta.url), 'utf8');
+const configSource = readFileSync(new URL('../../app.config.js', import.meta.url), 'utf8');
 
 assert.match(oauthSource, /openAuthSessionAsync/);
+assert.match(oauthSource, /shouldUseNativeDiscordAuthorization/);
+assert.match(oauthSource, /requestNativeDiscordAuthorization/);
 assert.match(apiSource, /\/auth\/oauth\/exchange/);
 assert.match(apiSource, /\/auth\/oauth\/link/);
+assert.match(apiSource, /\/auth\/oauth\/discord\/mobile/);
 assert.match(firebaseSource, /signInWithCustomToken/);
 assert.match(contextSource, /pendingAccountLinkRef/);
+assert.match(discordNativeSource, /requireOptionalNativeModule/);
+assert.match(discordNativeSource, /Platform\.OS === 'ios'/);
+assert.match(discordNativeSource, /1539925787333890090/);
+assert.match(configSource, /`discord-\$\{discordClientId\}`/);
+assert.match(configSource, /LSApplicationQueriesSchemes/);
 assert.doesNotMatch(apiSource, /facebook/i);
 assert.doesNotMatch(oauthSource, /facebook/i);
 assert.doesNotMatch(
