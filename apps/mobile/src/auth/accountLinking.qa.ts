@@ -8,7 +8,7 @@ const contextSource = readFileSync(new URL('./AuthSessionContext.tsx', import.me
 const firebaseSource = readFileSync(new URL('./firebase.ts', import.meta.url), 'utf8');
 const settingsSource = readFileSync(new URL('../profile/SettingsScreen.tsx', import.meta.url), 'utf8');
 
-for (const provider of ['Google', 'Apple', 'Microsoft']) {
+for (const provider of ['Google', 'Apple']) {
   assert.match(firebaseSource, new RegExp(`linkWith${provider}`));
 }
 for (const provider of ['Google', 'Apple', 'Microsoft', 'Discord']) {
@@ -17,6 +17,7 @@ for (const provider of ['Google', 'Apple', 'Microsoft', 'Discord']) {
 assert.doesNotMatch(settingsSource, /Facebook|FACEBOOK/);
 assert.match(contextSource, /ACCOUNT_LINK_REQUIRED/);
 assert.match(contextSource, /completeExternalOAuthLink/);
+assert.match(contextSource, /createMicrosoftOAuthTicket/);
 assert.match(contextSource, /linkWithPendingFirebaseCredential/);
 assert.match(firebaseSource, /auth\/account-exists-with-different-credential/);
 assert.doesNotMatch(

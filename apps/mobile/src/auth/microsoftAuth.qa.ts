@@ -5,15 +5,19 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const configSource = readFileSync(new URL('../../app.config.js', import.meta.url), 'utf8');
+const contextSource = readFileSync(new URL('./AuthSessionContext.tsx', import.meta.url), 'utf8');
 const firebaseSource = readFileSync(new URL('./firebase.ts', import.meta.url), 'utf8');
 const microsoftSource = readFileSync(new URL('./microsoftAuth.ts', import.meta.url), 'utf8');
+const externalApiSource = readFileSync(new URL('../api/externalAuth.ts', import.meta.url), 'utf8');
 
 assert.match(configSource, /msauth\.\$\{applicationId\}/);
 assert.match(microsoftSource, /ResponseType\.Code/);
 assert.match(microsoftSource, /usePKCE: true/);
 assert.match(microsoftSource, /exchangeCodeAsync/);
 assert.doesNotMatch(microsoftSource, /client_secret|clientSecret/);
-assert.match(firebaseSource, /new OAuthProvider\('microsoft\.com'\)/);
-assert.match(firebaseSource, /linkWithMicrosoftTokens/);
+assert.match(externalApiSource, /\/auth\/oauth\/microsoft\/token/);
+assert.match(contextSource, /createMicrosoftOAuthTicket\(tokens\.idToken/);
+assert.doesNotMatch(firebaseSource, /new OAuthProvider\('microsoft\.com'\)/);
+assert.doesNotMatch(firebaseSource, /createMicrosoftCredential|linkWithMicrosoftTokens/);
 
 console.log('Microsoft auth QA passed.');

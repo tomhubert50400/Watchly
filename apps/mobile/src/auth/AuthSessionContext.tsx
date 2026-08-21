@@ -1,9 +1,11 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { getCurrentUser, CurrentUser } from '../api/auth';
 import {
+  createMicrosoftOAuthTicket,
   exchangeExternalOAuth,
   ExternalAuthProvider,
   linkExternalOAuth as completeExternalOAuthLink,
+  OAuthTicketProvider,
 } from '../api/externalAuth';
 import { ApiError } from '../api/client';
 import { clearPrivateCacheForUser } from '../cache/persistedCache';
@@ -16,12 +18,10 @@ import {
   getFirebaseSessionFromUser,
   linkWithAppleIdentityToken,
   linkWithGoogleIdToken,
-  linkWithMicrosoftTokens,
   linkWithPendingFirebaseCredential,
   signInWithConfiguredDevAccount,
   signInWithAppleIdentityToken,
   signInWithGoogleIdToken,
-  signInWithMicrosoftTokens,
   signInWithWatchlyCustomToken,
   signOutFromFirebase,
   subscribeToFirebaseIdTokenState,
@@ -41,7 +41,7 @@ export type ProviderSignInResult =
   | { type: 'signedIn' }
   | {
     existingProviders: string[];
-    provider: ExternalAuthProvider | FirebaseCredentialProvider;
+    provider: OAuthTicketProvider | FirebaseCredentialProvider;
     type: 'linkRequired';
   }
   | { challenge: TotpSignInChallenge; type: 'totpRequired' };
@@ -327,18 +327,72 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       linkProvider(() => linkWithAppleIdentityToken(identityToken, rawNonce)),
     [linkProvider],
   );
-  const linkMicrosoft = useCallback(
-    (tokens: MicrosoftTokens) => linkProvider(() => linkWithMicrosoftTokens(tokens)),
-    [linkProvider],
-  );
+  const linkMicrosoft = useCallback(async (tokens: MicrosoftTokens) => {
+    const transition = authTransitionsRef.current.begin();
+    setStatus('loading');
+
+    try {
+      const firebaseToken = await getFreshFirebaseIdToken();
+      if (!firebaseToken) throw new Error('Sign in before linking another provider.');
+
+      const { ticket } = await createMicrosoftOAuthTicket(tokens.idToken, firebaseToken);
+      const user = await completeExternalOAuthLink(ticket, firebaseToken);
+      if (authTransitionsRef.current.isCurrent(transition)) {
+        latestFirebaseIdTokenRef.current = firebaseToken;
+        setFirebaseIdToken(firebaseToken);
+        setCurrentUser(user);
+        setStatus('signedIn');
+      }
+    } catch (error) {
+      if (authTransitionsRef.current.isCurrent(transition)) setStatus('signedIn');
+      throw error;
+    }
+  }, []);
   const linkGoogle = useCallback(
     (googleIdToken: string) => linkProvider(() => linkWithGoogleIdToken(googleIdToken)),
     [linkProvider],
   );
-  const signInWithMicrosoft = useCallback(
-    (tokens: MicrosoftTokens) => finishProviderSignIn(() => signInWithMicrosoftTokens(tokens)),
-    [finishProviderSignIn],
-  );
+  const signInWithMicrosoft = useCallback(async (
+    tokens: MicrosoftTokens,
+  ): Promise<ProviderSignInResult> => {
+    const transition = authTransitionsRef.current.begin();
+    explicitSignOutRef.current = false;
+    setStatus('loading');
+
+    try {
+      const { ticket } = await createMicrosoftOAuthTicket(tokens.idToken);
+      let exchange: { firebaseCustomToken: string };
+
+      try {
+        exchange = await exchangeExternalOAuth(ticket);
+      } catch (error) {
+        if (error instanceof ApiError && error.code === 'ACCOUNT_LINK_REQUIRED') {
+          const pendingLink = pendingAccountLinkRef.current ?? {
+            existingProviders: getExistingProviders(error),
+            kind: 'external' as const,
+            provider: 'microsoft' as const,
+            ticket,
+          };
+          pendingAccountLinkRef.current = pendingLink;
+          if (authTransitionsRef.current.isCurrent(transition)) setStatus('idle');
+
+          return toLinkRequiredResult(pendingLink);
+        }
+
+        throw error;
+      }
+
+      const session = await signInWithWatchlyCustomToken(exchange.firebaseCustomToken);
+      if (authTransitionsRef.current.isCurrent(transition)) {
+        await applyFirebaseSession(session.firebaseIdToken, transition);
+      }
+
+      return { type: 'signedIn' };
+    } catch (error) {
+      if (authTransitionsRef.current.isCurrent(transition)) setStatus('error');
+      throw error;
+    }
+  }, [applyFirebaseSession]);
   const signInWithExternal = useCallback(async (
     provider: ExternalAuthProvider,
   ): Promise<ProviderSignInResult> => {
@@ -528,7 +582,7 @@ type PendingAccountLink =
   | {
     existingProviders: string[];
     kind: 'external';
-    provider: ExternalAuthProvider;
+    provider: OAuthTicketProvider;
     ticket: string;
   };
 

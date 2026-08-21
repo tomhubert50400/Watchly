@@ -24,7 +24,6 @@ import {
 import * as FirebaseAuth from '@firebase/auth';
 import { publicEnv } from '../config/publicEnv';
 import { resolveDevAuthConfig } from './devAuthConfig';
-import type { MicrosoftTokens } from './microsoftAuth';
 import { selectTotpFactor } from './totpChallenge';
 
 const firebaseConfigKeys = [
@@ -52,7 +51,7 @@ export type FirebaseTotpChallenge = {
   verify: (oneTimePassword: string) => Promise<FirebaseSession>;
 };
 
-export type FirebaseCredentialProvider = 'apple' | 'google' | 'microsoft';
+export type FirebaseCredentialProvider = 'apple' | 'google';
 
 export type FirebaseProviderSignInResult =
   | { credential: AuthCredential; provider: FirebaseCredentialProvider; type: 'linkRequired' }
@@ -93,12 +92,6 @@ export async function signInWithAppleIdentityToken(
   return signInWithFirebaseCredential(credential, 'apple');
 }
 
-export async function signInWithMicrosoftTokens(
-  tokens: MicrosoftTokens,
-): Promise<FirebaseProviderSignInResult> {
-  return signInWithFirebaseCredential(createMicrosoftCredential(tokens), 'microsoft');
-}
-
 export async function signInWithWatchlyCustomToken(
   customToken: string,
 ): Promise<FirebaseSession> {
@@ -119,10 +112,6 @@ export async function linkWithAppleIdentityToken(
 
 export async function linkWithGoogleIdToken(googleIdToken: string): Promise<FirebaseSession> {
   return linkWithFirebaseCredential(GoogleAuthProvider.credential(googleIdToken));
-}
-
-export async function linkWithMicrosoftTokens(tokens: MicrosoftTokens): Promise<FirebaseSession> {
-  return linkWithFirebaseCredential(createMicrosoftCredential(tokens));
 }
 
 export function linkWithPendingFirebaseCredential(credential: AuthCredential) {
@@ -217,15 +206,6 @@ async function linkWithFirebaseCredential(credential: AuthCredential) {
   const linkedUser = await linkWithCredential(user, credential);
 
   return getFirebaseSessionFromUser(linkedUser.user, true);
-}
-
-function createMicrosoftCredential(tokens: MicrosoftTokens) {
-  const provider = new OAuthProvider('microsoft.com');
-
-  return provider.credential({
-    accessToken: tokens.accessToken ?? undefined,
-    idToken: tokens.idToken ?? undefined,
-  });
 }
 
 export async function signInWithConfiguredDevAccount(): Promise<FirebaseSession | null> {

@@ -15,8 +15,7 @@ const discovery = {
 };
 
 export type MicrosoftTokens = {
-  accessToken: string | null;
-  idToken: string | null;
+  idToken: string;
 };
 
 export function useMicrosoftAuth() {
@@ -58,14 +57,11 @@ export function useMicrosoftAuth() {
       discovery,
     );
 
-    if (!tokens.accessToken && !tokens.idToken) {
-      throw new Error('Microsoft did not return an authentication token.');
+    if (!tokens.idToken) {
+      throw new Error('Microsoft did not return an ID token.');
     }
 
-    return {
-      accessToken: tokens.accessToken ?? null,
-      idToken: tokens.idToken ?? null,
-    };
+    return { idToken: tokens.idToken };
   }, [clientId, promptAsync, redirectUri, request?.codeVerifier]);
 
   return {
