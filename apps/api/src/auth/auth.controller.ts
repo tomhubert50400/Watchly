@@ -87,6 +87,23 @@ export class AuthController {
     );
   }
 
+  @Post('oauth/discord/mobile')
+  @HttpCode(200)
+  @UseGuards(OptionalAuthGuard)
+  createDiscordMobileOAuthTicket(
+    @Body() body: Record<string, unknown>,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    const authorization = requireDiscordMobileAuthorization(body);
+
+    return this.externalOAuth.completeDiscordMobileAuthorization(
+      authorization.code,
+      authorization.redirectUri,
+      authorization.codeVerifier,
+      request.authIdentity?.firebaseUid,
+    );
+  }
+
   @Post('oauth/link')
   @HttpCode(200)
   @UseGuards(AuthGuard)
@@ -108,6 +125,27 @@ function requireExternalProvider(value: string) {
   if (!provider) throw new BadRequestException('Unsupported external auth provider.');
 
   return provider;
+}
+
+function requireDiscordMobileAuthorization(body: Record<string, unknown>) {
+  const code = body.code;
+  const codeVerifier = body.codeVerifier;
+  const redirectUri = body.redirectUri;
+
+  if (typeof code !== 'string' || !code || code.length > 2048) {
+    throw new BadRequestException('Missing Discord authorization code.');
+  }
+  if (
+    typeof codeVerifier !== 'string'
+    || !/^[A-Za-z0-9._~-]{43,128}$/.test(codeVerifier)
+  ) {
+    throw new BadRequestException('Invalid Discord PKCE verifier.');
+  }
+  if (typeof redirectUri !== 'string' || !redirectUri || redirectUri.length > 256) {
+    throw new BadRequestException('Missing Discord redirect URI.');
+  }
+
+  return { code, codeVerifier, redirectUri };
 }
 
 function requireTicket(body: Record<string, unknown>) {

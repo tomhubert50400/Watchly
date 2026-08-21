@@ -58,11 +58,16 @@ export async function exchangeExternalAuthorizationCode(
   provider: ExternalOAuthProvider,
   code: string,
   callbackUrl: string,
+  codeVerifier?: string,
 ): Promise<ExternalProviderIdentity> {
   const settings = getExternalProviderSettings(config, provider);
-  const token = await requestAccessToken(settings, code, callbackUrl);
+  const token = await requestAccessToken(settings, code, callbackUrl, codeVerifier);
 
   return requestDiscordIdentity(settings.userEndpoint, token);
+}
+
+export function getDiscordMobileRedirectUri(clientId: string) {
+  return `discord-${clientId}:/authorize/callback`;
 }
 
 export function getExternalProviderSettings(
@@ -91,6 +96,7 @@ async function requestAccessToken(
   settings: ProviderSettings,
   code: string,
   callbackUrl: string,
+  codeVerifier?: string,
 ) {
   const body = new URLSearchParams({
     client_id: settings.clientId,
@@ -98,6 +104,7 @@ async function requestAccessToken(
     code,
     grant_type: 'authorization_code',
     redirect_uri: callbackUrl,
+    ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
   });
   const response = await fetch(settings.tokenEndpoint, {
     body,

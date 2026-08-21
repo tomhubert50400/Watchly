@@ -19,6 +19,7 @@ import {
   ExternalOAuthProvider,
   ExternalProviderIdentity,
   getExternalFirebaseUid,
+  getDiscordMobileRedirectUri,
   getExternalProviderSettings,
   hashOAuthSecret,
   OAuthTicketProvider,
@@ -152,6 +153,50 @@ export class ExternalOAuthService {
           provider: identity.provider,
           providerUserId: identity.providerUserId,
           stateHash: hashOAuthSecret(idToken),
+        },
+      });
+    });
+
+    return { ticket };
+  }
+
+  async completeDiscordMobileAuthorization(
+    code: string,
+    redirectUri: string,
+    codeVerifier: string,
+    initiatedByFirebaseUid?: string,
+  ) {
+    const settings = getExternalProviderSettings(this.config, 'discord');
+    if (redirectUri !== getDiscordMobileRedirectUri(settings.clientId)) {
+      throw new BadRequestException('The Discord mobile redirect URI is invalid.');
+    }
+
+    const identity = await exchangeExternalAuthorizationCode(
+      this.config,
+      'discord',
+      code,
+      redirectUri,
+      codeVerifier,
+    );
+    const ticket = createOpaqueSecret();
+    const now = new Date();
+
+    await this.prisma.withConnectionRetry(async () => {
+      await this.prisma.oAuthAttempt.deleteMany({ where: { expiresAt: { lt: now } } });
+      await this.prisma.oAuthAttempt.create({
+        data: {
+          appRedirectUri: redirectUri,
+          completedAt: now,
+          completionHash: hashOAuthSecret(ticket),
+          displayName: identity.displayName,
+          email: identity.email,
+          emailVerified: identity.emailVerified,
+          expiresAt: new Date(now.getTime() + ATTEMPT_LIFETIME_MS),
+          initiatedByFirebaseUid,
+          photoUrl: identity.photoUrl,
+          provider: identity.provider,
+          providerUserId: identity.providerUserId,
+          stateHash: hashOAuthSecret(`discord-mobile:${ticket}`),
         },
       });
     });

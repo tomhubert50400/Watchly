@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { ConfigService } from '@nestjs/config';
 import {
   buildExternalAuthorizationUrl,
+  getDiscordMobileRedirectUri,
   getExternalFirebaseUid,
   getExternalProviderSettings,
   hashOAuthSecret,
@@ -25,6 +26,10 @@ assert.equal(authorizationUrl.searchParams.get('client_id'), 'discord-client');
 assert.equal(authorizationUrl.searchParams.get('redirect_uri'), callbackUrl);
 assert.equal(authorizationUrl.searchParams.get('scope'), 'identify email');
 assert.equal(authorizationUrl.searchParams.get('state'), 'single-use-state');
+assert.equal(
+  getDiscordMobileRedirectUri('1539925787333890090'),
+  'discord-1539925787333890090:/authorize/callback',
+);
 assert(!authorizationUrl.toString().includes('discord-secret'), 'OAuth secrets must never enter authorize URLs');
 assert.equal(hashOAuthSecret('ticket').length, 64);
 assert.equal(
@@ -43,6 +48,14 @@ const providerSource = readFileSync(
 );
 assert(!providerSource.includes("searchParams.set('access_token'"), 'access tokens must stay out of URLs');
 assert(providerSource.includes('Authorization: `Bearer ${accessToken}`'));
+assert(providerSource.includes('code_verifier: codeVerifier'));
 assert(!providerSource.toLowerCase().includes('facebook'));
+
+const controllerSource = readFileSync(
+  resolve(process.cwd(), 'src/auth/auth.controller.ts'),
+  'utf8',
+);
+assert(controllerSource.includes("@Post('oauth/discord/mobile')"));
+assert(controllerSource.includes('/^[A-Za-z0-9._~-]{43,128}$/'));
 
 console.log('External OAuth QA passed.');
