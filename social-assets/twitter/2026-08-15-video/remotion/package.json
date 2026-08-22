@@ -1,0 +1,21 @@
+{
+  "name": "watchly-interface-teaser",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "preview": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts WatchlyInterfaceTeaser out/watchly-interface-teaser.mp4 --codec h264 --crf 18",
+    "render:feed": "remotion render src/index.ts WatchlyFeedBreaksOpen out/watchly-feed-breaks-open.mp4 --codec h264 --crf 18",
+    "render:flow": "remotion render src/index.ts WatchlyProductFlowTeaser out/watchly-product-flow-teaser.mp4 --codec h264 --crf 18"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.512",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "remotion": "4.0.512"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "typescript": "5.9.3"
+  }
+}
