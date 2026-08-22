@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 const appConfig = JSON.parse(
   readFileSync(new URL('../../app.json', import.meta.url), 'utf8'),
 ) as { expo: { ios?: { usesAppleSignIn?: boolean }; plugins?: unknown[] } };
+const appleLogo = readFileSync(new URL('../../assets/apple-signin-logo-black-44.png', import.meta.url));
 const easConfig = JSON.parse(
   readFileSync(new URL('../../eas.json', import.meta.url), 'utf8'),
 ) as {
@@ -27,9 +28,15 @@ assert(
 );
 assert.match(
   authCardSource,
-  /AppleAuthenticationButton/,
-  'Apple sign-in must use the official Apple button component',
+  /function AppleSignInButton/,
+  'Apple sign-in must use the dedicated compliant button presentation',
 );
+assert.match(authCardSource, /apple-signin-logo-black-44\.png/);
+assert(appleLogo.length > 0, 'the official Apple sign-in logo asset must be present');
+assert.doesNotMatch(authCardSource, /AppleAuthentication\.AppleAuthenticationButton/);
+assert.match(authCardSource, /appleButton: \{[^}]*height: 50/);
+assert.match(authCardSource, /appleButtonBorder: \{[^}]*borderWidth: 1/);
+assert.match(authCardSource, /appleButtonLabel: \{[^}]*fontSize: 14/);
 assert.match(authCardSource, /AppleAuthenticationScope\.EMAIL/);
 assert.match(authCardSource, /AppleAuthenticationScope\.FULL_NAME/);
 assert.match(firebaseSource, /new OAuthProvider\('apple\.com'\)/);

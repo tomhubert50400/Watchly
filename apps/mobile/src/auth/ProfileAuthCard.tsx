@@ -356,15 +356,11 @@ export function ProfileAuthCard({
             <View style={styles.primaryList}>
               {primaryProviders.map((provider) => (
                 provider.id === 'apple' && appleAvailable ? (
-                  <View key={provider.id} pointerEvents={canUseApple ? 'auto' : 'none'} style={!canUseApple ? styles.disabled : null}>
-                    <AppleAuthentication.AppleAuthenticationButton
-                      buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE_OUTLINE}
-                      buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-                      cornerRadius={radii.md}
-                      onPress={() => { void startAppleSignIn(); }}
-                      style={styles.appleButton}
-                    />
-                  </View>
+                  <AppleSignInButton
+                    disabled={!canUseApple}
+                    key={provider.id}
+                    onPress={() => { void startAppleSignIn(); }}
+                  />
                 ) : (
                   <ProviderButton
                     disabled={provider.id === 'google' ? !canUseGoogle : !canUseApple}
@@ -403,6 +399,34 @@ export function ProfileAuthCard({
         )}
       </View>
     </View>
+  );
+}
+
+function AppleSignInButton({ disabled, onPress }: { disabled?: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityLabel="Continue with Apple"
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.appleButton,
+        disabled ? styles.disabled : null,
+        pressed ? styles.pressed : null,
+      ]}
+    >
+      <Image
+        accessibilityIgnoresInvertColors
+        accessible={false}
+        source={require('../../assets/apple-signin-logo-black-44.png')}
+        style={styles.appleLogo}
+      />
+      <Text maxFontSizeMultiplier={1.1} numberOfLines={1} style={styles.appleButtonLabel}>
+        Continue with Apple
+      </Text>
+      <View pointerEvents="none" style={styles.appleButtonBorder} />
+    </Pressable>
   );
 }
 
@@ -499,7 +523,10 @@ function formatProvider(provider: string) {
 }
 
 const styles = StyleSheet.create({
-  appleButton: { height: 50, width: '100%' },
+  appleButton: { alignItems: 'center', backgroundColor: '#000000', borderRadius: radii.md, height: 50, justifyContent: 'center', overflow: 'hidden', position: 'relative', width: '100%' },
+  appleButtonBorder: { ...StyleSheet.absoluteFillObject, borderColor: '#FFFFFF', borderRadius: radii.md, borderWidth: 1 },
+  appleButtonLabel: { color: '#FFFFFF', fontSize: 14, fontWeight: '800', lineHeight: 18, textAlign: 'center' },
+  appleLogo: { height: 50, left: 3, position: 'absolute', width: 50 },
   body: { ...typography.body, color: colors.textMuted, marginTop: spacing.sm, textAlign: 'center' },
   card: { backgroundColor: 'rgba(15, 19, 29, 0.92)', borderColor: colors.border, borderRadius: radii.xl, borderWidth: 1, padding: spacing.lg },
   configWarning: { ...typography.meta, color: colors.danger, marginTop: spacing.md, textAlign: 'center' },
