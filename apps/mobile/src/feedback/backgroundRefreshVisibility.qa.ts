@@ -179,6 +179,21 @@ assert.doesNotMatch(
   /Loading your (favorites|movies|series)/,
   'optional profile media rails must stay hidden until their data is ready',
 );
+assert.match(
+  ownerProfileSource,
+  /resource\.isInitialLoading && !profile \? \([\s\S]*<OwnerProfileLoadingState/,
+  'the owner profile must show a profile-shaped skeleton while no cached profile is visible',
+);
+assert.doesNotMatch(
+  ownerProfileSource,
+  /<LoadingState label="Loading your profile"/,
+  'the owner profile must not fall back to a centered spinner while loading',
+);
+assert.match(
+  ownerProfileSource,
+  /accessibilityLabel="Loading your profile"[\s\S]*accessibilityRole="progressbar"/,
+  'the owner profile skeleton must expose one accessible loading state',
+);
 
 const profileBodySource = source('../profile/ProfileBody.tsx');
 assert.match(

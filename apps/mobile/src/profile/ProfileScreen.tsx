@@ -18,12 +18,11 @@ import { BrandWordmark } from '../brand/BrandWordmark';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
-import { LoadingState } from '../components/LoadingState';
 import { Screen } from '../components/Screen';
 import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
-import { colors, spacing, typography } from '../design/tokens';
+import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
 import type { LibraryMediaItem } from '../library/useLibraryData';
 import { useLibraryData } from '../library/useLibraryData';
@@ -312,7 +311,7 @@ export function ProfileScreen() {
       }
     >
       {resource.isInitialLoading && !profile ? (
-        <LoadingState label="Loading your profile" />
+        <OwnerProfileLoadingState />
       ) : resource.error && !profile ? (
         <EmptyState body={resource.error} title="Profile unavailable">
           <Button label="Retry" onPress={resource.retry} />
@@ -381,6 +380,57 @@ export function ProfileScreen() {
   );
 }
 
+function OwnerProfileLoadingState() {
+  return (
+    <View
+      accessibilityLabel="Loading your profile"
+      accessibilityLiveRegion="polite"
+      accessibilityRole="progressbar"
+      style={styles.skeletonStack}
+    >
+      <View importantForAccessibility="no-hide-descendants" style={styles.skeletonContent}>
+        <View style={styles.skeletonIdentity}>
+          <View style={[styles.skeletonBlock, styles.skeletonAvatar]} />
+          <View style={styles.skeletonIdentityCopy}>
+            <View style={[styles.skeletonBlock, styles.skeletonName]} />
+            <View style={[styles.skeletonBlock, styles.skeletonHandle]} />
+            <View style={[styles.skeletonBlock, styles.skeletonSocial]} />
+          </View>
+        </View>
+
+        <View style={styles.skeletonDivider} />
+        <View style={styles.skeletonStatsRow}>
+          {[0, 1, 2].map((item) => (
+            <View key={item} style={styles.skeletonStat}>
+              <View style={[styles.skeletonBlock, styles.skeletonStatValue]} />
+              <View style={[styles.skeletonBlock, styles.skeletonStatLabel]} />
+            </View>
+          ))}
+        </View>
+        <View style={styles.skeletonDivider} />
+
+        {['Series', 'Movies', 'Favorites'].map((title) => (
+          <View key={title} style={styles.skeletonRailSection}>
+            <View style={styles.skeletonRailHeader}>
+              <Text style={styles.skeletonRailTitle}>{title}</Text>
+              <View style={[styles.skeletonBlock, styles.skeletonViewAll]} />
+            </View>
+            <View style={styles.skeletonPosterRail}>
+              {[0, 1, 2].map((item) => (
+                <View key={item} style={styles.skeletonPosterCard}>
+                  <View style={[styles.skeletonBlock, styles.skeletonPoster]} />
+                  <View style={[styles.skeletonBlock, styles.skeletonPosterTitle]} />
+                  <View style={[styles.skeletonBlock, styles.skeletonPosterMeta]} />
+                </View>
+              ))}
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function openProfileMediaItem(navigation: ProfileNavigation, item: LibraryMediaItem) {
   if (item.contentType === 'movie') {
     navigation.navigate('FilmDetail', { title: item.title, tmdbId: item.tmdbId });
@@ -411,5 +461,112 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     gap: spacing.md,
+  },
+  skeletonAvatar: {
+    borderRadius: 42,
+    height: 84,
+    width: 84,
+  },
+  skeletonBlock: {
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.border,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  skeletonContent: {
+    gap: spacing.xl,
+  },
+  skeletonDivider: {
+    backgroundColor: colors.accentBorder,
+    height: StyleSheet.hairlineWidth,
+    width: '100%',
+  },
+  skeletonHandle: {
+    borderRadius: 4,
+    height: 12,
+    width: '42%',
+  },
+  skeletonIdentity: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.lg,
+  },
+  skeletonIdentityCopy: {
+    flex: 1,
+    gap: spacing.sm,
+  },
+  skeletonName: {
+    borderRadius: radii.xs,
+    height: 28,
+    width: '72%',
+  },
+  skeletonPoster: {
+    borderRadius: radii.md,
+    height: 156,
+    width: 104,
+  },
+  skeletonPosterCard: {
+    gap: spacing.xs,
+    width: 104,
+  },
+  skeletonPosterMeta: {
+    borderRadius: 3,
+    height: 9,
+    width: 60,
+  },
+  skeletonPosterRail: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    overflow: 'hidden',
+  },
+  skeletonPosterTitle: {
+    borderRadius: 3,
+    height: 12,
+    width: 88,
+  },
+  skeletonRailHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  skeletonRailSection: {
+    gap: spacing.sm,
+  },
+  skeletonRailTitle: {
+    ...typography.title,
+    color: colors.text,
+  },
+  skeletonSocial: {
+    borderRadius: 4,
+    height: 12,
+    width: '58%',
+  },
+  skeletonStack: {
+    paddingBottom: spacing.md,
+  },
+  skeletonStat: {
+    alignItems: 'center',
+    flex: 1,
+    gap: spacing.xs,
+  },
+  skeletonStatLabel: {
+    borderRadius: 3,
+    height: 9,
+    width: 62,
+  },
+  skeletonStatsRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  skeletonStatValue: {
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
+    borderRadius: radii.xs,
+    height: 22,
+    width: 46,
+  },
+  skeletonViewAll: {
+    borderRadius: 4,
+    height: 11,
+    width: 50,
   },
 });
