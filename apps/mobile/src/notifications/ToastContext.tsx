@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radii, shadows, spacing, touchTargets } from '../design/tokens';
 import { getToastAccessibility } from './toastAccessibility';
 
-type ToastTone = 'error' | 'success';
+type ToastTone = 'error' | 'info' | 'success';
 
 type ToastAction = {
   label: string;
@@ -102,7 +102,11 @@ export function ToastProvider({ children }: PropsWithChildren) {
               key={toastAccessibility?.announcementKey}
               style={[
                 styles.toast,
-                toast.tone === 'success' ? styles.successToast : styles.errorToast,
+                toast.tone === 'success'
+                  ? styles.successToast
+                  : toast.tone === 'info'
+                    ? styles.infoToast
+                    : styles.errorToast,
               ]}
             >
               <Pressable
@@ -151,6 +155,10 @@ const styles = StyleSheet.create({
     borderColor: colors.dangerBorder,
   },
   host: { flex: 1 },
+  infoToast: {
+    backgroundColor: colors.panelElevated,
+    borderColor: colors.borderStrong,
+  },
   successToast: {
     backgroundColor: colors.successBackground,
     borderColor: colors.successBorder,
