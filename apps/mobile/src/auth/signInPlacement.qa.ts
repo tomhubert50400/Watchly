@@ -35,6 +35,16 @@ assert.match(
   /error instanceof ApiError && error\.status === 403\) return error\.message/,
   'sign-in must show the safe suspension message instead of a generic 403 error',
 );
+assert.match(
+  profileAuthCardSource,
+  /showToast\((?:'|`)Connecting with [^;]+, 'info'\)/,
+  'provider progress must use a neutral informational toast',
+);
+assert.doesNotMatch(
+  profileAuthCardSource,
+  /Choose any connected method|styles\.connecting|connectingProvider/,
+  'provider progress and account tips must not add inline noise to the sign-in card',
+);
 
 assert.match(
   signInSheetSource,

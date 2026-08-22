@@ -12,6 +12,7 @@ import { Button } from '../components/Button';
 import { TextInput } from '../components/TextInput';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
+import { useToast } from '../notifications/ToastContext';
 import { useAuthSession } from './AuthSessionContext';
 import type { ProviderSignInResult, TotpSignInChallenge } from './AuthSessionContext';
 import { getMissingFirebaseConfig } from './firebase';
@@ -51,8 +52,8 @@ export function ProfileAuthCard({
     status: sessionStatus,
   } = useAuthSession();
   const microsoftAuth = useMicrosoftAuth();
+  const { showToast } = useToast();
   const [appleAvailable, setAppleAvailable] = useState(false);
-  const [connectingProvider, setConnectingProvider] = useState<string | null>(null);
   const [localStatus, setLocalStatus] = useState<AuthStatus>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const [totpChallenge, setTotpChallenge] = useState<TotpSignInChallenge | null>(null);
@@ -79,17 +80,14 @@ export function ProfileAuthCard({
   useEffect(() => {
     let mounted = true;
     async function finishGoogleSignIn(idToken: string) {
-      setConnectingProvider('Google');
       setLocalStatus('loading');
       setMessage(null);
       try {
         const result = await signInWithGoogle(idToken);
         if (mounted) applyProviderResult(result);
       } catch (error) {
-        hapticError();
         if (mounted) {
           console.warn('Sign-in failed', safeError(error));
-          setConnectingProvider(null);
           setLocalStatus('error');
           setMessage(accountError(error));
         }
@@ -101,17 +99,13 @@ export function ProfileAuthCard({
       if (typeof idToken === 'string' && idToken.length > 0) {
         void finishGoogleSignIn(idToken);
       } else {
-        hapticError();
         setLocalStatus('error');
         setMessage('Google did not return an ID token.');
       }
     } else if (response?.type === 'error') {
-      hapticError();
-      setConnectingProvider(null);
       setLocalStatus('error');
       setMessage('Google sign-in was rejected.');
     } else if (response) {
-      setConnectingProvider(null);
       setLocalStatus('idle');
     }
 
@@ -132,7 +126,7 @@ export function ProfileAuthCard({
       return;
     }
 
-    setConnectingProvider('Apple');
+    showToast('Connecting with Apple.', 'info');
     setLocalStatus('loading');
     setMessage(null);
 
@@ -155,14 +149,11 @@ export function ProfileAuthCard({
       applyProviderResult(result);
     } catch (error) {
       if (isAppleCancellation(error)) {
-        setConnectingProvider(null);
         setLocalStatus('idle');
         return;
       }
 
-      hapticError();
       console.warn('Apple sign-in failed', safeError(error));
-      setConnectingProvider(null);
       setLocalStatus('error');
       setMessage(accountError(error));
     }
@@ -170,7 +161,6 @@ export function ProfileAuthCard({
 
   function applyProviderResult(result: ProviderSignInResult) {
     if (result.type === 'cancelled') {
-      setConnectingProvider(null);
       setLocalStatus('idle');
       return;
     }
@@ -178,7 +168,6 @@ export function ProfileAuthCard({
       const existingMethods = result.existingProviders.length > 0
         ? result.existingProviders.map(formatProvider).join(' or ')
         : 'a method already connected to your account';
-      setConnectingProvider(null);
       setLocalStatus('idle');
       setMessage(
         `A Watchly account already uses this email. Continue with ${existingMethods} now, then ${formatProvider(result.provider)} will be linked to the same account.`,
@@ -186,7 +175,6 @@ export function ProfileAuthCard({
       return;
     }
     if (result.type === 'totpRequired') {
-      setConnectingProvider(null);
       setLocalStatus('idle');
       setTotpChallenge(result.challenge);
       setTotpCode('');
@@ -194,8 +182,6 @@ export function ProfileAuthCard({
       return;
     }
 
-    hapticSuccess();
-    setConnectingProvider(null);
     setLocalStatus('idle');
     setMessage(null);
   }
@@ -203,7 +189,7 @@ export function ProfileAuthCard({
   async function startExternalSignIn(provider: ExternalAuthProvider) {
     if (status === 'loading') return;
 
-    setConnectingProvider(providerName(provider));
+    showToast(`Connecting with ${providerName(provider)}.`, 'info');
     setLocalStatus('loading');
     setMessage(null);
 
@@ -211,9 +197,7 @@ export function ProfileAuthCard({
       const result = await signInWithExternal(provider);
       applyProviderResult(result);
     } catch (error) {
-      hapticError();
       console.warn(`${providerName(provider)} sign-in failed`, safeError(error));
-      setConnectingProvider(null);
       setLocalStatus('error');
       setMessage(accountError(error));
     }
@@ -226,14 +210,13 @@ export function ProfileAuthCard({
     }
     if (!microsoftAuth.isReady || status === 'loading') return;
 
-    setConnectingProvider('Microsoft');
+    showToast('Connecting with Microsoft.', 'info');
     setLocalStatus('loading');
     setMessage(null);
 
     try {
       const tokens = await microsoftAuth.authenticate();
       if (!tokens) {
-        setConnectingProvider(null);
         setLocalStatus('idle');
         return;
       }
@@ -241,9 +224,7 @@ export function ProfileAuthCard({
       const result = await signInWithMicrosoft(tokens);
       applyProviderResult(result);
     } catch (error) {
-      hapticError();
       console.warn('Microsoft sign-in failed', safeError(error));
-      setConnectingProvider(null);
       setLocalStatus('error');
       setMessage(accountError(error));
     }
@@ -264,19 +245,16 @@ export function ProfileAuthCard({
       return;
     }
     if (!provider.isWired) {
-      setConnectingProvider(null);
       setLocalStatus('idle');
       setMessage(`${provider.name} sign-in is not connected yet. Choose Google or finish provider setup first.`);
       return;
     }
     if (!canUseGoogle) return;
-    setConnectingProvider(provider.name);
+    showToast(`Connecting with ${provider.name}.`, 'info');
     setLocalStatus('loading');
     try {
       await promptAsync();
     } catch {
-      hapticError();
-      setConnectingProvider(null);
       setLocalStatus('error');
       setMessage('Could not open Google sign-in.');
     }
@@ -291,7 +269,6 @@ export function ProfileAuthCard({
       return;
     }
 
-    setConnectingProvider('your security code');
     setLocalStatus('loading');
     setTotpError(null);
     Keyboard.dismiss();
@@ -302,14 +279,12 @@ export function ProfileAuthCard({
     } catch (error) {
       hapticError();
       console.warn('TOTP verification failed', safeError(error));
-      setConnectingProvider(null);
       setLocalStatus('error');
       setTotpError(error instanceof ApiError ? accountError(error) : getTotpErrorMessage(error));
     }
   }
 
   function cancelTotp() {
-    setConnectingProvider(null);
     setLocalStatus('idle');
     setTotpChallenge(null);
     setTotpCode('');
@@ -340,10 +315,6 @@ export function ProfileAuthCard({
           </Text>
         ) : null}
         {!totpChallenge && displayedMessage ? <Text accessibilityLiveRegion="polite" style={styles.setupMessage}>{displayedMessage}</Text> : null}
-        {!totpChallenge && status === 'loading' ? (
-          <Text accessibilityLiveRegion="polite" style={styles.connecting}>Connecting with {connectingProvider ?? 'your account'}…</Text>
-        ) : null}
-
         {totpChallenge ? (
           <View style={styles.totpForm}>
             <TextInput
@@ -428,7 +399,6 @@ export function ProfileAuthCard({
                 </View>
               ))}
             </View>
-            <Text style={styles.note}>Choose any connected method. Add more methods later in Settings to keep one Watchly account.</Text>
           </>
         )}
       </View>
@@ -533,7 +503,6 @@ const styles = StyleSheet.create({
   body: { ...typography.body, color: colors.textMuted, marginTop: spacing.sm, textAlign: 'center' },
   card: { backgroundColor: 'rgba(15, 19, 29, 0.92)', borderColor: colors.border, borderRadius: radii.xl, borderWidth: 1, padding: spacing.lg },
   configWarning: { ...typography.meta, color: colors.danger, marginTop: spacing.md, textAlign: 'center' },
-  connecting: { ...typography.meta, color: colors.accentText, marginTop: spacing.md, textAlign: 'center' },
   disabled: { opacity: 0.48 },
   discord: { backgroundColor: '#5865F2', borderColor: '#5865F2' },
   glow: { backgroundColor: colors.accentSoft, borderRadius: 155, height: 310, left: '10%', opacity: 0.7, position: 'absolute', top: 14, width: '80%' },
@@ -542,7 +511,6 @@ const styles = StyleSheet.create({
   logoSlot: { alignItems: 'center', height: 24, justifyContent: 'center', width: 24 },
   microsoft: { backgroundColor: '#F7F3F5', borderColor: '#F7F3F5' },
   moreLabel: { color: colors.textSubtle, fontSize: 10, fontWeight: '800', marginBottom: spacing.sm, marginTop: spacing.lg, textAlign: 'center' },
-  note: { color: colors.textSubtle, fontSize: 11, lineHeight: 15, marginTop: spacing.md, textAlign: 'center' },
   pressed: { opacity: 0.8, transform: [{ scale: 0.98 }] },
   primaryList: { gap: spacing.sm, marginTop: spacing.lg },
   providerButton: { alignItems: 'center', borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', minHeight: 50, paddingHorizontal: spacing.md },
