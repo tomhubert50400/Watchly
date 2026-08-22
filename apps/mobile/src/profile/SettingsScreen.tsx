@@ -688,71 +688,68 @@ export function SettingsScreen() {
             title="Sign-in methods"
           >
             <View style={styles.group}>
-              <SettingsActionRow
-                body={currentUser?.providers?.includes('GOOGLE')
-                  ? 'Connected to this Watchly account.'
-                  : 'Authenticate with Google to link it securely.'}
-                icon={ShieldCheck}
-                label={currentUser?.providers?.includes('GOOGLE')
-                  ? 'Google connected'
-                  : 'Link Google'}
-                loading={accountAction === 'linkGoogle'}
-                onPress={() => { void connectGoogle(); }}
-              />
-              <View style={[styles.connectionRow, styles.connectionDivider]}>
-                <View style={styles.connectionCopy}>
-                  <Text style={styles.connectionTitle}>Apple</Text>
-                  <Text style={styles.connectionBody}>
-                    {currentUser?.providers?.includes('APPLE')
-                      ? 'Connected to this Watchly account.'
-                      : 'Authenticate with Apple to link it securely.'}
-                  </Text>
+              {currentUser?.providers?.includes('GOOGLE') ? (
+                <ConnectedProviderRow name="Google" />
+              ) : (
+                <SettingsActionRow
+                  body="Authenticate with Google to link it securely."
+                  icon={ShieldCheck}
+                  label="Link Google"
+                  loading={accountAction === 'linkGoogle'}
+                  onPress={() => { void connectGoogle(); }}
+                />
+              )}
+              {currentUser?.providers?.includes('APPLE') ? (
+                <ConnectedProviderRow name="Apple" />
+              ) : (
+                <View style={[styles.connectionRow, styles.connectionDivider]}>
+                  <View style={styles.connectionCopy}>
+                    <Text style={styles.connectionTitle}>Apple</Text>
+                    <Text style={styles.connectionBody}>
+                      Authenticate with Apple to link it securely.
+                    </Text>
+                  </View>
+                  {appleAvailable ? (
+                    <View
+                      pointerEvents={accountAction ? 'none' : 'auto'}
+                      style={accountAction === 'linkApple' ? styles.disabled : null}
+                    >
+                      <AppleAuthentication.AppleAuthenticationButton
+                        buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE_OUTLINE}
+                        buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                        cornerRadius={radii.md}
+                        onPress={() => { void connectApple(); }}
+                        style={styles.appleConnectionButton}
+                      />
+                    </View>
+                  ) : (
+                    <Text style={styles.connectionUnavailable}>Unavailable</Text>
+                  )}
                 </View>
-                {currentUser?.providers?.includes('APPLE') ? (
-                  <View style={styles.connectedPill}>
-                    <Check color={colors.success} size={15} strokeWidth={2.4} />
-                    <Text style={styles.connectedPillText}>Connected</Text>
-                  </View>
-                ) : appleAvailable ? (
-                  <View
-                    pointerEvents={accountAction ? 'none' : 'auto'}
-                    style={accountAction === 'linkApple' ? styles.disabled : null}
-                  >
-                    <AppleAuthentication.AppleAuthenticationButton
-                      buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE_OUTLINE}
-                      buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-                      cornerRadius={radii.md}
-                      onPress={() => { void connectApple(); }}
-                      style={styles.appleConnectionButton}
-                    />
-                  </View>
-                ) : (
-                  <Text style={styles.connectionUnavailable}>Unavailable</Text>
-                )}
-              </View>
-              <SettingsActionRow
-                body={currentUser?.providers?.includes('MICROSOFT')
-                  ? 'Connected to this Watchly account.'
-                  : 'Authenticate with Microsoft to link it securely.'}
-                icon={ShieldCheck}
-                label={currentUser?.providers?.includes('MICROSOFT')
-                  ? 'Microsoft connected'
-                  : 'Link Microsoft'}
-                loading={accountAction === 'linkMicrosoft'}
-                onPress={() => { void connectMicrosoft(); }}
-              />
-              <SettingsActionRow
-                body={currentUser?.providers?.includes('DISCORD')
-                  ? 'Connected to this Watchly account.'
-                  : 'Authenticate with Discord to link it securely.'}
-                icon={ShieldCheck}
-                label={currentUser?.providers?.includes('DISCORD')
-                  ? 'Discord connected'
-                  : 'Link Discord'}
-                last
-                loading={accountAction === 'linkDiscord'}
-                onPress={() => { void connectDiscord(); }}
-              />
+              )}
+              {currentUser?.providers?.includes('MICROSOFT') ? (
+                <ConnectedProviderRow name="Microsoft" />
+              ) : (
+                <SettingsActionRow
+                  body="Authenticate with Microsoft to link it securely."
+                  icon={ShieldCheck}
+                  label="Link Microsoft"
+                  loading={accountAction === 'linkMicrosoft'}
+                  onPress={() => { void connectMicrosoft(); }}
+                />
+              )}
+              {currentUser?.providers?.includes('DISCORD') ? (
+                <ConnectedProviderRow last name="Discord" />
+              ) : (
+                <SettingsActionRow
+                  body="Authenticate with Discord to link it securely."
+                  icon={ShieldCheck}
+                  label="Link Discord"
+                  last
+                  loading={accountAction === 'linkDiscord'}
+                  onPress={() => { void connectDiscord(); }}
+                />
+              )}
             </View>
           </SettingsSection>
 
@@ -1164,6 +1161,27 @@ function VisibilityPill({ value }: { value: PrivacyVisibility }) {
       <Text style={[styles.visibilityPillText, publicValue ? styles.visibilityPillTextPublic : null]}>
         {publicValue ? 'Everyone' : 'Only me'}
       </Text>
+    </View>
+  );
+}
+
+function ConnectedProviderRow({
+  last = false,
+  name,
+}: {
+  last?: boolean;
+  name: string;
+}) {
+  return (
+    <View style={[styles.connectionRow, last ? null : styles.connectionDivider]}>
+      <View style={styles.connectionCopy}>
+        <Text style={styles.connectionTitle}>{name}</Text>
+        <Text style={styles.connectionBody}>Connected to this Watchly account.</Text>
+      </View>
+      <View style={styles.connectedPill}>
+        <Check color={colors.success} size={15} strokeWidth={2.4} />
+        <Text style={styles.connectedPillText}>Connected</Text>
+      </View>
     </View>
   );
 }

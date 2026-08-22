@@ -13,8 +13,17 @@ for (const provider of ['Google', 'Apple']) {
 }
 for (const provider of ['Google', 'Apple', 'Microsoft', 'Discord']) {
   assert.match(settingsSource, new RegExp(provider));
+  assert.match(
+    settingsSource,
+    new RegExp(`ConnectedProviderRow[^>]*name="${provider}"`),
+    `${provider} must use the shared connected-provider presentation`,
+  );
 }
 assert.doesNotMatch(settingsSource, /Facebook|FACEBOOK/);
+assert.doesNotMatch(settingsSource, /(Google|Microsoft|Discord) connected/);
+assert.match(settingsSource, /function ConnectedProviderRow/);
+assert.match(settingsSource, /Connected to this Watchly account\./);
+assert.match(settingsSource, /connectedPillText}>Connected</);
 assert.match(contextSource, /ACCOUNT_LINK_REQUIRED/);
 assert.match(contextSource, /completeExternalOAuthLink/);
 assert.match(contextSource, /createMicrosoftOAuthTicket/);
