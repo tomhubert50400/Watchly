@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import { readFileSync } from 'node:fs';
+import { googleClientBelongsToFirebaseProject } from './googleAuthConfig';
 
 const authCardSource = readFileSync(new URL('./ProfileAuthCard.tsx', import.meta.url), 'utf8');
 
@@ -10,6 +11,21 @@ assert.equal(
   authCardSource.includes('redirectUri: googleNativeRedirectUri'),
   false,
   'Google auth must derive its native redirect from the installed application ID',
+);
+assert.equal(
+  googleClientBelongsToFirebaseProject(
+    '593047782300-client.apps.googleusercontent.com',
+    '1:593047782300:ios:staging',
+  ),
+  true,
+);
+assert.equal(
+  googleClientBelongsToFirebaseProject(
+    '976365509331-client.apps.googleusercontent.com',
+    '1:593047782300:ios:staging',
+  ),
+  false,
+  'Google and Firebase staging clients must belong to the same project',
 );
 
 const previousVariant = process.env.APP_VARIANT;

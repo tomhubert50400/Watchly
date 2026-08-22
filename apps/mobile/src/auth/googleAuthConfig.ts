@@ -7,17 +7,31 @@ export const googleClientIds = {
 };
 
 export function getMissingGoogleClientConfig(platform: string): string[] {
-  if (platform === 'ios' && !googleClientIds.iosClientId) {
-    return ['EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID'];
-  }
+  const config = platform === 'ios'
+    ? ['EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID', googleClientIds.iosClientId] as const
+    : platform === 'android'
+      ? ['EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID', googleClientIds.androidClientId] as const
+      : platform === 'web'
+        ? ['EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID', googleClientIds.webClientId] as const
+        : null;
 
-  if (platform === 'android' && !googleClientIds.androidClientId) {
-    return ['EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID'];
-  }
+  if (!config) return [];
 
-  if (platform === 'web' && !googleClientIds.webClientId) {
-    return ['EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID'];
-  }
+  const [key, clientId] = config;
+  if (!clientId) return [key];
 
-  return [];
+  return googleClientBelongsToFirebaseProject(
+    clientId,
+    publicEnv.EXPO_PUBLIC_FIREBASE_APP_ID,
+  ) ? [] : [`${key} (Firebase project mismatch)`];
+}
+
+export function googleClientBelongsToFirebaseProject(
+  googleClientId: string,
+  firebaseAppId: string | undefined,
+) {
+  const firebaseProjectNumber = firebaseAppId?.match(/^1:(\d+):/)?.[1];
+  if (!firebaseProjectNumber) return true;
+
+  return googleClientId.startsWith(`${firebaseProjectNumber}-`);
 }
