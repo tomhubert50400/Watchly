@@ -392,7 +392,7 @@ $env:NODE_OPTIONS = "--max-old-space-size=8192"
 try {
   $metroProcess = Start-Process `
     -FilePath $pnpmPath `
-    -ArgumentList @("--filter", "mobile", "exec", "expo", "start", "--dev-client", "--host", "lan", "--port", "8081", "--clear") `
+    -ArgumentList @("--filter", "mobile", "exec", "expo", "start", "--dev-client", "--host", "lan", "--port", "8081", "--max-workers", "4", "--clear") `
     -WorkingDirectory $repoRoot `
     -WindowStyle Hidden `
     -RedirectStandardOutput (Join-Path $runDirectory "metro.out.log") `

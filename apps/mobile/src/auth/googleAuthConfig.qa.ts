@@ -16,6 +16,11 @@ assert.match(
   /NODE_OPTIONS = "--max-old-space-size=8192"/,
   'the iPhone dev launcher must leave enough memory for the full Expo bundle',
 );
+assert.match(
+  devLauncherSource,
+  /"--max-workers", "4"/,
+  'the iPhone dev launcher must bound Metro transform concurrency',
+);
 
 assert.equal(
   authCardSource.includes('redirectUri: googleNativeRedirectUri'),
