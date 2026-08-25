@@ -20,6 +20,10 @@ const easConfig = JSON.parse(
 const authCardSource = readFileSync(new URL('./ProfileAuthCard.tsx', import.meta.url), 'utf8');
 const firebaseSource = readFileSync(new URL('./firebase.ts', import.meta.url), 'utf8');
 const settingsSource = readFileSync(new URL('../profile/SettingsScreen.tsx', import.meta.url), 'utf8');
+const stagingLauncherSource = readFileSync(
+  new URL('../../../../scripts/start-iphone-staging-auth.ps1', import.meta.url),
+  'utf8',
+);
 
 assert.equal(appConfig.expo.ios?.usesAppleSignIn, true, 'the iOS build must enable the Apple Sign-In entitlement');
 assert(
@@ -66,6 +70,11 @@ assert.equal(stagingDevelopmentProfile.developmentClient, true);
 assert.equal(stagingDevelopmentProfile.env?.APP_VARIANT, 'staging');
 assert.equal(stagingDevelopmentProfile.env?.EXPO_PUBLIC_APP_ENV, 'staging');
 assert.equal(stagingDevelopmentProfile.env?.WATCHLY_DEV_CLIENT, 'true');
+assert.match(
+  stagingLauncherSource,
+  /--max-workers 4/,
+  'the staging iPhone launcher must bound Metro transform concurrency',
+);
 
 const previousVariant = process.env.APP_VARIANT;
 const previousPublicEnvironment = process.env.EXPO_PUBLIC_APP_ENV;

@@ -90,7 +90,7 @@ try {
     return
   }
 
-  pnpm exec expo start --dev-client --host lan --port $Port
+  pnpm exec expo start --dev-client --host lan --port $Port --max-workers 4
   if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
   }
