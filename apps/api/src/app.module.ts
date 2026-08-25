@@ -27,50 +27,72 @@ import { TrackingModule } from './tracking/tracking.module';
 import { WatchlistsModule } from './watchlists/watchlists.module';
 import { ViewingsModule } from './viewings/viewings.module';
 
+export const apiEnvironmentSchema = Joi.object({
+  APP_ENV: Joi.string().valid('development', 'staging', 'production').default('development'),
+  CORS_ADDITIONAL_ORIGIN: Joi.string().uri().optional(),
+  CORS_ORIGIN: Joi.string().uri().optional(),
+  DATABASE_URL: Joi.string().uri().required(),
+  ERROR_TRACKING_DSN: Joi.string().uri().when('APP_ENV', {
+    is: Joi.valid('staging', 'production'),
+    then: Joi.required(),
+    otherwise: Joi.allow('').optional(),
+  }),
+  FIREBASE_AUTH_EMULATOR_HOST: Joi.string().allow('').optional(),
+  FIREBASE_PROJECT_ID: Joi.string().required(),
+  FIREBASE_SERVICE_ACCOUNT_JSON: Joi.string().when('APP_ENV', {
+    is: Joi.valid('staging', 'production'),
+    then: Joi.required(),
+    otherwise: Joi.allow('').optional(),
+  }),
+  AUTH_APP_REDIRECT_URI: Joi.string().uri().when('APP_ENV', {
+    is: Joi.valid('staging', 'production'),
+    then: Joi.required(),
+    otherwise: Joi.allow('').optional(),
+  }),
+  AUTH_OAUTH_CALLBACK_BASE_URL: Joi.string().uri().when('APP_ENV', {
+    is: Joi.valid('staging', 'production'),
+    then: Joi.required(),
+    otherwise: Joi.allow('').optional(),
+  }),
+  DISCORD_OAUTH_CLIENT_ID: Joi.string().when('APP_ENV', {
+    is: Joi.valid('staging', 'production'),
+    then: Joi.required(),
+    otherwise: Joi.allow('').optional(),
+  }),
+  DISCORD_OAUTH_CLIENT_SECRET: Joi.string().when('APP_ENV', {
+    is: Joi.valid('staging', 'production'),
+    then: Joi.required(),
+    otherwise: Joi.allow('').optional(),
+  }),
+  MICROSOFT_OAUTH_CLIENT_ID: Joi.string().when('APP_ENV', {
+    is: Joi.valid('staging', 'production'),
+    then: Joi.required(),
+    otherwise: Joi.allow('').optional(),
+  }),
+  NODE_ENV: Joi.string().valid('development', 'test', 'production').default('development'),
+  PORT: Joi.number().integer().min(1).max(65535).default(3000),
+  EXPO_PUSH_ACCESS_TOKEN: Joi.string().allow('').optional(),
+  RATE_LIMIT_MAX_REQUESTS: Joi.number().integer().min(1).default(100),
+  RATE_LIMIT_TTL_MS: Joi.number().integer().min(1000).default(60000),
+  MONITORING_TEST_KEY: Joi.string().min(32).when('APP_ENV', {
+    is: 'staging',
+    then: Joi.required(),
+    otherwise: Joi.allow('').optional(),
+  }),
+  R2_ACCESS_KEY_ID: Joi.string().allow('').optional(),
+  R2_ACCOUNT_ID: Joi.string().allow('').optional(),
+  R2_BUCKET_NAME: Joi.string().allow('').optional(),
+  R2_PUBLIC_BASE_URL: Joi.string().uri().allow('').optional(),
+  R2_SECRET_ACCESS_KEY: Joi.string().allow('').optional(),
+  TMDB_ACCESS_TOKEN: Joi.string().allow('').optional(),
+});
+
 @Module({
   controllers: [HealthController, MonitoringController],
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      validationSchema: Joi.object({
-        APP_ENV: Joi.string().valid('development', 'staging', 'production').default('development'),
-        CORS_ADDITIONAL_ORIGIN: Joi.string().uri().optional(),
-        CORS_ORIGIN: Joi.string().uri().optional(),
-        DATABASE_URL: Joi.string().uri().required(),
-        ERROR_TRACKING_DSN: Joi.string().uri().when('APP_ENV', {
-          is: Joi.valid('staging', 'production'),
-          then: Joi.required(),
-          otherwise: Joi.allow('').optional(),
-        }),
-        FIREBASE_AUTH_EMULATOR_HOST: Joi.string().allow('').optional(),
-        FIREBASE_PROJECT_ID: Joi.string().required(),
-        FIREBASE_SERVICE_ACCOUNT_JSON: Joi.string().when('APP_ENV', {
-          is: Joi.valid('staging', 'production'),
-          then: Joi.required(),
-          otherwise: Joi.allow('').optional(),
-        }),
-        AUTH_APP_REDIRECT_URI: Joi.string().uri().allow('').optional(),
-        AUTH_OAUTH_CALLBACK_BASE_URL: Joi.string().uri().allow('').optional(),
-        DISCORD_OAUTH_CLIENT_ID: Joi.string().allow('').optional(),
-        DISCORD_OAUTH_CLIENT_SECRET: Joi.string().allow('').optional(),
-        MICROSOFT_OAUTH_CLIENT_ID: Joi.string().allow('').optional(),
-        NODE_ENV: Joi.string().valid('development', 'test', 'production').default('development'),
-        PORT: Joi.number().integer().min(1).max(65535).default(3000),
-        EXPO_PUSH_ACCESS_TOKEN: Joi.string().allow('').optional(),
-        RATE_LIMIT_MAX_REQUESTS: Joi.number().integer().min(1).default(100),
-        RATE_LIMIT_TTL_MS: Joi.number().integer().min(1000).default(60000),
-        MONITORING_TEST_KEY: Joi.string().min(32).when('APP_ENV', {
-          is: 'staging',
-          then: Joi.required(),
-          otherwise: Joi.allow('').optional(),
-        }),
-        R2_ACCESS_KEY_ID: Joi.string().allow('').optional(),
-        R2_ACCOUNT_ID: Joi.string().allow('').optional(),
-        R2_BUCKET_NAME: Joi.string().allow('').optional(),
-        R2_PUBLIC_BASE_URL: Joi.string().uri().allow('').optional(),
-        R2_SECRET_ACCESS_KEY: Joi.string().allow('').optional(),
-        TMDB_ACCESS_TOKEN: Joi.string().allow('').optional(),
-      }),
+      validationSchema: apiEnvironmentSchema,
     }),
     AdminModule,
     ThrottlerModule.forRootAsync({

@@ -10,7 +10,7 @@
     "db:verify": "tsx src/database/verify-database.ts",
     "dev:prepare-ui-review": "tsx src/dev/prepare-ui-review-data.ts",
     "prisma:generate": "prisma generate",
-    "pretest": "tsx src/security/external-oauth.qa.ts && tsx src/security/microsoft-id-token.qa.ts",
+    "pretest": "tsx src/security/api-environment.qa.ts && tsx src/security/external-oauth.qa.ts && tsx src/security/microsoft-id-token.qa.ts",
     "security:audit-smoke": "tsx src/security/audit-log-smoke.ts",
     "security:account-deletion-smoke": "tsx src/security/account-deletion-smoke.ts",
     "security:backup-readiness": "tsx src/security/backup-readiness.ts",
