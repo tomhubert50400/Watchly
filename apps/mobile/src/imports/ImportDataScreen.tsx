@@ -1,4 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type * as ExpoDocumentPicker from 'expo-document-picker';
 import { requireOptionalNativeModule } from 'expo';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
@@ -8,7 +10,6 @@ import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-nativ
 import {
   confirmDataImport,
   ImportPreview,
-  ImportPreviewItem,
   ImportResult,
   previewDataImport,
   SupportedImportSource,
@@ -22,6 +23,8 @@ import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
+import type { RootStackParamList } from '../navigation/types';
+import { getImportReviewMatches } from './importReviewModel';
 
 declare const require: (moduleName: 'expo-document-picker') => typeof ExpoDocumentPicker;
 
@@ -162,6 +165,7 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
     notifySocialChanged,
     notifyTrackingChanged,
   } = useAuthSession();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [activeSource, setActiveSource] = useState<ImportBrand | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
@@ -260,6 +264,15 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
     }
   };
 
+  const reviewMatches = () => {
+    if (!preview) return;
+
+    const items = getImportReviewMatches(preview.items);
+    if (items.length === 0) return;
+
+    navigation.navigate('ImportMatches', { fileName: preview.fileName, items });
+  };
+
   const requestConfirmation = () => {
     if (!preview || preview.summary.ready === 0) return;
 
@@ -315,6 +328,7 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
           <ImportPreviewPanel
             confirming={status === 'confirming'}
             onConfirm={requestConfirmation}
+            onReview={reviewMatches}
             preview={preview}
             showAction={!embedded}
           />
@@ -495,11 +509,13 @@ async function openExportLink(url: string) {
 function ImportPreviewPanel({
   confirming,
   onConfirm,
+  onReview,
   preview,
   showAction,
 }: {
   confirming: boolean;
   onConfirm: () => void;
+  onReview: () => void;
   preview: ImportPreview;
   showAction: boolean;
 }) {
@@ -507,7 +523,7 @@ function ImportPreviewPanel({
     <View style={styles.previewPanel}>
       <View style={styles.previewHeading}>
         <View style={styles.previewHeadingCopy}>
-          <Text accessibilityRole="header" style={styles.previewTitle}>Review matches</Text>
+          <Text accessibilityRole="header" style={styles.previewTitle}>Import preview</Text>
           <Text numberOfLines={1} style={styles.previewFileName}>{preview.fileName}</Text>
         </View>
         <View style={styles.readyBadge}>
@@ -532,22 +548,19 @@ function ImportPreviewPanel({
         <SummaryValue label="Attention" value={preview.summary.needsAttention} warning />
       </View>
 
-      <View style={styles.matchList}>
-        {preview.items.slice(0, PREVIEW_ITEM_LIMIT).map((item, index) => (
-          <ImportMatchRow item={item} key={`${item.sourceTitle}:${item.sourceYear ?? ''}:${index}`} />
-        ))}
-        {preview.items.length > PREVIEW_ITEM_LIMIT ? (
-          <Text style={styles.moreMatches}>
-            +{preview.items.length - PREVIEW_ITEM_LIMIT} more titles included in this preview
-          </Text>
-        ) : null}
-      </View>
-
       {preview.summary.needsAttention > 0 ? (
         <Text style={styles.previewWarning}>
           {preview.summary.needsAttention} unmatched or unsupported {preview.summary.needsAttention === 1 ? 'row will' : 'rows will'} be skipped.
         </Text>
       ) : null}
+
+      <Button
+        disabled={preview.summary.ready === 0}
+        fullWidth
+        label="Review matches"
+        onPress={onReview}
+        variant="secondary"
+      />
 
       {showAction ? (
         <Button
@@ -567,38 +580,6 @@ function SummaryValue({ label, value, warning = false }: { label: string; value:
     <View style={styles.summaryValue}>
       <Text style={[styles.summaryNumber, warning && value > 0 ? styles.summaryNumberWarning : null]}>{value}</Text>
       <Text style={styles.summaryLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function ImportMatchRow({ item }: { item: ImportPreviewItem }) {
-  const match = item.status === 'ready' ? item.match : null;
-  const ready = match !== null;
-  const actionLabels = [
-    item.actions.rating !== null ? `${item.actions.rating}/5` : null,
-    item.actions.hasReview ? 'Review' : null,
-    item.actions.watched ? 'Watched' : null,
-    item.actions.watching ? 'Watching' : null,
-    item.actions.watchlisted ? 'Want to watch' : null,
-    item.actions.favorite ? 'Favorite' : null,
-  ].filter((label): label is string => Boolean(label));
-
-  return (
-    <View style={styles.matchRow}>
-      {ready
-        ? <CheckCircle2 color={colors.success} size={19} />
-        : <AlertCircle color={colors.danger} size={19} />}
-      <View style={styles.matchCopy}>
-        <Text numberOfLines={1} style={styles.matchTitle}>{item.sourceTitle}</Text>
-        <Text numberOfLines={2} style={styles.matchMeta}>
-          {match
-            ? `Matched to ${match.title}${match.releaseDate ? ` (${match.releaseDate.slice(0, 4)})` : ''}`
-            : item.issues[0] ?? 'This row cannot be imported.'}
-        </Text>
-        {ready && actionLabels.length > 0 ? (
-          <Text style={styles.matchActions}>{actionLabels.join(' · ')}</Text>
-        ) : null}
-      </View>
     </View>
   );
 }
@@ -626,8 +607,6 @@ function showUnavailableSource(source: ImportSource) {
     'Send one real Trakt ZIP export so its JSON files can be mapped without risking incorrect history.',
   );
 }
-
-const PREVIEW_ITEM_LIMIT = 8;
 
 function BrandLogo({ brand }: { brand: ImportBrand }) {
   if (brand === 'tvtime') {
@@ -851,46 +830,6 @@ const styles = StyleSheet.create({
     height: 46,
     justifyContent: 'center',
     width: 46,
-  },
-  matchActions: {
-    ...typography.meta,
-    color: colors.accentText,
-    marginTop: 3,
-  },
-  matchCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  matchList: {
-    borderBottomColor: colors.border,
-    borderTopColor: colors.border,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  matchMeta: {
-    color: colors.textSubtle,
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 2,
-  },
-  matchRow: {
-    alignItems: 'flex-start',
-    borderBottomColor: colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-  },
-  matchTitle: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '800',
-    lineHeight: 20,
-  },
-  moreMatches: {
-    ...typography.meta,
-    color: colors.textSubtle,
-    paddingVertical: spacing.sm,
-    textAlign: 'center',
   },
   note: {
     alignItems: 'flex-start',

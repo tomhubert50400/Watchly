@@ -8,6 +8,8 @@ function assert(condition: unknown, message: string): asserts condition {
 
 const appSource = readFileSync(new URL('../../App.tsx', import.meta.url), 'utf8');
 const importScreenSource = readFileSync(new URL('./ImportDataScreen.tsx', import.meta.url), 'utf8');
+const importMatchesSource = readFileSync(new URL('./ImportMatchesScreen.tsx', import.meta.url), 'utf8');
+const importReviewModelSource = readFileSync(new URL('./importReviewModel.ts', import.meta.url), 'utf8');
 const importApiSource = readFileSync(new URL('../api/imports.ts', import.meta.url), 'utf8');
 const onboardingSource = readFileSync(new URL('../onboarding/OnboardingScreen.tsx', import.meta.url), 'utf8');
 const settingsSource = readFileSync(new URL('../profile/SettingsScreen.tsx', import.meta.url), 'utf8');
@@ -20,6 +22,11 @@ assert(
 assert(
   appSource.includes('component={ImportDataScreen} name="ImportData"'),
   'The import destination must be registered in the root stack.',
+);
+assert(
+  appSource.includes('component={ImportMatchesScreen} name="ImportMatches"') &&
+    appSource.includes("title: 'Review matches'"),
+  'Import previews must register a dedicated match review screen.',
 );
 for (const sourceName of ['Letterboxd', 'IMDb', 'Trakt', 'TV Time']) {
   assert(importScreenSource.includes(`name: '${sourceName}'`), `${sourceName} must appear in the import source list.`);
@@ -76,8 +83,20 @@ assert(
   'The mobile import API must support preview and confirmation.',
 );
 assert(
-  importScreenSource.includes('Review matches') && importScreenSource.includes('Existing Watchly ratings and reviews will be kept.'),
-  'The user must review matches and overwrite behavior before importing.',
+  importScreenSource.includes('label="Review matches"') &&
+    importScreenSource.includes("navigation.navigate('ImportMatches'") &&
+    !importScreenSource.includes('function ImportMatchRow') &&
+    importScreenSource.includes('Existing Watchly ratings and reviews will be kept.'),
+  'The user must open the dedicated match review screen before importing.',
+);
+assert(
+  importMatchesSource.includes('const MATCH_COLUMNS = 3') &&
+    importMatchesSource.includes('numColumns={MATCH_COLUMNS}') &&
+    importMatchesSource.includes('<MediaPoster') &&
+    importMatchesSource.includes('item.rating') &&
+    importReviewModelSource.includes('item.actions.sourceRating') &&
+    importReviewModelSource.includes('new Map<string, ImportReviewMatch>()'),
+  'Match review must show a deduplicated three-column poster grid with source ratings.',
 );
 assert(
   onboardingSource.includes('<ImportDataScreen') &&

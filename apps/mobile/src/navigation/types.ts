@@ -1,5 +1,6 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { ViewingStats } from '../api/viewings';
+import type { ImportReviewMatch } from '../imports/importReviewModel';
 import type { LegalDocumentId } from '../legal/legalDocuments';
 import type { LibraryMediaItem } from '../library/useLibraryData';
 import type { ProfileMediaFilter } from '../profile/profileMediaModel';
@@ -33,6 +34,10 @@ export type RootStackParamList = {
     tmdbId: number;
   };
   ImportData: undefined;
+  ImportMatches: {
+    fileName: string;
+    items: ImportReviewMatch[];
+  };
   Journal: undefined;
   LegalDocument: {
     document: LegalDocumentId;

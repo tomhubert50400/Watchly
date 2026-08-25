@@ -20,6 +20,7 @@ import { colors } from './src/design/tokens';
 import { FeedScreen } from './src/feed/FeedScreen';
 import { HomeScreen } from './src/home/HomeScreen';
 import { ImportDataScreen } from './src/imports/ImportDataScreen';
+import { ImportMatchesScreen } from './src/imports/ImportMatchesScreen';
 import { JournalScreen } from './src/journal/JournalScreen';
 import { AppStartupPreloader } from './src/launch/AppStartupPreloader';
 import { WatchlyLaunchGate } from './src/launch/WatchlyLaunchGate';
@@ -279,6 +280,7 @@ function AppNavigator() {
             <Stack.Screen component={ReleaseCalendarScreen} name="ReleaseCalendar" options={{ title: 'Release calendar' }} />
             <Stack.Screen component={SettingsScreen} name="Settings" options={{ title: 'Settings' }} />
             <Stack.Screen component={ImportDataScreen} name="ImportData" options={{ title: 'Import your data' }} />
+            <Stack.Screen component={ImportMatchesScreen} name="ImportMatches" options={{ title: 'Review matches' }} />
             <Stack.Screen
               component={SharedWatchlistScreen}
               name="SharedWatchlist"
