@@ -11,10 +11,10 @@ const devLauncherSource = readFileSync(
   'utf8',
 );
 
-assert.match(
+assert.doesNotMatch(
   devLauncherSource,
-  /NODE_OPTIONS = "--max-old-space-size=8192"/,
-  'the iPhone dev launcher must leave enough memory for the full Expo bundle',
+  /max-old-space-size/,
+  'the iPhone dev launcher must not hide Metro leaks behind an oversized heap',
 );
 assert.match(
   devLauncherSource,
