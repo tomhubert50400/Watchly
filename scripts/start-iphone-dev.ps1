@@ -258,19 +258,19 @@ function Stop-PrismaDevServer {
 }
 
 function Start-PrismaDevServer {
-  param(
-    [int]$Port,
-    [string]$LogDirectory
-  )
+  param([int]$Port)
 
-  Start-Process `
-    -FilePath powershell.exe `
-    -ArgumentList @("-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "pnpm exec prisma dev start tv-app") `
-    -WorkingDirectory $apiDir `
-    -WindowStyle Hidden `
-    -RedirectStandardOutput (Join-Path $LogDirectory "prisma.out.log") `
-    -RedirectStandardError (Join-Path $LogDirectory "prisma.err.log") | Out-Null
-  Wait-ForPort -Port $Port
+  Push-Location $apiDir
+  try {
+    & $pnpmPath exec prisma dev start tv-app
+    if ($LASTEXITCODE -ne 0) {
+      throw "Prisma dev failed to start."
+    }
+  } finally {
+    Pop-Location
+  }
+
+  Wait-ForPort -Port $Port -TimeoutSeconds 120
 }
 
 function Wait-ForHttp {
@@ -345,14 +345,14 @@ Write-Host "Logs: $runDirectory"
 $databasePort = Get-DatabasePort
 Write-Host "Ensuring Prisma dev is running..."
 if (-not (Get-NetTCPConnection -State Listen -LocalPort $databasePort -ErrorAction SilentlyContinue)) {
-  Start-PrismaDevServer -Port $databasePort -LogDirectory $runDirectory
+  Start-PrismaDevServer -Port $databasePort
 }
 Wait-ForPort -Port $databasePort
 
 if (-not $SkipDbChecks) {
   if (-not (Test-DatabaseConnection)) {
     Stop-PrismaDevServer -Port $databasePort
-    Start-PrismaDevServer -Port $databasePort -LogDirectory $runDirectory
+    Start-PrismaDevServer -Port $databasePort
   }
 
   Write-Host "Checking database migrations and connection..."
