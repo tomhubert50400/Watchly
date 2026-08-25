@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { Prisma } from '../generated/prisma/client';
 import { TrackedContentType, UserContentStatus } from '../generated/prisma/enums';
 import { commitPreparedItems } from './imports.service';
@@ -127,6 +128,11 @@ assert.equal(createdReviews.length, 1);
 assert.equal(createdStates.length, 1);
 assert.equal(createdViewings.length, 1);
 assert.deepEqual(updatedStates, [{ favorite: true, status: UserContentStatus.WATCHING }]);
+assert.match(
+  readFileSync('src/imports/imports.service.ts', 'utf8'),
+  /sourceRating: item\.rating/,
+  'Import previews must expose the source rating for movie and series match review.',
+);
 
 console.log('Imports service QA passed.');
 }

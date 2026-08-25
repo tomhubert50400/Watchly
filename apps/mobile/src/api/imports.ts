@@ -8,6 +8,7 @@ export type ImportPreviewItem = {
     hasReview: boolean;
     favorite: boolean;
     rating: number | null;
+    sourceRating: number | null;
     viewingCount: number;
     watched: boolean;
     watching: boolean;

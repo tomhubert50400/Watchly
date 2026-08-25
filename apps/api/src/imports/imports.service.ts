@@ -478,6 +478,7 @@ function toPublicPreview(importId: string, preview: StoredImportPreview) {
       actions: {
         hasReview: item.review !== null && item.match?.contentType === 'movie',
         rating: item.match?.contentType === 'movie' ? item.rating : null,
+        sourceRating: item.rating,
         viewingCount: item.match?.contentType === 'movie' && item.watched
           ? Math.max(1, item.watchedDates.length)
           : 0,
