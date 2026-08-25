@@ -48,6 +48,10 @@
         "APP_VARIANT": "production",
         "EXPO_PUBLIC_APP_ENV": "production"
       }
+    },
+    "production-internal": {
+      "extends": "production",
+      "distribution": "internal"
     }
   }
 }

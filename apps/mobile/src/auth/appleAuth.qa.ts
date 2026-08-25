@@ -13,6 +13,7 @@ const easConfig = JSON.parse(
 ) as {
   build: Record<string, {
     developmentClient?: boolean;
+    distribution?: string;
     env?: Record<string, string>;
     extends?: string;
   }>;
@@ -70,6 +71,11 @@ assert.equal(stagingDevelopmentProfile.developmentClient, true);
 assert.equal(stagingDevelopmentProfile.env?.APP_VARIANT, 'staging');
 assert.equal(stagingDevelopmentProfile.env?.EXPO_PUBLIC_APP_ENV, 'staging');
 assert.equal(stagingDevelopmentProfile.env?.WATCHLY_DEV_CLIENT, 'true');
+
+const productionInternalProfile = easConfig.build['production-internal'];
+assert.equal(productionInternalProfile.extends, 'production');
+assert.equal(productionInternalProfile.distribution, 'internal');
+assert.equal(productionInternalProfile.developmentClient, undefined);
 assert.match(
   stagingLauncherSource,
   /--max-workers 4/,
