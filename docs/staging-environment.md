@@ -23,6 +23,11 @@ Configure these values in the EAS `preview` environment:
 - `EXPO_PUBLIC_FIREBASE_PROJECT_ID`.
 - `EXPO_PUBLIC_FIREBASE_APP_ID`.
 - The platform Google client IDs when staging OAuth is ready.
+- `EXPO_PUBLIC_MICROSOFT_CLIENT_ID` when Microsoft OAuth is ready.
+- `EXPO_PUBLIC_DISCORD_APPLICATION_ID` when Discord OAuth is ready.
+
+Production must use a dedicated Discord application ID. The build fails instead of reusing the
+staging Discord callback when `EXPO_PUBLIC_DISCORD_APPLICATION_ID` is absent.
 
 `APP_VARIANT` and `EXPO_PUBLIC_APP_ENV` are fixed by `eas.json`. A staging or production bundle fails during startup if the API URL is local, not HTTPS, or if the core Firebase configuration is absent. Development emulator credentials are also rejected outside development.
 

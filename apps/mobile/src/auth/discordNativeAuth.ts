@@ -1,7 +1,11 @@
 import { requireOptionalNativeModule } from 'expo';
 import { Platform } from 'react-native';
+import { appEnvironment, publicEnv } from '../config/publicEnv';
 
-export const DISCORD_APPLICATION_ID = '1539925787333890090';
+const stagingDiscordApplicationId = '1539925787333890090';
+
+export const DISCORD_APPLICATION_ID = publicEnv.EXPO_PUBLIC_DISCORD_APPLICATION_ID
+  ?? (appEnvironment === 'production' ? null : stagingDiscordApplicationId);
 
 export type DiscordNativeAuthorization = {
   code: string;
@@ -22,6 +26,9 @@ export function shouldUseNativeDiscordAuthorization() {
 export async function requestNativeDiscordAuthorization() {
   if (!nativeModule) {
     throw new Error('Discord sign-in requires the latest Watchly build.');
+  }
+  if (!DISCORD_APPLICATION_ID) {
+    throw new Error('Discord setup is incomplete: EXPO_PUBLIC_DISCORD_APPLICATION_ID.');
   }
 
   return nativeModule.authorize(DISCORD_APPLICATION_ID);

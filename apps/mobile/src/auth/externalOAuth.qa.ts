@@ -21,7 +21,14 @@ assert.match(firebaseSource, /signInWithCustomToken/);
 assert.match(contextSource, /pendingAccountLinkRef/);
 assert.match(discordNativeSource, /requireOptionalNativeModule/);
 assert.match(discordNativeSource, /Platform\.OS === 'ios'/);
-assert.match(discordNativeSource, /1539925787333890090/);
+assert.match(discordNativeSource, /publicEnv\.EXPO_PUBLIC_DISCORD_APPLICATION_ID/);
+assert.doesNotMatch(
+  discordNativeSource,
+  /export const DISCORD_APPLICATION_ID = '1539925787333890090'/,
+  'the production binary must not reuse the staging Discord application ID',
+);
+assert.match(configSource, /EXPO_PUBLIC_DISCORD_APPLICATION_ID/);
+assert.match(configSource, /is required for production builds/);
 assert.match(configSource, /`discord-\$\{discordClientId\}`/);
 assert.match(configSource, /LSApplicationQueriesSchemes/);
 assert.doesNotMatch(apiSource, /facebook/i);
@@ -32,4 +39,34 @@ assert.doesNotMatch(
   'pending provider tickets must remain in memory and disappear when the app process exits',
 );
 
+const previousVariant = process.env.APP_VARIANT;
+const previousPublicEnvironment = process.env.EXPO_PUBLIC_APP_ENV;
+const previousProductionApplicationId = process.env.WATCHLY_PRODUCTION_APPLICATION_ID;
+const previousDiscordApplicationId = process.env.EXPO_PUBLIC_DISCORD_APPLICATION_ID;
+process.env.APP_VARIANT = 'production';
+process.env.EXPO_PUBLIC_APP_ENV = 'production';
+process.env.WATCHLY_PRODUCTION_APPLICATION_ID = 'com.tom.tvapp';
+delete process.env.EXPO_PUBLIC_DISCORD_APPLICATION_ID;
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const configureApp = require('../../app.config.js');
+assert.throws(
+  () => configureApp({ config: {} }),
+  /EXPO_PUBLIC_DISCORD_APPLICATION_ID is required for production builds/,
+);
+
+process.env.EXPO_PUBLIC_DISCORD_APPLICATION_ID = '123456789012345678';
+const productionConfig = configureApp({ config: {} });
+assert(productionConfig.scheme.includes('discord-123456789012345678'));
+
+restoreEnvironment('APP_VARIANT', previousVariant);
+restoreEnvironment('EXPO_PUBLIC_APP_ENV', previousPublicEnvironment);
+restoreEnvironment('WATCHLY_PRODUCTION_APPLICATION_ID', previousProductionApplicationId);
+restoreEnvironment('EXPO_PUBLIC_DISCORD_APPLICATION_ID', previousDiscordApplicationId);
+
 console.log('External OAuth mobile QA passed.');
+
+function restoreEnvironment(key: string, value: string | undefined) {
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+}

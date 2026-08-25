@@ -3,6 +3,7 @@ import { resolveAppEnvironment, validatePublicEnvironment } from './appEnvironme
 type PublicEnv = {
   EXPO_PUBLIC_APP_ENV?: string;
   EXPO_PUBLIC_API_URL?: string;
+  EXPO_PUBLIC_DISCORD_APPLICATION_ID?: string;
   EXPO_PUBLIC_ERROR_TRACKING_DSN?: string;
   EXPO_PUBLIC_MONITORING_PROBE_ID?: string;
   EXPO_PUBLIC_NATIVE_CRASH_PROBE_ID?: string;
@@ -38,6 +39,7 @@ const fallbackPublicEnv = appEnvironment === 'development' ? developmentFallback
 export const publicEnv: PublicEnv = {
   EXPO_PUBLIC_APP_ENV: process.env.EXPO_PUBLIC_APP_ENV ?? appEnvironment,
   EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL ?? fallbackPublicEnv.EXPO_PUBLIC_API_URL,
+  EXPO_PUBLIC_DISCORD_APPLICATION_ID: process.env.EXPO_PUBLIC_DISCORD_APPLICATION_ID,
   EXPO_PUBLIC_ERROR_TRACKING_DSN: process.env.EXPO_PUBLIC_ERROR_TRACKING_DSN,
   EXPO_PUBLIC_MONITORING_PROBE_ID: process.env.EXPO_PUBLIC_MONITORING_PROBE_ID,
   EXPO_PUBLIC_NATIVE_CRASH_PROBE_ID: process.env.EXPO_PUBLIC_NATIVE_CRASH_PROBE_ID,

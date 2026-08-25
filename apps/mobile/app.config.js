@@ -1,5 +1,5 @@
 const allowedVariants = new Set(['development', 'staging', 'production']);
-const discordApplicationId = '1539925787333890090';
+const stagingDiscordApplicationId = '1539925787333890090';
 
 module.exports = ({ config }) => {
   const variant = process.env.APP_VARIANT?.trim() || 'development';
@@ -16,6 +16,7 @@ module.exports = ({ config }) => {
   }
 
   const applicationId = getApplicationId(variant, config);
+  const discordApplicationId = getDiscordApplicationId(variant);
   const isDevelopment = variant === 'development';
   const usesLocalNetworking = isDevelopment || process.env.WATCHLY_DEV_CLIENT === 'true';
 
@@ -94,6 +95,20 @@ function getApplicationId(variant, config) {
   }
 
   return productionApplicationId;
+}
+
+function getDiscordApplicationId(variant) {
+  if (variant !== 'production') return stagingDiscordApplicationId;
+
+  const productionDiscordApplicationId = process.env.EXPO_PUBLIC_DISCORD_APPLICATION_ID?.trim();
+  if (!productionDiscordApplicationId) {
+    throw new Error('EXPO_PUBLIC_DISCORD_APPLICATION_ID is required for production builds.');
+  }
+  if (!/^\d+$/.test(productionDiscordApplicationId)) {
+    throw new Error('EXPO_PUBLIC_DISCORD_APPLICATION_ID must be a numeric Discord application ID.');
+  }
+
+  return productionDiscordApplicationId;
 }
 
 function withoutLocalNetworkEntitlements(infoPlist = {}) {
