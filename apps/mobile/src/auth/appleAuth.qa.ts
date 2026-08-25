@@ -75,6 +75,11 @@ assert.match(
   /--max-workers 4/,
   'the staging iPhone launcher must bound Metro transform concurrency',
 );
+assert.match(
+  stagingLauncherSource,
+  /security:auth-provider-readiness/,
+  'the staging launcher must expose the deployed provider readiness smoke',
+);
 
 const previousVariant = process.env.APP_VARIANT;
 const previousPublicEnvironment = process.env.EXPO_PUBLIC_APP_ENV;

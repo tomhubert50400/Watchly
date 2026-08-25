@@ -1,5 +1,6 @@
 param(
   [int]$Port = 8081,
+  [switch]$CheckProviders,
   [switch]$ValidateOnly
 )
 
@@ -86,6 +87,19 @@ try {
   }
 
   Write-Host 'Watchly staging auth configuration is valid.'
+  if ($CheckProviders) {
+    $env:DEPLOYMENT_API_URL = $env:EXPO_PUBLIC_API_URL
+    $env:DEPLOYMENT_APP_ENV = 'staging'
+    Push-Location $repoRoot
+    try {
+      pnpm --filter api security:auth-provider-readiness
+      if ($LASTEXITCODE -ne 0) {
+        throw 'The deployed auth provider readiness smoke failed.'
+      }
+    } finally {
+      Pop-Location
+    }
+  }
   if ($ValidateOnly) {
     return
   }
