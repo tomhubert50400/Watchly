@@ -10,6 +10,8 @@ import type { ExternalProviderIdentity } from './external-oauth.provider';
 const MICROSOFT_JWKS_URL = 'https://login.microsoftonline.com/common/discovery/v2.0/keys';
 const KEY_CACHE_LIFETIME_MS = 60 * 60 * 1000;
 const CLOCK_TOLERANCE_SECONDS = 60;
+const MICROSOFT_JWKS_TIMEOUT_MS = 10_000;
+const MICROSOFT_TENANT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type MicrosoftJwtHeader = {
   alg?: unknown;
@@ -31,6 +33,7 @@ type MicrosoftJwtPayload = {
 
 type MicrosoftJwk = JsonWebKey & {
   alg?: string;
+  issuer?: string;
   kid?: string;
   kty?: string;
   use?: string;
@@ -68,11 +71,16 @@ export function verifyMicrosoftIdentityWithKeys(
     throw invalidMicrosoftToken();
   }
 
+  const tenantId = getRequiredMicrosoftTenantId(payload.tid);
+  const subject = getRequiredString(payload.sub);
+  const expectedIssuer = `https://login.microsoftonline.com/${tenantId}/v2.0`;
+
   const signingKey = keys.find((key) => (
     key.kid === header.kid
     && key.kty === 'RSA'
     && (!key.alg || key.alg === 'RS256')
     && (!key.use || key.use === 'sig')
+    && microsoftKeyIssuerMatches(key.issuer, expectedIssuer, tenantId)
   ));
   if (!signingKey) throw invalidMicrosoftToken();
 
@@ -89,9 +97,6 @@ export function verifyMicrosoftIdentityWithKeys(
   }
   if (!signatureIsValid) throw invalidMicrosoftToken();
 
-  const tenantId = getRequiredString(payload.tid);
-  const subject = getRequiredString(payload.sub);
-  const expectedIssuer = `https://login.microsoftonline.com/${tenantId}/v2.0`;
   const audienceIsValid = payload.aud === clientId
     || (Array.isArray(payload.aud) && payload.aud.includes(clientId));
 
@@ -111,11 +116,23 @@ export function verifyMicrosoftIdentityWithKeys(
   return {
     displayName: getOptionalString(payload.name),
     email,
-    emailVerified: email !== null,
+    emailVerified: false,
     photoUrl: null,
     provider: AuthProvider.MICROSOFT,
-    providerUserId: subject,
+    providerUserId: `${tenantId}:${subject}`,
   };
+}
+
+export function getLegacyMicrosoftProviderUserId(providerUserId: string) {
+  const separatorIndex = providerUserId.indexOf(':');
+  const tenantId = providerUserId.slice(0, separatorIndex);
+  const subject = providerUserId.slice(separatorIndex + 1);
+
+  return separatorIndex === 36
+    && MICROSOFT_TENANT_ID_PATTERN.test(tenantId)
+    && subject
+    ? subject
+    : null;
 }
 
 async function getMicrosoftSigningKeys() {
@@ -124,7 +141,9 @@ async function getMicrosoftSigningKeys() {
 
   let response: Response;
   try {
-    response = await fetch(MICROSOFT_JWKS_URL);
+    response = await fetch(MICROSOFT_JWKS_URL, {
+      signal: AbortSignal.timeout(MICROSOFT_JWKS_TIMEOUT_MS),
+    });
   } catch {
     throw new ServiceUnavailableException('Microsoft sign-in could not be verified right now.');
   }
@@ -171,6 +190,23 @@ function getRequiredString(value: unknown) {
   if (!normalized || normalized.length > 512) throw invalidMicrosoftToken();
 
   return normalized;
+}
+
+function getRequiredMicrosoftTenantId(value: unknown) {
+  const tenantId = getRequiredString(value);
+  if (!MICROSOFT_TENANT_ID_PATTERN.test(tenantId)) throw invalidMicrosoftToken();
+
+  return tenantId.toLowerCase();
+}
+
+function microsoftKeyIssuerMatches(
+  keyIssuer: string | undefined,
+  expectedIssuer: string,
+  tenantId: string,
+) {
+  if (!keyIssuer) return false;
+
+  return keyIssuer.replace(/\{tenantid\}/gi, tenantId) === expectedIssuer;
 }
 
 function getOptionalString(value: unknown) {

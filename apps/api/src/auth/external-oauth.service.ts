@@ -25,7 +25,10 @@ import {
   OAuthTicketProvider,
   toAuthProvider,
 } from './external-oauth.provider';
-import { verifyMicrosoftIdentity } from './microsoft-id-token';
+import {
+  getLegacyMicrosoftProviderUserId,
+  verifyMicrosoftIdentity,
+} from './microsoft-id-token';
 
 const ATTEMPT_LIFETIME_MS = 10 * 60 * 1000;
 
@@ -152,7 +155,7 @@ export class ExternalOAuthService {
           photoUrl: identity.photoUrl,
           provider: identity.provider,
           providerUserId: identity.providerUserId,
-          stateHash: hashOAuthSecret(idToken),
+          stateHash: hashOAuthSecret(createOpaqueSecret()),
         },
       });
     });
@@ -215,8 +218,8 @@ export class ExternalOAuthService {
       toExternalProvider(attempt.provider),
       attempt.providerUserId,
     ));
-    const existingIdentity = await this.prisma.withConnectionRetry(() =>
-      this.prisma.authIdentity.findUnique({
+    const existingIdentity = await this.prisma.withConnectionRetry(async () => {
+      const exactIdentity = await this.prisma.authIdentity.findUnique({
         select: { user: { select: { firebaseUid: true } } },
         where: {
           provider_providerUserId: {
@@ -224,8 +227,23 @@ export class ExternalOAuthService {
             providerUserId: attempt.providerUserId,
           },
         },
-      }),
-    );
+      });
+      const legacyProviderUserId = attempt.provider === AuthProvider.MICROSOFT
+        ? getLegacyMicrosoftProviderUserId(attempt.providerUserId)
+        : null;
+
+      return exactIdentity ?? (legacyProviderUserId
+        ? this.prisma.authIdentity.findUnique({
+            select: { user: { select: { firebaseUid: true } } },
+            where: {
+              provider_providerUserId: {
+                provider: attempt.provider,
+                providerUserId: legacyProviderUserId,
+              },
+            },
+          })
+        : null);
+    });
     const firebaseUid = existingIdentity?.user.firebaseUid ?? identity.firebaseUid;
 
     await this.authService.getOrCreateUser({ ...identity, firebaseUid });
@@ -241,6 +259,9 @@ export class ExternalOAuthService {
 
   async link(identity: AuthenticatedIdentity, ticket: string) {
     const attempt = await this.getCompletedAttempt(ticket);
+    const legacyProviderUserId = attempt.provider === AuthProvider.MICROSOFT
+      ? getLegacyMicrosoftProviderUserId(attempt.providerUserId)
+      : null;
 
     if (
       attempt.initiatedByFirebaseUid
@@ -257,7 +278,7 @@ export class ExternalOAuthService {
         });
         if (!user) throw new BadRequestException('The Watchly account no longer exists.');
 
-        const providerCollision = await transaction.authIdentity.findUnique({
+        const exactProviderCollision = await transaction.authIdentity.findUnique({
           select: { userId: true },
           where: {
             provider_providerUserId: {
@@ -266,6 +287,17 @@ export class ExternalOAuthService {
             },
           },
         });
+        const providerCollision = exactProviderCollision ?? (legacyProviderUserId
+          ? await transaction.authIdentity.findUnique({
+              select: { userId: true },
+              where: {
+                provider_providerUserId: {
+                  provider: attempt.provider,
+                  providerUserId: legacyProviderUserId,
+                },
+              },
+            })
+          : null);
         if (providerCollision && providerCollision.userId !== user.id) {
           throw new ConflictException({
             code: 'PROVIDER_ALREADY_LINKED',
@@ -279,7 +311,11 @@ export class ExternalOAuthService {
             userId_provider: { provider: attempt.provider, userId: user.id },
           },
         });
-        if (linkedProvider && linkedProvider.providerUserId !== attempt.providerUserId) {
+        if (
+          linkedProvider
+          && linkedProvider.providerUserId !== attempt.providerUserId
+          && linkedProvider.providerUserId !== legacyProviderUserId
+        ) {
           throw new ConflictException({
             code: 'PROVIDER_ALREADY_LINKED',
             message: 'Another account from this provider is already linked to Watchly.',

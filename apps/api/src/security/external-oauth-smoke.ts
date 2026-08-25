@@ -95,6 +95,56 @@ async function main() {
     });
     assert.equal(preservedIdentity?.providerUserId, `discord-${suffix}`);
 
+    const legacyMicrosoftSubject = `microsoft-legacy-${suffix}`;
+    const microsoftTenantId = '11111111-2222-3333-4444-555555555555';
+    await prisma.authIdentity.create({
+      data: {
+        provider: AuthProvider.MICROSOFT,
+        providerUserId: legacyMicrosoftSubject,
+        userId,
+      },
+    });
+    const microsoftTicket = `external-oauth-microsoft-${suffix}`;
+    const microsoftAttempt = await prisma.oAuthAttempt.create({
+      data: {
+        appRedirectUri: 'microsoft-token://watchly',
+        completedAt: new Date(),
+        completionHash: hashOAuthSecret(microsoftTicket),
+        emailVerified: false,
+        expiresAt: new Date(Date.now() + 60_000),
+        initiatedByFirebaseUid: firebaseUid,
+        provider: AuthProvider.MICROSOFT,
+        providerUserId: `${microsoftTenantId}:${legacyMicrosoftSubject}`,
+        stateHash: hashOAuthSecret(`microsoft-state-${suffix}`),
+      },
+    });
+    attemptIds.push(microsoftAttempt.id);
+
+    await oauth.link({
+      displayName: null,
+      emailVerified: false,
+      firebaseUid,
+      provider: AuthProvider.GOOGLE,
+      providerUserId: `google-${suffix}`,
+    }, microsoftTicket);
+
+    assert(await prisma.authIdentity.findUnique({
+      where: {
+        provider_providerUserId: {
+          provider: AuthProvider.MICROSOFT,
+          providerUserId: `${microsoftTenantId}:${legacyMicrosoftSubject}`,
+        },
+      },
+    }), 'a legacy Microsoft identity must migrate to the tenant-scoped identifier');
+    assert.equal(await prisma.authIdentity.findUnique({
+      where: {
+        provider_providerUserId: {
+          provider: AuthProvider.MICROSOFT,
+          providerUserId: legacyMicrosoftSubject,
+        },
+      },
+    }), null);
+
     console.log('External OAuth smoke passed.');
   } finally {
     if (attemptIds.length > 0) {
