@@ -37,6 +37,11 @@ assert.match(
 );
 assert.match(
   profileAuthCardSource,
+  /if \(!provider\.isWired\)[\s\S]*if \(provider\.id === 'apple'\)/,
+  'unwired provider builds must stop before opening a native provider flow',
+);
+assert.match(
+  profileAuthCardSource,
   /showToast\((?:'|`)Connecting with [^;]+, 'info'\)/,
   'provider progress must use a neutral informational toast',
 );

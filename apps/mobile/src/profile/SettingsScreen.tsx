@@ -47,6 +47,7 @@ import { useAuthSession } from '../auth/AuthSessionContext';
 import { reauthenticateAndRevokeApple } from '../auth/firebase';
 import { useMicrosoftAuth } from '../auth/microsoftAuth';
 import { getMissingGoogleClientConfig, googleClientIds } from '../auth/googleAuthConfig';
+import { authProviders } from '../auth/providerConfig';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { BottomActionSheet, BottomActionSheetScrollView } from '../components/BottomActionSheet';
 import { Button } from '../components/Button';
@@ -79,6 +80,8 @@ const defaultPrivacy: ProfilePrivacy = {
   sharedWatchlistVisibility: 'members',
   viewingHistoryVisibility: 'public',
 };
+const discordProviderWired = authProviders.some((provider) => provider.id === 'discord' && provider.isWired);
+const microsoftProviderWired = authProviders.some((provider) => provider.id === 'microsoft' && provider.isWired);
 
 export function SettingsScreen() {
   const navigation = useNavigation<SettingsNavigation>();
@@ -125,6 +128,8 @@ export function SettingsScreen() {
 
     void AppleAuthentication.isAvailableAsync().then((available) => {
       if (isMounted) setAppleAvailable(available);
+    }).catch(() => {
+      if (isMounted) setAppleAvailable(false);
     });
 
     return () => { isMounted = false; };
@@ -348,6 +353,13 @@ export function SettingsScreen() {
   }
 
   async function connectMicrosoft() {
+    if (!microsoftProviderWired) {
+      setMessage({
+        text: 'Microsoft linking is available in Watchly Staging and production.',
+        tone: 'error',
+      });
+      return;
+    }
     if (accountAction || currentUser?.providers?.includes('MICROSOFT')) return;
     if (!microsoftAuth.isConfigured) {
       setMessage({
@@ -376,6 +388,13 @@ export function SettingsScreen() {
   }
 
   async function connectDiscord() {
+    if (!discordProviderWired) {
+      setMessage({
+        text: 'Discord linking is available in Watchly Staging and production.',
+        tone: 'error',
+      });
+      return;
+    }
     if (accountAction || currentUser?.providers?.includes('DISCORD')) return;
 
     setAccountAction('linkDiscord');

@@ -234,6 +234,11 @@ export function ProfileAuthCard({
 
   async function selectProvider(provider: AuthProviderConfig) {
     setMessage(null);
+    if (!provider.isWired) {
+      setLocalStatus('idle');
+      setMessage(`${provider.name} sign-in is available in Watchly Staging and production.`);
+      return;
+    }
     if (provider.id === 'apple') {
       await startAppleSignIn();
       return;
@@ -244,11 +249,6 @@ export function ProfileAuthCard({
     }
     if (provider.id === 'discord') {
       await startExternalSignIn(provider.id);
-      return;
-    }
-    if (!provider.isWired) {
-      setLocalStatus('idle');
-      setMessage(`${provider.name} sign-in is not connected yet. Choose Google or finish provider setup first.`);
       return;
     }
     if (!canUseGoogle) return;

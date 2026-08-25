@@ -52,6 +52,11 @@ assert.match(firebaseSource, /accounts:revokeToken/);
 assert.match(firebaseSource, /tokenType: 'CODE'/);
 assert.match(settingsSource, /linkApple/);
 assert.match(settingsSource, /AppleAuthenticationButton/);
+assert.match(
+  settingsSource,
+  /AppleAuthentication\.isAvailableAsync\(\)[\s\S]*\.catch\(\(\) =>/,
+  'Settings must handle Apple availability failures',
+);
 assert.match(settingsSource, /authorizationCode/);
 assert.match(settingsSource, /reauthenticateAndRevokeApple/);
 

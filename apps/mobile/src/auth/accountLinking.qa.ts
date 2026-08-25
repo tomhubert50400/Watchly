@@ -24,6 +24,8 @@ assert.doesNotMatch(settingsSource, /(Google|Microsoft|Discord) connected/);
 assert.match(settingsSource, /function ConnectedProviderRow/);
 assert.match(settingsSource, /Connected to this Watchly account\./);
 assert.match(settingsSource, /connectedPillText}>Connected</);
+assert.match(settingsSource, /microsoftProviderWired/);
+assert.match(settingsSource, /discordProviderWired/);
 assert.match(contextSource, /ACCOUNT_LINK_REQUIRED/);
 assert.match(contextSource, /completeExternalOAuthLink/);
 assert.match(contextSource, /createMicrosoftOAuthTicket/);
