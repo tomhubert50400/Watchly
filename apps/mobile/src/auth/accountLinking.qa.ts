@@ -28,7 +28,17 @@ assert.match(contextSource, /ACCOUNT_LINK_REQUIRED/);
 assert.match(contextSource, /completeExternalOAuthLink/);
 assert.match(contextSource, /createMicrosoftOAuthTicket/);
 assert.match(contextSource, /linkWithPendingFirebaseCredential/);
+assert.match(contextSource, /explicitProviderSignInRef/);
+assert.match(contextSource, /isAccountLinkRequired/);
+assert.match(contextSource, /credential: result\.credential/);
+assert.match(contextSource, /await signOutFromFirebase\(\)/);
 assert.match(firebaseSource, /auth\/account-exists-with-different-credential/);
+assert.match(firebaseSource, /credential, provider, session:/);
+assert.match(
+  readFileSync(new URL('./ProfileAuthCard.tsx', import.meta.url), 'utf8'),
+  /if \(error instanceof ApiError\) return error\.message;/,
+  'provider setup and account-linking errors must remain actionable',
+);
 assert.doesNotMatch(
   contextSource,
   /AsyncStorage/,

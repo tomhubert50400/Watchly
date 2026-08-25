@@ -78,6 +78,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   const [status, setStatus] = useState<AuthSessionStatus>('loading');
   const [trackingRevision, setTrackingRevision] = useState(0);
   const explicitSignOutRef = useRef(false);
+  const explicitProviderSignInRef = useRef(false);
   const devSignInAttemptedRef = useRef(false);
   const latestFirebaseIdTokenRef = useRef<string | null>(null);
   const pendingAccountLinkRef = useRef<PendingAccountLink | null>(null);
@@ -176,6 +177,8 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     setStatus('loading');
 
     const unsubscribe = subscribeToFirebaseIdTokenState((firebaseUser) => {
+      if (explicitProviderSignInRef.current) return;
+
       const transition = authTransitionsRef.current.begin();
       void (async () => {
         if (!isMounted || !authTransitionsRef.current.isCurrent(transition)) return;
@@ -239,6 +242,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   ): Promise<ProviderSignInResult> => {
     const transition = authTransitionsRef.current.begin();
     explicitSignOutRef.current = false;
+    explicitProviderSignInRef.current = true;
     setStatus('loading');
     try {
       const result = await signIn();
@@ -289,13 +293,32 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       }
 
       if (authTransitionsRef.current.isCurrent(transition)) {
-        await applyFirebaseSession(result.session.firebaseIdToken, transition);
+        try {
+          await applyFirebaseSession(result.session.firebaseIdToken, transition);
+        } catch (error) {
+          if (!isAccountLinkRequired(error)) throw error;
+
+          const pendingLink = {
+            credential: result.credential,
+            existingProviders: getExistingProviders(error),
+            kind: 'firebase' as const,
+            provider: result.provider,
+          };
+          pendingAccountLinkRef.current = pendingLink;
+          explicitSignOutRef.current = true;
+          await signOutFromFirebase();
+          if (authTransitionsRef.current.isCurrent(transition)) setStatus('idle');
+
+          return toLinkRequiredResult(pendingLink);
+        }
       }
 
       return { type: 'signedIn' as const };
     } catch (error) {
       if (authTransitionsRef.current.isCurrent(transition)) setStatus('error');
       throw error;
+    } finally {
+      explicitProviderSignInRef.current = false;
     }
   }, [applyFirebaseSession]);
   const signInWithApple = useCallback(
@@ -570,6 +593,10 @@ function getExistingProviders(error: ApiError) {
   return Array.isArray(providers)
     ? providers.filter((provider): provider is string => typeof provider === 'string')
     : [];
+}
+
+function isAccountLinkRequired(error: unknown): error is ApiError {
+  return error instanceof ApiError && error.code === 'ACCOUNT_LINK_REQUIRED';
 }
 
 type PendingAccountLink =

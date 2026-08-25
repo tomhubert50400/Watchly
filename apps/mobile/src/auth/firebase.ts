@@ -55,7 +55,12 @@ export type FirebaseCredentialProvider = 'apple' | 'google';
 
 export type FirebaseProviderSignInResult =
   | { credential: AuthCredential; provider: FirebaseCredentialProvider; type: 'linkRequired' }
-  | { session: FirebaseSession; type: 'signedIn' }
+  | {
+    credential: AuthCredential;
+    provider: FirebaseCredentialProvider;
+    session: FirebaseSession;
+    type: 'signedIn';
+  }
   | { challenge: FirebaseTotpChallenge; type: 'totpRequired' };
 
 let authInstance: Auth | null = null;
@@ -165,7 +170,7 @@ async function signInWithFirebaseCredential(
     const userCredential = await signInWithCredential(auth, credential);
 
     return {
-      session: await getFirebaseSessionFromUser(userCredential.user),
+      credential, provider, session: await getFirebaseSessionFromUser(userCredential.user),
       type: 'signedIn',
     };
   } catch (error) {

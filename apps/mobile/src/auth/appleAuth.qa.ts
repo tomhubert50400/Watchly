@@ -39,6 +39,11 @@ assert.match(authCardSource, /appleButtonBorder: \{[^}]*borderWidth: 1/);
 assert.match(authCardSource, /appleButtonLabel: \{[^}]*fontSize: 14/);
 assert.match(authCardSource, /AppleAuthenticationScope\.EMAIL/);
 assert.match(authCardSource, /AppleAuthenticationScope\.FULL_NAME/);
+assert.match(
+  authCardSource,
+  /AppleAuthentication\.isAvailableAsync\(\)[\s\S]*\.catch\(\(\) =>/,
+  'Apple availability failures must leave the sign-in screen usable',
+);
 assert.match(firebaseSource, /new OAuthProvider\('apple\.com'\)/);
 assert.match(firebaseSource, /rawNonce/);
 assert.match(firebaseSource, /linkWithCredential/);

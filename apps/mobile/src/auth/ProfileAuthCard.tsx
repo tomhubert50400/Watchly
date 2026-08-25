@@ -71,6 +71,8 @@ export function ProfileAuthCard({
     if (Platform.OS === 'ios') {
       void AppleAuthentication.isAvailableAsync().then((available) => {
         if (mounted) setAppleAvailable(available);
+      }).catch(() => {
+        if (mounted) setAppleAvailable(false);
       });
     }
 
@@ -499,8 +501,6 @@ function accountError(error: unknown) {
   if (isFirebaseAuthError(error, 'auth/account-exists-with-different-credential')) {
     return 'This email already belongs to a Watchly account. Sign in with a connected method, then add this provider in Settings.';
   }
-  if (error instanceof ApiError && error.status === 403) return error.message;
-  if (error instanceof ApiError && error.status) return `Backend account check failed with status ${error.status}.`;
   if (error instanceof ApiError) return error.message;
   return 'Sign-in failed. Check Firebase and backend account setup.';
 }
