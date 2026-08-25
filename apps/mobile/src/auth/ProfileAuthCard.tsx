@@ -501,6 +501,7 @@ function accountError(error: unknown) {
   if (isFirebaseAuthError(error, 'auth/account-exists-with-different-credential')) {
     return 'This email already belongs to a Watchly account. Sign in with a connected method, then add this provider in Settings.';
   }
+  if (error instanceof ApiError && error.status === 403) return error.message;
   if (error instanceof ApiError) return error.message;
   return 'Sign-in failed. Check Firebase and backend account setup.';
 }
