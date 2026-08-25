@@ -31,10 +31,7 @@ export class DevOnboardingController {
     @Req() request: AuthenticatedRequest,
     @Param('mode') modeValue: string,
   ) {
-    assertDevelopmentOnboardingReset(
-      this.config.get<string>('APP_ENV'),
-      this.config.get<string>('NODE_ENV'),
-    );
+    assertOnboardingResetEnvironment(this.config.get<string>('APP_ENV'));
 
     if (!request.authIdentity) {
       throw new UnauthorizedException('Missing auth token.');
@@ -60,12 +57,9 @@ export class DevOnboardingController {
   }
 }
 
-export function assertDevelopmentOnboardingReset(
-  appEnvironment: string | undefined,
-  nodeEnvironment: string | undefined,
-) {
-  if (appEnvironment !== 'development' || nodeEnvironment === 'production') {
-    throw new ForbiddenException('Onboarding reset is only available in development.');
+export function assertOnboardingResetEnvironment(appEnvironment: string | undefined) {
+  if (appEnvironment !== 'development' && appEnvironment !== 'staging') {
+    throw new ForbiddenException('Onboarding reset is unavailable in production.');
   }
 }
 

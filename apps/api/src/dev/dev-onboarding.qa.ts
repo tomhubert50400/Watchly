@@ -1,14 +1,11 @@
 import assert from 'node:assert/strict';
 import { ForbiddenException } from '@nestjs/common';
-import { assertDevelopmentOnboardingReset } from './dev-onboarding.controller';
+import { assertOnboardingResetEnvironment } from './dev-onboarding.controller';
 
-assert.doesNotThrow(() => assertDevelopmentOnboardingReset('development', 'development'));
+assert.doesNotThrow(() => assertOnboardingResetEnvironment('development'));
+assert.doesNotThrow(() => assertOnboardingResetEnvironment('staging'));
 assert.throws(
-  () => assertDevelopmentOnboardingReset('staging', 'development'),
-  ForbiddenException,
-);
-assert.throws(
-  () => assertDevelopmentOnboardingReset('development', 'production'),
+  () => assertOnboardingResetEnvironment('production'),
   ForbiddenException,
 );
 
