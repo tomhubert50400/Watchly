@@ -1,0 +1,51 @@
+# Dependencies and version-control data
+.git
+.git/
+.git/**
+node_modules/
+**/node_modules/
+.pnpm-store/
+
+# Local caches and generated output
+.expo/
+.expo-shared/
+**/.next/
+**/.gradle/
+**/.kotlin/
+**/dist/
+**/build/
+**/coverage/
+apps/api/src/generated/
+apps/mobile/ios/
+apps/mobile/android/
+
+# Local tooling and logs
+.agents/
+.codex/
+.codex-runlogs/
+.hermes/
+.hermes-design/
+.logs/
+tmp/
+*.log
+*.pyc
+*.tsbuildinfo
+__pycache__/
+.DS_Store
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+credentials.json
+
+# Assets unrelated to the mobile build
+output/
+screenshots/
+social-assets/
