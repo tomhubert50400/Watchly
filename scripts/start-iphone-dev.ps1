@@ -12,6 +12,56 @@ $apiEnvPath = Join-Path $apiDir ".env"
 $mobileEnvPath = Join-Path $repoRoot "apps\mobile\.env"
 $pnpmPath = (Get-Command pnpm.cmd -ErrorAction Stop).Source
 
+function Get-DotEnvValues {
+  param([string]$Path)
+
+  $values = @{}
+  foreach ($line in Get-Content -LiteralPath $Path) {
+    if ($line -match "^([A-Za-z_][A-Za-z0-9_]*)=(.*)$") {
+      $values[$Matches[1]] = $Matches[2].Trim()
+    }
+  }
+
+  return $values
+}
+
+function Assert-MobileAuthEnvironment {
+  $mobileEnv = Get-DotEnvValues -Path $mobileEnvPath
+  $apiEnv = Get-DotEnvValues -Path $apiEnvPath
+  $firebaseAppId = [string]$mobileEnv["EXPO_PUBLIC_FIREBASE_APP_ID"]
+
+  if (-not [string]::IsNullOrWhiteSpace($firebaseAppId)) {
+    if ($firebaseAppId -notmatch "^1:([0-9]+):") {
+      throw "EXPO_PUBLIC_FIREBASE_APP_ID is invalid."
+    }
+
+    $firebaseProjectNumber = $Matches[1]
+    foreach ($clientKey in @(
+      "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID",
+      "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID",
+      "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID"
+    )) {
+      $clientId = [string]$mobileEnv[$clientKey]
+      if (
+        -not [string]::IsNullOrWhiteSpace($clientId) -and
+        -not $clientId.StartsWith("$firebaseProjectNumber-")
+      ) {
+        throw "$clientKey belongs to a different Firebase project."
+      }
+    }
+  }
+
+  $mobileFirebaseProject = [string]$mobileEnv["EXPO_PUBLIC_FIREBASE_PROJECT_ID"]
+  $apiFirebaseProject = [string]$apiEnv["FIREBASE_PROJECT_ID"]
+  if (
+    -not [string]::IsNullOrWhiteSpace($mobileFirebaseProject) -and
+    -not [string]::IsNullOrWhiteSpace($apiFirebaseProject) -and
+    $mobileFirebaseProject -ne $apiFirebaseProject
+  ) {
+    throw "The mobile and API Firebase projects do not match."
+  }
+}
+
 function Get-LocalIPv4 {
   $config = Get-NetIPConfiguration -ErrorAction SilentlyContinue |
     Where-Object {
@@ -252,6 +302,10 @@ if (-not $Ip) {
   $Ip = Get-LocalIPv4
 }
 
+$env:APP_VARIANT = "development"
+$env:EXPO_PUBLIC_APP_ENV = "development"
+$env:WATCHLY_DEV_CLIENT = "true"
+
 $apiUrl = "http://$Ip`:3000"
 $metroUrl = "http://$Ip`:8081"
 $developmentClientScheme = Get-DevelopmentClientScheme
@@ -277,6 +331,9 @@ if (-not $SkipEnvUpdate) {
   Set-Content -LiteralPath $mobileEnvPath -Value $envLines
   Write-Host "Updated apps/mobile/.env: $mobileApiUrl"
 }
+
+Assert-MobileAuthEnvironment
+Write-Host "Auth environment: Firebase and Google client projects match."
 
 Stop-WatchlyServer -Port 8081 -Label "Metro"
 Stop-WatchlyServer -Port 3000 -Label "API"

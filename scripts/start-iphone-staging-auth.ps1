@@ -10,6 +10,8 @@ $ansiPattern = "$([char]27)\[[0-?]*[ -/]*[@-~]"
 
 Push-Location $mobileRoot
 try {
+  $env:CI = '1'
+  $env:PNPM_CONFIG_REPORTER = 'silent'
   $environmentOutput = (& pnpm dlx eas-cli@latest env:list preview --format short 2>&1 | Out-String)
   if ($LASTEXITCODE -ne 0) {
     throw 'Unable to load the EAS Preview environment.'
@@ -52,9 +54,21 @@ try {
     throw 'The Google iOS client belongs to a different Firebase project.'
   }
 
-  $configOutput = (& pnpm exec expo config --type public --json 2>$null | Out-String)
-  if ($LASTEXITCODE -ne 0) {
-    throw 'Unable to resolve the Expo staging manifest.'
+  $configOutput = ''
+  $configExitCode = 1
+  foreach ($attempt in 1..2) {
+    $configOutput = (& pnpm exec expo config --type public --json 2>$null | Out-String)
+    $configExitCode = $LASTEXITCODE
+    if ($configExitCode -eq 0) {
+      break
+    }
+    if ($attempt -eq 1) {
+      Write-Warning 'Expo staging manifest resolution failed once. Retrying.'
+      Start-Sleep -Seconds 1
+    }
+  }
+  if ($configExitCode -ne 0) {
+    throw 'Unable to resolve the Expo staging manifest after two attempts.'
   }
   $config = $configOutput | ConvertFrom-Json
   $requiredSchemes = @(
