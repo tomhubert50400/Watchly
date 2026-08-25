@@ -100,6 +100,15 @@ function assertEnvironmentIsolation() {
     failures.push('The health endpoint must remain available without a client environment header.');
   }
 
+  if (!runEnvironmentMiddleware(
+    middleware,
+    '/auth/oauth/discord/callback',
+    'GET',
+    undefined,
+  ).continued) {
+    failures.push('An OAuth provider callback must remain available without a client environment header.');
+  }
+
   if (!runEnvironmentMiddleware(middleware, '/ratings', 'OPTIONS', undefined).continued) {
     failures.push('CORS preflight must remain available without a client environment header.');
   }

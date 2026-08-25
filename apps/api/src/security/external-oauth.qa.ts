@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   buildExternalAuthorizationUrl,
+  exchangeExternalAuthorizationCode,
   getDiscordMobileRedirectUri,
   getExternalFirebaseUid,
   getExternalOAuthFailureReason,
@@ -82,5 +84,37 @@ const controllerSource = readFileSync(
 );
 assert(controllerSource.includes("@Post('oauth/discord/mobile')"));
 assert(controllerSource.includes('/^[A-Za-z0-9._~-]{43,128}$/'));
+const serviceSource = readFileSync(
+  resolve(process.cwd(), 'src/auth/external-oauth.service.ts'),
+  'utf8',
+);
+assert(!serviceSource.includes('stateHash: hashOAuthSecret(idToken)'));
+assert(serviceSource.includes('stateHash: hashOAuthSecret(createOpaqueSecret())'));
 
-console.log('External OAuth QA passed.');
+async function assertNetworkFailureIsClassified() {
+  const originalFetch = globalThis.fetch;
+  let requestSignal: AbortSignal | null = null;
+
+  globalThis.fetch = async (_input, init) => {
+    requestSignal = init?.signal ?? null;
+    throw new Error('provider offline');
+  };
+
+  try {
+    await assert.rejects(
+      () => exchangeExternalAuthorizationCode(config, 'discord', 'code', callbackUrl),
+      ServiceUnavailableException,
+    );
+    assert(requestSignal, 'external provider requests must have a timeout signal');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+void assertNetworkFailureIsClassified().then(
+  () => console.log('External OAuth QA passed.'),
+  (error: unknown) => {
+    console.error(error);
+    process.exitCode = 1;
+  },
+);

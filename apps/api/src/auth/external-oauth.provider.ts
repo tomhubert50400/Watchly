@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { createHash } from 'node:crypto';
 import { AuthProvider } from '../generated/prisma/enums';
 
+const EXTERNAL_PROVIDER_TIMEOUT_MS = 10_000;
+
 export type ExternalOAuthProvider = 'discord';
 export type OAuthTicketProvider = ExternalOAuthProvider | 'microsoft';
 
@@ -123,7 +125,7 @@ async function requestAccessToken(
     redirect_uri: callbackUrl,
     ...(codeVerifier ? { code_verifier: codeVerifier } : {}),
   });
-  const response = await fetch(settings.tokenEndpoint, {
+  const response = await fetchExternalProvider(settings.tokenEndpoint, {
     body,
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     method: 'POST',
@@ -145,7 +147,9 @@ async function requestAccessToken(
 }
 
 async function requestDiscordIdentity(endpoint: string, accessToken: string) {
-  const response = await fetch(endpoint, { headers: { Authorization: `Bearer ${accessToken}` } });
+  const response = await fetchExternalProvider(endpoint, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
   const payload = await readJson(response) as {
     avatar?: unknown;
     email?: unknown;
@@ -190,6 +194,17 @@ function requireProviderSettings(settings: {
     clientId: settings.clientId.trim(),
     clientSecret: settings.clientSecret.trim(),
   };
+}
+
+async function fetchExternalProvider(input: string, init: RequestInit) {
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: AbortSignal.timeout(EXTERNAL_PROVIDER_TIMEOUT_MS),
+    });
+  } catch {
+    throw new ServiceUnavailableException('The external sign-in provider could not be reached.');
+  }
 }
 
 async function readJson(response: Response) {

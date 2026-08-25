@@ -14,7 +14,13 @@ type NextFunction = () => void;
 
 export function createEnvironmentIsolationMiddleware(expectedEnvironment: string) {
   return (request: EnvironmentRequest, response: EnvironmentResponse, next: NextFunction) => {
-    if (request.method === 'OPTIONS' || request.path.replace(/\/+$/, '') === '/health') {
+    const normalizedPath = request.path.replace(/\/+$/, '');
+
+    if (
+      request.method === 'OPTIONS'
+      || normalizedPath === '/health'
+      || normalizedPath === '/auth/oauth/discord/callback'
+    ) {
       next();
       return;
     }
