@@ -386,7 +386,9 @@ Write-Host "API health: local $($apiLocalResponse.StatusCode), LAN $($apiLanResp
 
 Write-Host "Starting Metro for the installed Watchly development client..."
 $previousPackagerHostname = $env:REACT_NATIVE_PACKAGER_HOSTNAME
+$previousNodeOptions = $env:NODE_OPTIONS
 $env:REACT_NATIVE_PACKAGER_HOSTNAME = $Ip
+$env:NODE_OPTIONS = "--max-old-space-size=8192"
 try {
   $metroProcess = Start-Process `
     -FilePath $pnpmPath `
@@ -401,6 +403,11 @@ try {
     Remove-Item Env:REACT_NATIVE_PACKAGER_HOSTNAME -ErrorAction SilentlyContinue
   } else {
     $env:REACT_NATIVE_PACKAGER_HOSTNAME = $previousPackagerHostname
+  }
+  if ($null -eq $previousNodeOptions) {
+    Remove-Item Env:NODE_OPTIONS -ErrorAction SilentlyContinue
+  } else {
+    $env:NODE_OPTIONS = $previousNodeOptions
   }
 }
 

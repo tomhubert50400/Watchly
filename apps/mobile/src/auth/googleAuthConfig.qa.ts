@@ -6,6 +6,16 @@ import { readFileSync } from 'node:fs';
 import { googleClientBelongsToFirebaseProject } from './googleAuthConfig';
 
 const authCardSource = readFileSync(new URL('./ProfileAuthCard.tsx', import.meta.url), 'utf8');
+const devLauncherSource = readFileSync(
+  new URL('../../../../scripts/start-iphone-dev.ps1', import.meta.url),
+  'utf8',
+);
+
+assert.match(
+  devLauncherSource,
+  /NODE_OPTIONS = "--max-old-space-size=8192"/,
+  'the iPhone dev launcher must leave enough memory for the full Expo bundle',
+);
 
 assert.equal(
   authCardSource.includes('redirectUri: googleNativeRedirectUri'),
