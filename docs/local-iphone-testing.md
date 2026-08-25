@@ -2,18 +2,19 @@
 
 Use this when you want to test Watchly on a physical iPhone from the local Windows workspace.
 
+The phone uses one development app and one account environment:
+
+- installed app: `Watchly Staging`
+- bundle identifier: `com.tom.tvapp.staging`
+- Firebase and API: EAS Preview staging
+
+Do not install or launch the production `Watchly` app for routine development. Production remains a separate release-validation target.
+
 ## What Runs Where
 
-- Prisma dev PostgreSQL runs on the PC.
-- The NestJS API runs on the PC at port `3000`.
 - Metro/Expo runs on the PC at port `8081`.
+- Firebase and the API use the deployed staging environment loaded from EAS Preview.
 - The iPhone connects to the PC through the local Wi-Fi IP.
-
-Important API URL rules:
-
-- Android emulator uses `http://10.0.2.2:3000`.
-- iPhone must use the PC LAN IP, for example `http://172.30.1.44:3000`.
-- `localhost` on iPhone means the iPhone itself, so it is wrong for local PC testing.
 
 ## Fast Path
 
@@ -21,109 +22,39 @@ From the repo root:
 
 ```powershell
 cd C:\Users\t\Desktop\Projects\tv-app
-powershell -ExecutionPolicy Bypass -File .\scripts\start-iphone-dev.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\start-iphone-staging-auth.ps1
 ```
 
 The script will:
 
-- detect a local IPv4 address
-- update `apps/mobile/.env` with `EXPO_PUBLIC_API_URL=http://<PC_IP>:3000`
-- ensure Prisma dev is running, then restart the API and Metro without duplicate processes
-- run Metro in development-client mode for the installed Watchly app
-- verify the database, API health, Expo manifest, and iOS bundle
-- resolve the current Expo slug, then print the `exp+<slug>://expo-development-client/?url=...` URL and the background-process log directory
+- load the EAS Preview staging variables
+- force `APP_VARIANT=staging` and `EXPO_PUBLIC_APP_ENV=staging`
+- validate the `Watchly Staging` manifest and OAuth configuration
+- run Metro in development-client mode for the installed staging app
 
 This local loop reuses the installed Watchly binary and never runs EAS Build.
 
-If the detected IP is wrong, pass it manually:
+The legacy command remains as a compatibility alias and launches the exact same staging environment:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\start-iphone-dev.ps1 -Ip 172.30.1.44
+powershell -ExecutionPolicy Bypass -File .\scripts\start-iphone-dev.ps1
 ```
 
 ## Manual Path
 
-### 1. Find The PC LAN IP
+From the repo root, load the staging variables before starting Metro. Prefer the launcher above because it also validates the environment pairing.
 
 ```powershell
-ipconfig
-```
-
-Find the Wi-Fi `Adresse IPv4`, for example:
-
-```text
-172.30.1.44
-```
-
-### 2. Update Mobile API URL
-
-In `apps/mobile/.env`, set:
-
-```env
-EXPO_PUBLIC_API_URL=http://172.30.1.44:3000
-```
-
-Replace `172.30.1.44` with the real PC LAN IP.
-
-### 3. Start Prisma Dev
-
-Terminal 1:
-
-```powershell
-cd C:\Users\t\Desktop\Projects\tv-app\apps\api
-pnpm exec prisma dev start tv-app
+cd C:\Users\t\Desktop\Projects\tv-app
+powershell -ExecutionPolicy Bypass -File .\scripts\start-iphone-staging-auth.ps1
 ```
 
 Keep this terminal open.
 
-If Prisma reports a new TCP port, update `apps/api/.env` `DATABASE_URL` before starting the API.
-
-### 4. Verify The Database
-
-Terminal 2:
-
-```powershell
-cd C:\Users\t\Desktop\Projects\tv-app
-pnpm --filter api db:deploy
-pnpm --filter api db:verify
-```
-
-### 5. Start The API
-
-Terminal 3:
-
-```powershell
-cd C:\Users\t\Desktop\Projects\tv-app
-pnpm --filter api start:dev
-```
-
-Keep this terminal open.
-
-Quick checks:
-
-```powershell
-Invoke-RestMethod http://localhost:3000/health
-Invoke-RestMethod http://172.30.1.44:3000/health
-```
-
-If `localhost` works but the LAN IP fails, check Windows Firewall or whether the API is listening on the network interface.
-
-### 6. Start Metro For iPhone
-
-Terminal 4:
-
-```powershell
-cd C:\Users\t\Desktop\Projects\tv-app
-$env:REACT_NATIVE_PACKAGER_HOSTNAME="172.30.1.44"
-pnpm --filter mobile exec expo start --dev-client --host lan --port 8081 --clear
-```
-
-Keep this terminal open.
-
-### 7. Open On iPhone
+### Open On iPhone
 
 - Put the iPhone on the same Wi-Fi as the PC.
-- Scan the QR code with the iPhone Camera so it opens the installed Watchly app.
+- Scan the QR code with the iPhone Camera so it opens the installed `Watchly Staging` app.
 - Use the development-client URL shown by Expo or printed by the launcher.
 
 Reuse the installed Watchly development build for JavaScript, TypeScript, UI, API, and bundled asset changes. Create a new EAS build only after a native dependency, Expo plugin, native app configuration, Expo SDK, or React Native version changes.

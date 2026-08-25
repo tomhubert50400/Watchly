@@ -83,6 +83,16 @@ assert.match(
 );
 assert.match(
   stagingLauncherSource,
+  /\$env:APP_VARIANT = 'staging'/,
+  'the staging launcher must keep the installed app on the staging bundle',
+);
+assert.match(
+  stagingLauncherSource,
+  /\$env:EXPO_PUBLIC_APP_ENV = 'staging'/,
+  'the staging launcher must keep runtime data on the staging environment',
+);
+assert.match(
+  stagingLauncherSource,
   /security:auth-provider-readiness/,
   'the staging launcher must expose the deployed provider readiness smoke',
 );

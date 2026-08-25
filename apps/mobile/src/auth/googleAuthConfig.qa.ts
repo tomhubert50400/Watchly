@@ -6,20 +6,25 @@ import { readFileSync } from 'node:fs';
 import { googleClientBelongsToFirebaseProject } from './googleAuthConfig';
 
 const authCardSource = readFileSync(new URL('./ProfileAuthCard.tsx', import.meta.url), 'utf8');
-const devLauncherSource = readFileSync(
+const iphoneLauncherSource = readFileSync(
   new URL('../../../../scripts/start-iphone-dev.ps1', import.meta.url),
   'utf8',
 );
 
 assert.doesNotMatch(
-  devLauncherSource,
+  iphoneLauncherSource,
   /max-old-space-size/,
   'the iPhone dev launcher must not hide Metro leaks behind an oversized heap',
 );
 assert.match(
-  devLauncherSource,
-  /"--max-workers", "4"/,
-  'the iPhone dev launcher must bound Metro transform concurrency',
+  iphoneLauncherSource,
+  /start-iphone-staging-auth\.ps1/,
+  'the canonical iPhone launcher must always delegate to Watchly Staging',
+);
+assert.doesNotMatch(
+  iphoneLauncherSource,
+  /APP_VARIANT\s*=\s*['"]development['"]/,
+  'the canonical iPhone launcher must not restore the separate development environment',
 );
 
 assert.equal(
