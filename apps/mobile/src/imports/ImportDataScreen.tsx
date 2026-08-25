@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
 import type * as ExpoDocumentPicker from 'expo-document-picker';
 import { requireOptionalNativeModule } from 'expo';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
@@ -41,6 +41,17 @@ type ImportSource = {
   }[];
   importSource?: SupportedImportSource;
   name: string;
+};
+
+export type ImportDataScreenHandle = {
+  requestPendingImport: () => void;
+};
+
+type ImportDataScreenProps = {
+  embedded?: boolean;
+  onImportCompleted?: (completion: { importId: string; result: ImportResult }) => void;
+  onPendingImportChange?: (readyTitleCount: number) => void;
+  workingSourcesOnly?: boolean;
 };
 
 const importSources: readonly ImportSource[] = [
@@ -140,15 +151,12 @@ const importSources: readonly ImportSource[] = [
   },
 ];
 
-export function ImportDataScreen({
+export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScreenProps>(function ImportDataScreen({
   embedded = false,
   onImportCompleted,
+  onPendingImportChange,
   workingSourcesOnly = false,
-}: {
-  embedded?: boolean;
-  onImportCompleted?: (completion: { importId: string; result: ImportResult }) => void;
-  workingSourcesOnly?: boolean;
-} = {}) {
+}, ref) {
   const {
     firebaseIdToken,
     notifySocialChanged,
@@ -163,6 +171,12 @@ export function ImportDataScreen({
   const visibleSources = workingSourcesOnly
     ? importSources.filter((source) => source.importSource)
     : importSources;
+
+  useEffect(() => {
+    onPendingImportChange?.(preview?.summary.ready ?? 0);
+  }, [onPendingImportChange, preview?.summary.ready]);
+
+  useEffect(() => () => onPendingImportChange?.(0), [onPendingImportChange]);
 
   const chooseFile = async (source: ImportSource) => {
     if (status !== 'idle') return;
@@ -259,6 +273,8 @@ export function ImportDataScreen({
     );
   };
 
+  useImperativeHandle(ref, () => ({ requestPendingImport: requestConfirmation }), [requestConfirmation]);
+
   const content = (
     <>
       <View style={styles.page}>
@@ -300,6 +316,7 @@ export function ImportDataScreen({
             confirming={status === 'confirming'}
             onConfirm={requestConfirmation}
             preview={preview}
+            showAction={!embedded}
           />
         ) : null}
 
@@ -329,7 +346,7 @@ export function ImportDataScreen({
   );
 
   return embedded ? content : <Screen title="">{content}</Screen>;
-}
+});
 
 function ImportSourceRow({
   busy,
@@ -479,10 +496,12 @@ function ImportPreviewPanel({
   confirming,
   onConfirm,
   preview,
+  showAction,
 }: {
   confirming: boolean;
   onConfirm: () => void;
   preview: ImportPreview;
+  showAction: boolean;
 }) {
   return (
     <View style={styles.previewPanel}>
@@ -530,13 +549,15 @@ function ImportPreviewPanel({
         </Text>
       ) : null}
 
-      <Button
-        disabled={preview.summary.ready === 0}
-        fullWidth
-        label={`Import ${preview.summary.ready} ${preview.summary.ready === 1 ? 'title' : 'titles'}`}
-        loading={confirming}
-        onPress={onConfirm}
-      />
+      {showAction ? (
+        <Button
+          disabled={preview.summary.ready === 0}
+          fullWidth
+          label={`Import ${preview.summary.ready} ${preview.summary.ready === 1 ? 'title' : 'titles'}`}
+          loading={confirming}
+          onPress={onConfirm}
+        />
+      ) : null}
     </View>
   );
 }

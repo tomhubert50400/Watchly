@@ -98,10 +98,12 @@ assert(
   'The import step must not repeat explanatory or success copy above the providers.',
 );
 assert(
-  /label=\{step === 'import' && !importSatisfied \? 'Skip' : 'Continue'\}/.test(onboardingSource) &&
+  onboardingSource.includes('pendingImportTitleCount > 0') &&
+    onboardingSource.includes('importDataRef.current?.requestPendingImport()') &&
+    onboardingSource.includes("`Import ${pendingImportTitleCount} ${pendingImportTitleCount === 1 ? 'title' : 'titles'}`") &&
     /importBackAction: \{\s*flex: 1,\s*\}/.test(onboardingSource) &&
     /importPrimaryAction: \{\s*flex: 2,\s*\}/.test(onboardingSource),
-  'The import actions must keep Back beside a two-thirds Skip or Continue button.',
+  'The import actions must replace Skip with the pending title count and trigger that import.',
 );
 assert(
   /\{!embedded \? \([\s\S]*Import your library[\s\S]*Choose a service[\s\S]*\) : null\}/.test(importScreenSource) &&
@@ -109,6 +111,11 @@ assert(
     /\{showDescription \? <Text style=\{styles\.sourceBody\}>\{source\.body\}<\/Text> : null\}/.test(importScreenSource) &&
     /\{!embedded \? \([\s\S]*styles\.note[\s\S]*styles\.disclaimer[\s\S]*\) : null\}/.test(importScreenSource),
   'Embedded onboarding imports must leave only the provider boxes before functional feedback appears.',
+);
+assert(
+  importScreenSource.includes('showAction={!embedded}') &&
+    /\{showAction \? \([\s\S]*label=\{`Import \$\{preview\.summary\.ready\}/.test(importScreenSource),
+  'Embedded onboarding imports must use the screen footer instead of rendering a duplicate import button.',
 );
 
 console.log('Import data placement QA passed.');

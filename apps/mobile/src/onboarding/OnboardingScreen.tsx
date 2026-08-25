@@ -48,7 +48,7 @@ import { TextInput } from '../components/TextInput';
 import { UserAvatar } from '../components/UserAvatar';
 import { colors, radii, shadows, spacing, touchTargets, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
-import { ImportDataScreen } from '../imports/ImportDataScreen';
+import { ImportDataScreen, ImportDataScreenHandle } from '../imports/ImportDataScreen';
 import {
   enableAllPushFromOnboarding,
   ReleasePushSetupResult,
@@ -139,11 +139,13 @@ export function OnboardingScreen() {
   const [isProfileEditing, setIsProfileEditing] = useState(false);
   const [notificationOutcome, setNotificationOutcome] = useState<ReleasePushSetupResult | null>(null);
   const [notificationStatus, setNotificationStatus] = useState<'idle' | 'requesting'>('idle');
+  const [pendingImportTitleCount, setPendingImportTitleCount] = useState(0);
   const [reduceMotionEnabled, setReduceMotionEnabled] = useState<boolean | null>(null);
   const [step, setStep] = useState<OnboardingStep>('profile');
   const [stepTransition, setStepTransition] = useState<OnboardingStepTransition | null>(null);
   const [tasteItems, setTasteItems] = useState<OnboardingTasteItem[]>([]);
   const copyAttempted = useRef(false);
+  const importDataRef = useRef<ImportDataScreenHandle>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const stepTransitionProgress = useRef(new Animated.Value(0)).current;
   const stepTransitioning = useRef(false);
@@ -582,10 +584,15 @@ export function OnboardingScreen() {
                       onBack={goBack}
                       onContinue={() => {
                         if (pageStep === 'profile') void continueProfile();
-                        if (pageStep === 'import') continueImport();
+                        if (pageStep === 'import' && pendingImportTitleCount > 0) {
+                          importDataRef.current?.requestPendingImport();
+                        } else if (pageStep === 'import') {
+                          continueImport();
+                        }
                         if (pageStep === 'taste') continueTaste();
                       }}
                       onFinishWithoutNotifications={() => void finishOnboarding()}
+                      pendingImportTitleCount={pendingImportTitleCount}
                       step={pageStep}
                       tasteSelectionCount={tasteItems.length}
                     />
@@ -666,6 +673,8 @@ export function OnboardingScreen() {
                         setImportSatisfied(true);
                         setError(null);
                       }}
+                      onPendingImportChange={setPendingImportTitleCount}
+                      ref={importDataRef}
                       workingSourcesOnly
                     />
                   ) : null}
@@ -732,6 +741,7 @@ function OnboardingFooter({
   onBack,
   onContinue,
   onFinishWithoutNotifications,
+  pendingImportTitleCount,
   step,
   tasteSelectionCount,
 }: {
@@ -744,6 +754,7 @@ function OnboardingFooter({
   onBack: () => void;
   onContinue: () => void;
   onFinishWithoutNotifications: () => void;
+  pendingImportTitleCount: number;
   step: OnboardingStep;
   tasteSelectionCount: number;
 }) {
@@ -788,7 +799,9 @@ function OnboardingFooter({
                 <Button
                   disabled={step === 'taste' && tasteSelectionCount < 1}
                   fullWidth
-                  label={step === 'import' && !importSatisfied ? 'Skip' : 'Continue'}
+                  label={step === 'import' && pendingImportTitleCount > 0
+                    ? `Import ${pendingImportTitleCount} ${pendingImportTitleCount === 1 ? 'title' : 'titles'}`
+                    : step === 'import' && !importSatisfied ? 'Skip' : 'Continue'}
                   onPress={onContinue}
                 />
               </View>
