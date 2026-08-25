@@ -1,0 +1,49 @@
+# Version-control data and dependencies
+.git
+.git/**
+node_modules/
+**/node_modules/
+.pnpm-store/
+
+# Services and assets unrelated to the API deployment
+apps/mobile/
+apps/web/
+design/
+docs/
+output/
+screenshots/
+social-assets/
+
+# Local caches and generated output
+.agents/
+.codex/
+.codex-runlogs/
+.expo/
+.expo-shared/
+.hermes/
+.hermes-design/
+.logs/
+tmp/
+**/.next/
+**/.gradle/
+**/.kotlin/
+**/dist/
+**/build/
+**/coverage/
+apps/api/src/generated/
+
+# Local configuration, credentials, and logs
+.env
+.env.*
+!.env.example
+*.jks
+*.key
+*.log
+*.mobileprovision
+*.p12
+*.p8
+*.pem
+*.pyc
+*.tsbuildinfo
+credentials.json
+__pycache__/
