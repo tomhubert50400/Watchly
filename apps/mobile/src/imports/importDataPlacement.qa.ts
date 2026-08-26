@@ -87,7 +87,8 @@ assert(
 );
 assert(
   importScreenSource.includes('label="Review imports"') &&
-    importScreenSource.includes("navigation.navigate('ImportMatches', { items })") &&
+    importScreenSource.includes("navigation.navigate('ImportMatches', { matchedItems, skippedItems })") &&
+    importScreenSource.includes('disabled={preview.summary.total === 0}') &&
     importScreenSource.includes('label="Skipped"') &&
     importScreenSource.includes('titles could not be matched and will not be imported.') &&
     !importScreenSource.includes('function ImportMatchRow') &&
@@ -101,9 +102,16 @@ assert(
     importMatchesSource.includes('item.rating') &&
     !importMatchesSource.includes('fileName') &&
     !importMatchesSource.includes('Check the artwork') &&
+    importMatchesSource.includes('accessibilityRole="tablist"') &&
+    importMatchesSource.includes('accessibilityRole="tab"') &&
+    importMatchesSource.includes('Matched ${matchedItems.length}') &&
+    importMatchesSource.includes('Skipped ${skippedItems.length}') &&
+    importMatchesSource.includes('<SkippedTitleRow item={item} />') &&
+    !importMatchesSource.includes('item.issues') &&
     importReviewModelSource.includes('item.actions.sourceRating') &&
+    importReviewModelSource.includes('getImportSkippedTitles') &&
     importReviewModelSource.includes('new Map<string, ImportReviewMatch>()'),
-  'Match review must show a deduplicated three-column poster grid with source ratings.',
+  'Import review must separate matched posters and skipped titles without exposing technical reasons.',
 );
 assert(
   importScreenSource.includes('useState<ImportPreview[]>([])') &&

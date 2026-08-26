@@ -14,6 +14,11 @@ export type ImportReviewMatch = {
   tmdbId: number;
 };
 
+export type ImportSkippedTitle = {
+  title: string;
+  year: number | null;
+};
+
 export function getImportReviewMatches(items: ImportPreviewItem[]): ImportReviewMatch[] {
   const matches = new Map<string, ImportReviewMatch>();
 
@@ -40,6 +45,22 @@ export function getImportReviewMatches(items: ImportPreviewItem[]): ImportReview
   });
 
   return [...matches.values()];
+}
+
+export function getImportSkippedTitles(items: ImportPreviewItem[]): ImportSkippedTitle[] {
+  const skipped = new Map<string, ImportSkippedTitle>();
+
+  items.forEach((item) => {
+    if (item.status === 'ready') return;
+
+    const title = item.sourceTitle.trim();
+    const key = `${title.toLowerCase()}:${item.sourceYear ?? ''}`;
+    if (!skipped.has(key)) {
+      skipped.set(key, { title, year: item.sourceYear });
+    }
+  });
+
+  return [...skipped.values()];
 }
 
 export function combineImportPreviews(previews: ImportPreview[]): CombinedImportPreview {

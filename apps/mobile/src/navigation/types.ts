@@ -1,6 +1,6 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { ViewingStats } from '../api/viewings';
-import type { ImportReviewMatch } from '../imports/importReviewModel';
+import type { ImportReviewMatch, ImportSkippedTitle } from '../imports/importReviewModel';
 import type { LegalDocumentId } from '../legal/legalDocuments';
 import type { LibraryMediaItem } from '../library/useLibraryData';
 import type { ProfileMediaFilter } from '../profile/profileMediaModel';
@@ -35,7 +35,8 @@ export type RootStackParamList = {
   };
   ImportData: undefined;
   ImportMatches: {
-    items: ImportReviewMatch[];
+    matchedItems: ImportReviewMatch[];
+    skippedItems: ImportSkippedTitle[];
   };
   Journal: undefined;
   LegalDocument: {

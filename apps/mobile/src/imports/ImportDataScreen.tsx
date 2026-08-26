@@ -27,6 +27,7 @@ import type { RootStackParamList } from '../navigation/types';
 import {
   combineImportPreviews,
   getImportReviewMatches,
+  getImportSkippedTitles,
 } from './importReviewModel';
 import type { CombinedImportPreview } from './importReviewModel';
 
@@ -287,10 +288,11 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
   };
 
   const reviewMatches = () => {
-    const items = getImportReviewMatches(combinedPreview.items);
-    if (items.length === 0) return;
+    const matchedItems = getImportReviewMatches(combinedPreview.items);
+    const skippedItems = getImportSkippedTitles(combinedPreview.items);
+    if (matchedItems.length === 0 && skippedItems.length === 0) return;
 
-    navigation.navigate('ImportMatches', { items });
+    navigation.navigate('ImportMatches', { matchedItems, skippedItems });
   };
 
   const requestConfirmation = () => {
@@ -576,7 +578,7 @@ function ImportPreviewPanel({
       ) : null}
 
       <Button
-        disabled={preview.summary.ready === 0}
+        disabled={preview.summary.total === 0}
         fullWidth
         label="Review imports"
         onPress={onReview}

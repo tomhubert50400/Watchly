@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import type { ImportPreview, ImportPreviewItem, SupportedImportSource } from '../api/imports';
-import { combineImportPreviews, getImportReviewMatches } from './importReviewModel';
+import {
+  combineImportPreviews,
+  getImportReviewMatches,
+  getImportSkippedTitles,
+} from './importReviewModel';
 
 const heat = createItem({
   contentType: 'movie',
@@ -39,6 +43,18 @@ assert.deepEqual(
       title: 'Breaking Bad',
       tmdbId: 1396,
     },
+  ],
+);
+assert.deepEqual(
+  getImportSkippedTitles([
+    unmatched,
+    { ...unmatched },
+    { ...unmatched, sourceYear: 2024 },
+    heat,
+  ]),
+  [
+    { title: 'Unknown', year: null },
+    { title: 'Unknown', year: 2024 },
   ],
 );
 
