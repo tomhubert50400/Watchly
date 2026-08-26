@@ -16,6 +16,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'ImportMatches'>;
 
 const MATCH_COLUMNS = 3;
 const POSTER_ASPECT_RATIO = 2 / 3;
+const RETRY_ALL_KEY = 'retry-all';
 type ReviewTab = 'matched' | 'skipped';
 
 export function ImportMatchesScreen({ route }: Props) {
@@ -27,6 +28,9 @@ export function ImportMatchesScreen({ route }: Props) {
   const [retryingKey, setRetryingKey] = useState<string | null>(null);
   const cardWidth = (width - (spacing.xl * 2) - (spacing.sm * (MATCH_COLUMNS - 1))) / MATCH_COLUMNS;
   const hasSeriesRating = matchedItems.some((item) => item.contentType === 'series' && item.rating !== null);
+  const retryableItems = skippedItems.filter(
+    (item) => item.suggestion !== null && item.retryTargets.length > 0,
+  );
   const skippedRows = getImportSkippedReviewRows(skippedItems);
 
   const selectTab = (tab: ReviewTab) => {
@@ -35,33 +39,49 @@ export function ImportMatchesScreen({ route }: Props) {
     hapticSelection();
   };
 
-  const retryTitle = async (item: ImportSkippedTitle) => {
-    if (!item.suggestion || item.retryTargets.length === 0) return;
+  const retryItems = async (items: ImportSkippedTitle[], retryKey: string) => {
+    if (items.length === 0) return;
     if (!firebaseIdToken) {
       Alert.alert('Session expired', 'Sign in again before retrying this title.');
       return;
     }
 
-    const itemKey = getSkippedKey(item);
-    setRetryingKey(itemKey);
+    const completed: ImportSkippedTitle[] = [];
+    let retryError: unknown = null;
+    setRetryingKey(retryKey);
     try {
-      for (const target of item.retryTargets) {
-        await retryImportSuggestion(firebaseIdToken, target.importId, target.itemIndex);
+      for (const item of items) {
+        for (const target of item.retryTargets) {
+          await retryImportSuggestion(firebaseIdToken, target.importId, target.itemIndex);
+        }
+        completed.push(item);
       }
-
-      setSkippedItems((current) => current.filter((candidate) => getSkippedKey(candidate) !== itemKey));
-      setMatchedItems((current) => addReviewMatch(current, item));
-      hapticSuccess();
     } catch (error) {
-      Alert.alert(
-        'Retry failed',
-        error instanceof Error ? error.message : 'This title could not be matched.',
-      );
-      hapticError();
+      retryError = error;
     } finally {
+      if (completed.length > 0) {
+        const completedKeys = new Set(completed.map(getSkippedKey));
+        setSkippedItems((current) => current.filter(
+          (candidate) => !completedKeys.has(getSkippedKey(candidate)),
+        ));
+        setMatchedItems((current) => completed.reduce(addReviewMatch, current));
+      }
       setRetryingKey(null);
     }
+
+    if (retryError) {
+      Alert.alert(
+        'Retry failed',
+        retryError instanceof Error ? retryError.message : 'This title could not be matched.',
+      );
+      hapticError();
+    } else {
+      hapticSuccess();
+    }
   };
+
+  const retryTitle = (item: ImportSkippedTitle) =>
+    retryItems([item], getSkippedKey(item));
 
   return (
     <SafeAreaView edges={['bottom']} style={styles.screen}>
@@ -99,6 +119,13 @@ export function ImportMatchesScreen({ route }: Props) {
           key="skipped-imports"
           keyExtractor={(item) => item.key}
           ListEmptyComponent={<EmptyTab label="No skipped titles." />}
+          ListHeaderComponent={retryableItems.length > 0 ? (
+            <RetryAllButton
+              disabled={retryingKey !== null}
+              loading={retryingKey === RETRY_ALL_KEY}
+              onPress={() => void retryItems(retryableItems, RETRY_ALL_KEY)}
+            />
+          ) : null}
           renderItem={({ item }) => (
             <SkippedReviewRow
               cardWidth={cardWidth}
@@ -112,6 +139,38 @@ export function ImportMatchesScreen({ route }: Props) {
         />
       )}
     </SafeAreaView>
+  );
+}
+
+function RetryAllButton({
+  disabled,
+  loading,
+  onPress,
+}: {
+  disabled: boolean;
+  loading: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <View style={styles.retryAllContainer}>
+      <Pressable
+        accessibilityHint="Accepts every probable match shown below."
+        accessibilityRole="button"
+        accessibilityState={{ busy: loading, disabled }}
+        disabled={disabled}
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.retryAllButton,
+          pressed ? styles.retryAllButtonPressed : null,
+          disabled && !loading ? styles.retryCardDisabled : null,
+        ]}
+      >
+        {loading
+          ? <ActivityIndicator color={colors.accentText} size="small" />
+          : <RotateCcw color={colors.accentText} size={15} strokeWidth={2.4} />}
+        <Text style={styles.retryAllLabel}>Retry all</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -432,6 +491,29 @@ const styles = StyleSheet.create({
   },
   retryCardDisabled: {
     opacity: 0.55,
+  },
+  retryAllButton: {
+    alignItems: 'center',
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.borderStrong,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+  },
+  retryAllButtonPressed: {
+    opacity: 0.78,
+  },
+  retryAllContainer: {
+    alignItems: 'flex-end',
+    marginBottom: spacing.md,
+  },
+  retryAllLabel: {
+    color: colors.accentText,
+    fontSize: 13,
+    fontWeight: '800',
   },
   retryCardPressed: {
     opacity: 0.78,
