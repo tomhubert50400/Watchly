@@ -1,7 +1,16 @@
-import type { ImportPreview, ImportPreviewItem } from '../api/imports';
+import type { ImportMatch, ImportPreview, ImportPreviewItem } from '../api/imports';
+
+export type ImportRetryTarget = {
+  importId: string;
+  itemIndex: number;
+};
+
+export type CombinedImportPreviewItem = ImportPreviewItem & {
+  retryTargets: ImportRetryTarget[];
+};
 
 export type CombinedImportPreview = {
-  items: ImportPreviewItem[];
+  items: CombinedImportPreviewItem[];
   onlyTvTime: boolean;
   summary: ImportPreview['summary'];
 };
@@ -15,6 +24,9 @@ export type ImportReviewMatch = {
 };
 
 export type ImportSkippedTitle = {
+  rating: number | null;
+  retryTargets: ImportRetryTarget[];
+  suggestion: ImportMatch | null;
   title: string;
   year: number | null;
 };
@@ -47,7 +59,7 @@ export function getImportReviewMatches(items: ImportPreviewItem[]): ImportReview
   return [...matches.values()];
 }
 
-export function getImportSkippedTitles(items: ImportPreviewItem[]): ImportSkippedTitle[] {
+export function getImportSkippedTitles(items: CombinedImportPreviewItem[]): ImportSkippedTitle[] {
   const skipped = new Map<string, ImportSkippedTitle>();
 
   items.forEach((item) => {
@@ -55,8 +67,23 @@ export function getImportSkippedTitles(items: ImportPreviewItem[]): ImportSkippe
 
     const title = item.sourceTitle.trim();
     const key = `${title.toLowerCase()}:${item.sourceYear ?? ''}`;
-    if (!skipped.has(key)) {
-      skipped.set(key, { title, year: item.sourceYear });
+    const sourceRating = item.actions.sourceRating ?? item.actions.rating;
+    const existing = skipped.get(key);
+    if (existing) {
+      skipped.set(key, {
+        ...existing,
+        rating: existing.rating ?? sourceRating,
+        retryTargets: [...existing.retryTargets, ...item.retryTargets],
+        suggestion: existing.suggestion ?? item.suggestion,
+      });
+    } else {
+      skipped.set(key, {
+        rating: sourceRating,
+        retryTargets: item.retryTargets,
+        suggestion: item.suggestion,
+        title,
+        year: item.sourceYear,
+      });
     }
   });
 
@@ -64,19 +91,25 @@ export function getImportSkippedTitles(items: ImportPreviewItem[]): ImportSkippe
 }
 
 export function combineImportPreviews(previews: ImportPreview[]): CombinedImportPreview {
-  const items = new Map<string, ImportPreviewItem>();
+  const items = new Map<string, CombinedImportPreviewItem>();
 
   previews.forEach((preview) => {
     preview.items.forEach((item) => {
       const key = getPreviewItemKey(item);
       const existing = items.get(key);
-      items.set(key, existing ? mergePreviewItems(existing, item) : item);
+      const combinedItem: CombinedImportPreviewItem = {
+        ...item,
+        retryTargets: item.suggestion
+          ? [{ importId: item.importId || preview.importId, itemIndex: item.itemIndex }]
+          : [],
+      };
+      items.set(key, existing ? mergePreviewItems(existing, combinedItem) : combinedItem);
     });
   });
 
   const combinedItems = [...items.values()];
   const readyItems = combinedItems.filter(
-    (item): item is ImportPreviewItem & { match: NonNullable<ImportPreviewItem['match']> } =>
+    (item): item is CombinedImportPreviewItem & { match: NonNullable<ImportPreviewItem['match']> } =>
       item.status === 'ready' && item.match !== null,
   );
 
@@ -109,7 +142,10 @@ function getPreviewItemKey(item: ImportPreviewItem) {
   return `skipped:${item.sourceTitle.trim().toLowerCase()}:${item.sourceYear ?? ''}`;
 }
 
-function mergePreviewItems(existing: ImportPreviewItem, incoming: ImportPreviewItem): ImportPreviewItem {
+function mergePreviewItems(
+  existing: CombinedImportPreviewItem,
+  incoming: CombinedImportPreviewItem,
+): CombinedImportPreviewItem {
   return {
     ...existing,
     actions: {
@@ -123,5 +159,7 @@ function mergePreviewItems(existing: ImportPreviewItem, incoming: ImportPreviewI
       watchlisted: existing.actions.watchlisted || incoming.actions.watchlisted,
     },
     issues: [...new Set([...existing.issues, ...incoming.issues])],
+    retryTargets: [...existing.retryTargets, ...incoming.retryTargets],
+    suggestion: existing.suggestion ?? incoming.suggestion,
   };
 }

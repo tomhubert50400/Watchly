@@ -1,7 +1,15 @@
 import type { DocumentPickerAsset } from 'expo-document-picker';
-import { apiPost, apiPostFormData } from './client';
+import { apiGet, apiPost, apiPostFormData } from './client';
 
 export type SupportedImportSource = 'imdb' | 'letterboxd' | 'tv-time';
+
+export type ImportMatch = {
+  contentType: 'movie' | 'series';
+  posterUrl: string | null;
+  releaseDate: string | null;
+  title: string;
+  tmdbId: number;
+};
 
 export type ImportPreviewItem = {
   actions: {
@@ -14,17 +22,14 @@ export type ImportPreviewItem = {
     watching: boolean;
     watchlisted: boolean;
   };
+  importId: string;
+  itemIndex: number;
   issues: string[];
-  match: {
-    contentType: 'movie' | 'series';
-    posterUrl: string | null;
-    releaseDate: string | null;
-    title: string;
-    tmdbId: number;
-  } | null;
+  match: ImportMatch | null;
   sourceTitle: string;
   sourceYear: number | null;
   status: 'ambiguous' | 'ready' | 'unmatched' | 'unsupported';
+  suggestion: ImportMatch | null;
 };
 
 export type ImportPreview = {
@@ -84,6 +89,21 @@ export function confirmDataImport(token: string, importId: string) {
     `/imports/${encodeURIComponent(importId)}/confirm`,
     {},
     { timeoutMs: 60_000, token },
+  );
+}
+
+export function getImportPreview(token: string, importId: string) {
+  return apiGet<ImportPreview>(
+    `/imports/${encodeURIComponent(importId)}/preview`,
+    { token },
+  );
+}
+
+export function retryImportSuggestion(token: string, importId: string, itemIndex: number) {
+  return apiPost<ImportPreview>(
+    `/imports/${encodeURIComponent(importId)}/items/${itemIndex}/retry`,
+    {},
+    { token },
   );
 }
 

@@ -46,16 +46,42 @@ assert.deepEqual(
   ],
 );
 assert.deepEqual(
-  getImportSkippedTitles([
-    unmatched,
-    { ...unmatched },
-    { ...unmatched, sourceYear: 2024 },
-    heat,
-  ]),
+  getImportSkippedTitles(combineImportPreviews([
+    createPreview('imdb', 'skipped-preview', [
+      unmatched,
+      { ...unmatched },
+      { ...unmatched, sourceYear: 2024 },
+      heat,
+    ]),
+  ]).items),
   [
-    { title: 'Unknown', year: null },
-    { title: 'Unknown', year: 2024 },
+    { rating: null, retryTargets: [], suggestion: null, title: 'Unknown', year: null },
+    { rating: null, retryTargets: [], suggestion: null, title: 'Unknown', year: 2024 },
   ],
+);
+
+const probableUnknown = {
+  ...unmatched,
+  suggestion: {
+    contentType: 'movie' as const,
+    posterUrl: 'https://image.test/123.jpg',
+    releaseDate: '2024-01-01',
+    title: 'Probable Unknown',
+    tmdbId: 123,
+  },
+};
+assert.deepEqual(
+  getImportSkippedTitles(combineImportPreviews([
+    createPreview('letterboxd', 'retry-preview', [probableUnknown]),
+  ]).items),
+  [{
+    rating: null,
+    retryTargets: [{ importId: 'retry-preview', itemIndex: 0 }],
+    suggestion: probableUnknown.suggestion,
+    title: 'Unknown',
+    year: null,
+  }],
+  'Skipped titles with a probable match must retain the candidate and retry target.',
 );
 
 const duplicateHeat = {
@@ -127,6 +153,8 @@ function createItem({
       watchlisted: true,
     },
     issues: [],
+    importId: 'import-id',
+    itemIndex: tmdbId,
     match: status === 'ready' ? {
       contentType,
       posterUrl: `https://image.test/${tmdbId}.jpg`,
@@ -137,6 +165,7 @@ function createItem({
     sourceTitle: title,
     sourceYear: null,
     status,
+    suggestion: null,
   };
 }
 
@@ -149,7 +178,7 @@ function createPreview(
     fileName: `${importId}.zip`,
     ignoredFileCount: 0,
     importId,
-    items,
+    items: items.map((item, itemIndex) => ({ ...item, importId, itemIndex })),
     source,
     summary: {
       favorites: 0,
