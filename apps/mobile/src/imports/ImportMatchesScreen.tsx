@@ -49,6 +49,7 @@ export function ImportMatchesScreen({ route }: Props) {
           contentContainerStyle={styles.content}
           data={matchedItems}
           ItemSeparatorComponent={GridSeparator}
+          key="matched-imports"
           keyExtractor={(item) => `${item.contentType}:${item.tmdbId}`}
           ListEmptyComponent={<EmptyTab label="No matched titles." />}
           ListFooterComponent={hasSeriesRating ? <SeriesRatingNotice /> : null}
@@ -61,6 +62,7 @@ export function ImportMatchesScreen({ route }: Props) {
           contentContainerStyle={styles.skippedContent}
           data={skippedItems}
           ItemSeparatorComponent={SkippedSeparator}
+          key="skipped-imports"
           keyExtractor={(item) => `${item.title.toLowerCase()}:${item.year ?? ''}`}
           ListEmptyComponent={<EmptyTab label="No skipped titles." />}
           renderItem={({ item }) => <SkippedTitleRow item={item} />}

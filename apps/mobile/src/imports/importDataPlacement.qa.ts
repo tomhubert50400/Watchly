@@ -107,6 +107,8 @@ assert(
     importMatchesSource.includes('Matched ${matchedItems.length}') &&
     importMatchesSource.includes('Skipped ${skippedItems.length}') &&
     importMatchesSource.includes('<SkippedTitleRow item={item} />') &&
+    importMatchesSource.includes('key="matched-imports"') &&
+    importMatchesSource.includes('key="skipped-imports"') &&
     !importMatchesSource.includes('item.issues') &&
     importReviewModelSource.includes('item.actions.sourceRating') &&
     importReviewModelSource.includes('getImportSkippedTitles') &&
