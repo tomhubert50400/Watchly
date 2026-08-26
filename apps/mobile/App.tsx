@@ -280,7 +280,6 @@ function AppNavigator() {
             <Stack.Screen component={ReleaseCalendarScreen} name="ReleaseCalendar" options={{ title: 'Release calendar' }} />
             <Stack.Screen component={SettingsScreen} name="Settings" options={{ title: 'Settings' }} />
             <Stack.Screen component={ImportDataScreen} name="ImportData" options={{ title: 'Import your data' }} />
-            <Stack.Screen component={ImportMatchesScreen} name="ImportMatches" options={{ title: 'Review matches' }} />
             <Stack.Screen
               component={SharedWatchlistScreen}
               name="SharedWatchlist"
@@ -317,6 +316,7 @@ function AppNavigator() {
             <Stack.Screen component={SeriesDetailScreen} name="SeriesDetail" options={{ title: '' }} />
           </>
         )}
+        <Stack.Screen component={ImportMatchesScreen} name="ImportMatches" options={{ title: 'Review imports' }} />
       </Stack.Navigator>
     </>
   );

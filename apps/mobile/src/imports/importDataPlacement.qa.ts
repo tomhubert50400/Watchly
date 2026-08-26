@@ -13,6 +13,8 @@ const importReviewModelSource = readFileSync(new URL('./importReviewModel.ts', i
 const importApiSource = readFileSync(new URL('../api/imports.ts', import.meta.url), 'utf8');
 const onboardingSource = readFileSync(new URL('../onboarding/OnboardingScreen.tsx', import.meta.url), 'utf8');
 const settingsSource = readFileSync(new URL('../profile/SettingsScreen.tsx', import.meta.url), 'utf8');
+const onboardingConditionalEnd = appSource.indexOf('\n        )}\n', appSource.indexOf('{needsOnboarding ?'));
+const importReviewRoute = appSource.indexOf('<Stack.Screen component={ImportMatchesScreen}');
 
 assert(
   settingsSource.includes("label=\"Import your data\"") &&
@@ -25,8 +27,9 @@ assert(
 );
 assert(
   appSource.includes('component={ImportMatchesScreen} name="ImportMatches"') &&
-    appSource.includes("title: 'Review matches'"),
-  'Import previews must register a dedicated match review screen.',
+    appSource.includes("title: 'Review imports'") &&
+    importReviewRoute > onboardingConditionalEnd,
+  'Import previews must register a dedicated review screen during and after onboarding.',
 );
 for (const sourceName of ['Letterboxd', 'IMDb', 'Trakt', 'TV Time']) {
   assert(importScreenSource.includes(`name: '${sourceName}'`), `${sourceName} must appear in the import source list.`);
@@ -83,8 +86,10 @@ assert(
   'The mobile import API must support preview and confirmation.',
 );
 assert(
-  importScreenSource.includes('label="Review matches"') &&
+  importScreenSource.includes('label="Review imports"') &&
     importScreenSource.includes("navigation.navigate('ImportMatches'") &&
+    importScreenSource.includes('label="Skipped"') &&
+    importScreenSource.includes('titles could not be matched and will not be imported.') &&
     !importScreenSource.includes('function ImportMatchRow') &&
     importScreenSource.includes('Existing Watchly ratings and reviews will be kept.'),
   'The user must open the dedicated match review screen before importing.',

@@ -545,19 +545,21 @@ function ImportPreviewPanel({
             <SummaryValue label="Watched" value={preview.summary.watched} />
           </>
         )}
-        <SummaryValue label="Attention" value={preview.summary.needsAttention} warning />
+        <SummaryValue label="Skipped" value={preview.summary.needsAttention} warning />
       </View>
 
       {preview.summary.needsAttention > 0 ? (
         <Text style={styles.previewWarning}>
-          {preview.summary.needsAttention} unmatched or unsupported {preview.summary.needsAttention === 1 ? 'row will' : 'rows will'} be skipped.
+          {preview.summary.needsAttention === 1
+            ? '1 title could not be matched and will not be imported.'
+            : `${preview.summary.needsAttention} titles could not be matched and will not be imported.`}
         </Text>
       ) : null}
 
       <Button
         disabled={preview.summary.ready === 0}
         fullWidth
-        label="Review matches"
+        label="Review imports"
         onPress={onReview}
         variant="secondary"
       />
