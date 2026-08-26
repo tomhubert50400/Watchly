@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service';
+import { CatalogueController } from './catalogue.controller';
 import {
   chooseWeeklySpotlight,
   getSpotlightExpiry,
@@ -18,6 +19,7 @@ import {
 } from './tmdb-catalogue.service';
 
 async function main() {
+  testCatalogueDetailRateLimits();
   testAnnouncedSelection();
   testDiscoveryEndpoints();
   testGenreMovieEndpoints();
@@ -513,6 +515,20 @@ async function main() {
   }
 
   console.log('Catalogue search QA passed.');
+}
+
+function testCatalogueDetailRateLimits() {
+  for (const handler of [
+    CatalogueController.prototype.movieDetails,
+    CatalogueController.prototype.seriesDetails,
+  ]) {
+    assert.equal(
+      Reflect.getMetadata('THROTTLER:LIMITdefault', handler),
+      600,
+      'catalogue detail hydration must have its own higher request budget',
+    );
+    assert.equal(Reflect.getMetadata('THROTTLER:TTLdefault', handler), 60_000);
+  }
 }
 
 function testLogoSelection() {

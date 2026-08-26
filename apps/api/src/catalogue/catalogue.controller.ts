@@ -1,4 +1,5 @@
 import { BadRequestException, Controller, Get, Inject, Param, ParseIntPipe, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import {
   CatalogueDiscoveryMediaType,
   CatalogueDiscoverySection,
@@ -75,6 +76,7 @@ export class CatalogueController {
   }
 
   @Get('movies/:tmdbId')
+  @Throttle({ default: { limit: 600, ttl: 60_000 } })
   async movieDetails(@Param('tmdbId', ParseIntPipe) tmdbId: number) {
     return this.catalogue.getMovie(tmdbId);
   }
@@ -88,6 +90,7 @@ export class CatalogueController {
   }
 
   @Get('series/:tmdbId')
+  @Throttle({ default: { limit: 600, ttl: 60_000 } })
   async seriesDetails(@Param('tmdbId', ParseIntPipe) tmdbId: number) {
     return this.catalogue.getSeries(tmdbId);
   }
