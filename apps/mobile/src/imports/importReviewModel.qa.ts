@@ -3,6 +3,7 @@ import type { ImportPreview, ImportPreviewItem, SupportedImportSource } from '..
 import {
   combineImportPreviews,
   getImportReviewMatches,
+  getImportSkippedReviewRows,
   getImportSkippedTitles,
 } from './importReviewModel';
 
@@ -82,6 +83,23 @@ assert.deepEqual(
     year: null,
   }],
   'Skipped titles with a probable match must retain the candidate and retry target.',
+);
+const skippedRows = getImportSkippedReviewRows([
+  {
+    rating: null,
+    retryTargets: [{ importId: 'retry-preview', itemIndex: 0 }],
+    suggestion: probableUnknown.suggestion,
+    title: 'Unknown',
+    year: null,
+  },
+  { rating: null, retryTargets: [], suggestion: null, title: 'No candidate', year: 2020 },
+]);
+assert.equal(skippedRows[0].kind, 'suggestions');
+assert.equal(skippedRows[1].kind, 'unmatched');
+assert.equal(
+  skippedRows[1].kind === 'unmatched' ? skippedRows[1].startsList : false,
+  true,
+  'Titles without candidates must be listed after every retryable suggestion.',
 );
 
 const duplicateHeat = {

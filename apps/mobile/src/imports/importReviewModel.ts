@@ -31,6 +31,10 @@ export type ImportSkippedTitle = {
   year: number | null;
 };
 
+export type ImportSkippedReviewRow =
+  | { items: ImportSkippedTitle[]; key: string; kind: 'suggestions' }
+  | { item: ImportSkippedTitle; key: string; kind: 'unmatched'; startsList: boolean };
+
 export function getImportReviewMatches(items: ImportPreviewItem[]): ImportReviewMatch[] {
   const matches = new Map<string, ImportReviewMatch>();
 
@@ -88,6 +92,33 @@ export function getImportSkippedTitles(items: CombinedImportPreviewItem[]): Impo
   });
 
   return [...skipped.values()];
+}
+
+export function getImportSkippedReviewRows(
+  items: ImportSkippedTitle[],
+): ImportSkippedReviewRow[] {
+  const suggestions = items.filter((item) => item.suggestion !== null);
+  const unmatched = items.filter((item) => item.suggestion === null);
+  const rows: ImportSkippedReviewRow[] = [];
+
+  for (let index = 0; index < suggestions.length; index += 3) {
+    rows.push({
+      items: suggestions.slice(index, index + 3),
+      key: `suggestions:${index / 3}`,
+      kind: 'suggestions',
+    });
+  }
+
+  unmatched.forEach((item, index) => {
+    rows.push({
+      item,
+      key: `unmatched:${item.title.toLowerCase()}:${item.year ?? ''}`,
+      kind: 'unmatched',
+      startsList: index === 0,
+    });
+  });
+
+  return rows;
 }
 
 export function combineImportPreviews(previews: ImportPreview[]): CombinedImportPreview {
