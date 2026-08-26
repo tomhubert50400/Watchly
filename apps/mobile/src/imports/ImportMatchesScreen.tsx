@@ -14,7 +14,7 @@ const POSTER_ASPECT_RATIO = 2 / 3;
 
 export function ImportMatchesScreen({ route }: Props) {
   const { width } = useWindowDimensions();
-  const { fileName, items } = route.params;
+  const { items } = route.params;
   const cardWidth = (width - (spacing.xl * 2) - (spacing.sm * (MATCH_COLUMNS - 1))) / MATCH_COLUMNS;
   const hasSeriesRating = items.some((item) => item.contentType === 'series' && item.rating !== null);
 
@@ -32,8 +32,6 @@ export function ImportMatchesScreen({ route }: Props) {
             <Text accessibilityRole="header" style={styles.title}>
               {items.length} matched {items.length === 1 ? 'title' : 'titles'}
             </Text>
-            <Text numberOfLines={1} style={styles.fileName}>{fileName}</Text>
-            <Text style={styles.body}>Check the artwork and rating from your export before importing.</Text>
           </View>
         )}
         numColumns={MATCH_COLUMNS}
@@ -92,10 +90,6 @@ function formatRating(rating: number) {
 }
 
 const styles = StyleSheet.create({
-  body: {
-    ...typography.body,
-    color: colors.textMuted,
-  },
   card: {
     gap: spacing.xs,
   },
@@ -114,10 +108,6 @@ const styles = StyleSheet.create({
     color: colors.textSubtle,
     fontSize: 10,
     textTransform: 'uppercase',
-  },
-  fileName: {
-    ...typography.meta,
-    color: colors.textSubtle,
   },
   gridRow: {
     gap: spacing.sm,

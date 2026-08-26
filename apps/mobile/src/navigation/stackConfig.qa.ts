@@ -17,6 +17,10 @@ assert(detailBackOptions('Home').headerBackTitle === 'Home', 'Detail back must n
 assert(detailBackOptions('Library').headerBackTitle === 'Library', 'Detail back must name its real Library origin.');
 assert(detailBackOptions(undefined).headerBackTitle === 'Back', 'Unknown detail origins must use a human fallback.');
 assert(
+  resolvePreviousPageLabel([{ name: 'Onboarding' }, { name: 'ImportMatches' }]) === 'Tastes',
+  'Import review opened during onboarding must return to Tastes.',
+);
+assert(
   detailBackOptions('Explore').headerBackButtonDisplayMode === 'default',
   'Detail back labels must be visible instead of forcing the minimal chevron mode.',
 );

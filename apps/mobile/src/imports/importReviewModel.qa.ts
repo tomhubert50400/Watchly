@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import type { ImportPreviewItem } from '../api/imports';
-import { getImportReviewMatches } from './importReviewModel';
+import type { ImportPreview, ImportPreviewItem, SupportedImportSource } from '../api/imports';
+import { combineImportPreviews, getImportReviewMatches } from './importReviewModel';
 
 const heat = createItem({
   contentType: 'movie',
@@ -42,6 +42,48 @@ assert.deepEqual(
   ],
 );
 
+const duplicateHeat = {
+  ...heat,
+  actions: {
+    ...heat.actions,
+    hasReview: true,
+    watched: true,
+  },
+};
+const alien = createItem({
+  contentType: 'movie',
+  rating: 4,
+  title: 'Alien',
+  tmdbId: 348,
+});
+const combined = combineImportPreviews([
+  createPreview('letterboxd', 'letterboxd-preview', [heat, breakingBad, unmatched]),
+  createPreview('imdb', 'imdb-preview', [duplicateHeat, alien, unmatched]),
+]);
+
+assert.equal(combined.items.length, 4, 'Titles shared by several platforms must appear once.');
+assert.equal(combined.onlyTvTime, false);
+assert.deepEqual(combined.summary, {
+  favorites: 0,
+  needsAttention: 1,
+  ratings: 2,
+  ready: 3,
+  reviews: 1,
+  total: 4,
+  watched: 1,
+  watching: 0,
+  watchlisted: 3,
+});
+assert.equal(
+  combined.items.find((item) => item.match?.tmdbId === 949)?.actions.hasReview,
+  true,
+  'Actions from duplicate matches must be merged into the shared preview item.',
+);
+assert.equal(
+  combineImportPreviews([createPreview('tv-time', 'tv-time-preview', [breakingBad])]).onlyTvTime,
+  true,
+);
+
 console.log('Import review model QA passed.');
 
 function createItem({
@@ -79,5 +121,30 @@ function createItem({
     sourceTitle: title,
     sourceYear: null,
     status,
+  };
+}
+
+function createPreview(
+  source: SupportedImportSource,
+  importId: string,
+  items: ImportPreviewItem[],
+): ImportPreview {
+  return {
+    fileName: `${importId}.zip`,
+    ignoredFileCount: 0,
+    importId,
+    items,
+    source,
+    summary: {
+      favorites: 0,
+      needsAttention: 0,
+      ratings: 0,
+      ready: 0,
+      reviews: 0,
+      total: 0,
+      watched: 0,
+      watching: 0,
+      watchlisted: 0,
+    },
   };
 }

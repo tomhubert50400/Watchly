@@ -14,6 +14,7 @@ type BackRoute = {
 const routeLabels: Record<string, string> = {
   MainTabs: 'Home',
   Notifications: 'Alerts',
+  Onboarding: 'Tastes',
   PublicProfile: 'Profile',
   SharedVotingSession: 'Vote',
 };

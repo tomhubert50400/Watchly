@@ -35,7 +35,6 @@ export type RootStackParamList = {
   };
   ImportData: undefined;
   ImportMatches: {
-    fileName: string;
     items: ImportReviewMatch[];
   };
   Journal: undefined;

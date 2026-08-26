@@ -87,7 +87,7 @@ assert(
 );
 assert(
   importScreenSource.includes('label="Review imports"') &&
-    importScreenSource.includes("navigation.navigate('ImportMatches'") &&
+    importScreenSource.includes("navigation.navigate('ImportMatches', { items })") &&
     importScreenSource.includes('label="Skipped"') &&
     importScreenSource.includes('titles could not be matched and will not be imported.') &&
     !importScreenSource.includes('function ImportMatchRow') &&
@@ -99,9 +99,19 @@ assert(
     importMatchesSource.includes('numColumns={MATCH_COLUMNS}') &&
     importMatchesSource.includes('<MediaPoster') &&
     importMatchesSource.includes('item.rating') &&
+    !importMatchesSource.includes('fileName') &&
+    !importMatchesSource.includes('Check the artwork') &&
     importReviewModelSource.includes('item.actions.sourceRating') &&
     importReviewModelSource.includes('new Map<string, ImportReviewMatch>()'),
   'Match review must show a deduplicated three-column poster grid with source ratings.',
+);
+assert(
+  importScreenSource.includes('useState<ImportPreview[]>([])') &&
+    importScreenSource.includes('combineImportPreviews(previews)') &&
+    importScreenSource.includes('for (const preview of previews)') &&
+    importReviewModelSource.includes('function mergePreviewItems') &&
+    importReviewModelSource.includes("return `${item.match.contentType}:${item.match.tmdbId}`"),
+  'Imports from several platforms must share one deduplicated preview and confirm every prepared import.',
 );
 assert(
   onboardingSource.includes('<ImportDataScreen') &&

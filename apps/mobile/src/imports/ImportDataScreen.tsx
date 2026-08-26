@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type * as ExpoDocumentPicker from 'expo-document-picker';
@@ -24,7 +24,11 @@ import { Screen } from '../components/Screen';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
 import type { RootStackParamList } from '../navigation/types';
-import { getImportReviewMatches } from './importReviewModel';
+import {
+  combineImportPreviews,
+  getImportReviewMatches,
+} from './importReviewModel';
+import type { CombinedImportPreview } from './importReviewModel';
 
 declare const require: (moduleName: 'expo-document-picker') => typeof ExpoDocumentPicker;
 
@@ -168,17 +172,18 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [activeSource, setActiveSource] = useState<ImportBrand | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [previews, setPreviews] = useState<ImportPreview[]>([]);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [selectedSource, setSelectedSource] = useState<ImportSource | null>(null);
   const [status, setStatus] = useState<'confirming' | 'idle' | 'picking' | 'previewing'>('idle');
   const visibleSources = workingSourcesOnly
     ? importSources.filter((source) => source.importSource)
     : importSources;
+  const combinedPreview = useMemo(() => combineImportPreviews(previews), [previews]);
 
   useEffect(() => {
-    onPendingImportChange?.(preview?.summary.ready ?? 0);
-  }, [onPendingImportChange, preview?.summary.ready]);
+    onPendingImportChange?.(combinedPreview.summary.ready);
+  }, [combinedPreview.summary.ready, onPendingImportChange]);
 
   useEffect(() => () => onPendingImportChange?.(0), [onPendingImportChange]);
 
@@ -219,7 +224,6 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
 
       setActiveSource(source.brand);
       setError(null);
-      setPreview(null);
       setResult(null);
       setStatus('previewing');
       const nextPreview = await previewDataImport(
@@ -227,7 +231,9 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
         source.importSource,
         selection.assets[0],
       );
-      setPreview(nextPreview);
+      setPreviews((current) => current.some((preview) => preview.importId === nextPreview.importId)
+        ? current
+        : [...current, nextPreview]);
       setSelectedSource(null);
     } catch (selectionError) {
       const rawMessage = selectionError instanceof Error ? selectionError.message : '';
@@ -244,19 +250,35 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
   };
 
   const confirmImport = async () => {
-    if (!firebaseIdToken || !preview || status !== 'idle') return;
+    if (!firebaseIdToken || previews.length === 0 || status !== 'idle') return;
 
     setError(null);
     setStatus('confirming');
+    const completedImportIds: string[] = [];
+    const importResults: ImportResult[] = [];
     try {
-      const importResult = await confirmDataImport(firebaseIdToken, preview.importId);
-      onImportCompleted?.({ importId: preview.importId, result: importResult });
-      setResult(importResult);
-      setPreview(null);
+      for (const preview of previews) {
+        const importResult = await confirmDataImport(firebaseIdToken, preview.importId);
+        completedImportIds.push(preview.importId);
+        importResults.push(importResult);
+        onImportCompleted?.({ importId: preview.importId, result: importResult });
+      }
+
+      setResult({
+        ...combineImportResults(importResults),
+        titlesProcessed: combinedPreview.summary.ready,
+      });
+      setPreviews([]);
       notifySocialChanged();
       notifyTrackingChanged();
       hapticSuccess();
     } catch (importError) {
+      if (completedImportIds.length > 0) {
+        setPreviews((current) => current.filter((preview) => !completedImportIds.includes(preview.importId)));
+        setResult(combineImportResults(importResults));
+        notifySocialChanged();
+        notifyTrackingChanged();
+      }
       setError(importError instanceof Error ? importError.message : 'The import could not be completed.');
       hapticError();
     } finally {
@@ -265,19 +287,17 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
   };
 
   const reviewMatches = () => {
-    if (!preview) return;
-
-    const items = getImportReviewMatches(preview.items);
+    const items = getImportReviewMatches(combinedPreview.items);
     if (items.length === 0) return;
 
-    navigation.navigate('ImportMatches', { fileName: preview.fileName, items });
+    navigation.navigate('ImportMatches', { items });
   };
 
   const requestConfirmation = () => {
-    if (!preview || preview.summary.ready === 0) return;
+    if (previews.length === 0 || combinedPreview.summary.ready === 0) return;
 
     Alert.alert(
-      `Import ${preview.summary.ready} ${preview.summary.ready === 1 ? 'title' : 'titles'}?`,
+      `Import ${combinedPreview.summary.ready} ${combinedPreview.summary.ready === 1 ? 'title' : 'titles'}?`,
       'Existing Watchly ratings and reviews will be kept. This import cannot be undone automatically.',
       [
         { style: 'cancel', text: 'Cancel' },
@@ -324,12 +344,12 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
           </View>
         ) : null}
 
-        {preview ? (
+        {previews.length > 0 ? (
           <ImportPreviewPanel
             confirming={status === 'confirming'}
             onConfirm={requestConfirmation}
             onReview={reviewMatches}
-            preview={preview}
+            preview={combinedPreview}
             showAction={!embedded}
           />
         ) : null}
@@ -516,7 +536,7 @@ function ImportPreviewPanel({
   confirming: boolean;
   onConfirm: () => void;
   onReview: () => void;
-  preview: ImportPreview;
+  preview: CombinedImportPreview;
   showAction: boolean;
 }) {
   return (
@@ -524,7 +544,6 @@ function ImportPreviewPanel({
       <View style={styles.previewHeading}>
         <View style={styles.previewHeadingCopy}>
           <Text accessibilityRole="header" style={styles.previewTitle}>Import preview</Text>
-          <Text numberOfLines={1} style={styles.previewFileName}>{preview.fileName}</Text>
         </View>
         <View style={styles.readyBadge}>
           <Text style={styles.readyBadgeText}>{preview.summary.ready} READY</Text>
@@ -532,7 +551,7 @@ function ImportPreviewPanel({
       </View>
 
       <View style={styles.summaryRow}>
-        {preview.source === 'tv-time' ? (
+        {preview.onlyTvTime ? (
           <>
             <SummaryValue label="Watched" value={preview.summary.watched} />
             <SummaryValue label="Watching" value={preview.summary.watching} />
@@ -584,6 +603,24 @@ function SummaryValue({ label, value, warning = false }: { label: string; value:
       <Text style={styles.summaryLabel}>{label}</Text>
     </View>
   );
+}
+
+function combineImportResults(results: ImportResult[]): ImportResult {
+  return results.reduce<ImportResult>((combined, result) => ({
+    preservedExisting: combined.preservedExisting + result.preservedExisting,
+    ratingsCreated: combined.ratingsCreated + result.ratingsCreated,
+    reviewsCreated: combined.reviewsCreated + result.reviewsCreated,
+    statesChanged: combined.statesChanged + result.statesChanged,
+    titlesProcessed: combined.titlesProcessed + result.titlesProcessed,
+    viewingEventsCreated: combined.viewingEventsCreated + result.viewingEventsCreated,
+  }), {
+    preservedExisting: 0,
+    ratingsCreated: 0,
+    reviewsCreated: 0,
+    statesChanged: 0,
+    titlesProcessed: 0,
+    viewingEventsCreated: 0,
+  });
 }
 
 function ImportResultPanel({ result }: { result: ImportResult }) {
@@ -848,10 +885,6 @@ const styles = StyleSheet.create({
   page: {
     gap: spacing.lg,
     paddingTop: spacing.lg,
-  },
-  previewFileName: {
-    ...typography.meta,
-    color: colors.textSubtle,
   },
   previewHeading: {
     alignItems: 'flex-start',
