@@ -58,6 +58,7 @@ export type ImportDataScreenHandle = {
 
 type ImportDataScreenProps = {
   embedded?: boolean;
+  onImportBatchCompleted?: () => void;
   onImportCompleted?: (completion: { importId: string; result: ImportResult }) => void;
   onPendingImportChange?: (readyTitleCount: number) => void;
   workingSourcesOnly?: boolean;
@@ -162,6 +163,7 @@ const importSources: readonly ImportSource[] = [
 
 export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScreenProps>(function ImportDataScreen({
   embedded = false,
+  onImportBatchCompleted,
   onImportCompleted,
   onPendingImportChange,
   workingSourcesOnly = false,
@@ -273,6 +275,7 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
 
     setError(null);
     setStatus('confirming');
+    let completedBatch = false;
     const completedImportIds: string[] = [];
     const importResults: ImportResult[] = [];
     try {
@@ -291,6 +294,7 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
       notifySocialChanged();
       notifyTrackingChanged();
       hapticSuccess();
+      completedBatch = true;
     } catch (importError) {
       if (completedImportIds.length > 0) {
         setPreviews((current) => current.filter((preview) => !completedImportIds.includes(preview.importId)));
@@ -303,6 +307,8 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
     } finally {
       setStatus('idle');
     }
+
+    if (completedBatch) onImportBatchCompleted?.();
   };
 
   const reviewMatches = () => {

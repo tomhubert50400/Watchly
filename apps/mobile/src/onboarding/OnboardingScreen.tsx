@@ -665,6 +665,7 @@ export function OnboardingScreen() {
                   {pageStep === 'import' ? (
                     <ImportDataScreen
                       embedded
+                      onImportBatchCompleted={() => moveToStep('notifications')}
                       onImportCompleted={({ importId, result }) => {
                         if (result.titlesProcessed < 1) return;
                         setCompletedImportIds((current) =>

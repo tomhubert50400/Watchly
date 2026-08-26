@@ -108,6 +108,8 @@ assert(
     importMatchesSource.includes('Skipped ${skippedItems.length}') &&
     importMatchesSource.includes('<SkippedSuggestionCard') &&
     importMatchesSource.includes('<RotateCcw') &&
+    importMatchesSource.includes('Retry all') &&
+    importMatchesSource.includes('retryItems(retryableItems, RETRY_ALL_KEY)') &&
     importMatchesSource.includes('accessibilityLabel={`Retry') &&
     importMatchesSource.includes('accessibilityRole="button"') &&
     !importMatchesSource.includes('label="Retry"') &&
@@ -133,8 +135,10 @@ assert(
 assert(
   onboardingSource.includes('<ImportDataScreen') &&
     onboardingSource.includes('workingSourcesOnly') &&
+    onboardingSource.includes("onImportBatchCompleted={() => moveToStep('notifications')}") &&
+    importScreenSource.includes('onImportBatchCompleted?.()') &&
     onboardingSource.includes("moveToStep(importSatisfied ? 'notifications' : 'taste')"),
-  'Onboarding must expose only working imports and skip Taste after a successful import.',
+  'Onboarding must expose only working imports and advance after a successful import batch.',
 );
 assert(
   onboardingSource.includes('<Text style={styles.importHeading}>Bring in your tastes</Text>') &&
