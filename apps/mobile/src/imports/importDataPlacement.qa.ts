@@ -111,9 +111,10 @@ assert(
     importMatchesSource.includes('accessibilityLabel={`Retry') &&
     importMatchesSource.includes('accessibilityRole="button"') &&
     !importMatchesSource.includes('label="Retry"') &&
-    importMatchesSource.includes('<SkippedTitleCard item={item} width={cardWidth} />') &&
+    importMatchesSource.includes('<SkippedTitleRow item={row.item} startsList={row.startsList} />') &&
+    importMatchesSource.includes('getImportSkippedReviewRows(skippedItems)') &&
     importMatchesSource.includes('key="matched-imports"') &&
-    importMatchesSource.includes('key="skipped-imports-grid"') &&
+    importMatchesSource.includes('key="skipped-imports"') &&
     !importMatchesSource.includes('item.issues') &&
     importReviewModelSource.includes('item.actions.sourceRating') &&
     importReviewModelSource.includes('getImportSkippedTitles') &&

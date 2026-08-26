@@ -9,7 +9,8 @@ import { MediaPoster } from '../components/MediaPoster';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSelection, hapticSuccess } from '../feedback/haptics';
 import type { RootStackParamList } from '../navigation/types';
-import type { ImportReviewMatch, ImportSkippedTitle } from './importReviewModel';
+import { getImportSkippedReviewRows } from './importReviewModel';
+import type { ImportReviewMatch, ImportSkippedReviewRow, ImportSkippedTitle } from './importReviewModel';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ImportMatches'>;
 
@@ -26,6 +27,7 @@ export function ImportMatchesScreen({ route }: Props) {
   const [retryingKey, setRetryingKey] = useState<string | null>(null);
   const cardWidth = (width - (spacing.xl * 2) - (spacing.sm * (MATCH_COLUMNS - 1))) / MATCH_COLUMNS;
   const hasSeriesRating = matchedItems.some((item) => item.contentType === 'series' && item.rating !== null);
+  const skippedRows = getImportSkippedReviewRows(skippedItems);
 
   const selectTab = (tab: ReviewTab) => {
     if (tab === activeTab) return;
@@ -92,23 +94,20 @@ export function ImportMatchesScreen({ route }: Props) {
         />
       ) : (
         <FlatList
-          columnWrapperStyle={styles.gridRow}
           contentContainerStyle={styles.content}
-          data={skippedItems}
-          ItemSeparatorComponent={GridSeparator}
-          key="skipped-imports-grid"
-          keyExtractor={getSkippedKey}
+          data={skippedRows}
+          key="skipped-imports"
+          keyExtractor={(item) => item.key}
           ListEmptyComponent={<EmptyTab label="No skipped titles." />}
-          numColumns={MATCH_COLUMNS}
-          renderItem={({ item }) => item.suggestion ? (
-            <SkippedSuggestionCard
-              item={item}
+          renderItem={({ item }) => (
+            <SkippedReviewRow
+              cardWidth={cardWidth}
               disabled={retryingKey !== null}
-              loading={retryingKey === getSkippedKey(item)}
-              onRetry={() => void retryTitle(item)}
-              width={cardWidth}
+              onRetry={(candidate) => void retryTitle(candidate)}
+              retryingKey={retryingKey}
+              row={item}
             />
-          ) : <SkippedTitleCard item={item} width={cardWidth} />}
+          )}
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -163,6 +162,39 @@ function ImportMatchCard({ item, width }: { item: ImportReviewMatch; width: numb
 
 function GridSeparator() {
   return <View style={styles.separator} />;
+}
+
+function SkippedReviewRow({
+  cardWidth,
+  disabled,
+  onRetry,
+  retryingKey,
+  row,
+}: {
+  cardWidth: number;
+  disabled: boolean;
+  onRetry: (item: ImportSkippedTitle) => void;
+  retryingKey: string | null;
+  row: ImportSkippedReviewRow;
+}) {
+  if (row.kind === 'unmatched') {
+    return <SkippedTitleRow item={row.item} startsList={row.startsList} />;
+  }
+
+  return (
+    <View style={styles.suggestionGridRow}>
+      {row.items.map((item) => (
+        <SkippedSuggestionCard
+          disabled={disabled}
+          item={item}
+          key={getSkippedKey(item)}
+          loading={retryingKey === getSkippedKey(item)}
+          onRetry={() => onRetry(item)}
+          width={cardWidth}
+        />
+      ))}
+    </View>
+  );
 }
 
 function SkippedSuggestionCard({
@@ -242,14 +274,14 @@ function SkippedSuggestionCard({
   );
 }
 
-function SkippedTitleCard({ item, width }: { item: ImportSkippedTitle; width: number }) {
+function SkippedTitleRow({ item, startsList }: { item: ImportSkippedTitle; startsList: boolean }) {
   return (
     <View
       accessibilityLabel={item.year ? `${item.title}, ${item.year}` : item.title}
       accessible
-      style={[styles.skippedCard, { width }]}
+      style={[styles.skippedRow, startsList ? styles.skippedListStart : null]}
     >
-      <Text numberOfLines={3} style={styles.skippedTitle}>{item.title}</Text>
+      <Text style={styles.skippedTitle}>{item.title}</Text>
       {item.year ? <Text style={styles.skippedYear}>{item.year}</Text> : null}
     </View>
   );
@@ -423,17 +455,23 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     justifyContent: 'center',
   },
-  skippedCard: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    gap: spacing.xs,
-    padding: spacing.sm,
+  skippedListStart: {
+    borderTopColor: colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  skippedRow: {
+    alignItems: 'center',
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between',
+    minHeight: 52,
+    paddingVertical: spacing.sm,
   },
   skippedTitle: {
     color: colors.text,
+    flex: 1,
     fontSize: 13,
     fontWeight: '700',
     lineHeight: 17,
@@ -441,6 +479,12 @@ const styles = StyleSheet.create({
   skippedYear: {
     ...typography.meta,
     color: colors.textSubtle,
+  },
+  suggestionGridRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
   },
   tab: {
     alignItems: 'center',
