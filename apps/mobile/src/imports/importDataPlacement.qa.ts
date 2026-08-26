@@ -112,6 +112,7 @@ assert(
     importMatchesSource.includes('accessibilityRole="button"') &&
     !importMatchesSource.includes('label="Retry"') &&
     importMatchesSource.includes('<SkippedTitleRow item={row.item} startsList={row.startsList} />') &&
+    importMatchesSource.includes("Couldn't match") &&
     importMatchesSource.includes('getImportSkippedReviewRows(skippedItems)') &&
     importMatchesSource.includes('key="matched-imports"') &&
     importMatchesSource.includes('key="skipped-imports"') &&

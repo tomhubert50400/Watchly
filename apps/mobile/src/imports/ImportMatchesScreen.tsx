@@ -276,14 +276,19 @@ function SkippedSuggestionCard({
 
 function SkippedTitleRow({ item, startsList }: { item: ImportSkippedTitle; startsList: boolean }) {
   return (
-    <View
-      accessibilityLabel={item.year ? `${item.title}, ${item.year}` : item.title}
-      accessible
-      style={[styles.skippedRow, startsList ? styles.skippedListStart : null]}
-    >
-      <Text style={styles.skippedTitle}>{item.title}</Text>
-      {item.year ? <Text style={styles.skippedYear}>{item.year}</Text> : null}
-    </View>
+    <>
+      {startsList ? (
+        <Text accessibilityRole="header" style={styles.skippedListLabel}>Couldn't match</Text>
+      ) : null}
+      <View
+        accessibilityLabel={item.year ? `${item.title}, ${item.year}` : item.title}
+        accessible
+        style={[styles.skippedRow, startsList ? styles.skippedListStart : null]}
+      >
+        <Text style={styles.skippedTitle}>{item.title}</Text>
+        {item.year ? <Text style={styles.skippedYear}>{item.year}</Text> : null}
+      </View>
+    </>
   );
 }
 
@@ -458,6 +463,12 @@ const styles = StyleSheet.create({
   skippedListStart: {
     borderTopColor: colors.border,
     borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  skippedListLabel: {
+    ...typography.eyebrow,
+    color: colors.textSubtle,
+    marginBottom: spacing.xs,
+    marginTop: spacing.xs,
   },
   skippedRow: {
     alignItems: 'center',
