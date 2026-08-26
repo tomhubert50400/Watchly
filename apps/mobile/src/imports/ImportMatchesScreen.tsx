@@ -1,11 +1,10 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useState } from 'react';
-import { Info, Star } from 'lucide-react-native';
-import { Alert, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Info, RotateCcw, Star } from 'lucide-react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { retryImportSuggestion } from '../api/imports';
 import { useAuthSession } from '../auth/AuthSessionContext';
-import { Button } from '../components/Button';
 import { MediaPoster } from '../components/MediaPoster';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSelection, hapticSuccess } from '../feedback/haptics';
@@ -183,34 +182,63 @@ function SkippedSuggestionCard({
   if (!suggestion) return null;
 
   const ratingLabel = item.rating === null ? null : formatRating(item.rating);
+  const hasPoster = Boolean(suggestion.posterUrl);
 
   return (
-    <View style={[styles.card, { width }]}>
-      <View style={styles.posterShell}>
-        <MediaPoster
-          accessibilityLabel={`${suggestion.title} poster, probable match for ${item.title}`}
-          posterUrl={suggestion.posterUrl}
-          style={{ aspectRatio: POSTER_ASPECT_RATIO, width }}
-        />
-        {ratingLabel ? (
-          <View style={styles.ratingBadge}>
-            <Star color={colors.ratingText} fill={colors.rating} size={12} strokeWidth={2} />
+    <Pressable
+      accessibilityHint="Accepts this probable match."
+      accessibilityLabel={`Retry ${item.title} as ${suggestion.title}`}
+      accessibilityRole="button"
+      accessibilityState={{ busy: loading, disabled }}
+      disabled={disabled}
+      onPress={onRetry}
+      style={({ pressed }) => [
+        styles.card,
+        !hasPoster ? styles.retryCardWithoutPoster : null,
+        { width },
+        pressed ? styles.retryCardPressed : null,
+        disabled && !loading ? styles.retryCardDisabled : null,
+      ]}
+    >
+      {hasPoster ? (
+        <View style={styles.posterShell}>
+          <MediaPoster
+            accessibilityLabel={`${suggestion.title} poster, probable match for ${item.title}`}
+            posterUrl={suggestion.posterUrl}
+            style={{ aspectRatio: POSTER_ASPECT_RATIO, width }}
+          />
+          <View style={styles.retryOverlay}>
+            <View style={styles.retryIconSurface}>
+              {loading
+                ? <ActivityIndicator color={colors.text} size="small" />
+                : <RotateCcw color={colors.text} size={22} strokeWidth={2.4} />}
+            </View>
+          </View>
+          {ratingLabel ? (
+            <View style={styles.ratingBadge}>
+              <Star color={colors.ratingText} fill={colors.rating} size={12} strokeWidth={2} />
+              <Text style={styles.ratingText}>{ratingLabel}</Text>
+            </View>
+          ) : null}
+        </View>
+      ) : (
+        <View style={styles.compactRetryIcon}>
+          {loading
+            ? <ActivityIndicator color={colors.text} size="small" />
+            : <RotateCcw color={colors.text} size={22} strokeWidth={2.4} />}
+        </View>
+      )}
+      <Text numberOfLines={2} style={styles.cardTitle}>{suggestion.title}</Text>
+      <View style={styles.cardMeta}>
+        <Text style={styles.contentType}>{suggestion.contentType === 'movie' ? 'Movie' : 'Series'}</Text>
+        {!hasPoster && ratingLabel ? (
+          <View style={styles.compactRating}>
+            <Star color={colors.ratingText} fill={colors.rating} size={11} strokeWidth={2} />
             <Text style={styles.ratingText}>{ratingLabel}</Text>
           </View>
         ) : null}
       </View>
-      <Text numberOfLines={2} style={styles.cardTitle}>{suggestion.title}</Text>
-      <Text style={styles.contentType}>{suggestion.contentType === 'movie' ? 'Movie' : 'Series'}</Text>
-      <Button
-        accessibilityLabel={`Retry ${item.title} as ${suggestion.title}`}
-        compact
-        disabled={disabled}
-        fullWidth
-        label="Retry"
-        loading={loading}
-        onPress={onRetry}
-      />
-    </View>
+    </Pressable>
   );
 }
 
@@ -273,7 +301,14 @@ function addReviewMatch(current: ImportReviewMatch[], item: ImportSkippedTitle) 
 
 const styles = StyleSheet.create({
   card: {
+    alignSelf: 'flex-start',
     gap: spacing.xs,
+  },
+  cardMeta: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+    justifyContent: 'space-between',
   },
   cardTitle: {
     color: colors.text,
@@ -293,7 +328,18 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   gridRow: {
+    alignItems: 'flex-start',
     gap: spacing.sm,
+  },
+  compactRating: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 3,
+  },
+  compactRetryIcon: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
   },
   emptyText: {
     ...typography.body,
@@ -347,14 +393,44 @@ const styles = StyleSheet.create({
   separator: {
     height: spacing.lg,
   },
+  retryCardDisabled: {
+    opacity: 0.55,
+  },
+  retryCardPressed: {
+    opacity: 0.78,
+  },
+  retryCardWithoutPoster: {
+    backgroundColor: colors.panel,
+    borderColor: colors.borderStrong,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    padding: spacing.sm,
+  },
+  retryIconSurface: {
+    alignItems: 'center',
+    backgroundColor: colors.overlay,
+    borderColor: colors.borderStrong,
+    borderRadius: 22,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  retryOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    backgroundColor: 'rgba(9, 12, 19, 0.36)',
+    borderRadius: radii.md,
+    justifyContent: 'center',
+  },
   skippedCard: {
+    alignSelf: 'flex-start',
     backgroundColor: colors.panelSoft,
     borderColor: colors.border,
     borderRadius: radii.md,
     borderWidth: 1,
     gap: spacing.xs,
-    minHeight: 112,
-    padding: spacing.md,
+    padding: spacing.sm,
   },
   skippedTitle: {
     color: colors.text,

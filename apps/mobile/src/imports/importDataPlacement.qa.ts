@@ -107,7 +107,10 @@ assert(
     importMatchesSource.includes('Matched ${matchedItems.length}') &&
     importMatchesSource.includes('Skipped ${skippedItems.length}') &&
     importMatchesSource.includes('<SkippedSuggestionCard') &&
-    importMatchesSource.includes('label="Retry"') &&
+    importMatchesSource.includes('<RotateCcw') &&
+    importMatchesSource.includes('accessibilityLabel={`Retry') &&
+    importMatchesSource.includes('accessibilityRole="button"') &&
+    !importMatchesSource.includes('label="Retry"') &&
     importMatchesSource.includes('<SkippedTitleCard item={item} width={cardWidth} />') &&
     importMatchesSource.includes('key="matched-imports"') &&
     importMatchesSource.includes('key="skipped-imports-grid"') &&
