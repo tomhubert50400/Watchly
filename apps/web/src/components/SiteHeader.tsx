@@ -12,18 +12,22 @@ export function SiteHeader() {
           <Image alt="Watchly" className="brand__wordmark" priority src={watchlyWordmark} />
         </Link>
         <nav aria-label="Primary navigation" className="site-nav">
-          <Link href="/#features">Features</Link>
+          <Link href="/#product">Product</Link>
+          <Link href="/#features">Track</Link>
           <Link href="/#community">Community</Link>
-          <Link href="/#your-watchly">Your Watchly</Link>
+          <Link href="/#faq">FAQ</Link>
+          <Link className="site-nav__cta" href="/support">Support</Link>
         </nav>
         <details className="mobile-nav">
           <summary aria-label="Open navigation">
             <Menu aria-hidden="true" size={22} />
           </summary>
           <nav aria-label="Mobile navigation">
-            <Link href="/#features">Features</Link>
+            <Link href="/#product">Product</Link>
+            <Link href="/#features">Track</Link>
             <Link href="/#community">Community</Link>
-            <Link href="/#your-watchly">Your Watchly</Link>
+            <Link href="/#faq">FAQ</Link>
+            <Link href="/support">Support</Link>
           </nav>
         </details>
       </div>

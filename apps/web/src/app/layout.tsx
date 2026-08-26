@@ -5,10 +5,10 @@ import './globals.css';
 const siteUrl = getSiteUrl();
 
 export const metadata: Metadata = {
-  description: 'Watchly legal information, community standards, support, and account controls.',
+  description: 'Discover films and series, track every watch, build watchlists, and share reviews with Watchly.',
   metadataBase: new URL(siteUrl),
   openGraph: {
-    description: 'Legal information, community standards, support, and account controls for Watchly.',
+    description: 'Discover films and series, track every watch, build watchlists, and share reviews with Watchly.',
     siteName: 'Watchly',
     title: 'Watchly',
     type: 'website',
