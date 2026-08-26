@@ -1,5 +1,5 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
-import { useNavigation } from '@react-navigation/native';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type * as ExpoDocumentPicker from 'expo-document-picker';
 import { requireOptionalNativeModule } from 'expo';
@@ -9,6 +9,7 @@ import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } 
 import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import {
   confirmDataImport,
+  getImportPreview,
   ImportPreview,
   ImportResult,
   previewDataImport,
@@ -181,6 +182,23 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
     ? importSources.filter((source) => source.importSource)
     : importSources;
   const combinedPreview = useMemo(() => combineImportPreviews(previews), [previews]);
+  const previewIds = useMemo(() => previews.map((preview) => preview.importId).join('|'), [previews]);
+
+  useFocusEffect(useCallback(() => {
+    if (!firebaseIdToken || !previewIds) return undefined;
+
+    let active = true;
+    const importIds = previewIds.split('|');
+    void Promise.all(importIds.map((importId) => getImportPreview(firebaseIdToken, importId)))
+      .then((refreshed) => {
+        if (active) setPreviews(refreshed);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, [firebaseIdToken, previewIds]));
 
   useEffect(() => {
     onPendingImportChange?.(combinedPreview.summary.ready);
