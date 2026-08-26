@@ -1,8 +1,10 @@
 import {
   BadRequestException,
   Controller,
+  Get,
   Inject,
   Param,
+  ParseIntPipe,
   Post,
   Req,
   UnauthorizedException,
@@ -31,6 +33,23 @@ export class ImportsController {
     @UploadedFile() file: ImportUpload,
   ) {
     return this.imports.preview(getIdentity(request), parseSource(source), file);
+  }
+
+  @Get(':importId/preview')
+  getPreview(
+    @Req() request: AuthenticatedRequest,
+    @Param('importId') importId: string,
+  ) {
+    return this.imports.getPreview(getIdentity(request), importId);
+  }
+
+  @Post(':importId/items/:itemIndex/retry')
+  retry(
+    @Req() request: AuthenticatedRequest,
+    @Param('importId') importId: string,
+    @Param('itemIndex', ParseIntPipe) itemIndex: number,
+  ) {
+    return this.imports.retry(getIdentity(request), importId, itemIndex);
   }
 
   @Post(':importId/confirm')

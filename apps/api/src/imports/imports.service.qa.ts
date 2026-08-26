@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Prisma } from '../generated/prisma/client';
 import { TrackedContentType, UserContentStatus } from '../generated/prisma/enums';
-import { commitPreparedItems } from './imports.service';
+import { applyImportSuggestion, commitPreparedItems } from './imports.service';
 
 async function main() {
 const createdRatings: unknown[] = [];
@@ -76,6 +76,7 @@ const baseItem = {
   sourceTitle: 'Heat',
   sourceYear: 1995,
   status: 'ready' as const,
+  suggestion: null,
   tmdbId: 1,
   tvdbId: null,
   watched: true,
@@ -84,6 +85,24 @@ const baseItem = {
   watchlisted: false,
   warnings: [],
 };
+const acceptedSuggestion = applyImportSuggestion({
+  ...baseItem,
+  match: null,
+  rating: 4.5,
+  review: 'Still excellent.',
+  status: 'ambiguous',
+  suggestion: {
+    contentType: 'series',
+    posterUrl: 'https://image.test/breaking-bad.jpg',
+    releaseDate: '2008-01-20',
+    title: 'Breaking Bad',
+    tmdbId: 1396,
+  },
+});
+assert.equal(acceptedSuggestion.status, 'ready');
+assert.equal(acceptedSuggestion.match?.tmdbId, 1396);
+assert.equal(acceptedSuggestion.suggestion, null);
+assert.equal(acceptedSuggestion.issues.length, 2);
 const result = await commitPreparedItems(transaction, 'user-id', [
   baseItem,
   {

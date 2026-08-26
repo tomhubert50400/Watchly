@@ -33,10 +33,11 @@ type ImportMatch = {
   tmdbId: number;
 };
 
-type PreparedImportItem = ParsedImportItem & {
+export type PreparedImportItem = ParsedImportItem & {
   issues: string[];
   match: ImportMatch | null;
   status: 'ambiguous' | 'ready' | 'unmatched' | 'unsupported';
+  suggestion: ImportMatch | null;
 };
 
 type ImportSummary = {
@@ -186,6 +187,75 @@ export class ImportsService {
     );
   }
 
+  async getPreview(identity: AuthenticatedIdentity, importId: string) {
+    assertUuid(importId);
+    const user = await this.authService.getOrCreateUser(identity);
+    const record = await this.prisma.withConnectionRetry(() =>
+      this.prisma.dataImport.findFirst({
+        where: { id: importId, status: DataImportStatus.PREVIEWED, userId: user.id },
+      }),
+    );
+
+    if (!record) {
+      throw new NotFoundException('Import preview not found.');
+    }
+
+    if (record.createdAt.getTime() < Date.now() - IMPORT_PREVIEW_TTL_MS) {
+      throw new BadRequestException('This import preview expired. Choose the file again.');
+    }
+
+    return toPublicPreview(record.id, readStoredPreview(record.preview));
+  }
+
+  async retry(identity: AuthenticatedIdentity, importId: string, itemIndex: number) {
+    assertUuid(importId);
+    const user = await this.authService.getOrCreateUser(identity);
+    const record = await this.prisma.withConnectionRetry(() =>
+      this.prisma.dataImport.findFirst({
+        where: { id: importId, status: DataImportStatus.PREVIEWED, userId: user.id },
+      }),
+    );
+
+    if (!record) {
+      throw new NotFoundException('Import preview not found.');
+    }
+
+    if (record.createdAt.getTime() < Date.now() - IMPORT_PREVIEW_TTL_MS) {
+      throw new BadRequestException('This import preview expired. Choose the file again.');
+    }
+
+    const preview = readStoredPreview(record.preview);
+    const item = preview.items[itemIndex];
+    if (!item) {
+      throw new NotFoundException('Skipped import title not found.');
+    }
+
+    if (item.status === 'ready') {
+      return toPublicPreview(record.id, preview);
+    }
+
+    const items = preview.items.map((current, index) =>
+      index === itemIndex ? applyImportSuggestion(current) : current,
+    );
+    const updatedPreview: StoredImportPreview = {
+      ...preview,
+      items,
+      summary: buildImportSummary(items),
+    };
+    const update = await this.prisma.withConnectionRetry(() =>
+      this.prisma.dataImport.updateMany({
+        data: { preview: updatedPreview as unknown as Prisma.InputJsonValue },
+        where: { id: record.id, status: DataImportStatus.PREVIEWED, userId: user.id },
+      }),
+    );
+
+    if (update.count !== 1) {
+      throw new ConflictException('This import preview is already being completed.');
+    }
+
+    return toPublicPreview(record.id, updatedPreview);
+  }
+
   private async prepareItem(item: ParsedImportItem): Promise<PreparedImportItem> {
     if (item.contentHint === 'episode') {
       return {
@@ -193,6 +263,7 @@ export class ImportsService {
         issues: [...item.warnings, 'Episode imports are not supported by this source yet.'],
         match: null,
         status: 'unsupported',
+        suggestion: null,
       };
     }
 
@@ -203,24 +274,19 @@ export class ImportsService {
         issues: [...item.warnings, matchResult.issue],
         match: null,
         status: matchResult.status,
+        suggestion: matchResult.suggestion,
       };
     }
 
-    const issues = [...item.warnings];
-    if (matchResult.match.contentType === 'series' && item.rating !== null) {
-      issues.push('Series ratings cannot be represented in Watchly yet and will be skipped.');
-    }
-    if (matchResult.match.contentType === 'series' && item.review !== null) {
-      issues.push('Series reviews cannot be represented in Watchly yet and will be skipped.');
-    }
-
-    return { ...item, issues, match: matchResult.match, status: 'ready' };
+    return prepareMatchedItem(item, matchResult.match);
   }
 
   private async findMatch(item: ParsedImportItem): Promise<
     | { match: ImportMatch; status: 'ready' }
-    | { issue: string; status: 'ambiguous' | 'unmatched' }
+    | { issue: string; status: 'ambiguous' | 'unmatched'; suggestion: ImportMatch | null }
   > {
+    let identifierIssue: string | null = null;
+
     if (item.tmdbId) {
       try {
         const response = item.contentHint === 'series'
@@ -230,9 +296,10 @@ export class ImportsService {
         return { match: toImportMatch(response.item), status: 'ready' };
       } catch (error) {
         if (error instanceof NotFoundException) {
-          return { issue: 'The supplied TMDB ID was not found.', status: 'unmatched' };
+          identifierIssue = 'The supplied TMDB ID was not found.';
+        } else {
+          throw error;
         }
-        throw error;
       }
     }
 
@@ -247,7 +314,11 @@ export class ImportsService {
       }
 
       if (candidates.length > 1) {
-        return { issue: 'The IMDb ID matched more than one TMDB title.', status: 'ambiguous' };
+        return {
+          issue: 'The IMDb ID matched more than one TMDB title.',
+          status: 'ambiguous',
+          suggestion: toImportMatch(candidates[0]),
+        };
       }
     }
 
@@ -262,17 +333,26 @@ export class ImportsService {
       }
 
       if (candidates.length > 1) {
-        return { issue: 'The TVDB ID matched more than one TMDB series.', status: 'ambiguous' };
+        return {
+          issue: 'The TVDB ID matched more than one TMDB series.',
+          status: 'ambiguous',
+          suggestion: toImportMatch(candidates[0]),
+        };
       }
     }
 
     if (!item.sourceTitle || item.sourceTitle.startsWith('Title ')) {
-      return { issue: 'No usable title or external ID was provided.', status: 'unmatched' };
+      return {
+        issue: identifierIssue ?? 'No usable title or external ID was provided.',
+        status: 'unmatched',
+        suggestion: null,
+      };
     }
 
     const contentType = item.contentHint === 'series' ? 'series' : 'movie';
     const response = await this.catalogue.search(item.sourceTitle, contentType);
-    const titleMatches = response.items.filter(
+    const candidates = response.items.filter((candidate) => candidate.mediaType === contentType);
+    const titleMatches = candidates.filter(
       (candidate) => normalizeTitle(candidate.title) === normalizeTitle(item.sourceTitle),
     );
     const yearMatches = item.sourceYear
@@ -284,11 +364,43 @@ export class ImportsService {
     }
 
     if (yearMatches.length > 1 || titleMatches.length > 1) {
-      return { issue: 'More than one TMDB title could match this row.', status: 'ambiguous' };
+      return {
+        issue: 'More than one TMDB title could match this row.',
+        status: 'ambiguous',
+        suggestion: toImportMatch(yearMatches[0] ?? titleMatches[0]),
+      };
     }
 
-    return { issue: 'No confident TMDB match was found.', status: 'unmatched' };
+    const probable = titleMatches[0] ?? candidates[0];
+    return {
+      issue: identifierIssue ?? 'No confident TMDB match was found.',
+      status: 'unmatched',
+      suggestion: probable ? toImportMatch(probable) : null,
+    };
   }
+}
+
+export function applyImportSuggestion(item: PreparedImportItem): PreparedImportItem {
+  if (!item.suggestion) {
+    throw new BadRequestException('No probable match is available for this title.');
+  }
+
+  return prepareMatchedItem(item, item.suggestion);
+}
+
+function prepareMatchedItem(
+  item: ParsedImportItem | PreparedImportItem,
+  match: ImportMatch,
+): PreparedImportItem {
+  const issues = [...item.warnings];
+  if (match.contentType === 'series' && item.rating !== null) {
+    issues.push('Series ratings cannot be represented in Watchly yet and will be skipped.');
+  }
+  if (match.contentType === 'series' && item.review !== null) {
+    issues.push('Series reviews cannot be represented in Watchly yet and will be skipped.');
+  }
+
+  return { ...item, issues, match, status: 'ready', suggestion: null };
 }
 
 export async function commitPreparedItems(
@@ -474,7 +586,7 @@ function toPublicPreview(importId: string, preview: StoredImportPreview) {
     fileName: preview.fileName,
     ignoredFileCount: preview.ignoredFileCount,
     importId,
-    items: preview.items.map((item) => ({
+    items: preview.items.map((item, itemIndex) => ({
       actions: {
         hasReview: item.review !== null && item.match?.contentType === 'movie',
         rating: item.match?.contentType === 'movie' ? item.rating : null,
@@ -488,10 +600,13 @@ function toPublicPreview(importId: string, preview: StoredImportPreview) {
         favorite: item.favorite,
       },
       issues: item.issues,
+      importId,
+      itemIndex,
       match: item.match,
       sourceTitle: item.sourceTitle,
       sourceYear: item.sourceYear,
       status: item.status,
+      suggestion: item.suggestion ?? null,
     })),
     source: preview.source,
     summary: preview.summary,
@@ -505,7 +620,10 @@ function readStoredPreview(value: Prisma.JsonValue): StoredImportPreview {
     throw new BadRequestException('This import preview is no longer supported.');
   }
 
-  return preview as StoredImportPreview;
+  return {
+    ...preview,
+    items: preview.items.map((item) => ({ ...item, suggestion: item.suggestion ?? null })),
+  } as StoredImportPreview;
 }
 
 function toImportMatch(item: {
