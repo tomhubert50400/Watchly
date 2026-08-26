@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RefreshControl, StyleSheet, View } from 'react-native';
 import { Button } from '../components/Button';
@@ -13,7 +13,6 @@ import { useLibraryData } from '../library/useLibraryData';
 import type { RootStackParamList } from '../navigation/types';
 import { ProfileMediaRail } from './ProfileMediaRail';
 import { getProfileMediaItems, groupProfileMediaByStatus } from './profileMediaModel';
-import { useHydratedProfileMediaItems } from './useHydratedProfileMediaItems';
 
 type Navigation = NativeStackNavigationProp<RootStackParamList>;
 type Route = RouteProp<RootStackParamList, 'ProfileMedia'>;
@@ -28,16 +27,11 @@ export function ProfileMediaScreen() {
     () => getProfileMediaItems(providedItems ?? resource.data?.items ?? [], route.params.filter),
     [providedItems, resource.data?.items, route.params.filter],
   );
-  const hydratedItems = useHydratedProfileMediaItems(sourceItems);
-  const groups = useMemo(() => groupProfileMediaByStatus(hydratedItems), [hydratedItems]);
+  const groups = useMemo(() => groupProfileMediaByStatus(sourceItems), [sourceItems]);
   const atmosphereUrl = route.params.profileBackdropUrl
-    ?? hydratedItems[0]?.backdropUrl
-    ?? hydratedItems[0]?.posterUrl
+    ?? sourceItems[0]?.backdropUrl
+    ?? sourceItems[0]?.posterUrl
     ?? null;
-
-  useFocusEffect(useCallback(() => {
-    if (!usesProvidedItems) resource.revalidate();
-  }, [resource.revalidate, usesProvidedItems]));
 
   const openItem = useCallback((item: LibraryMediaItem) => {
     if (item.contentType === 'movie') {

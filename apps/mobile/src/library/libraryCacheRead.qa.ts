@@ -15,5 +15,10 @@ assert.match(
   /useCallback\(async \(cached\?: LibraryData\)/,
   'Library loading must consume the cached value already supplied by useCachedResource',
 );
+assert.match(
+  source,
+  /fallback && !isCataloguePlaceholderTitle\(fallback\.title\)/,
+  'resolved catalogue metadata must survive a Library revalidation without another detail request',
+);
 
 console.log('Library cache read QA passed.');

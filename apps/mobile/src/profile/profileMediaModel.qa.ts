@@ -187,6 +187,16 @@ assert(
   'profile media rails must stay locked to horizontal card movement',
 );
 assert(
+  mediaRailSource.includes('<FlatList')
+    && mediaRailSource.includes('initialNumToRender={4}')
+    && mediaRailSource.includes('windowSize={3}'),
+  'profile media rails must hydrate a small visible window instead of mounting every title',
+);
+assert(
+  mediaRailSource.includes('getProfileMediaDisplayTitle(hydratedItem)'),
+  'profile cards must hide unresolved TMDB identifiers while metadata loads',
+);
+assert(
   allTimeStatsSource.includes('route.params?.profileBackdropUrl')
     && allTimeStatsSource.includes('<SpotlightAtmosphere imageUrl={atmosphereUrl} />'),
   'All Time must render the same profile backdrop through the shared atmosphere',
@@ -210,6 +220,20 @@ assert(
   'the selected background must persist through the profile API',
 );
 const mediaScreenSource = readFileSync(new URL('./ProfileMediaScreen.tsx', import.meta.url), 'utf8');
+assert(
+  profileSource.includes('profileBackdropUrl: atmosphereUrl'),
+  'owner Profile media pages must preserve their resolved atmosphere',
+);
+assert.doesNotMatch(
+  profileSource,
+  /mediaResource\.revalidate\(\)/,
+  'returning to Profile must not force another complete Library hydration',
+);
+assert.doesNotMatch(
+  mediaScreenSource,
+  /useFocusEffect|useHydratedProfileMediaItems/,
+  'Profile media pages must not revalidate or hydrate their complete collection on focus',
+);
 assert(
   mediaScreenSource.includes("route.params.filter !== 'movies'"),
   'movie pages must hide the In progress section',

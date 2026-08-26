@@ -21,7 +21,7 @@ export function useHydratedProfileMediaItems(items: readonly LibraryMediaItem[])
         backdropUrl: item.backdropUrl ?? previous.backdropUrl,
         numberOfEpisodes: item.numberOfEpisodes ?? previous.numberOfEpisodes,
         posterUrl: item.posterUrl ?? previous.posterUrl,
-        title: /^TMDB \d+$/.test(item.title) ? previous.title : item.title,
+        title: isCataloguePlaceholderTitle(item.title) ? previous.title : item.title,
       };
     }));
 
@@ -31,32 +31,7 @@ export function useHydratedProfileMediaItems(items: readonly LibraryMediaItem[])
       items: pendingItems,
       load: async (item) => {
         try {
-          if (item.contentType === 'movie') {
-            const details = await refreshMovie(item.tmdbId);
-            return {
-              ...item,
-              backdropUrl: details.backdropUrl,
-              numberOfEpisodes: null,
-              posterUrl: details.posterUrl,
-              title: details.title,
-            };
-          }
-
-          const details = await refreshSeries(item.tmdbId);
-          const resume = calculateResumeEpisode(
-            details.seasons,
-            item.resumeSeasonNumber,
-            item.resumeEpisodeNumber,
-          );
-          return {
-            ...item,
-            backdropUrl: details.backdropUrl,
-            numberOfEpisodes: details.numberOfEpisodes,
-            posterUrl: details.posterUrl,
-            resumeEpisodeNumber: resume?.episodeNumber ?? null,
-            resumeSeasonNumber: resume?.seasonNumber ?? null,
-            title: details.title,
-          };
+          return await hydrateProfileMediaItem(item, refreshMovie, refreshSeries);
         } catch {
           return item;
         }
@@ -77,8 +52,88 @@ export function useHydratedProfileMediaItems(items: readonly LibraryMediaItem[])
   return hydratedItems;
 }
 
-function needsCatalogueHydration(item: LibraryMediaItem) {
-  return item.posterUrl === null
-    || /^TMDB \d+$/.test(item.title)
+export function useHydratedProfileMediaItem(item: LibraryMediaItem) {
+  const { refreshMovie, refreshSeries } = useCatalogueCache();
+  const [hydratedItem, setHydratedItem] = useState(item);
+
+  useEffect(() => {
+    let active = true;
+    setHydratedItem((current) => mergeHydratedItem(item, current));
+
+    if (!needsCatalogueHydration(item)) {
+      return () => {
+        active = false;
+      };
+    }
+
+    void hydrateProfileMediaItem(item, refreshMovie, refreshSeries)
+      .then((loaded) => {
+        if (active) setHydratedItem(loaded);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, [item, refreshMovie, refreshSeries]);
+
+  return hydratedItem;
+}
+
+export function getProfileMediaDisplayTitle(item: Pick<LibraryMediaItem, 'title'>) {
+  return isCataloguePlaceholderTitle(item.title) ? 'Loading title' : item.title;
+}
+
+export function needsCatalogueHydration(item: LibraryMediaItem) {
+  return isCataloguePlaceholderTitle(item.title)
     || (item.contentType === 'series' && item.numberOfEpisodes === null);
+}
+
+function isCataloguePlaceholderTitle(title: string) {
+  return /^TMDB \d+$/.test(title);
+}
+
+async function hydrateProfileMediaItem(
+  item: LibraryMediaItem,
+  refreshMovie: ReturnType<typeof useCatalogueCache>['refreshMovie'],
+  refreshSeries: ReturnType<typeof useCatalogueCache>['refreshSeries'],
+) {
+  if (item.contentType === 'movie') {
+    const details = await refreshMovie(item.tmdbId);
+    return {
+      ...item,
+      backdropUrl: details.backdropUrl,
+      numberOfEpisodes: null,
+      posterUrl: details.posterUrl,
+      title: details.title,
+    };
+  }
+
+  const details = await refreshSeries(item.tmdbId);
+  const resume = calculateResumeEpisode(
+    details.seasons,
+    item.resumeSeasonNumber,
+    item.resumeEpisodeNumber,
+  );
+  return {
+    ...item,
+    backdropUrl: details.backdropUrl,
+    numberOfEpisodes: details.numberOfEpisodes,
+    posterUrl: details.posterUrl,
+    resumeEpisodeNumber: resume?.episodeNumber ?? null,
+    resumeSeasonNumber: resume?.seasonNumber ?? null,
+    title: details.title,
+  };
+}
+
+function mergeHydratedItem(item: LibraryMediaItem, previous: LibraryMediaItem) {
+  if (previous.key !== item.key) return item;
+
+  return {
+    ...item,
+    backdropUrl: item.backdropUrl ?? previous.backdropUrl,
+    numberOfEpisodes: item.numberOfEpisodes ?? previous.numberOfEpisodes,
+    posterUrl: item.posterUrl ?? previous.posterUrl,
+    title: isCataloguePlaceholderTitle(item.title) ? previous.title : item.title,
+  };
 }

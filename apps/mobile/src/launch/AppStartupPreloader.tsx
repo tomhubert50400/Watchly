@@ -120,7 +120,10 @@ export function AppStartupPreloader() {
             }),
             preloadCachedResource<LibraryData>({
               key: getLibraryResourceKey(userId),
-              load: (cached) => loadLibraryData(token, cached),
+              load: (cached) => loadLibraryData(token, cached, {
+                loadMovie: refreshMovie,
+                loadSeries: refreshSeries,
+              }),
             }),
             preloadCachedResource<CachedProfile>({
               key: getProfileResourceKey(userId),

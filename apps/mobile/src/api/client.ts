@@ -145,6 +145,10 @@ async function getServerError(response: Response) {
 }
 
 function sanitizeServerMessage(message: string | undefined, status: number) {
+  if (status === 429) {
+    return 'Watchly is catching up. Try again in a moment.';
+  }
+
   if (!message) {
     return `API request failed with status ${status}.`;
   }

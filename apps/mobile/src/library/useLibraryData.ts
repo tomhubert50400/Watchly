@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { getMovieDetails, getSeriesDetails } from '../api/catalogue';
+import { getMovieDetails, getSeriesDetails, type MovieDetails, type SeriesDetails } from '../api/catalogue';
 import { listReleaseAlerts } from '../api/notifications';
 import { listSeriesProgressSummaries } from '../api/progress';
 import { listMovieRatings } from '../api/ratings';
@@ -9,6 +9,7 @@ import { listWatchlists } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
+import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
 import { createRequestCoalescer, takeHydrationItems } from '../watchlists/requestBoundaries';
 import { loadWatchlistPreviewUrls } from '../watchlists/watchlistPreview';
 import { calculateResumeEpisode, LibraryItemBase, mapLibrarySourceErrors, mergeLibraryItems, shouldShowTrackedTitle } from './libraryModel';
@@ -27,6 +28,15 @@ export type LibraryListItem = {
   memberCount: number | null; name: string; posterUrls: Array<string | null>; updatedAt: string;
 };
 export type LibraryData = { items: LibraryMediaItem[]; lists: LibraryListItem[]; partialError: string | null };
+type CatalogueLoaders = {
+  loadMovie: (tmdbId: number) => Promise<MovieDetails>;
+  loadSeries: (tmdbId: number) => Promise<SeriesDetails>;
+};
+
+const defaultCatalogueLoaders: CatalogueLoaders = {
+  loadMovie: async (tmdbId) => (await getMovieDetails(tmdbId)).item,
+  loadSeries: async (tmdbId) => (await getSeriesDetails(tmdbId)).item,
+};
 
 export function getLibraryResourceKey(userId: string) {
   return getPrivateCacheKey(userId, 'library:v5');
@@ -34,18 +44,26 @@ export function getLibraryResourceKey(userId: string) {
 
 export function useLibraryData(enabled = true) {
   const { currentUser, getFirebaseIdToken, trackingRevision } = useAuthSession();
+  const { refreshMovie, refreshSeries } = useCatalogueCache();
   const key = getLibraryResourceKey(currentUser?.id ?? 'visitor');
   const load = useCallback(async (cached?: LibraryData): Promise<LibraryData> => {
     void trackingRevision;
     if (!currentUser) throw new Error('Sign in to load your library.');
     const token = await getFirebaseIdToken();
     if (!token) throw new Error('Sign in again to load your library.');
-    return loadLibraryData(token, cached);
-  }, [currentUser, getFirebaseIdToken, key, trackingRevision]);
+    return loadLibraryData(token, cached, {
+      loadMovie: refreshMovie,
+      loadSeries: refreshSeries,
+    });
+  }, [currentUser, getFirebaseIdToken, key, refreshMovie, refreshSeries, trackingRevision]);
   return { key, ...useCachedResource({ enabled: enabled && Boolean(currentUser), key, load }) };
 }
 
-export async function loadLibraryData(token: string, previous?: LibraryData): Promise<LibraryData> {
+export async function loadLibraryData(
+  token: string,
+  previous?: LibraryData,
+  catalogueLoaders: CatalogueLoaders = defaultCatalogueLoaders,
+): Promise<LibraryData> {
   const [tracking, ratings, progress, personal, shared, alerts] = await Promise.allSettled([
     listTrackingStates(token), listMovieRatings(token), listSeriesProgressSummaries(token),
     listWatchlists(token), listSharedWatchlists(token), listReleaseAlerts(token),
@@ -70,7 +88,7 @@ export async function loadLibraryData(token: string, previous?: LibraryData): Pr
     items = await Promise.all(bases.map((item) => {
       const fallback = previous?.items.find((old) => old.key === item.key);
       return hydrationKeys.has(item.key)
-        ? hydrateMediaItem(item, fallback)
+        ? hydrateMediaItem(item, fallback, catalogueLoaders)
         : Promise.resolve(fallback ? { ...fallback, ...item } : toLibraryFallback(item));
     }));
   }
@@ -89,8 +107,8 @@ export async function loadLibraryData(token: string, previous?: LibraryData): Pr
       const [contentType, rawTmdbId] = mediaKey.split(':');
       const tmdbId = Number(rawTmdbId);
       const details = contentType === 'movie'
-        ? (await getMovieDetails(tmdbId)).item
-        : (await getSeriesDetails(tmdbId)).item;
+        ? await catalogueLoaders.loadMovie(tmdbId)
+        : await catalogueLoaders.loadSeries(tmdbId);
       return details.backdropUrl ?? details.posterUrl;
     });
     lists = await Promise.all(summaries.map(async (list) => {
@@ -111,13 +129,21 @@ export async function loadLibraryData(token: string, previous?: LibraryData): Pr
   return { items, lists, partialError: mapLibrarySourceErrors(sourceErrors) };
 }
 
-async function hydrateMediaItem(item: LibraryItemBase, fallback?: LibraryMediaItem): Promise<LibraryMediaItem> {
+async function hydrateMediaItem(
+  item: LibraryItemBase,
+  fallback: LibraryMediaItem | undefined,
+  catalogueLoaders: CatalogueLoaders,
+): Promise<LibraryMediaItem> {
+  if (fallback && !isCataloguePlaceholderTitle(fallback.title)) {
+    return { ...fallback, ...item };
+  }
+
   try {
     if (item.contentType === 'movie') {
-      const { item: details } = await getMovieDetails(item.tmdbId);
+      const details = await catalogueLoaders.loadMovie(item.tmdbId);
       return { ...item, backdropUrl: details.backdropUrl, numberOfEpisodes: null, posterUrl: details.posterUrl, title: details.title };
     }
-    const { item: details } = await getSeriesDetails(item.tmdbId);
+    const details = await catalogueLoaders.loadSeries(item.tmdbId);
     const resume = calculateResumeEpisode(details.seasons, item.resumeSeasonNumber, item.resumeEpisodeNumber);
     return { ...item, backdropUrl: details.backdropUrl, numberOfEpisodes: details.numberOfEpisodes, posterUrl: details.posterUrl, title: details.title, resumeEpisodeNumber: resume?.episodeNumber ?? null, resumeSeasonNumber: resume?.seasonNumber ?? null };
   } catch {
@@ -127,4 +153,8 @@ async function hydrateMediaItem(item: LibraryItemBase, fallback?: LibraryMediaIt
 
 function toLibraryFallback(item: LibraryItemBase): LibraryMediaItem {
   return { ...item, backdropUrl: null, numberOfEpisodes: null, posterUrl: null, title: `TMDB ${item.tmdbId}` };
+}
+
+function isCataloguePlaceholderTitle(title: string) {
+  return /^TMDB \d+$/.test(title);
 }

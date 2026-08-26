@@ -161,6 +161,22 @@ async function main() {
       Array.isArray(structuredError.details?.existingProviders),
       'Structured auth conflicts must preserve the existing provider list.',
     );
+
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      message: 'ThrottlerException: Too Many Requests',
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 429,
+    })) as typeof fetch;
+    const throttledError = await apiGet('/qa-throttled').then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+    assert(throttledError instanceof ApiError);
+    assert(
+      throttledError.message === 'Watchly is catching up. Try again in a moment.',
+      'Rate limits must never expose the server exception name.',
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

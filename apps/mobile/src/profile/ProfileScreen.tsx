@@ -120,9 +120,8 @@ export function ProfileScreen() {
   useFocusEffect(useCallback(() => {
     if (firebaseIdToken && userId) {
       resource.revalidate();
-      mediaResource.revalidate();
     }
-  }, [firebaseIdToken, mediaResource.revalidate, resource.revalidate, userId]));
+  }, [firebaseIdToken, resource.revalidate, userId]));
   const profile = resource.data;
   const mediaItems = mediaResource.data?.items ?? EMPTY_PROFILE_MEDIA_ITEMS;
   const previews = useMemo(() => getProfileMediaPreviews(mediaItems), [mediaItems]);
@@ -361,7 +360,10 @@ export function ProfileScreen() {
           onOpenMediaItem={(item) => openProfileMediaItem(navigation, item)}
           onOpenOpinion={(item) => openOpinion(navigation, item)}
           onOpenStats={() => navigation.navigate('AllTimeStats', { profileBackdropUrl: atmosphereUrl })}
-          onViewAllMedia={(filter) => navigation.navigate('ProfileMedia', { filter })}
+          onViewAllMedia={(filter) => navigation.navigate('ProfileMedia', {
+            filter,
+            profileBackdropUrl: atmosphereUrl,
+          })}
           opinions={profile.opinions}
           showMediaRails={Boolean(mediaResource.data)}
           stats={profile.viewingStats}

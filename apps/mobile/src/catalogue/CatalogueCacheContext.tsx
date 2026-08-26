@@ -1,7 +1,7 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import { getMovieDetails, getSeriesDetails, MovieDetails, SeriesDetails } from '../api/catalogue';
 import { WatchlistContentType } from '../api/watchlists';
-import { setMemoryResource } from '../cache/memoryResourceCache';
+import { loadCachedCatalogueResource } from './catalogueResourceCache';
 
 type CatalogueCacheContextValue = {
   getCachedMovie: (tmdbId: number) => MovieDetails | null;
@@ -27,16 +27,14 @@ export function CatalogueCacheProvider({ children }: PropsWithChildren) {
       return existingRequest;
     }
 
-    const request = getMovieDetails(tmdbId)
-      .then((response) => {
-        setMemoryResource(
-          `watchly:public:catalogue:movie:${tmdbId}:v3`,
-          response.item,
-          new Date().toISOString(),
-        );
-        setMovies((current) => ({ ...current, [tmdbId]: response.item }));
+    const request = loadCachedCatalogueResource(
+      `watchly:public:catalogue:movie:${tmdbId}:v3`,
+      async () => (await getMovieDetails(tmdbId)).item,
+    )
+      .then((item) => {
+        setMovies((current) => ({ ...current, [tmdbId]: item }));
 
-        return response.item;
+        return item;
       })
       .finally(() => {
         movieRequestsRef.current.delete(tmdbId);
@@ -54,16 +52,14 @@ export function CatalogueCacheProvider({ children }: PropsWithChildren) {
       return existingRequest;
     }
 
-    const request = getSeriesDetails(tmdbId)
-      .then((response) => {
-        setMemoryResource(
-          `watchly:public:catalogue:series:${tmdbId}:v3`,
-          response.item,
-          new Date().toISOString(),
-        );
-        setSeries((current) => ({ ...current, [tmdbId]: response.item }));
+    const request = loadCachedCatalogueResource(
+      `watchly:public:catalogue:series:${tmdbId}:v3`,
+      async () => (await getSeriesDetails(tmdbId)).item,
+    )
+      .then((item) => {
+        setSeries((current) => ({ ...current, [tmdbId]: item }));
 
-        return response.item;
+        return item;
       })
       .finally(() => {
         seriesRequestsRef.current.delete(tmdbId);

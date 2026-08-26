@@ -1,10 +1,16 @@
 import { memo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MediaPoster } from '../components/MediaPoster';
 import { SectionHeader } from '../components/SectionHeader';
 import { colors, spacing, typography } from '../design/tokens';
 import type { LibraryMediaItem } from '../library/useLibraryData';
 import { getProfileMediaStatus } from './profileMediaModel';
+import {
+  getProfileMediaDisplayTitle,
+  useHydratedProfileMediaItem,
+} from './useHydratedProfileMediaItems';
+
+const PROFILE_MEDIA_CARD_WIDTH = 104;
 
 type ProfileMediaRailProps = {
   emptyLabel: string;
@@ -30,17 +36,27 @@ export function ProfileMediaRail({
         title={title}
       />
       {items.length ? (
-        <ScrollView
+        <FlatList
           alwaysBounceVertical={false}
           contentContainerStyle={styles.rail}
+          data={items}
           directionalLockEnabled
+          getItemLayout={(_data, index) => ({
+            index,
+            length: PROFILE_MEDIA_CARD_WIDTH + spacing.sm,
+            offset: (PROFILE_MEDIA_CARD_WIDTH + spacing.sm) * index,
+          })}
           horizontal
+          initialNumToRender={4}
+          ItemSeparatorComponent={ProfileMediaSeparator}
+          keyExtractor={(item) => item.key}
+          maxToRenderPerBatch={4}
+          renderItem={({ item }) => (
+            <ProfileMediaPoster item={item} onOpen={onOpen} />
+          )}
           showsHorizontalScrollIndicator={false}
-        >
-          {items.map((item) => (
-            <ProfileMediaPoster item={item} key={item.key} onPress={() => onOpen(item)} />
-          ))}
-        </ScrollView>
+          windowSize={3}
+        />
       ) : (
         <Text style={styles.empty}>{emptyLabel}</Text>
       )}
@@ -50,30 +66,36 @@ export function ProfileMediaRail({
 
 const ProfileMediaPoster = memo(function ProfileMediaPoster({
   item,
-  onPress,
+  onOpen,
 }: {
   item: LibraryMediaItem;
-  onPress: () => void;
+  onOpen: (item: LibraryMediaItem) => void;
 }) {
-  const meta = getMediaMeta(item);
+  const hydratedItem = useHydratedProfileMediaItem(item);
+  const meta = getMediaMeta(hydratedItem);
+  const title = getProfileMediaDisplayTitle(hydratedItem);
 
   return (
     <Pressable
-      accessibilityLabel={`Open ${item.title}, ${meta}`}
+      accessibilityLabel={`Open ${title}, ${meta}`}
       accessibilityRole="button"
-      onPress={onPress}
+      onPress={() => onOpen(hydratedItem)}
       style={({ pressed }) => [styles.card, pressed ? styles.cardPressed : null]}
     >
       <MediaPoster
-        accessibilityLabel={`${item.title} poster`}
-        posterUrl={item.posterUrl}
+        accessibilityLabel={`${title} poster`}
+        posterUrl={hydratedItem.posterUrl}
         style={styles.poster}
       />
-      <Text numberOfLines={1} style={styles.title}>{item.title}</Text>
+      <Text numberOfLines={1} style={styles.title}>{title}</Text>
       <Text numberOfLines={1} style={styles.meta}>{meta}</Text>
     </Pressable>
   );
 });
+
+function ProfileMediaSeparator() {
+  return <View style={styles.separator} />;
+}
 
 function getMediaMeta(item: LibraryMediaItem) {
   const status = getProfileMediaStatus(item);
@@ -94,7 +116,7 @@ function getMediaMeta(item: LibraryMediaItem) {
 
 const styles = StyleSheet.create({
   card: {
-    width: 104,
+    width: PROFILE_MEDIA_CARD_WIDTH,
   },
   cardPressed: {
     opacity: 0.78,
@@ -112,11 +134,13 @@ const styles = StyleSheet.create({
   },
   poster: {
     height: 156,
-    width: 104,
+    width: PROFILE_MEDIA_CARD_WIDTH,
   },
   rail: {
-    gap: spacing.sm,
     paddingRight: spacing.xl,
+  },
+  separator: {
+    width: spacing.sm,
   },
   section: {
     gap: spacing.xs,
