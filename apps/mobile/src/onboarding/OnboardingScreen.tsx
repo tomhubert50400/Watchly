@@ -18,6 +18,7 @@ import {
   View,
 } from 'react-native';
 import {
+  BellOff,
   BellRing,
   Camera,
   CheckCircle2,
@@ -138,6 +139,7 @@ export function OnboardingScreen() {
   const [isFinishing, setIsFinishing] = useState(false);
   const [isProfileEditing, setIsProfileEditing] = useState(false);
   const [notificationOutcome, setNotificationOutcome] = useState<ReleasePushSetupResult | null>(null);
+  const [notificationSkipConfirmationVisible, setNotificationSkipConfirmationVisible] = useState(false);
   const [notificationStatus, setNotificationStatus] = useState<'idle' | 'requesting'>('idle');
   const [pendingImportTitleCount, setPendingImportTitleCount] = useState(0);
   const [reduceMotionEnabled, setReduceMotionEnabled] = useState<boolean | null>(null);
@@ -393,12 +395,29 @@ export function OnboardingScreen() {
     setError(null);
     if (step === 'import') moveToStep('profile');
     if (step === 'taste') moveToStep('import');
-    if (step === 'notifications') moveToStep(importSatisfied ? 'import' : 'taste');
+    if (step === 'notifications' && notificationSkipConfirmationVisible) {
+      setNotificationSkipConfirmationVisible(false);
+    } else if (step === 'notifications') {
+      moveToStep(importSatisfied ? 'import' : 'taste');
+    }
+  }
+
+  function requestNotificationSkip() {
+    const notificationBlocked = notificationOutcome?.status === 'denied'
+      || notificationOutcome?.status === 'unavailable';
+    if (notificationBlocked) {
+      void finishOnboarding();
+      return;
+    }
+
+    setError(null);
+    setNotificationSkipConfirmationVisible(true);
   }
 
   async function allowNotifications() {
     if (!firebaseIdToken || !currentUser || notificationStatus === 'requesting' || isFinishing) return;
 
+    setNotificationSkipConfirmationVisible(false);
     setNotificationStatus('requesting');
     setNotificationOutcome(null);
     setError(null);
@@ -580,6 +599,7 @@ export function OnboardingScreen() {
                       isCheckingHandle={isCheckingHandle}
                       isFinishing={isFinishing}
                       notificationOutcome={notificationOutcome}
+                      notificationSkipConfirmationVisible={notificationSkipConfirmationVisible}
                       notificationStatus={notificationStatus}
                       onBack={goBack}
                       onContinue={() => {
@@ -591,7 +611,9 @@ export function OnboardingScreen() {
                         }
                         if (pageStep === 'taste') continueTaste();
                       }}
+                      onEnableNotifications={() => void allowNotifications()}
                       onFinishWithoutNotifications={() => void finishOnboarding()}
+                      onRequestNotificationSkip={requestNotificationSkip}
                       pendingImportTitleCount={pendingImportTitleCount}
                       step={pageStep}
                       tasteSelectionCount={tasteItems.length}
@@ -691,12 +713,16 @@ export function OnboardingScreen() {
                   ) : null}
 
                   {pageStep === 'notifications' ? (
-                    <NotificationsStep
-                      loading={notificationStatus === 'requesting' || isFinishing}
-                      onEnable={() => void allowNotifications()}
-                      outcome={notificationOutcome}
-                      tasteItems={tasteItems}
-                    />
+                    notificationSkipConfirmationVisible
+                      ? <NotificationSkipConfirmation />
+                      : (
+                          <NotificationsStep
+                            loading={notificationStatus === 'requesting' || isFinishing}
+                            onEnable={() => void allowNotifications()}
+                            outcome={notificationOutcome}
+                            tasteItems={tasteItems}
+                          />
+                        )
                   ) : null}
                 </View>
               </Screen>
@@ -738,10 +764,13 @@ function OnboardingFooter({
   isCheckingHandle,
   isFinishing,
   notificationOutcome,
+  notificationSkipConfirmationVisible,
   notificationStatus,
   onBack,
   onContinue,
+  onEnableNotifications,
   onFinishWithoutNotifications,
+  onRequestNotificationSkip,
   pendingImportTitleCount,
   step,
   tasteSelectionCount,
@@ -751,10 +780,13 @@ function OnboardingFooter({
   isCheckingHandle: boolean;
   isFinishing: boolean;
   notificationOutcome: ReleasePushSetupResult | null;
+  notificationSkipConfirmationVisible: boolean;
   notificationStatus: 'idle' | 'requesting';
   onBack: () => void;
   onContinue: () => void;
+  onEnableNotifications: () => void;
   onFinishWithoutNotifications: () => void;
+  onRequestNotificationSkip: () => void;
   pendingImportTitleCount: number;
   step: OnboardingStep;
   tasteSelectionCount: number;
@@ -766,7 +798,24 @@ function OnboardingFooter({
     <View style={styles.footer}>
       {error ? <Text accessibilityLiveRegion="polite" style={styles.errorText}>{error}</Text> : null}
       {step === 'notifications' ? (
-        <>
+        notificationSkipConfirmationVisible ? (
+          <View style={styles.notificationConfirmationActions}>
+            <Button
+              disabled={notificationStatus === 'requesting' || isFinishing}
+              fullWidth
+              label="Enable notifications"
+              onPress={onEnableNotifications}
+            />
+            <Button
+              disabled={notificationStatus === 'requesting' || isFinishing}
+              fullWidth
+              label="Continue without notifications"
+              loading={isFinishing}
+              onPress={onFinishWithoutNotifications}
+              variant="secondary"
+            />
+          </View>
+        ) : (
           <View style={styles.actions}>
             <View style={styles.notificationsBackAction}>
               <Button
@@ -783,12 +832,12 @@ function OnboardingFooter({
                 fullWidth
                 label={notificationBlocked ? 'Continue without' : 'Not now'}
                 loading={isFinishing}
-                onPress={onFinishWithoutNotifications}
+                onPress={notificationBlocked ? onFinishWithoutNotifications : onRequestNotificationSkip}
                 variant="secondary"
               />
             </View>
           </View>
-        </>
+        )
       ) : (
         <View style={[styles.actions, step === 'profile' ? styles.profileActions : null]}>
           {step === 'import' || step === 'taste' ? (
@@ -1396,6 +1445,23 @@ function NotificationsStep({
   );
 }
 
+function NotificationSkipConfirmation() {
+  return (
+    <View style={styles.notificationSkipConfirmation}>
+      <View style={styles.notificationSkipConfirmationIcon}>
+        <BellOff color={colors.accentText} size={34} strokeWidth={2.1} />
+      </View>
+      <Text accessibilityRole="header" style={styles.notificationSkipConfirmationHeading}>Are you sure?</Text>
+      <Text style={styles.notificationSkipConfirmationCopy}>
+        Without notifications, Watchly won&apos;t be able to alert you when movies and TV shows you follow are released.
+      </Text>
+      <Text style={styles.notificationSkipConfirmationHint}>
+        You can turn notifications on later in Settings.
+      </Text>
+    </View>
+  );
+}
+
 function NotificationPreview({
   fallbackText,
   item,
@@ -1654,6 +1720,9 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '800',
   },
+  notificationConfirmationActions: {
+    gap: spacing.sm,
+  },
   notificationPreview: {
     alignItems: 'center',
     backgroundColor: colors.panelSoft,
@@ -1710,6 +1779,40 @@ const styles = StyleSheet.create({
     color: colors.textSubtle,
     fontSize: 11,
     fontWeight: '600',
+  },
+  notificationSkipConfirmation: {
+    alignItems: 'center',
+    flexGrow: 1,
+    gap: spacing.md,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  notificationSkipConfirmationCopy: {
+    ...typography.body,
+    color: colors.text,
+    maxWidth: 340,
+    textAlign: 'center',
+  },
+  notificationSkipConfirmationHeading: {
+    ...typography.title,
+    color: colors.accentText,
+    textAlign: 'center',
+  },
+  notificationSkipConfirmationHint: {
+    ...typography.meta,
+    color: colors.textMuted,
+    maxWidth: 300,
+    textAlign: 'center',
+  },
+  notificationSkipConfirmationIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.panelSoft,
+    borderColor: colors.borderStrong,
+    borderRadius: 38,
+    borderWidth: 1,
+    height: 76,
+    justifyContent: 'center',
+    width: 76,
   },
   photoAction: {
     alignItems: 'center',

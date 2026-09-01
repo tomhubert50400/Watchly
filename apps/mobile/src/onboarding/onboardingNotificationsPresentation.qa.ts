@@ -72,10 +72,25 @@ assert.match(
   /styles\.notificationsBackAction[\s\S]*label="Back"[\s\S]*styles\.notificationsSkipAction[\s\S]*label=\{notificationBlocked \? 'Continue without' : 'Not now'\}/,
   'Not now must replace Enable notifications in the bottom bar',
 );
+assert.match(
+  source,
+  /const \[notificationSkipConfirmationVisible, setNotificationSkipConfirmationVisible\] = useState\(false\);[\s\S]*function requestNotificationSkip\(\)[\s\S]*setNotificationSkipConfirmationVisible\(true\)/,
+  'Not now must open an explicit confirmation before finishing onboarding',
+);
+assert.match(
+  source,
+  /function NotificationSkipConfirmation\(\)[\s\S]*Are you sure\?[\s\S]*Watchly won&apos;t be able to alert you when movies and TV shows you follow are released\.[\s\S]*turn notifications on later in Settings/,
+  'the skip confirmation must clearly explain what notifications will be missed',
+);
+assert.match(
+  footerSource,
+  /notificationSkipConfirmationVisible[\s\S]*label="Enable notifications"[\s\S]*label="Continue without notifications"/,
+  'the skip confirmation must offer an accessible opt-in and an explicit opt-out',
+);
 assert.doesNotMatch(
   footerSource,
-  /Enable notifications|onAllowNotifications/,
-  'the permission action must no longer appear in the bottom bar',
+  /onAllowNotifications/,
+  'the initial notification footer must not own a duplicate permission action',
 );
 assert.match(
   source,
