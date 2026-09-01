@@ -5,10 +5,10 @@ import './globals.css';
 const siteUrl = getSiteUrl();
 
 export const metadata: Metadata = {
-  description: 'Discover films and series, track every watch, build watchlists, and share reviews with Watchly.',
+  description: 'A home for the films you discover, watch, rate, remember, and share.',
   metadataBase: new URL(siteUrl),
   openGraph: {
-    description: 'Discover films and series, track every watch, build watchlists, and share reviews with Watchly.',
+    description: 'A home for the films you discover, watch, rate, remember, and share.',
     siteName: 'Watchly',
     title: 'Watchly',
     type: 'website',
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   colorScheme: 'dark',
-  themeColor: '#090C13',
+  themeColor: '#0D0B0A',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
