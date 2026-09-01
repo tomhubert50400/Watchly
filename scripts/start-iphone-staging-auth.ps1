@@ -11,10 +11,22 @@ $ansiPattern = "$([char]27)\[[0-?]*[ -/]*[@-~]"
 
 Push-Location $mobileRoot
 try {
-  $env:CI = '1'
   $env:PNPM_CONFIG_REPORTER = 'silent'
-  $environmentOutput = (& pnpm dlx eas-cli@latest env:list preview --format short 2>&1 | Out-String)
-  if ($LASTEXITCODE -ne 0) {
+  $previousCi = [Environment]::GetEnvironmentVariable('CI', 'Process')
+  $environmentOutput = ''
+  $environmentExitCode = 1
+  try {
+    $env:CI = '1'
+    $environmentOutput = (& pnpm dlx eas-cli@latest env:list preview --format short 2>&1 | Out-String)
+    $environmentExitCode = $LASTEXITCODE
+  } finally {
+    if ($null -eq $previousCi) {
+      Remove-Item Env:CI -ErrorAction SilentlyContinue
+    } else {
+      $env:CI = $previousCi
+    }
+  }
+  if ($environmentExitCode -ne 0) {
     throw 'Unable to load the EAS Preview environment.'
   }
 

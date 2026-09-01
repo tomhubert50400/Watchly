@@ -83,6 +83,11 @@ assert.match(
 );
 assert.match(
   stagingLauncherSource,
+  /Remove-Item Env:CI[\s\S]*expo start --dev-client/,
+  'the staging iPhone launcher must restore interactive Metro mode after loading EAS variables',
+);
+assert.match(
+  stagingLauncherSource,
   /\$env:APP_VARIANT = 'staging'/,
   'the staging launcher must keep the installed app on the staging bundle',
 );
