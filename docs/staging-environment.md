@@ -55,6 +55,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-iphone-s
 
 This smoke uses invalid, non-user credentials to confirm that Google and Apple are enabled in Firebase and that Microsoft and Discord are configured and reachable. It does not prove a successful provider login; the final gate remains a real return to Watchly on the registered iPhone.
 
+The product owner confirmed that the full Google, Apple, Microsoft, and Discord OAuth and account-linking scope passed that real-device gate on 2026-09-01. This records user-confirmed device acceptance rather than agent-captured runtime logs.
+
 ## Staging API variables
 
 The dedicated API service and database use `APP_ENV=staging` with `NODE_ENV=production`. The health response exposes `environment: staging`, which lets deployment smoke tests detect a wrong target. `ERROR_TRACKING_DSN` and `MONITORING_TEST_KEY` are sealed Railway variables. The API refuses to boot in staging if either is absent.

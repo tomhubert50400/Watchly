@@ -151,6 +151,8 @@ Critères de validation:
 
 ### 6. Finaliser Google OAuth, ajouter Apple OAuth et la liaison des comptes
 
+Statut au 1er septembre 2026: terminé. Le propriétaire du produit confirme la validation complète du périmètre OAuth et de la liaison des comptes sur appareil réel.
+
 Objectif: proposer des connexions réellement fonctionnelles et éviter la création de comptes Watchly en double.
 
 Travail prévu:
