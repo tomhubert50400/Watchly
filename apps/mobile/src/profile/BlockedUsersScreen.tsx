@@ -11,6 +11,7 @@ import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
 import { Screen } from '../components/Screen';
+import { TextInput } from '../components/TextInput';
 import { UserAvatar } from '../components/UserAvatar';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
@@ -25,8 +26,15 @@ export function BlockedUsersScreen() {
   const [message, setMessage] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [paginationStatus, setPaginationStatus] = useState<PaginationStatus>('idle');
+  const [query, setQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [status, setStatus] = useState<LoadStatus>('loading');
   const [unblockingUserId, setUnblockingUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setSearchQuery(query.trim()), 250);
+    return () => clearTimeout(timeout);
+  }, [query]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -43,7 +51,7 @@ export function BlockedUsersScreen() {
     setPaginationStatus('idle');
     setStatus('loading');
 
-    void listBlockedUsers(firebaseIdToken)
+    void listBlockedUsers(firebaseIdToken, undefined, searchQuery)
       .then((page) => {
         if (!isCurrent) return;
 
@@ -63,14 +71,14 @@ export function BlockedUsersScreen() {
     return () => {
       isCurrent = false;
     };
-  }, [firebaseIdToken, loadAttempt]);
+  }, [firebaseIdToken, loadAttempt, searchQuery]);
 
   const loadNextPage = useCallback(async () => {
     if (!firebaseIdToken || !nextCursor || paginationStatus === 'loading') return;
 
     setPaginationStatus('loading');
     try {
-      const page = await listBlockedUsers(firebaseIdToken, nextCursor);
+      const page = await listBlockedUsers(firebaseIdToken, nextCursor, searchQuery);
       setItems((current) => {
         const existingIds = new Set(current.map((item) => item.userId));
         return [...current, ...page.items.filter((item) => !existingIds.has(item.userId))];
@@ -80,7 +88,12 @@ export function BlockedUsersScreen() {
     } catch {
       setPaginationStatus('error');
     }
-  }, [firebaseIdToken, nextCursor, paginationStatus]);
+  }, [firebaseIdToken, nextCursor, paginationStatus, searchQuery]);
+
+  function clearSearch() {
+    setQuery('');
+    setSearchQuery('');
+  }
 
   function confirmUnblock(item: BlockedUser) {
     if (unblockingUserId) return;
@@ -124,6 +137,21 @@ export function BlockedUsersScreen() {
   return (
     <Screen title="">
       <View style={styles.page}>
+        <TextInput
+          accessibilityLabel="Search blocked users"
+          autoCapitalize="none"
+          autoComplete="off"
+          autoCorrect={false}
+          clearButtonMode="while-editing"
+          inputMode="search"
+          label="Search blocked users"
+          maxLength={80}
+          onChangeText={setQuery}
+          placeholder="Name or @handle"
+          returnKeyType="search"
+          spellCheck={false}
+          value={query}
+        />
         {status === 'loading' ? (
           <LoadingState label="Loading blocked users" />
         ) : status === 'error' ? (
@@ -140,14 +168,20 @@ export function BlockedUsersScreen() {
           </EmptyState>
         ) : items.length === 0 && !nextCursor ? (
           <EmptyState
-            body="People you block will appear here."
+            body={searchQuery
+              ? 'Try a different name or handle.'
+              : 'People you block will appear here.'}
             illustration={(
               <View style={styles.emptyIcon}>
                 <UserX color={colors.accentText} size={34} strokeWidth={1.8} />
               </View>
             )}
-            title="No blocked users"
-          />
+            title={searchQuery ? 'No blocked users found' : 'No blocked users'}
+          >
+            {searchQuery ? (
+              <Button compact label="Clear search" onPress={clearSearch} variant="secondary" />
+            ) : null}
+          </EmptyState>
         ) : (
           <>
             <Text style={styles.intro}>

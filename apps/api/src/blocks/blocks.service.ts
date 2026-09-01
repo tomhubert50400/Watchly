@@ -12,6 +12,7 @@ import { AvatarStorageService } from '../media/avatar-storage.service';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
+const MAX_SEARCH_QUERY_LENGTH = 80;
 
 @Injectable()
 export class BlocksService {
@@ -25,10 +26,12 @@ export class BlocksService {
     identity: AuthenticatedIdentity,
     cursorValue?: string,
     limitValue?: string,
+    queryValue?: string,
   ) {
     const blockerId = await this.getUserId(identity);
     const cursor = parseCursor(cursorValue);
     const pageSize = parsePageSize(limitValue);
+    const query = parseSearchQuery(queryValue);
     const blocks = await this.prisma.withConnectionRetry(() =>
       this.prisma.userBlock.findMany({
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -46,10 +49,22 @@ export class BlocksService {
         },
         take: pageSize + 1,
         where: {
-          ...(cursor ? {
-            OR: [
-              { createdAt: { lt: cursor.createdAt } },
-              { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+          ...(cursor || query ? {
+            AND: [
+              ...(cursor ? [{
+                OR: [
+                  { createdAt: { lt: cursor.createdAt } },
+                  { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+                ],
+              }] : []),
+              ...(query ? [{
+                blockedUser: {
+                  OR: [
+                    { displayName: { contains: query, mode: 'insensitive' as const } },
+                    { handle: { contains: query, mode: 'insensitive' as const } },
+                  ],
+                },
+              }] : []),
             ],
           } : {}),
           blockerId,
@@ -242,6 +257,18 @@ function parsePageSize(value?: string) {
   }
 
   return pageSize;
+}
+
+function parseSearchQuery(value?: string) {
+  if (value === undefined) return null;
+
+  const query = value.trim().replace(/^@+/, '');
+  if (!query) return null;
+  if (query.length > MAX_SEARCH_QUERY_LENGTH) {
+    throw new BadRequestException(`query must be ${MAX_SEARCH_QUERY_LENGTH} characters or fewer.`);
+  }
+
+  return query;
 }
 
 function parseCursor(value?: string) {

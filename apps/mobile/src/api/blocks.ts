@@ -22,9 +22,14 @@ export type BlockedUsersPage = {
 export function listBlockedUsers(
   firebaseIdToken: string,
   cursor?: string,
+  query?: string,
 ): Promise<BlockedUsersPage> {
+  const searchParams: string[] = [];
+  if (cursor) searchParams.push(`cursor=${encodeURIComponent(cursor)}`);
+  if (query?.trim()) searchParams.push(`query=${encodeURIComponent(query.trim())}`);
+
   return apiGet<BlockedUsersPage>(
-    `/blocks${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+    `/blocks${searchParams.length > 0 ? `?${searchParams.join('&')}` : ''}`,
     { token: firebaseIdToken },
   );
 }

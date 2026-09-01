@@ -12,14 +12,19 @@ const blockedUsers = read('./BlockedUsersScreen.tsx');
 const settings = read('./SettingsScreen.tsx');
 const navigationTypes = read('../navigation/types.ts');
 
-assert.match(api, /listBlockedUsers[\s\S]*\/blocks\$\{cursor \? `\?cursor=\$\{encodeURIComponent\(cursor\)\}` : ''\}/);
+assert.match(api, /listBlockedUsers[\s\S]*query\?: string[\s\S]*query=\$\{encodeURIComponent\(query\.trim\(\)\)\}/);
 assert.match(navigationTypes, /BlockedUsers: undefined/);
 assert.match(app, /component=\{BlockedUsersScreen\}[\s\S]*name="BlockedUsers"[\s\S]*title: 'Blocked users'/);
 assert.match(settings, /title="Privacy"[\s\S]*label="Blocked users"[\s\S]*navigation\.navigate\('BlockedUsers'\)/);
 
 assert.match(blockedUsers, /status === 'loading'[\s\S]*<LoadingState label="Loading blocked users"/);
 assert.match(blockedUsers, /status === 'error'[\s\S]*title="Blocked users unavailable"[\s\S]*label="Try again"/);
-assert.match(blockedUsers, /items\.length === 0[\s\S]*title="No blocked users"/);
+assert.match(blockedUsers, /items\.length === 0[\s\S]*title=\{searchQuery \? 'No blocked users found' : 'No blocked users'\}/);
+assert.match(blockedUsers, /setTimeout\(\(\) => setSearchQuery\(query\.trim\(\)\), 250\)/);
+assert.match(blockedUsers, /accessibilityLabel="Search blocked users"[\s\S]*clearButtonMode="while-editing"[\s\S]*label="Search blocked users"[\s\S]*maxLength=\{80\}[\s\S]*placeholder="Name or @handle"/);
+assert.match(blockedUsers, /listBlockedUsers\(firebaseIdToken, undefined, searchQuery\)/);
+assert.match(blockedUsers, /listBlockedUsers\(firebaseIdToken, nextCursor, searchQuery\)/);
+assert.match(blockedUsers, /title=\{searchQuery \? 'No blocked users found'[\s\S]*label="Clear search"/);
 assert.match(blockedUsers, /items\.map\(\(item, index\)[\s\S]*<UserAvatar[\s\S]*@\{item\.handle\}/);
 assert.match(blockedUsers, /nextCursor[\s\S]*label="Load more"[\s\S]*loadNextPage/);
 assert.match(blockedUsers, /paginationStatus === 'loading'[\s\S]*Loading more/);

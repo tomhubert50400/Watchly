@@ -24,8 +24,9 @@ export class BlocksController {
     @Req() request: AuthenticatedRequest,
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
+    @Query('query') query?: string,
   ) {
-    return this.blocks.listBlockedUsers(getIdentity(request), cursor, limit);
+    return this.blocks.listBlockedUsers(getIdentity(request), cursor, limit, query);
   }
 
   @Get(':userId')

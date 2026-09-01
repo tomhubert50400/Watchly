@@ -52,6 +52,7 @@ async function run() {
         id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
       },
     ],
+    [],
   ];
   const prisma = {
     userBlock: {
@@ -118,9 +119,28 @@ async function run() {
   assert.equal(secondPage.items.length, 1);
   assert.equal(secondPage.nextCursor, null);
   assert.deepEqual((queryArgs[1] as { where: unknown }).where, {
-    OR: [
-      { createdAt: { lt: secondCreatedAt } },
-      { createdAt: secondCreatedAt, id: { lt: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' } },
+    AND: [
+      {
+        OR: [
+          { createdAt: { lt: secondCreatedAt } },
+          { createdAt: secondCreatedAt, id: { lt: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' } },
+        ],
+      },
+    ],
+    blockerId,
+  });
+
+  await service.listBlockedUsers(identity, undefined, '20', '  @MAYA  ');
+  assert.deepEqual((queryArgs[2] as { where: unknown }).where, {
+    AND: [
+      {
+        blockedUser: {
+          OR: [
+            { displayName: { contains: 'MAYA', mode: 'insensitive' } },
+            { handle: { contains: 'MAYA', mode: 'insensitive' } },
+          ],
+        },
+      },
     ],
     blockerId,
   });
@@ -135,6 +155,10 @@ async function run() {
   );
   await assert.rejects(
     () => service.listBlockedUsers(identity, undefined, '51'),
+    BadRequestException,
+  );
+  await assert.rejects(
+    () => service.listBlockedUsers(identity, undefined, '20', 'x'.repeat(81)),
     BadRequestException,
   );
 
