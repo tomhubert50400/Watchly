@@ -18,6 +18,7 @@ export type RootStackParamList = {
     profileBackdropUrl: string | null;
     stats?: ViewingStats;
   };
+  BlockedUsers: undefined;
   EpisodeDetail: {
     episodeNumber: number;
     seasonNumber: number;

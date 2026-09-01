@@ -15,8 +15,9 @@ async function main() {
   const config = new ConfigService(process.env);
   const prisma = new PrismaService(config);
   const auth = new AuthService(prisma);
-  const profile = new ProfileService(auth, config, prisma, new AvatarStorageService(config));
-  const blocks = new BlocksService(auth, prisma);
+  const avatarStorage = new AvatarStorageService(config);
+  const profile = new ProfileService(auth, config, prisma, avatarStorage);
+  const blocks = new BlocksService(auth, prisma, avatarStorage);
   let userIds: string[] = [];
 
   try {

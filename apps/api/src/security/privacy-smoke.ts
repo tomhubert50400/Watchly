@@ -26,7 +26,7 @@ async function main() {
   const profile = new ProfileService(auth, config, prisma, avatarStorage);
   const follows = new FollowsService(auth, prisma);
   const feed = new FeedService(auth, prisma, avatarStorage);
-  const blocks = new BlocksService(auth, prisma);
+  const blocks = new BlocksService(auth, prisma, avatarStorage);
   const ratings = new RatingsService(auth, prisma);
   const progress = new ProgressService(auth, prisma);
   const reviews = new ReviewsService(auth, prisma, avatarStorage);

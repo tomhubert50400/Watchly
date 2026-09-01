@@ -8,13 +8,72 @@ import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
 import { AuditAction } from '../generated/prisma/enums';
+import { AvatarStorageService } from '../media/avatar-storage.service';
+
+const DEFAULT_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE = 50;
 
 @Injectable()
 export class BlocksService {
   constructor(
     @Inject(AuthService) private readonly authService: AuthService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(AvatarStorageService) private readonly avatarStorage: AvatarStorageService,
   ) {}
+
+  async listBlockedUsers(
+    identity: AuthenticatedIdentity,
+    cursorValue?: string,
+    limitValue?: string,
+  ) {
+    const blockerId = await this.getUserId(identity);
+    const cursor = parseCursor(cursorValue);
+    const pageSize = parsePageSize(limitValue);
+    const blocks = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userBlock.findMany({
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        select: {
+          blockedUser: {
+            select: {
+              avatarObjectKey: true,
+              displayName: true,
+              handle: true,
+              id: true,
+            },
+          },
+          createdAt: true,
+          id: true,
+        },
+        take: pageSize + 1,
+        where: {
+          ...(cursor ? {
+            OR: [
+              { createdAt: { lt: cursor.createdAt } },
+              { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+            ],
+          } : {}),
+          blockerId,
+        },
+      }),
+    );
+    const page = blocks.slice(0, pageSize);
+    const lastBlock = page.at(-1);
+
+    return {
+      items: page.map((block) => ({
+        avatarUrl: this.avatarStorage.getPublicUrl(block.blockedUser.avatarObjectKey),
+        blockedAt: block.createdAt.toISOString(),
+        displayName: block.blockedUser.displayName?.trim()
+          || block.blockedUser.handle
+          || 'Watchly member',
+        handle: block.blockedUser.handle,
+        userId: block.blockedUser.id,
+      })),
+      nextCursor: blocks.length > pageSize && lastBlock
+        ? encodeCursor(lastBlock.createdAt, lastBlock.id)
+        : null,
+    };
+  }
 
   async getBlockState(identity: AuthenticatedIdentity, targetUserId: string) {
     const blockerId = await this.getUserId(identity);
@@ -168,4 +227,43 @@ function assertNotSelf(userId: string, targetUserId: string) {
   if (userId === targetUserId) {
     throw new BadRequestException('Users cannot block themselves.');
   }
+}
+
+function parsePageSize(value?: string) {
+  if (value === undefined) return DEFAULT_PAGE_SIZE;
+
+  if (!/^\d+$/.test(value)) {
+    throw new BadRequestException(`limit must be an integer between 1 and ${MAX_PAGE_SIZE}.`);
+  }
+
+  const pageSize = Number(value);
+  if (pageSize < 1 || pageSize > MAX_PAGE_SIZE) {
+    throw new BadRequestException(`limit must be an integer between 1 and ${MAX_PAGE_SIZE}.`);
+  }
+
+  return pageSize;
+}
+
+function parseCursor(value?: string) {
+  if (!value) return null;
+
+  try {
+    const decoded = JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as unknown;
+    if (!decoded || typeof decoded !== 'object') throw new Error('Invalid cursor');
+
+    const { createdAt: createdAtValue, id } = decoded as Record<string, unknown>;
+    const createdAt = new Date(typeof createdAtValue === 'string' ? createdAtValue : '');
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (Number.isNaN(createdAt.getTime()) || typeof id !== 'string' || !uuidPattern.test(id)) {
+      throw new Error('Invalid cursor');
+    }
+
+    return { createdAt, id };
+  } catch {
+    throw new BadRequestException('cursor is invalid.');
+  }
+}
+
+function encodeCursor(createdAt: Date, id: string) {
+  return Buffer.from(JSON.stringify({ createdAt: createdAt.toISOString(), id })).toString('base64url');
 }

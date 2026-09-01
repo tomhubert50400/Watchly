@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   Trash2,
   User,
+  UserX,
   Users,
 } from 'lucide-react-native';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
@@ -680,9 +681,15 @@ export function SettingsScreen() {
                 body="Includes your profile, reviews, ratings, history, and episode progress."
                 icon={Eye}
                 label="Profile visibility"
-                last
                 onPress={toggleProfileVisibility}
                 value={privacy.profileVisibility}
+              />
+              <SettingsActionRow
+                body="Review people you blocked and restore access."
+                icon={UserX}
+                label="Blocked users"
+                last
+                onPress={() => navigation.navigate('BlockedUsers')}
               />
             </PrivacyPanel>
           </SettingsSection>

@@ -42,6 +42,7 @@ import { ProfileConnectionsScreen } from './src/profile/ProfileConnectionsScreen
 import { ProfileScreen } from './src/profile/ProfileScreen';
 import { PublicProfileScreen } from './src/profile/PublicProfileScreen';
 import { AllTimeStatsScreen } from './src/profile/AllTimeStatsScreen';
+import { BlockedUsersScreen } from './src/profile/BlockedUsersScreen';
 import { ProfileMediaScreen } from './src/profile/ProfileMediaScreen';
 import { SettingsScreen } from './src/profile/SettingsScreen';
 
@@ -279,6 +280,7 @@ function AppNavigator() {
             <Stack.Screen component={NotificationPreferencesScreen} name="NotificationPreferences" options={{ title: 'Notifications' }} />
             <Stack.Screen component={ReleaseCalendarScreen} name="ReleaseCalendar" options={{ title: 'Release calendar' }} />
             <Stack.Screen component={SettingsScreen} name="Settings" options={{ title: 'Settings' }} />
+            <Stack.Screen component={BlockedUsersScreen} name="BlockedUsers" options={{ title: 'Blocked users' }} />
             <Stack.Screen component={ImportDataScreen} name="ImportData" options={{ title: 'Import your data' }} />
             <Stack.Screen
               component={SharedWatchlistScreen}

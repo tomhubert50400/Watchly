@@ -5,6 +5,7 @@ import {
   Inject,
   Param,
   Put,
+  Query,
   Req,
   UnauthorizedException,
   UseGuards,
@@ -17,6 +18,15 @@ import { BlocksService } from './blocks.service';
 @UseGuards(AuthGuard)
 export class BlocksController {
   constructor(@Inject(BlocksService) private readonly blocks: BlocksService) {}
+
+  @Get()
+  async list(
+    @Req() request: AuthenticatedRequest,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.blocks.listBlockedUsers(getIdentity(request), cursor, limit);
+  }
 
   @Get(':userId')
   async get(@Req() request: AuthenticatedRequest, @Param('userId') userId: string) {
