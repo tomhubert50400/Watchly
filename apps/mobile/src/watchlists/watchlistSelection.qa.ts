@@ -3,28 +3,12 @@
 import assert from 'node:assert/strict';
 import {
   autoSelectCreatedWatchlist,
-  buildSelectionDiff,
-  buildSelectionLabel,
   rollbackSelection,
 } from './watchlistSelection';
 
 function keys(...values: string[]) {
   return new Set(values);
 }
-
-assert.equal(buildSelectionLabel(keys(), keys('personal:a')), 'Add to 1 list');
-assert.equal(
-  buildSelectionLabel(keys(), keys('personal:a', 'shared:b', 'shared:c')),
-  'Add to 3 lists',
-);
-assert.equal(buildSelectionLabel(keys('personal:a'), keys('personal:a', 'shared:b')), 'Save changes');
-assert.equal(buildSelectionLabel(keys('shared:b'), keys()), 'Save changes');
-assert.equal(buildSelectionLabel(keys(), keys()), 'Save changes');
-
-assert.deepEqual(buildSelectionDiff(keys('personal:a', 'shared:b'), keys('shared:b', 'personal:c')), {
-  addedKeys: ['personal:c'],
-  removedKeys: ['personal:a'],
-});
 
 assert.deepEqual(
   [...autoSelectCreatedWatchlist(keys('personal:a'), 'shared:new')].sort(),

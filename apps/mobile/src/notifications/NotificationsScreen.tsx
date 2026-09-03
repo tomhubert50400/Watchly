@@ -16,6 +16,7 @@ import {
   syncNotifications,
 } from '../api/notifications';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey, writePersistedCache } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
@@ -50,7 +51,7 @@ const filters: Array<{ label: string; value: NotificationFilter }> = [
 ];
 
 export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
-  const { currentUser, firebaseIdToken, getFirebaseIdToken, notifySocialChanged } = useAuthSession();
+  const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
   const ownerId = currentUser?.id ?? null;
   const ownerIdRef = useRef(ownerId);
   ownerIdRef.current = ownerId;
@@ -63,11 +64,12 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [pendingIds, setPendingIds] = useState<ReadonlySet<string>>(new Set());
   const [followRequests, setFollowRequests] = useState<FollowRequest[]>([]);
+  const followRequestsRef = useRef(followRequests);
   const [followRequestsOwnerId, setFollowRequestsOwnerId] = useState<string | null>(null);
   const [followRequestError, setFollowRequestError] = useState<string | null>(null);
-  const [followRequestPendingIds, setFollowRequestPendingIds] = useState<ReadonlySet<string>>(new Set());
   const [isRefreshingFollowRequests, setIsRefreshingFollowRequests] = useState(false);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
+  followRequestsRef.current = followRequests;
   const load = useCallback(async () => {
     const requestedOwnerId = ownerId;
     const token = await getFirebaseIdToken();
@@ -140,7 +142,6 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
       setFollowRequests([]);
       setFollowRequestsOwnerId(null);
       setFollowRequestError(null);
-      setFollowRequestPendingIds(new Set());
       return;
     }
 
@@ -154,12 +155,16 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
   const resolveFollowRequest = useCallback(async (requesterId: string, accept: boolean) => {
     const expectedOwnerId = ownerIdRef.current;
 
-    if (!expectedOwnerId || followRequestPendingIds.has(requesterId)) {
+    if (!expectedOwnerId) {
       return;
     }
+    const request = followRequestsRef.current.find((item) => item.userId === requesterId);
+    if (!request) return;
 
     setFollowRequestError(null);
-    setFollowRequestPendingIds((current) => new Set(current).add(requesterId));
+    const optimisticRequests = followRequestsRef.current.filter((item) => item.userId !== requesterId);
+    followRequestsRef.current = optimisticRequests;
+    setFollowRequests(optimisticRequests);
 
     try {
       const token = await getFirebaseIdToken();
@@ -175,23 +180,20 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
       }
 
       if (ownerIdRef.current === expectedOwnerId) {
-        setFollowRequests((current) => current.filter((request) => request.userId !== requesterId));
-        notifySocialChanged();
+        notifyUserDataChanged('profile', 'socialGraph');
       }
     } catch (error) {
       if (ownerIdRef.current === expectedOwnerId) {
+        setFollowRequests((current) => {
+          if (current.some((item) => item.userId === requesterId)) return current;
+          const restored = [request, ...current];
+          followRequestsRef.current = restored;
+          return restored;
+        });
         setFollowRequestError(error instanceof Error ? error.message : 'Follow request could not be updated.');
       }
-    } finally {
-      if (ownerIdRef.current === expectedOwnerId) {
-        setFollowRequestPendingIds((current) => {
-          const next = new Set(current);
-          next.delete(requesterId);
-          return next;
-        });
-      }
     }
-  }, [followRequestPendingIds, getFirebaseIdToken, notifySocialChanged]);
+  }, [getFirebaseIdToken]);
 
   const items = ownedInbox.ownerId === ownerId ? ownedInbox.items : [];
   const visibleFollowRequests = followRequestsOwnerId === ownerId ? followRequests : [];
@@ -255,6 +257,7 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
       if (!response.updated) {
         throw new Error('The alert could not be marked as read.');
       }
+      notifyUserDataChanged('notifications');
     } catch (error) {
       if (ownerIdRef.current === expectedOwnerId && ownedInboxRef.current.ownerId === expectedOwnerId) {
         const rolledBack = rollbackNotificationMutation(ownedInboxRef.current.items, mutation);
@@ -302,6 +305,7 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
       }
 
       await markAllNotificationsRead(token);
+      notifyUserDataChanged('notifications');
     } catch (error) {
       if (ownerIdRef.current === expectedOwnerId && ownedInboxRef.current.ownerId === expectedOwnerId) {
         const rolledBack = rollbackNotificationMutation(ownedInboxRef.current.items, mutation);
@@ -430,7 +434,6 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
                 key={request.userId}
                 onAccept={() => resolveFollowRequest(request.userId, true)}
                 onReject={() => resolveFollowRequest(request.userId, false)}
-                pending={followRequestPendingIds.has(request.userId)}
                 request={request}
               />
             ))}
@@ -471,12 +474,10 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
 function FollowRequestRow({
   onAccept,
   onReject,
-  pending,
   request,
 }: {
   onAccept: () => void;
   onReject: () => void;
-  pending: boolean;
   request: FollowRequest;
 }) {
   const name = request.displayName?.trim() || 'A Watchly member';
@@ -488,8 +489,8 @@ function FollowRequestRow({
         <Text style={styles.rowBody}>Wants to follow you and see your private profile.</Text>
       </View>
       <View style={styles.requestActions}>
-        <Button compact disabled={pending} label="Decline" onPress={onReject} variant="secondary" />
-        <Button compact disabled={pending} label="Accept" onPress={onAccept} />
+        <Button compact label="Decline" onPress={onReject} variant="secondary" />
+        <Button compact label="Accept" onPress={onAccept} />
       </View>
     </View>
   );

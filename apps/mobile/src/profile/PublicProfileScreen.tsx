@@ -24,6 +24,7 @@ import {
 import type { ReportTarget } from '../api/reports';
 import type { ViewingStats } from '../api/viewings';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
 import { BottomActionSheet } from '../components/BottomActionSheet';
@@ -63,7 +64,7 @@ type PublicProfilePreview = NonNullable<RootStackParamList['PublicProfile']['pro
 const EMPTY_MEDIA_ITEMS: LibraryMediaItem[] = [];
 
 export function PublicProfileScreen() {
-  const { firebaseIdToken, notifySocialChanged } = useAuthSession();
+  const { firebaseIdToken } = useAuthSession();
   const { refreshMovie, refreshSeries } = useCatalogueCache();
   const navigation = useNavigation<PublicProfileNavigation>();
   const route = useRoute<PublicProfileRoute>();
@@ -241,17 +242,58 @@ export function PublicProfileScreen() {
     if (!firebaseIdToken || isOwnPreview || isUpdatingBlock || followMutationRef.current) return;
 
     const currentProfile = profileRef.current;
+    const previousBlockState = blockState;
+    const previousFollowState = followState;
+    const previousFollowersCountOverride = followersCountOverride;
     const wasFollowing = followState?.status === 'following';
+    const willBlock = !blockState?.blocked;
     setIsUpdatingBlock(true);
     setMessage(null);
+    setBlockState({
+      blocked: willBlock,
+      blockedAt: willBlock ? new Date().toISOString() : null,
+      userId: route.params.userId,
+    });
+    if (willBlock) {
+      const optimisticBlockedProfile = currentProfile ? {
+        ...currentProfile,
+        blockRelationship: 'blocked_by_viewer' as const,
+        canViewContent: false,
+        media: {
+          movieRatings: [],
+          releaseAlerts: [],
+          seriesProgress: [],
+          trackingStates: [],
+        },
+        opinions: [],
+        stats: {
+          ...currentProfile.stats,
+          followersCount: Math.max(0, currentProfile.stats.followersCount - Number(wasFollowing)),
+        },
+        viewingStats: null,
+        watchlists: [],
+      } : null;
+      setFollowState({
+        followedAt: null,
+        following: false,
+        status: 'none',
+        userId: route.params.userId,
+      });
+      profileRef.current = optimisticBlockedProfile;
+      setProfile(optimisticBlockedProfile);
+    } else if (currentProfile) {
+      const optimisticUnblockedProfile = { ...currentProfile, blockRelationship: null };
+      profileRef.current = optimisticUnblockedProfile;
+      setProfile(optimisticUnblockedProfile);
+    }
 
     try {
-      const nextBlockState = blockState?.blocked
-        ? await unblockUser(firebaseIdToken, route.params.userId)
-        : await blockUser(firebaseIdToken, route.params.userId);
+      const nextBlockState = willBlock
+        ? await blockUser(firebaseIdToken, route.params.userId)
+        : await unblockUser(firebaseIdToken, route.params.userId);
 
       setBlockState(nextBlockState);
-      notifySocialChanged();
+      notifyUserDataChanged('socialGraph');
 
       if (nextBlockState.blocked) {
         const blockedProfile = currentProfile ? {
@@ -330,6 +372,11 @@ export function PublicProfileScreen() {
       setFollowersCountOverride(null);
       setStatus('ready');
     } catch (error) {
+      setBlockState(previousBlockState);
+      setFollowState(previousFollowState);
+      setFollowersCountOverride(previousFollowersCountOverride);
+      profileRef.current = currentProfile;
+      setProfile(currentProfile);
       setMessage(error instanceof ApiError ? error.message : 'Could not update blocking.');
     } finally {
       setIsUpdatingBlock(false);
@@ -404,7 +451,7 @@ export function PublicProfileScreen() {
         setFollowState(nextFollowState);
         setFollowersCountOverride(null);
       }
-      notifySocialChanged();
+      notifyUserDataChanged('socialGraph');
     } catch {
       setFollowState(previousFollowState);
       setFollowersCountOverride(previousFollowersCountOverride);
@@ -434,9 +481,8 @@ export function PublicProfileScreen() {
     blockRelationship === 'blocked_by_viewer' ? (
       <Button
         accessibilityHint="Restores access to this member's profile activity."
-        disabled={isUpdatingBlock}
         fullWidth
-        label={isUpdatingBlock ? 'Updating...' : 'Unblock'}
+        label="Unblock"
         onPress={toggleBlock}
         variant="secondary"
       />
@@ -636,10 +682,9 @@ export function PublicProfileScreen() {
           {!blockRelationship ? (
             <Button
               accessibilityHint="Blocks this member and hides their profile."
-              disabled={isUpdatingBlock}
               fullWidth
               icon={<Ban color={colors.danger} size={19} strokeWidth={2} />}
-              label={isUpdatingBlock ? 'Updating...' : 'Block profile'}
+              label="Block profile"
               onPress={() => {
                 setProfileActionsOpen(false);
                 void toggleBlock();

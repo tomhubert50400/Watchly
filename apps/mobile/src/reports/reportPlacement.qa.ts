@@ -20,7 +20,7 @@ assert.match(episodeCommunity, /type: 'episodeReview'/);
 assert.match(publicProfile, /accessibilityLabel="More profile actions"/);
 assert.match(
   publicProfile,
-  /title="Profile actions"[\s\S]*label=\{isUpdatingBlock \? 'Updating\.\.\.' : 'Block profile'\}[\s\S]*label="Report profile"[\s\S]*type: 'profile'/,
+  /title="Profile actions"[\s\S]*label="Block profile"[\s\S]*label="Report profile"[\s\S]*type: 'profile'/,
 );
 assert.doesNotMatch(publicProfile, /styles\.moderationActions/);
 assert.match(sheet, /BottomActionSheetScrollView/);

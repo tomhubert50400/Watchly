@@ -23,7 +23,7 @@ assert.match(
 );
 assert.match(
   publicProfile,
-  /blockRelationship === 'blocked_by_viewer'[\s\S]*label=\{isUpdatingBlock \? 'Updating\.\.\.' : 'Unblock'\}/,
+  /blockRelationship === 'blocked_by_viewer'[\s\S]*label="Unblock"/,
   'a viewer-initiated block must replace Follow with Unblock',
 );
 assert.match(

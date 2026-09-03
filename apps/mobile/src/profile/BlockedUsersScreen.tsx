@@ -7,6 +7,7 @@ import {
   unblockUser,
 } from '../api/blocks';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
@@ -14,7 +15,7 @@ import { Screen } from '../components/Screen';
 import { TextInput } from '../components/TextInput';
 import { UserAvatar } from '../components/UserAvatar';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
-import { hapticError, hapticSuccess } from '../feedback/haptics';
+import { hapticError } from '../feedback/haptics';
 
 type LoadStatus = 'error' | 'loading' | 'ready';
 type PaginationStatus = 'error' | 'idle' | 'loading';
@@ -29,7 +30,6 @@ export function BlockedUsersScreen() {
   const [query, setQuery] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [status, setStatus] = useState<LoadStatus>('loading');
-  const [unblockingUserId, setUnblockingUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const timeout = setTimeout(() => setSearchQuery(query.trim()), 250);
@@ -96,8 +96,6 @@ export function BlockedUsersScreen() {
   }
 
   function confirmUnblock(item: BlockedUser) {
-    if (unblockingUserId) return;
-
     Alert.alert(
       `Unblock ${item.displayName}?`,
       `${item.displayName} will be able to find your profile and interact with you again.`,
@@ -113,24 +111,28 @@ export function BlockedUsersScreen() {
   }
 
   async function performUnblock(item: BlockedUser) {
-    if (!firebaseIdToken || unblockingUserId) return;
+    if (!firebaseIdToken) return;
 
-    setUnblockingUserId(item.userId);
+    const previousIndex = items.findIndex((currentItem) => currentItem.userId === item.userId);
+    setItems((current) => current.filter((currentItem) => currentItem.userId !== item.userId));
     try {
       await unblockUser(firebaseIdToken, item.userId);
-      setItems((current) => current.filter((currentItem) => currentItem.userId !== item.userId));
       if (items.length === 1 && nextCursor) {
         await loadNextPage();
       }
-      hapticSuccess();
+      notifyUserDataChanged('socialGraph');
     } catch (error) {
+      setItems((current) => {
+        if (current.some((currentItem) => currentItem.userId === item.userId)) return current;
+        const restored = [...current];
+        restored.splice(Math.max(0, previousIndex), 0, item);
+        return restored;
+      });
       hapticError();
       Alert.alert(
         'Could not unblock user',
         error instanceof Error ? error.message : 'Try again in a moment.',
       );
-    } finally {
-      setUnblockingUserId(null);
     }
   }
 
@@ -204,23 +206,14 @@ export function BlockedUsersScreen() {
                     <Pressable
                       accessibilityLabel={`Unblock ${item.displayName}`}
                       accessibilityRole="button"
-                      accessibilityState={{
-                        busy: unblockingUserId === item.userId,
-                        disabled: unblockingUserId !== null,
-                      }}
-                      disabled={unblockingUserId !== null}
+                      accessibilityState={{}}
                       onPress={() => confirmUnblock(item)}
                       style={({ pressed }) => [
                         styles.unblockButton,
                         pressed ? styles.pressed : null,
-                        unblockingUserId && unblockingUserId !== item.userId ? styles.disabled : null,
                       ]}
                     >
-                      {unblockingUserId === item.userId ? (
-                        <ActivityIndicator color={colors.danger} size="small" />
-                      ) : (
-                        <Text style={styles.unblockLabel}>Unblock</Text>
-                      )}
+                      <Text style={styles.unblockLabel}>Unblock</Text>
                     </Pressable>
                   </View>
                 ))}
@@ -258,9 +251,6 @@ const styles = StyleSheet.create({
   copy: {
     flex: 1,
     minWidth: 0,
-  },
-  disabled: {
-    opacity: 0.48,
   },
   emptyIcon: {
     alignItems: 'center',

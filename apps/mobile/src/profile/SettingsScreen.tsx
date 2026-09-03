@@ -45,6 +45,7 @@ import {
   updateWatchlistVisibility,
 } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { reauthenticateAndRevokeApple } from '../auth/firebase';
 import { useMicrosoftAuth } from '../auth/microsoftAuth';
 import { getMissingGoogleClientConfig, googleClientIds } from '../auth/googleAuthConfig';
@@ -100,7 +101,6 @@ export function SettingsScreen() {
     linkExternal,
     linkGoogle,
     linkMicrosoft,
-    notifySocialChanged,
     refreshCurrentUser,
     signOut,
     status: authStatus,
@@ -222,16 +222,22 @@ export function SettingsScreen() {
   }, [displayName, personalWatchlists, privacy, savedSettings, savedWatchlistVisibilities]);
 
   async function saveSettings() {
-    if (!firebaseIdToken || !isDirty || status === 'saving') return;
+    if (!firebaseIdToken || !isDirty || !savedSettings) return;
 
-    setStatus('saving');
+    const previousSavedSettings = savedSettings;
+    const previousSavedWatchlistVisibilities = savedWatchlistVisibilities;
+    const trimmedDisplayName = displayName.trim();
+    const changedWatchlists = personalWatchlists.filter(
+      (watchlist) => savedWatchlistVisibilities[watchlist.id] !== watchlist.visibility,
+    );
+    setSavedSettings({
+      displayName: trimmedDisplayName,
+      privacy,
+    });
+    setSavedWatchlistVisibilities(toWatchlistVisibilities(personalWatchlists));
     setMessage(null);
 
     try {
-      const trimmedDisplayName = displayName.trim();
-      const changedWatchlists = personalWatchlists.filter(
-        (watchlist) => savedWatchlistVisibilities[watchlist.id] !== watchlist.visibility,
-      );
       const [savedProfile, savedPrivacy, savedWatchlists] = await Promise.all([
         updateProfile(firebaseIdToken, {
           displayName: trimmedDisplayName.length > 0 ? trimmedDisplayName : null,
@@ -258,10 +264,11 @@ export function SettingsScreen() {
       setSavedWatchlistVisibilities(toWatchlistVisibilities(nextPersonalWatchlists));
       await refreshCurrentUser();
       setStatus('ready');
-      setMessage({ text: 'Your changes are saved.', tone: 'success' });
-      hapticSuccess();
+      notifyUserDataChanged('profile', 'watchlists');
     } catch {
-      setStatus('error');
+      setSavedSettings(previousSavedSettings);
+      setSavedWatchlistVisibilities(previousSavedWatchlistVisibilities);
+      setStatus('ready');
       setMessage({ text: 'Could not save your changes. Try again.', tone: 'error' });
       hapticError();
     }
@@ -425,7 +432,7 @@ export function SettingsScreen() {
       if (!profile) return;
 
       setAvatarUrl(profile.avatarUrl);
-      notifySocialChanged();
+      notifyUserDataChanged('profile');
       setMessage({ text: 'Your profile photo is updated.', tone: 'success' });
       hapticSuccess();
     } catch (error) {
@@ -447,7 +454,7 @@ export function SettingsScreen() {
     try {
       const profile = await removeAvatar(firebaseIdToken);
       setAvatarUrl(profile.avatarUrl);
-      notifySocialChanged();
+      notifyUserDataChanged('profile');
       setMessage({ text: 'Your profile photo was removed.', tone: 'success' });
       hapticSuccess();
     } catch (error) {
@@ -641,11 +648,10 @@ export function SettingsScreen() {
   return (
     <>
       <Screen
-        footer={isDirty || status === 'saving' ? (
+        footer={isDirty ? (
           <Button
             fullWidth
             label="Save changes"
-            loading={status === 'saving'}
             onPress={saveSettings}
           />
         ) : undefined}

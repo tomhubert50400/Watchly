@@ -10,8 +10,14 @@ import {
 } from '../api/notifications';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInSheet } from '../auth/SignInRequired';
+import {
+  getPrivateCacheKey,
+  readPersistedCache,
+  writePersistedCache,
+} from '../cache/persistedCache';
 import { colors, radii } from '../design/tokens';
-import { hapticConfirm, hapticError } from '../feedback/haptics';
+import { hapticError } from '../feedback/haptics';
+import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { useToast } from './ToastContext';
 import { maybeEnableReleasePushFromAlert, ReleasePushSetupResult } from './nativePushNotifications';
 import {
@@ -26,7 +32,7 @@ type ReleaseAlertControlProps = {
 };
 
 export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControlProps) {
-  const { currentUser, firebaseIdToken, getFirebaseIdToken, notifyTrackingChanged } = useAuthSession();
+  const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
   const { showToast } = useToast();
   const { isSignedIn, requestScope } = getReleaseAlertControlSession({
     contentType,
@@ -34,11 +40,20 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
     tmdbId,
     userId: currentUser?.id ?? null,
   });
-  const [loadStatus, setLoadStatus] = useState<ReleaseAlertLoadStatus>('loading');
+  const cacheKey = currentUser
+    ? getPrivateCacheKey(currentUser.id, `release-alert:${contentType}:${tmdbId}`)
+    : null;
+  const [loadStatus, setLoadStatus] = useState<ReleaseAlertLoadStatus>('ready');
   const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [state, setState] = useState<ReleaseAlertState | null>(null);
   const [stateScope, setStateScope] = useState(requestScope);
+  const batchChangedRef = useRef(false);
+  const confirmedStateRef = useRef<ReleaseAlertState | null>(null);
+  const mutationQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingMutationCountRef = useRef(0);
   const requestRef = useRef({ scope: requestScope, version: 0 });
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   if (requestRef.current.scope !== requestScope) {
     requestRef.current = { scope: requestScope, version: requestRef.current.version + 1 };
@@ -59,9 +74,16 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
       return;
     }
 
-    setLoadStatus('loading');
-
     try {
+      if (cacheKey) {
+        const cached = await readPersistedCache<ReleaseAlertState>(cacheKey).catch(() => null);
+        if (cached && isCurrent()) {
+          setState(cached.data);
+          stateRef.current = cached.data;
+          setStateScope(scope);
+          setLoadStatus('ready');
+        }
+      }
       const token = await getFirebaseIdToken();
       if (!isCurrent()) return;
       if (!token) throw new Error('Sign in again to load release alerts.');
@@ -69,13 +91,15 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
       const loadedState = await getReleaseAlert(token, contentType, tmdbId);
       if (!isCurrent()) return;
       setState(loadedState);
+      stateRef.current = loadedState;
       setStateScope(scope);
       setLoadStatus('ready');
+      if (cacheKey) void writePersistedCache(cacheKey, loadedState).catch(() => undefined);
     } catch {
       if (!isCurrent()) return;
       setLoadStatus('error');
     }
-  }, [contentType, getFirebaseIdToken, isSignedIn, requestScope, tmdbId]);
+  }, [cacheKey, contentType, getFirebaseIdToken, isSignedIn, requestScope, tmdbId]);
 
   useEffect(() => {
     setState(null);
@@ -91,46 +115,64 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
     }
 
     const scope = requestScope;
-    const version = requestRef.current.version + 1;
-    requestRef.current = { scope, version };
-    const isCurrent = () => requestRef.current.scope === scope && requestRef.current.version === version;
-    const previousState = visibleState;
+    requestRef.current = { scope, version: requestRef.current.version + 1 };
+    const previousState = stateRef.current;
     const nextEnabled = !previousState?.enabled;
 
-    setState({ enabled: nextEnabled, items: previousState?.items ?? [] });
+    const optimisticState = { enabled: nextEnabled, items: previousState?.items ?? [] };
+    setState(optimisticState);
+    stateRef.current = optimisticState;
     setStateScope(scope);
-
-    try {
-      const token = await getFirebaseIdToken();
-      if (!isCurrent()) return;
-      if (!token) throw new Error('Sign in again to update release alerts.');
-
-      let pushSetup: ReleasePushSetupResult | null = null;
-      if (!previousState?.enabled && currentUser?.id) {
-        pushSetup = await maybeEnableReleasePushFromAlert(token, currentUser.id).catch(() => ({
-          message: 'System notifications could not be enabled. Your in-app alert still works.',
-          status: 'unavailable' as const,
-        }));
-        if (!isCurrent()) return;
-      }
-
-      const nextState = previousState?.enabled
-        ? await disableReleaseAlert(token, contentType, tmdbId)
-        : await enableReleaseAlert(token, contentType, tmdbId);
-      if (!isCurrent()) return;
-
-      setState(nextState);
-      setStateScope(scope);
-      notifyTrackingChanged();
-      hapticConfirm();
-      if (pushSetup?.message) showToast(pushSetup.message);
-    } catch (toggleError) {
-      if (!isCurrent()) return;
-      setState(previousState);
-      setStateScope(scope);
-      hapticError();
-      showToast(toggleError instanceof Error ? toggleError.message : 'Could not update release alerts.');
+    setLoadStatus('ready');
+    if (cacheKey) void writePersistedCache(cacheKey, optimisticState).catch(() => undefined);
+    if (pendingMutationCountRef.current === 0) {
+      confirmedStateRef.current = previousState;
+      batchChangedRef.current = false;
     }
+    pendingMutationCountRef.current += 1;
+
+    const commitMutation = async () => {
+      try {
+        const token = await getFirebaseIdToken();
+        if (!token) throw new Error('Sign in again to update release alerts.');
+
+        let pushSetup: ReleasePushSetupResult | null = null;
+        if (nextEnabled && currentUser?.id) {
+          pushSetup = await maybeEnableReleasePushFromAlert(token, currentUser.id).catch(() => ({
+            message: 'System notifications could not be enabled. Your in-app alert still works.',
+            status: 'unavailable' as const,
+          }));
+        }
+
+        confirmedStateRef.current = nextEnabled
+          ? await enableReleaseAlert(token, contentType, tmdbId)
+          : await disableReleaseAlert(token, contentType, tmdbId);
+        batchChangedRef.current = true;
+        if (pushSetup?.message) showToast(pushSetup.message);
+      } catch (toggleError) {
+        hapticError();
+        showToast(toggleError instanceof Error ? toggleError.message : 'Could not update release alerts.');
+      } finally {
+        pendingMutationCountRef.current -= 1;
+        if (pendingMutationCountRef.current === 0) {
+          const confirmedState = confirmedStateRef.current;
+          if (requestRef.current.scope === scope) {
+            setState(confirmedState);
+            stateRef.current = confirmedState;
+            setStateScope(scope);
+            setLoadStatus('ready');
+            if (cacheKey && confirmedState) {
+              void writePersistedCache(cacheKey, confirmedState).catch(() => undefined);
+            }
+          }
+          if (batchChangedRef.current) notifyUserDataChanged('releaseAlerts');
+          batchChangedRef.current = false;
+        }
+      }
+    };
+    const queuedMutation = mutationQueueRef.current.then(commitMutation, commitMutation);
+    mutationQueueRef.current = queuedMutation.catch(() => undefined);
+    await queuedMutation;
   }
 
   const presentation = getReleaseAlertControlPresentation(loadStatus, visibleState);

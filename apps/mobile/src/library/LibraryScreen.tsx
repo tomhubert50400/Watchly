@@ -7,6 +7,7 @@ import { createSharedWatchlist } from '../api/sharedWatchlists';
 import { disableReleaseAlert, enableReleaseAlert } from '../api/notifications';
 import { createWatchlist } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { writePersistedCache } from '../cache/persistedCache';
 import { Button } from '../components/Button';
@@ -20,11 +21,11 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { TextInput } from '../components/TextInput';
 import { colors, spacing, typography } from '../design/tokens';
-import { hapticConfirm, hapticError, hapticSuccess } from '../feedback/haptics';
+import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { RootStackParamList } from '../navigation/types';
 import { ContinueWatchingCard } from './ContinueWatchingCard';
 import { buildLibrarySummary, getLastWatchedLibraryItem } from './libraryModel';
-import { OwnerScopedData, replaceOwnedData, rollbackAlertValue, updateOwnedData } from './libraryState';
+import { OwnerScopedData, replaceOwnedData, updateOwnedData } from './libraryState';
 import { LibrarySummary } from './LibrarySummary';
 import { ReleaseAlertRow } from './ReleaseAlertRow';
 import { LibraryData, LibraryListItem, LibraryMediaItem, useLibraryData } from './useLibraryData';
@@ -35,7 +36,7 @@ type Navigation = NativeStackNavigationProp<RootStackParamList>;
 
 export function LibraryScreen() {
   const navigation = useNavigation<Navigation>();
-  const { currentUser, getFirebaseIdToken, notifyTrackingChanged } = useAuthSession();
+  const { currentUser, getFirebaseIdToken } = useAuthSession();
   const resource = useLibraryData();
   const [scopedData, setScopedData] = useState<OwnerScopedData<LibraryData> | null>(null);
   const [tab, setTab] = useState<Tab>('all');
@@ -43,6 +44,10 @@ export function LibraryScreen() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [newListName, setNewListName] = useState('');
   const [newListKind, setNewListKind] = useState<'personal' | 'shared'>('personal');
+  const alertConfirmedValuesRef = useRef(new Map<string, boolean>());
+  const alertMutationQueuesRef = useRef(new Map<string, Promise<void>>());
+  const alertPendingCountsRef = useRef(new Map<string, number>());
+  const dataRef = useRef<LibraryData | null>(null);
   const activeOwnerIdRef = useRef(currentUser?.id ?? null);
   activeOwnerIdRef.current = currentUser?.id ?? null;
   const resourceDataRef = useRef(resource.data);
@@ -55,6 +60,7 @@ export function LibraryScreen() {
   if (currentUser && scopedData && scopedData.ownerId === currentUser.id) {
     data = scopedData.data;
   }
+  dataRef.current = data;
   useEffect(() => {
     const ownerId = currentUser?.id ?? null;
     const sourceOwnerId = resourceOwnerIdRef.current;
@@ -90,27 +96,58 @@ export function LibraryScreen() {
   async function persist(cacheKey: string, next: LibraryData) { await writePersistedCache(cacheKey, next).catch(() => undefined); }
 
   async function toggleAlert(item: LibraryMediaItem) {
-    if (!currentUser || !data || busyKey) return;
+    if (!currentUser || !data) return;
     const ownerId = currentUser.id; const cacheKey = resource.key;
-    const next = { ...data, items: data.items.map((entry) => entry.key === item.key ? { ...entry, hasReleaseAlert: !entry.hasReleaseAlert } : entry) };
-    setBusyKey(item.key); setActionError(null); updateData(ownerId, () => next);
-    try {
-      const token = await getFirebaseIdToken(); if (!token) throw new Error('Sign in again to update this alert.');
-      if (item.hasReleaseAlert) await disableReleaseAlert(token, item.contentType, item.tmdbId); else await enableReleaseAlert(token, item.contentType, item.tmdbId);
-      if (activeOwnerIdRef.current !== ownerId) return;
-      await persist(cacheKey, next);
-      if (activeOwnerIdRef.current === ownerId) {
-        notifyTrackingChanged();
-        hapticConfirm();
-      }
-    } catch (error) {
-      updateData(ownerId, (current) => rollbackAlertValue(current, item.key, !item.hasReleaseAlert, item.hasReleaseAlert));
-      if (activeOwnerIdRef.current === ownerId) {
-        setActionError(error instanceof Error ? error.message : 'Could not update this alert.');
-        hapticError();
-      }
+    const currentData = dataRef.current ?? data;
+    const currentItem = currentData.items.find((entry) => entry.key === item.key) ?? item;
+    const nextEnabled = !currentItem.hasReleaseAlert;
+    const next = { ...currentData, items: currentData.items.map((entry) => entry.key === item.key ? { ...entry, hasReleaseAlert: nextEnabled } : entry) };
+    if ((alertPendingCountsRef.current.get(item.key) ?? 0) === 0) {
+      alertConfirmedValuesRef.current.set(item.key, currentItem.hasReleaseAlert);
     }
-    finally { if (activeOwnerIdRef.current === ownerId) setBusyKey(null); }
+    alertPendingCountsRef.current.set(item.key, (alertPendingCountsRef.current.get(item.key) ?? 0) + 1);
+    setActionError(null);
+    dataRef.current = next;
+    updateData(ownerId, () => next);
+    void persist(cacheKey, next);
+
+    const commitMutation = async () => {
+      try {
+        const token = await getFirebaseIdToken();
+        if (!token) throw new Error('Sign in again to update this alert.');
+        if (nextEnabled) await enableReleaseAlert(token, item.contentType, item.tmdbId);
+        else await disableReleaseAlert(token, item.contentType, item.tmdbId);
+        alertConfirmedValuesRef.current.set(item.key, nextEnabled);
+      } catch (error) {
+        if (activeOwnerIdRef.current === ownerId) {
+          setActionError(error instanceof Error ? error.message : 'Could not update this alert.');
+          hapticError();
+        }
+      } finally {
+        const pendingCount = (alertPendingCountsRef.current.get(item.key) ?? 1) - 1;
+        if (pendingCount > 0) {
+          alertPendingCountsRef.current.set(item.key, pendingCount);
+        } else {
+          alertPendingCountsRef.current.delete(item.key);
+          const confirmedValue = alertConfirmedValuesRef.current.get(item.key) ?? currentItem.hasReleaseAlert;
+          if (activeOwnerIdRef.current === ownerId) {
+            const current = dataRef.current;
+            if (current) {
+              const reconciled = { ...current, items: current.items.map((entry) => (
+                entry.key === item.key ? { ...entry, hasReleaseAlert: confirmedValue } : entry
+              )) };
+              dataRef.current = reconciled;
+              updateData(ownerId, () => reconciled);
+              void persist(cacheKey, reconciled);
+            }
+            notifyUserDataChanged('releaseAlerts');
+          }
+        }
+      }
+    };
+    const previousQueue = alertMutationQueuesRef.current.get(item.key) ?? Promise.resolve();
+    const queuedMutation = previousQueue.then(commitMutation, commitMutation);
+    alertMutationQueuesRef.current.set(item.key, queuedMutation.catch(() => undefined));
   }
 
   async function createList() {
@@ -159,7 +196,7 @@ export function LibraryScreen() {
         {tab !== 'lists' && continueItems.length > 0 ? <View style={styles.section}><SectionHeader title="Continue watching" /><ContinueWatchingCard item={continueItems[0]!} onPress={() => openItem(continueItems[0]!, true)} /></View> : null}
         {tab !== 'progress' ? <View style={styles.section}><SectionHeader actionLabel="Journal" onActionPress={() => navigation.navigate('Journal')} title="My lists" />{data.lists.length ? <WatchlistRail lists={data.lists} onOpen={openList} /> : <Text style={styles.emptyInline}>No personal or shared lists yet.</Text>}</View> : null}
         {tab === 'lists' ? <View style={styles.create}><SegmentedControl buttonMinHeight={36} options={[{ label: 'Personal', value: 'personal' }, { label: 'Shared', value: 'shared' }]} value={newListKind} onChange={setNewListKind} /><TextInput label="New list" value={newListName} onChangeText={setNewListName} placeholder="Weekend ideas" /></View> : null}
-        {tab !== 'lists' ? <View style={styles.section}><SectionHeader title={tab === 'progress' ? 'In progress' : 'Tracked titles & alerts'} />{visibleItems.map((item) => <ReleaseAlertRow busy={busyKey === item.key} item={item} key={item.key} onOpen={() => openItem(item)} onToggle={() => void toggleAlert(item)} />)}{visibleItems.length === 0 ? <Text style={styles.emptyInline}>Nothing in progress right now.</Text> : null}</View> : null}
+        {tab !== 'lists' ? <View style={styles.section}><SectionHeader title={tab === 'progress' ? 'In progress' : 'Tracked titles & alerts'} />{visibleItems.map((item) => <ReleaseAlertRow item={item} key={item.key} onOpen={() => openItem(item)} onToggle={() => void toggleAlert(item)} />)}{visibleItems.length === 0 ? <Text style={styles.emptyInline}>Nothing in progress right now.</Text> : null}</View> : null}
       </View> : null}
   </Screen>;
 }

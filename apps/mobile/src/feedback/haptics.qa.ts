@@ -6,8 +6,7 @@ import { readFileSync } from 'node:fs';
 
 const helperSource = readFileSync(new URL('haptics.ts', import.meta.url), 'utf8');
 
-assert.match(helperSource, /export function hapticConfirm\(/, 'routine confirmations need a shared light haptic');
-assert.match(helperSource, /ImpactFeedbackStyle\.Light/, 'routine confirmations must stay light');
+assert.doesNotMatch(helperSource, /export function hapticConfirm\(/, 'routine backend confirmations must stay silent');
 assert.match(helperSource, /export function hapticSuccess\(/, 'important completions need a shared success haptic');
 assert.match(helperSource, /NotificationFeedbackType\.Success/, 'important completions must use success feedback');
 assert.match(helperSource, /export function hapticError\(/, 'explicit mutation failures need a shared error haptic');
@@ -19,18 +18,24 @@ assert.match(helperSource, /\.catch\(\(\) => undefined\)/, 'unavailable haptics 
 for (const [file, haptic] of [
   ['../auth/ProfileAuthCard.tsx', 'hapticSuccess'],
   ['../components/SegmentedControl.tsx', 'hapticSelection'],
-  ['../episodes/useSeasonEpisodes.ts', 'hapticConfirm'],
-  ['../library/LibraryScreen.tsx', 'hapticConfirm'],
-  ['../notifications/ReleaseAlertControl.tsx', 'hapticConfirm'],
-  ['../opinions/OpinionSheet.tsx', 'hapticConfirm'],
   ['../profile/SettingsScreen.tsx', 'hapticSuccess'],
-  ['../tracking/TrackingControls.tsx', 'hapticConfirm'],
-  ['../watchlists/AddToWatchlistControl.tsx', 'hapticConfirm'],
-  ['../watchlists/SharedVoteScreen.tsx', 'hapticConfirm'],
   ['../watchlists/SharedWatchlistScreen.tsx', 'hapticSuccess'],
 ] as const) {
   const source = readFileSync(new URL(file, import.meta.url), 'utf8');
   assert.match(source, new RegExp(`\\b${haptic}\\(\\)`), `${file} must trigger ${haptic} after its confirmed action`);
+}
+
+for (const file of [
+  '../episodes/useSeasonEpisodes.ts',
+  '../library/LibraryScreen.tsx',
+  '../notifications/ReleaseAlertControl.tsx',
+  '../opinions/OpinionSheet.tsx',
+  '../tracking/TrackingControls.tsx',
+  '../watchlists/AddToWatchlistControl.tsx',
+  '../watchlists/SharedVoteScreen.tsx',
+]) {
+  const source = readFileSync(new URL(file, import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /hapticConfirm/, `${file} must not vibrate after routine backend confirmation`);
 }
 
 console.log('Haptic feedback QA passed.');

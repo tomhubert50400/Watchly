@@ -95,19 +95,16 @@ assert.doesNotMatch(
   /getIdToken\(true\)/,
   'authenticated reads must not force credential rotation on every request',
 );
-const authSessionValueSource = authSessionSource.slice(
-  authSessionSource.indexOf('const value = useMemo<AuthSessionContextValue>'),
-  authSessionSource.indexOf('return (', authSessionSource.indexOf('const value = useMemo<AuthSessionContextValue>')),
-);
 assert.doesNotMatch(
-  authSessionValueSource,
-  /socialRevision/,
-  'social refreshes must not invalidate every authentication consumer',
-);
-assert.match(
   authSessionSource,
-  /const SocialRevisionContext = createContext\(0\)[\s\S]*export function useSocialRevision\(\)/,
-  'social refresh consumers must subscribe through their dedicated context',
+  /(social|tracking)Revision|notify(Social|Tracking)Changed/,
+  'routine user-data refreshes must not invalidate authentication consumers',
+);
+const userDataEventsSource = source('../sync/userDataEvents.ts');
+assert.match(
+  userDataEventsSource,
+  /useSyncExternalStore/,
+  'user-data refresh consumers must subscribe to scoped external-store domains',
 );
 
 const exploreSource = source('../catalogue/ExploreScreen.tsx');
@@ -123,10 +120,10 @@ assert.doesNotMatch(
   /model\.isSaving \|\| model\.isRefreshing/,
   'episode progress must not overlay visible controls during background refresh',
 );
-assert.match(
+assert.doesNotMatch(
   progressSource,
-  /\{model\.isSaving \? \(/,
-  'episode progress must keep feedback for an explicit save',
+  /model\.isSaving|ActivityIndicator/,
+  'episode progress mutations must stay interactive and render no backend spinner',
 );
 
 const feedSource = source('../feed/FeedScreen.tsx');
@@ -246,19 +243,34 @@ assert.doesNotMatch(
   /Could not refresh these picks/,
   'discovery refresh failures must stay hidden while existing groups remain visible',
 );
+assert.doesNotMatch(
+  episodeCommunitySource,
+  /trackingRevision|opinionRevision,\s*\]\s*\.join/,
+  'episode community cache identity must remain stable during opinion revalidation',
+);
 
 const viewingCountSource = source('../viewings/ViewingCountControl.tsx');
+assert.doesNotMatch(
+  viewingCountSource,
+  /isSaving|ActivityIndicator|Another watch was logged/,
+  'viewing mutations must update locally without backend progress or success feedback',
+);
 assert.match(
   viewingCountSource,
-  /if \(isLoading && !summary\) \{\s*return null;/,
-  'optional viewing history must stay hidden until usable data is ready',
+  /writePersistedCache\(cacheKey, optimisticSummary\)/,
+  'optimistic viewing counts must be persisted locally',
 );
 
 const opinionSource = source('../opinions/OpinionSheet.tsx');
+assert.doesNotMatch(
+  opinionSource,
+  /if \(isLoading\)|Rated \$\{score\}|hapticConfirm/,
+  'opinion controls must stay mounted and avoid backend success feedback',
+);
 assert.match(
   opinionSource,
-  /if \(isLoading\) \{\s*return null;/,
-  'optional opinion controls must stay hidden instead of exposing their initial request',
+  /writePersistedCache\(cacheKey, \{[\s\S]*rating: optimistic\.savedRating/,
+  'optimistic ratings must be persisted locally before backend confirmation',
 );
 
 console.log('Background refresh visibility QA passed.');

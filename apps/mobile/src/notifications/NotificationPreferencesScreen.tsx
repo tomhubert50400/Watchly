@@ -1,9 +1,14 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { BellRing, Smartphone } from 'lucide-react-native';
 import { Linking, StyleSheet, Switch, Text, View } from 'react-native';
 import { getPushPreferences, PushPreferences, updatePushPreferences } from '../api/push';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
+import {
+  getPrivateCacheKey,
+  readPersistedCache,
+  writePersistedCache,
+} from '../cache/persistedCache';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
@@ -26,6 +31,14 @@ export function NotificationPreferencesScreen() {
   const [permission, setPermission] = useState<SystemPushPermission>('undetermined');
   const [preferences, setPreferences] = useState<PushPreferences | null>(null);
   const [status, setStatus] = useState<ScreenStatus>('loading');
+  const confirmedReleasePreferencesRef = useRef<PushPreferences | null>(null);
+  const pendingReleaseMutationCountRef = useRef(0);
+  const preferencesRef = useRef(preferences);
+  const releaseMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const cacheKey = currentUser
+    ? getPrivateCacheKey(currentUser.id, 'push-preferences:v1')
+    : null;
+  preferencesRef.current = preferences;
 
   const load = useCallback(async () => {
     if (!firebaseIdToken) {
@@ -36,17 +49,22 @@ export function NotificationPreferencesScreen() {
     setStatus('loading');
     setMessage(null);
     try {
+      if (cacheKey) {
+        const cached = await readPersistedCache<PushPreferences>(cacheKey).catch(() => null);
+        if (cached) setPreferences(cached.data);
+      }
       const [loadedPreferences, loadedPermission] = await Promise.all([
         getPushPreferences(firebaseIdToken),
         getSystemPushPermission(),
       ]);
       setPreferences(loadedPreferences);
+      if (cacheKey) void writePersistedCache(cacheKey, loadedPreferences).catch(() => undefined);
       setPermission(loadedPermission);
       setStatus('ready');
     } catch {
       setStatus('error');
     }
-  }, [firebaseIdToken]);
+  }, [cacheKey, firebaseIdToken]);
 
   useEffect(() => {
     void load();
@@ -64,11 +82,15 @@ export function NotificationPreferencesScreen() {
       if (!enabled) {
         const next = await disablePushFromSettings(token);
         setPreferences(next);
+        preferencesRef.current = next;
+        if (cacheKey) void writePersistedCache(cacheKey, next).catch(() => undefined);
         setMessage({ detail: 'System notifications are off for this account.', tone: 'success' });
       } else {
         const result = await enablePushFromSettings(token, currentUser.id);
         const next = await getPushPreferences(token);
         setPreferences(next);
+        preferencesRef.current = next;
+        if (cacheKey) void writePersistedCache(cacheKey, next).catch(() => undefined);
         setPermission(await getSystemPushPermission());
 
         if (result.status !== 'enabled') {
@@ -93,27 +115,41 @@ export function NotificationPreferencesScreen() {
   }
 
   async function setReleasePushEnabled(enabled: boolean) {
-    if (!firebaseIdToken || !preferences?.pushEnabled || status === 'saving') return;
-    const previous = preferences;
-    setPreferences({ ...preferences, releasePushEnabled: enabled });
-    setStatus('saving');
+    const currentPreferences = preferencesRef.current;
+    if (!firebaseIdToken || !currentPreferences?.pushEnabled) return;
+    if (pendingReleaseMutationCountRef.current === 0) {
+      confirmedReleasePreferencesRef.current = currentPreferences;
+    }
+    const optimistic = { ...currentPreferences, releasePushEnabled: enabled };
+    setPreferences(optimistic);
+    preferencesRef.current = optimistic;
+    if (cacheKey) void writePersistedCache(cacheKey, optimistic).catch(() => undefined);
+    pendingReleaseMutationCountRef.current += 1;
     setMessage(null);
 
-    try {
-      const next = await updatePushPreferences(firebaseIdToken, { releasePushEnabled: enabled });
-      setPreferences(next);
-      setStatus('ready');
-      setMessage({
-        detail: enabled ? 'Followed release pushes are on.' : 'Followed release pushes are off.',
-        tone: 'success',
-      });
-      hapticSuccess();
-    } catch {
-      setPreferences(previous);
-      setStatus('ready');
-      setMessage({ detail: 'Could not update release notifications.', tone: 'error' });
-      hapticError();
-    }
+    const commitMutation = async () => {
+      try {
+        confirmedReleasePreferencesRef.current = await updatePushPreferences(
+          firebaseIdToken,
+          { releasePushEnabled: enabled },
+        );
+      } catch {
+        setMessage({ detail: 'Could not update release notifications.', tone: 'error' });
+        hapticError();
+      } finally {
+        pendingReleaseMutationCountRef.current -= 1;
+        if (pendingReleaseMutationCountRef.current === 0) {
+          const confirmed = confirmedReleasePreferencesRef.current;
+          setPreferences(confirmed);
+          preferencesRef.current = confirmed;
+          if (cacheKey && confirmed) {
+            void writePersistedCache(cacheKey, confirmed).catch(() => undefined);
+          }
+        }
+      }
+    };
+    const queuedMutation = releaseMutationQueueRef.current.then(commitMutation, commitMutation);
+    releaseMutationQueueRef.current = queuedMutation.catch(() => undefined);
   }
 
   if (!currentUser || !firebaseIdToken) {
@@ -176,7 +212,7 @@ export function NotificationPreferencesScreen() {
           />
           <PreferenceRow
             body="Announcements, one-week reminders, and release-day alerts for active bells."
-            disabled={!globalEnabled || status === 'saving'}
+            disabled={!globalEnabled}
             icon={<BellRing color={globalEnabled ? colors.accentText : colors.textSubtle} size={20} strokeWidth={2} />}
             label="Followed releases"
             last

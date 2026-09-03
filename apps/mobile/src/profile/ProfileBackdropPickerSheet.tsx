@@ -1,5 +1,5 @@
 import { Check, Image as ImageIcon, Sparkles } from 'lucide-react-native';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ProfileBackdropSelection } from '../api/profile';
 import {
   BottomActionSheet,
@@ -10,7 +10,6 @@ import { colors, spacing, typography } from '../design/tokens';
 import type { LibraryMediaItem } from '../library/useLibraryData';
 
 type ProfileBackdropPickerSheetProps = {
-  busy: boolean;
   error: string | null;
   items: LibraryMediaItem[];
   onClose: () => void;
@@ -20,7 +19,6 @@ type ProfileBackdropPickerSheetProps = {
 };
 
 export function ProfileBackdropPickerSheet({
-  busy,
   error,
   items,
   onClose,
@@ -43,8 +41,7 @@ export function ProfileBackdropPickerSheet({
         <Pressable
           accessibilityLabel="Use an automatic profile background"
           accessibilityRole="button"
-          accessibilityState={{ disabled: busy, selected: selected === null }}
-          disabled={busy}
+          accessibilityState={{ selected: selected === null }}
           onPress={() => onSelect(null)}
           style={({ pressed }) => [styles.automaticRow, pressed ? styles.pressed : null]}
         >
@@ -55,9 +52,7 @@ export function ProfileBackdropPickerSheet({
             <Text numberOfLines={1} style={styles.rowTitle}>Automatic</Text>
             <Text style={styles.rowMeta}>Use your latest profile activity</Text>
           </View>
-          {busy && selected === null ? (
-            <ActivityIndicator color={colors.accentText} size="small" />
-          ) : selected === null ? (
+          {selected === null ? (
             <Check color={colors.accentText} size={21} strokeWidth={2.2} />
           ) : null}
         </Pressable>
@@ -71,14 +66,12 @@ export function ProfileBackdropPickerSheet({
           </View>
         ) : null}
         <BackdropSection
-          busy={busy}
           items={series}
           onSelect={onSelect}
           selected={selected}
           title="Series"
         />
         <BackdropSection
-          busy={busy}
           items={movies}
           onSelect={onSelect}
           selected={selected}
@@ -90,13 +83,11 @@ export function ProfileBackdropPickerSheet({
 }
 
 function BackdropSection({
-  busy,
   items,
   onSelect,
   selected,
   title,
 }: {
-  busy: boolean;
   items: LibraryMediaItem[];
   onSelect: (selection: ProfileBackdropSelection) => void;
   selected: ProfileBackdropSelection | null;
@@ -116,8 +107,7 @@ function BackdropSection({
             <Pressable
               accessibilityLabel={`Use ${item.title} as profile background`}
               accessibilityRole="button"
-              accessibilityState={{ disabled: busy, selected: isSelected }}
-              disabled={busy}
+              accessibilityState={{ selected: isSelected }}
               key={item.key}
               onPress={() => onSelect({ contentType: item.contentType, tmdbId: item.tmdbId })}
               style={({ pressed }) => [styles.mediaRow, pressed ? styles.pressed : null]}
@@ -127,9 +117,7 @@ function BackdropSection({
                 <Text numberOfLines={1} style={styles.rowTitle}>{item.title}</Text>
                 <Text style={styles.rowMeta}>{item.contentType === 'movie' ? 'Movie' : 'Series'}</Text>
               </View>
-              {busy && isSelected ? (
-                <ActivityIndicator color={colors.accentText} size="small" />
-              ) : isSelected ? (
+              {isSelected ? (
                 <Check color={colors.accentText} size={21} strokeWidth={2.2} />
               ) : null}
             </Pressable>

@@ -2,11 +2,10 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { Flag, Heart } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
-import { hapticError, hapticSelection } from '../feedback/haptics';
+import { hapticError } from '../feedback/haptics';
 import {
   applyLikeMutation,
   beginLikeMutation,
-  rollbackLikeMutation,
   type FeedLikeState,
 } from '../feed/feedLikeModel';
 import { useToast } from '../notifications/ToastContext';
@@ -49,35 +48,49 @@ export const SocialReviewPost = memo(function SocialReviewPost({
   const visibleAuthor = authorDisplayName?.trim() || 'Watchly member';
   const { showToast } = useToast();
   const [likeState, setLikeState] = useState<FeedLikeState>({ likeCount, likedByViewer });
-  const [isLikePending, setIsLikePending] = useState(false);
-  const isLikePendingRef = useRef(false);
+  const confirmedLikeStateRef = useRef(likeState);
+  const likeMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const likeStateRef = useRef(likeState);
+  const pendingLikeCountRef = useRef(0);
+  likeStateRef.current = likeState;
 
   useEffect(() => {
-    if (!isLikePendingRef.current) {
-      setLikeState({ likeCount, likedByViewer });
+    if (pendingLikeCountRef.current === 0) {
+      const next = { likeCount, likedByViewer };
+      setLikeState(next);
+      likeStateRef.current = next;
+      confirmedLikeStateRef.current = next;
     }
   }, [likeCount, likedByViewer]);
 
   const toggleLike = async () => {
-    if (isLikePendingRef.current) return;
-
-    const mutation = beginLikeMutation(likeState);
-    isLikePendingRef.current = true;
-    setIsLikePending(true);
-    setLikeState(mutation.optimistic);
-    hapticSelection();
-
-    try {
-      const confirmed = await onSetLiked(mutation.optimistic.likedByViewer);
-      setLikeState(applyLikeMutation(confirmed));
-    } catch (error) {
-      setLikeState(rollbackLikeMutation(mutation));
-      hapticError();
-      showToast(error instanceof Error ? error.message : 'Could not update this like.');
-    } finally {
-      isLikePendingRef.current = false;
-      setIsLikePending(false);
+    const mutation = beginLikeMutation(likeStateRef.current);
+    if (pendingLikeCountRef.current === 0) {
+      confirmedLikeStateRef.current = likeStateRef.current;
     }
+    pendingLikeCountRef.current += 1;
+    setLikeState(mutation.optimistic);
+    likeStateRef.current = mutation.optimistic;
+
+    const commitMutation = async () => {
+      try {
+        confirmedLikeStateRef.current = applyLikeMutation(
+          await onSetLiked(mutation.optimistic.likedByViewer),
+        );
+      } catch (error) {
+        hapticError();
+        showToast(error instanceof Error ? error.message : 'Could not update this like.');
+      } finally {
+        pendingLikeCountRef.current -= 1;
+        if (pendingLikeCountRef.current === 0) {
+          setLikeState(confirmedLikeStateRef.current);
+          likeStateRef.current = confirmedLikeStateRef.current;
+        }
+      }
+    };
+    const queuedMutation = likeMutationQueueRef.current.then(commitMutation, commitMutation);
+    likeMutationQueueRef.current = queuedMutation.catch(() => undefined);
+    await queuedMutation;
   };
 
   return (
@@ -125,18 +138,14 @@ export const SocialReviewPost = memo(function SocialReviewPost({
           accessibilityLabel={`${likeState.likedByViewer ? 'Unlike' : 'Like'} ${visibleAuthor}'s review, ${likeState.likeCount} ${likeState.likeCount === 1 ? 'like' : 'likes'}`}
           accessibilityRole="button"
           accessibilityState={{
-            busy: isLikePending,
-            disabled: isLikePending,
             selected: likeState.likedByViewer,
           }}
-          disabled={isLikePending}
           onPress={() => {
             void toggleLike();
           }}
           style={({ pressed }) => [
             styles.likeButton,
             pressed ? styles.likeButtonPressed : null,
-            isLikePending ? styles.likeButtonPending : null,
           ]}
         >
           {likeState.likeCount > 0 ? (
@@ -210,9 +219,6 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     minHeight: touchTargets.min,
     paddingHorizontal: spacing.sm,
-  },
-  likeButtonPending: {
-    opacity: 0.58,
   },
   likeButtonPressed: {
     opacity: 0.72,

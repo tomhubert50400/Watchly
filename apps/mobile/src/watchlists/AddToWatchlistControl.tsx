@@ -17,6 +17,11 @@ import {
   WatchlistContentType,
 } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import {
+  getPrivateCacheKey,
+  readPersistedCache,
+  writePersistedCache,
+} from '../cache/persistedCache';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
 import { SignInSheet } from '../auth/SignInRequired';
 import {
@@ -26,16 +31,15 @@ import {
 import { Button } from '../components/Button';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { colors, radii, spacing, typography } from '../design/tokens';
-import { hapticConfirm, hapticError, hapticSelection, hapticSuccess } from '../feedback/haptics';
+import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { useToast } from '../notifications/ToastContext';
+import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { useWatchlistCache } from './WatchlistCacheContext';
 import { WatchlistOption, WatchlistOptionRow } from './WatchlistOptionRow';
 import { loadProgressively, takeHydrationItems } from './requestBoundaries';
 import { loadWatchlistPreviewUrls } from './watchlistPreview';
 import {
   autoSelectCreatedWatchlist,
-  buildSelectionDiff,
-  buildSelectionLabel,
   rollbackSelection,
 } from './watchlistSelection';
 
@@ -55,11 +59,9 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   const { showToast } = useToast();
   const { preloadWatchlists } = useWatchlistCache();
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
-  const [initialSelectedKeys, setInitialSelectedKeys] = useState<Set<string>>(new Set());
   const [isCreating, setIsCreating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [newWatchlistKind, setNewWatchlistKind] = useState<CreateWatchlistKind>('personal');
   const [newWatchlistName, setNewWatchlistName] = useState('');
@@ -70,10 +72,19 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   const previewArtworkCacheRef = useRef(new Map<string, string | null>());
   const previewHydrationCacheRef = useRef(new Map<string, string>());
   const previewVersionRef = useRef(0);
-  const saveVersionRef = useRef(0);
+  const confirmedSelectedKeysRef = useRef(new Set<string>());
+  const optionMutationQueuesRef = useRef(new Map<string, Promise<void>>());
+  const optionPendingCountsRef = useRef(new Map<string, number>());
+  const optionsRef = useRef(options);
+  const selectedKeysRef = useRef(selectedKeys);
   const contentKey = `${contentType}:${tmdbId}`;
   const optionsOwnerKey = `${currentUser?.id ?? 'signed-out'}:${contentKey}`;
+  const optionsCacheKey = currentUser
+    ? getPrivateCacheKey(currentUser.id, `watchlist-options:${contentKey}`)
+    : null;
   const previewOwnerKeyRef = useRef(optionsOwnerKey);
+  selectedKeysRef.current = selectedKeys;
+  optionsRef.current = options;
 
   if (previewOwnerKeyRef.current !== optionsOwnerKey) {
     previewOwnerKeyRef.current = optionsOwnerKey;
@@ -150,6 +161,20 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
     if (showLoading) setIsLoading(true);
 
     try {
+      if (optionsCacheKey) {
+        const cached = await readPersistedCache<WatchlistOption[]>(optionsCacheKey).catch(() => null);
+        if (cached && loadVersionRef.current === loadVersion) {
+          const cachedSelectedKeys = new Set(
+            cached.data.filter((option) => option.containsTitle).map((option) => option.key),
+          );
+          optionsRef.current = cached.data;
+          confirmedSelectedKeysRef.current = cachedSelectedKeys;
+          selectedKeysRef.current = rollbackSelection(cachedSelectedKeys);
+          setOptions(cached.data);
+          setOptionsContentKey(optionsOwnerKey);
+          setSelectedKeys(rollbackSelection(cachedSelectedKeys));
+        }
+      }
       const token = await getFirebaseIdToken();
       if (!token) throw new Error('Sign in again to load watchlists.');
 
@@ -165,42 +190,48 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
         nextOptions.filter((option) => option.containsTitle).map((option) => option.key),
       );
 
-      if (loadVersionRef.current !== loadVersion) return;
-      setOptions((current) => nextOptions.map((option) => ({
+      if (loadVersionRef.current !== loadVersion || optionPendingCountsRef.current.size > 0) return;
+      const hydratedOptions = nextOptions.map((option) => ({
         ...option,
-        posterUrls: current.find((item) => (
+        posterUrls: optionsRef.current.find((item) => (
           item.key === option.key && item.updatedAt === option.updatedAt
         ))?.posterUrls ?? option.posterUrls,
-      })));
+      }));
+      optionsRef.current = hydratedOptions;
+      setOptions(hydratedOptions);
       setOptionsContentKey(optionsOwnerKey);
-      setInitialSelectedKeys(nextSelectedKeys);
+      confirmedSelectedKeysRef.current = nextSelectedKeys;
+      selectedKeysRef.current = rollbackSelection(nextSelectedKeys);
       setSelectedKeys(rollbackSelection(nextSelectedKeys));
+      if (optionsCacheKey) {
+        void writePersistedCache(optionsCacheKey, hydratedOptions).catch(() => undefined);
+      }
       if (loadPreviews) void loadOptionPreviews(nextOptions, optionsOwnerKey);
     } catch (loadError) {
       if (loadVersionRef.current === loadVersion) {
-        setOptions([]);
-        setOptionsContentKey(optionsOwnerKey);
-        setInitialSelectedKeys(new Set());
-        setSelectedKeys(new Set());
         showToast(loadError instanceof Error ? loadError.message : 'Could not load watchlists.');
       }
     } finally {
       if (loadVersionRef.current === loadVersion) setIsLoading(false);
     }
-  }, [contentType, firebaseIdToken, getFirebaseIdToken, loadOptionPreviews, optionsOwnerKey, showToast, tmdbId]);
+  }, [contentType, firebaseIdToken, getFirebaseIdToken, loadOptionPreviews, optionsCacheKey, optionsOwnerKey, showToast, tmdbId]);
 
   useEffect(() => {
-    saveVersionRef.current += 1;
+    optionsRef.current = [];
+    confirmedSelectedKeysRef.current = new Set();
+    selectedKeysRef.current = new Set();
     setIsOpen(false);
-    setIsSaving(false);
     setIsSignInOpen(false);
   }, [optionsOwnerKey]);
 
   useEffect(() => {
     if (!firebaseIdToken) {
+      optionsRef.current = [];
+      confirmedSelectedKeysRef.current = new Set();
+      selectedKeysRef.current = new Set();
       setOptions([]);
       setOptionsContentKey(null);
-      setInitialSelectedKeys(new Set());
+      confirmedSelectedKeysRef.current = new Set();
       setSelectedKeys(new Set());
       return;
     }
@@ -209,9 +240,8 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   }, [firebaseIdToken, loadOptions]);
 
   function openSheet() {
-    if (!firebaseIdToken || isSaving) return;
+    if (!firebaseIdToken) return;
 
-    setSelectedKeys(rollbackSelection(initialSelectedKeys));
     setIsCreateFormOpen(false);
     setNewWatchlistKind('personal');
     setNewWatchlistName('');
@@ -219,7 +249,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
 
     if (optionsContentKey !== optionsOwnerKey) {
       setOptions([]);
-      setInitialSelectedKeys(new Set());
+      confirmedSelectedKeysRef.current = new Set();
       setSelectedKeys(new Set());
       void loadOptions(true, true);
     } else {
@@ -228,7 +258,6 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   }
 
   function dismissSheet() {
-    setSelectedKeys(rollbackSelection(initialSelectedKeys));
     setIsCreateFormOpen(false);
     setNewWatchlistName('');
     setIsOpen(false);
@@ -246,11 +275,29 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
       const option = newWatchlistKind === 'personal'
         ? toPersonalOption({ ...(await createWatchlist(token, name)), containsTitle: false })
         : toSharedOption({ ...(await createSharedWatchlist(token, name)), containsTitle: false });
+      if (option.kind === 'personal') {
+        await addWatchlistItem(token, option.id, { contentType, tmdbId });
+      } else {
+        await addSharedWatchlistItem(token, option.id, { contentType, tmdbId });
+      }
 
-      setOptions((current) => [option, ...current.filter((item) => item.key !== option.key)]);
-      setSelectedKeys((current) => autoSelectCreatedWatchlist(current, option.key));
+      const selectedOption = {
+        ...option,
+        containsTitle: true,
+        itemCount: option.itemCount + 1,
+      };
+      const nextSelected = autoSelectCreatedWatchlist(selectedKeysRef.current, option.key);
+      const nextOptions = [selectedOption, ...optionsRef.current.filter((item) => item.key !== option.key)];
+      selectedKeysRef.current = nextSelected;
+      confirmedSelectedKeysRef.current = nextSelected;
+      optionsRef.current = nextOptions;
+      setOptions(nextOptions);
+      setSelectedKeys(nextSelected);
+      if (optionsCacheKey) void writePersistedCache(optionsCacheKey, nextOptions).catch(() => undefined);
       setIsCreateFormOpen(false);
       setNewWatchlistName('');
+      void preloadWatchlists();
+      notifyUserDataChanged('watchlists');
       hapticSuccess();
     } catch (createError) {
       hapticError();
@@ -261,113 +308,73 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   }
 
   function toggleOption(key: string) {
-    hapticSelection();
-    setSelectedKeys((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
+    const option = options.find((item) => item.key === key);
+    if (!option) return;
+    const previousSelected = rollbackSelection(selectedKeysRef.current);
+    const nextContainsTitle = !previousSelected.has(key);
+    const nextSelected = rollbackSelection(previousSelected);
+    if (nextContainsTitle) nextSelected.add(key);
+    else nextSelected.delete(key);
+    selectedKeysRef.current = nextSelected;
+    setSelectedKeys(nextSelected);
+    const optimisticOptions = updateOptionSelection(optionsRef.current, previousSelected, nextSelected);
+    optionsRef.current = optimisticOptions;
+    setOptions(optimisticOptions);
+    if (optionsCacheKey) void writePersistedCache(optionsCacheKey, optimisticOptions).catch(() => undefined);
+    optionPendingCountsRef.current.set(key, (optionPendingCountsRef.current.get(key) ?? 0) + 1);
 
-  async function saveSelection() {
-    if (!firebaseIdToken || isSaving) return;
-
-    const previousInitialKeys = rollbackSelection(initialSelectedKeys);
-    const previousOptions = options;
-    const nextSelectedKeys = rollbackSelection(selectedKeys);
-    const saveOptions = options;
-    const diff = buildSelectionDiff(previousInitialKeys, nextSelectedKeys);
-    if (diff.addedKeys.length === 0 && diff.removedKeys.length === 0) return;
-
-    const addedKeys = new Set(diff.addedKeys);
-    const removedKeys = new Set(diff.removedKeys);
-    const saveVersion = saveVersionRef.current + 1;
-    saveVersionRef.current = saveVersion;
-
-    setInitialSelectedKeys(nextSelectedKeys);
-    setOptions((current) => updateOptionSelection(current, previousInitialKeys, nextSelectedKeys));
-    setIsSaving(true);
-    setIsOpen(false);
-    const completedRollbacks: Array<() => Promise<unknown>> = [];
-
-    try {
-      const token = await getFirebaseIdToken();
-      if (!token) throw new Error('Sign in again to update watchlists.');
-
-      const operations: Array<{
-        rollback: () => Promise<unknown>;
-        run: () => Promise<unknown>;
-      }> = [];
-
-      saveOptions.forEach((option) => {
-        if (addedKeys.has(option.key)) {
-          operations.push(option.kind === 'personal'
-            ? {
-                rollback: () => removeWatchlistItem(token, option.id, contentType, tmdbId),
-                run: () => addWatchlistItem(token, option.id, { contentType, tmdbId }),
-              }
-            : {
-                rollback: () => removeSharedWatchlistItem(token, option.id, contentType, tmdbId),
-                run: () => addSharedWatchlistItem(token, option.id, { contentType, tmdbId }),
-              });
-        }
-        if (removedKeys.has(option.key)) {
-          operations.push(option.kind === 'personal'
-            ? {
-                rollback: () => addWatchlistItem(token, option.id, { contentType, tmdbId }),
-                run: () => removeWatchlistItem(token, option.id, contentType, tmdbId),
-              }
-            : {
-                rollback: () => addSharedWatchlistItem(token, option.id, { contentType, tmdbId }),
-                run: () => removeSharedWatchlistItem(token, option.id, contentType, tmdbId),
-              });
-        }
-      });
-
-      for (const operation of operations) {
-        await operation.run();
-        completedRollbacks.unshift(operation.rollback);
-      }
-
-      [...addedKeys, ...removedKeys].forEach((key) => previewHydrationCacheRef.current.delete(key));
-      void loadOptionPreviews(
-        updateOptionSelection(saveOptions, previousInitialKeys, nextSelectedKeys),
-        optionsOwnerKey,
-      );
-      void preloadWatchlists();
-      showToast('Watchlists updated.', 'success');
-      hapticConfirm();
-    } catch (saveError) {
-      const compensationResults = await Promise.allSettled(
-        completedRollbacks.map((rollback) => rollback()),
-      );
-      const rollbackComplete = compensationResults.every((result) => result.status === 'fulfilled');
-
-      if (saveVersionRef.current === saveVersion) {
-        hapticError();
-        setIsOpen(true);
-        if (rollbackComplete) {
-          setOptions(previousOptions);
-          setInitialSelectedKeys(previousInitialKeys);
-          setSelectedKeys(rollbackSelection(previousInitialKeys));
-          showToast(saveError instanceof Error ? saveError.message : 'Could not update watchlists.');
+    const commitMutation = async () => {
+      try {
+        const token = await getFirebaseIdToken();
+        if (!token) throw new Error('Sign in again to update watchlists.');
+        if (option.kind === 'personal') {
+          if (nextContainsTitle) await addWatchlistItem(token, option.id, { contentType, tmdbId });
+          else await removeWatchlistItem(token, option.id, contentType, tmdbId);
+        } else if (nextContainsTitle) {
+          await addSharedWatchlistItem(token, option.id, { contentType, tmdbId });
         } else {
-          await loadOptions(false);
-          showToast('Some list changes could not be rolled back. Showing the latest server state.');
+          await removeSharedWatchlistItem(token, option.id, contentType, tmdbId);
+        }
+        const confirmed = rollbackSelection(confirmedSelectedKeysRef.current);
+        if (nextContainsTitle) confirmed.add(key);
+        else confirmed.delete(key);
+        confirmedSelectedKeysRef.current = confirmed;
+        previewHydrationCacheRef.current.delete(key);
+        void preloadWatchlists();
+        notifyUserDataChanged('watchlists');
+      } catch (saveError) {
+        hapticError();
+        showToast(saveError instanceof Error ? saveError.message : 'Could not update watchlists.');
+      } finally {
+        const pendingCount = (optionPendingCountsRef.current.get(key) ?? 1) - 1;
+        if (pendingCount > 0) {
+          optionPendingCountsRef.current.set(key, pendingCount);
+        } else {
+          optionPendingCountsRef.current.delete(key);
+          const confirmedContainsTitle = confirmedSelectedKeysRef.current.has(key);
+          const previousSelected = rollbackSelection(selectedKeysRef.current);
+          const reconciled = rollbackSelection(selectedKeysRef.current);
+          if (confirmedContainsTitle) reconciled.add(key);
+          else reconciled.delete(key);
+          selectedKeysRef.current = reconciled;
+          setSelectedKeys(reconciled);
+          const reconciledOptions = updateOptionSelection(optionsRef.current, previousSelected, reconciled);
+          optionsRef.current = reconciledOptions;
+          setOptions(reconciledOptions);
+          if (optionsCacheKey) {
+            void writePersistedCache(optionsCacheKey, reconciledOptions).catch(() => undefined);
+          }
         }
       }
-    } finally {
-      if (saveVersionRef.current === saveVersion) setIsSaving(false);
-    }
+    };
+    const previousQueue = optionMutationQueuesRef.current.get(key) ?? Promise.resolve();
+    const queuedMutation = previousQueue.then(commitMutation, commitMutation);
+    optionMutationQueuesRef.current.set(key, queuedMutation.catch(() => undefined));
   }
 
   const hasCurrentOptions = optionsContentKey === optionsOwnerKey;
-  const diff = buildSelectionDiff(initialSelectedKeys, selectedKeys);
-  const hasChanges = diff.addedKeys.length > 0 || diff.removedKeys.length > 0;
   const personalOptions = options.filter((option) => option.kind === 'personal');
   const sharedOptions = options.filter((option) => option.kind === 'shared');
-  const saveLabel = buildSelectionLabel(initialSelectedKeys, selectedKeys);
 
   const footer = (
     <View style={styles.footer}>
@@ -385,7 +392,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
           <View style={styles.createRow}>
             <TextInput
               accessibilityLabel="New watchlist name"
-              editable={!isCreating && !isSaving}
+              editable={!isCreating}
               onChangeText={setNewWatchlistName}
               onSubmitEditing={createWatchlistFromSheet}
               placeholder={newWatchlistKind === 'personal' ? 'New personal list' : 'New shared list'}
@@ -415,14 +422,6 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
           <Text style={styles.newListLabel}>Create a new list</Text>
         </Pressable>
       )}
-
-      <Button
-        disabled={isLoading || isCreating || !hasCurrentOptions || !hasChanges}
-        fullWidth
-        label={saveLabel}
-        loading={isSaving}
-        onPress={saveSelection}
-      />
     </View>
   );
 
@@ -431,27 +430,21 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
       <Pressable
         accessibilityLabel={firebaseIdToken ? 'Add to watchlist' : 'Sign in to add to watchlist'}
         accessibilityRole="button"
-        accessibilityState={{ busy: isSaving, disabled: isSaving }}
-        disabled={isSaving}
+        accessibilityState={{}}
         onPress={() => firebaseIdToken ? openSheet() : setIsSignInOpen(true)}
         style={({ pressed }) => [
           styles.trigger,
-          pressed && !isSaving ? styles.pressed : null,
-          isSaving ? styles.disabled : null,
+          pressed ? styles.pressed : null,
         ]}
       >
-        {isSaving ? (
-          <ActivityIndicator color={colors.accentText} size="small" />
-        ) : (
-          <BookmarkPlus color={colors.accentText} size={16} strokeWidth={2.4} />
-        )}
+        <BookmarkPlus color={colors.accentText} size={16} strokeWidth={2.4} />
         <Text style={styles.triggerLabel}>Add to watchlist</Text>
       </Pressable>
 
       <BottomActionSheet footer={footer} onClose={dismissSheet} title="Add to a list" visible={isOpen}>
         <Text style={styles.sheetSubtitle}>Select one or more lists.</Text>
 
-        {isLoading || !hasCurrentOptions ? (
+        {(!hasCurrentOptions || (isLoading && options.length === 0)) ? (
           <View style={styles.centerState}>
             <ActivityIndicator color={colors.accent} />
             <Text style={styles.stateText}>Loading your lists…</Text>
@@ -590,9 +583,6 @@ const styles = StyleSheet.create({
   createRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-  },
-  disabled: {
-    opacity: 0.48,
   },
   emptyTitle: {
     ...typography.title,

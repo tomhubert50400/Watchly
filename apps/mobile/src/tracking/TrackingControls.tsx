@@ -9,12 +9,18 @@ import {
   upsertTrackingState,
 } from '../api/tracking';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import {
+  getPrivateCacheKey,
+  readPersistedCache,
+  writePersistedCache,
+} from '../cache/persistedCache';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { resolveTrackingStatusLayout } from '../components/dynamicTypeLayout';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { colors, spacing } from '../design/tokens';
-import { hapticConfirm, hapticError } from '../feedback/haptics';
+import { hapticError } from '../feedback/haptics';
 import { useToast } from '../notifications/ToastContext';
+import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { buildTrackingMutation } from './trackingControlState';
 import { createTrackingStateMemoryCache } from './trackingStateMemoryCache';
 
@@ -42,23 +48,30 @@ function getTrackingStateCacheKey(userId: string, contentType: TrackedContentTyp
 export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps) {
   const { fontScale } = useWindowDimensions();
   const statusLayout = resolveTrackingStatusLayout(fontScale);
-  const { currentUser, firebaseIdToken, getFirebaseIdToken, notifyTrackingChanged } = useAuthSession();
+  const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
   const { showToast } = useToast();
   const ownerId = currentUser?.id ?? null;
   const trackingStateCacheKey = ownerId
     ? getTrackingStateCacheKey(ownerId, contentType, tmdbId)
     : null;
+  const persistedCacheKey = ownerId
+    ? getPrivateCacheKey(ownerId, `tracking:${contentType}:${tmdbId}`)
+    : null;
   const requestScope = trackingStateCacheKey ?? 'signed-out';
   const [state, setState] = useState<TrackingState | null>(() =>
     ownerId ? trackingStateCache.get(ownerId, contentType, tmdbId) ?? null : null,
   );
-  const [isStateKnown, setIsStateKnown] = useState(() =>
-    ownerId ? trackingStateCache.has(ownerId, contentType, tmdbId) : true,
-  );
+  const [isStateKnown, setIsStateKnown] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [stateScope, setStateScope] = useState(requestScope);
+  const batchChangedRef = useRef(false);
+  const confirmedStateRef = useRef<TrackingState | null>(null);
+  const mutationQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingMutationCountRef = useRef(0);
   const requestRef = useRef({ scope: requestScope, version: 0 });
+  const stateRef = useRef(state);
   const previousOwnerRef = useRef(ownerId);
+  stateRef.current = state;
 
   if (requestRef.current.scope !== requestScope) {
     requestRef.current = { scope: requestScope, version: requestRef.current.version + 1 };
@@ -84,6 +97,15 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
     setLoadError(false);
 
     try {
+      if (persistedCacheKey) {
+        const cached = await readPersistedCache<TrackingState | null>(persistedCacheKey).catch(() => null);
+        if (cached && isCurrent()) {
+          trackingStateCache.set(ownerId!, contentType, tmdbId, cached.data);
+          setState(cached.data);
+          setStateScope(scope);
+          setIsStateKnown(true);
+        }
+      }
       const token = await getFirebaseIdToken();
       if (!isCurrent()) return;
       if (!token) throw new Error('Sign in again to load your tracking state.');
@@ -95,11 +117,14 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
       setState(loadedState);
       setStateScope(scope);
       setIsStateKnown(true);
+      if (persistedCacheKey) {
+        void writePersistedCache(persistedCacheKey, loadedState).catch(() => undefined);
+      }
     } catch {
       if (isCurrent()) setLoadError(true);
       return;
     }
-  }, [contentType, firebaseIdToken, getFirebaseIdToken, ownerId, requestScope, tmdbId, trackingStateCacheKey]);
+  }, [contentType, firebaseIdToken, getFirebaseIdToken, ownerId, persistedCacheKey, requestScope, tmdbId, trackingStateCacheKey]);
 
   useEffect(() => {
     if (previousOwnerRef.current && previousOwnerRef.current !== ownerId) {
@@ -108,7 +133,7 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
     previousOwnerRef.current = ownerId;
     setState(ownerId ? trackingStateCache.get(ownerId, contentType, tmdbId) ?? null : null);
     setStateScope(requestScope);
-    setIsStateKnown(ownerId ? trackingStateCache.has(ownerId, contentType, tmdbId) : true);
+    setIsStateKnown(true);
     setLoadError(false);
   }, [contentType, ownerId, requestScope, tmdbId]);
 
@@ -120,10 +145,8 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
     if (!firebaseIdToken || !trackingStateCacheKey) return;
 
     const scope = requestScope;
-    const version = requestRef.current.version + 1;
-    requestRef.current = { scope, version };
-    const isCurrent = () => requestRef.current.scope === scope && requestRef.current.version === version;
-    const previousState = visibleState;
+    requestRef.current = { scope, version: requestRef.current.version + 1 };
+    const previousState = stateRef.current;
     const optimisticState =
       nextStatus === null && !nextFavorite
         ? null
@@ -138,34 +161,54 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
 
     trackingStateCache.set(ownerId!, contentType, tmdbId, optimisticState);
     setState(optimisticState);
+    stateRef.current = optimisticState;
     setStateScope(scope);
-
-    try {
-      const token = await getFirebaseIdToken();
-      if (!isCurrent()) return;
-      if (!token) throw new Error('Sign in again to save your tracking state.');
-
-      const savedState = await upsertTrackingState(token, {
-        contentType,
-        favorite: nextFavorite,
-        status: nextStatus,
-        tmdbId,
-      });
-      if (!isCurrent()) return;
-
-      trackingStateCache.set(ownerId!, contentType, tmdbId, savedState);
-      setState(savedState);
-      setStateScope(scope);
-      notifyTrackingChanged();
-      hapticConfirm();
-    } catch (saveError) {
-      if (!isCurrent()) return;
-      trackingStateCache.set(ownerId!, contentType, tmdbId, previousState);
-      setState(previousState);
-      setStateScope(scope);
-      hapticError();
-      showToast(saveError instanceof Error ? saveError.message : 'Could not save your tracking state.');
+    setIsStateKnown(true);
+    if (persistedCacheKey) {
+      void writePersistedCache(persistedCacheKey, optimisticState).catch(() => undefined);
     }
+    if (pendingMutationCountRef.current === 0) {
+      confirmedStateRef.current = previousState;
+      batchChangedRef.current = false;
+    }
+    pendingMutationCountRef.current += 1;
+
+    const commitMutation = async () => {
+      try {
+        const token = await getFirebaseIdToken();
+        if (!token) throw new Error('Sign in again to save your tracking state.');
+
+        confirmedStateRef.current = await upsertTrackingState(token, {
+          contentType,
+          favorite: nextFavorite,
+          status: nextStatus,
+          tmdbId,
+        });
+        batchChangedRef.current = true;
+      } catch (saveError) {
+        hapticError();
+        showToast(saveError instanceof Error ? saveError.message : 'Could not save your tracking state.');
+      } finally {
+        pendingMutationCountRef.current -= 1;
+        if (pendingMutationCountRef.current === 0) {
+          const confirmedState = confirmedStateRef.current;
+          if (requestRef.current.scope === scope) {
+            trackingStateCache.set(ownerId!, contentType, tmdbId, confirmedState);
+            setState(confirmedState);
+            stateRef.current = confirmedState;
+            setStateScope(scope);
+            if (persistedCacheKey) {
+              void writePersistedCache(persistedCacheKey, confirmedState).catch(() => undefined);
+            }
+          }
+          if (batchChangedRef.current) notifyUserDataChanged('tracking');
+          batchChangedRef.current = false;
+        }
+      }
+    };
+    const queuedMutation = mutationQueueRef.current.then(commitMutation, commitMutation);
+    mutationQueueRef.current = queuedMutation.catch(() => undefined);
+    await queuedMutation;
   }
 
   const currentStatus = visibleState?.status ?? null;

@@ -21,8 +21,9 @@ import { LoadingState } from '../components/LoadingState';
 import { MediaPoster } from '../components/MediaPoster';
 import { SectionHeader } from '../components/SectionHeader';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
-import { hapticConfirm, hapticError, hapticSuccess } from '../feedback/haptics';
+import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { RootStackParamList } from '../navigation/types';
+import { notifyUserDataChanged } from '../sync/userDataEvents';
 import {
   beginOptimisticClose,
   beginOptimisticVote,
@@ -77,7 +78,11 @@ export function SharedVoteScreen({ route }: Props) {
   const resource = useCachedResource<VoteDetails>({ enabled: Boolean(ownerId && firebaseIdToken), key: cacheKey, load });
   const [ownedVote, setOwnedVote] = useState<OwnedVote>({ data: null, ownerId: null });
   const ownedVoteRef = useRef(ownedVote);
-  const [pendingCandidateId, setPendingCandidateId] = useState<string | null>(null);
+  const [pendingVoteCount, setPendingVoteCount] = useState(0);
+  const confirmedSessionRef = useRef<SharedVotingSession | null>(null);
+  const pendingVoteCountRef = useRef(0);
+  const voteBatchChangedRef = useRef(false);
+  const voteMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [isClosing, setIsClosing] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
@@ -92,11 +97,12 @@ export function SharedVoteScreen({ route }: Props) {
       const empty = { data: null, ownerId: null };
       ownedVoteRef.current = empty;
       setOwnedVote(empty);
-      setPendingCandidateId(null);
+      pendingVoteCountRef.current = 0;
+      setPendingVoteCount(0);
       setIsClosing(false);
       return;
     }
-    if (resource.data) {
+    if (resource.data && pendingVoteCountRef.current === 0 && !isClosing) {
       const next = { data: resource.data, ownerId };
       ownedVoteRef.current = next;
       setOwnedVote(next);
@@ -129,38 +135,50 @@ export function SharedVoteScreen({ route }: Props) {
     const expectedOwnerId = ownerIdRef.current;
     const owned = ownedVoteRef.current;
     const snapshot = owned.data;
-    if (!expectedOwnerId || owned.ownerId !== expectedOwnerId || !snapshot || pendingCandidateId || isClosing) return;
+    if (!expectedOwnerId || owned.ownerId !== expectedOwnerId || !snapshot || isClosing) return;
     const mutation = beginOptimisticVote(snapshot.session, candidateId, new Date());
     if (!mutation) return;
     const wasSelected = snapshot.session.candidates.find((candidate) => candidate.id === candidateId)?.userHasVoted === true;
     setMutationError(null);
-    setPendingCandidateId(candidateId);
     commitDetails(expectedOwnerId, { ...snapshot, session: mutation.optimistic });
-    try {
-      const token = await getFirebaseIdToken();
-      if (ownerIdRef.current !== expectedOwnerId || !token) throw new Error('Sign in again to save your vote.');
-      const confirmed = wasSelected
-        ? await removeSharedCandidateVote(token, route.params.watchlistId, route.params.sessionId, candidateId)
-        : await voteForSharedCandidate(token, route.params.watchlistId, route.params.sessionId, candidateId);
-      if (ownerIdRef.current !== expectedOwnerId) return;
-      const current = ownedVoteRef.current.data;
-      if (current) commitDetails(expectedOwnerId, { ...current, session: confirmed });
-      hapticConfirm();
-    } catch (error) {
-      if (ownerIdRef.current === expectedOwnerId) {
-        const current = ownedVoteRef.current.data;
-        if (current) commitDetails(expectedOwnerId, { ...current, session: rollbackVoteMutation(mutation, current.session) });
-        setMutationError(error instanceof Error ? error.message : 'Your vote could not be saved.');
-        hapticError();
-        resource.revalidate();
-      }
-    } finally {
-      if (ownerIdRef.current === expectedOwnerId) setPendingCandidateId(null);
+    if (pendingVoteCountRef.current === 0) {
+      confirmedSessionRef.current = snapshot.session;
+      voteBatchChangedRef.current = false;
     }
+    pendingVoteCountRef.current += 1;
+    setPendingVoteCount(pendingVoteCountRef.current);
+
+    const commitMutation = async () => {
+      try {
+        const token = await getFirebaseIdToken();
+        if (ownerIdRef.current !== expectedOwnerId || !token) throw new Error('Sign in again to save your vote.');
+        confirmedSessionRef.current = wasSelected
+          ? await removeSharedCandidateVote(token, route.params.watchlistId, route.params.sessionId, candidateId)
+          : await voteForSharedCandidate(token, route.params.watchlistId, route.params.sessionId, candidateId);
+        voteBatchChangedRef.current = true;
+      } catch (error) {
+        if (ownerIdRef.current === expectedOwnerId) {
+          setMutationError(error instanceof Error ? error.message : 'Your vote could not be saved.');
+          hapticError();
+        }
+      } finally {
+        pendingVoteCountRef.current = Math.max(0, pendingVoteCountRef.current - 1);
+        setPendingVoteCount(pendingVoteCountRef.current);
+        if (pendingVoteCountRef.current === 0 && ownerIdRef.current === expectedOwnerId) {
+          const current = ownedVoteRef.current.data;
+          const confirmed = confirmedSessionRef.current;
+          if (current && confirmed) commitDetails(expectedOwnerId, { ...current, session: confirmed });
+          if (voteBatchChangedRef.current) notifyUserDataChanged('watchlists');
+          voteBatchChangedRef.current = false;
+        }
+      }
+    };
+    const queuedMutation = voteMutationQueueRef.current.then(commitMutation, commitMutation);
+    voteMutationQueueRef.current = queuedMutation.catch(() => undefined);
   }
 
   function confirmClose() {
-    if (!details || !canCloseVote(details.isOwner, details.session, new Date()) || isClosing || pendingCandidateId) return;
+    if (!details || !canCloseVote(details.isOwner, details.session, new Date()) || isClosing || pendingVoteCount > 0) return;
     Alert.alert(
       'Close this vote?',
       'Voting will stop immediately. This action cannot be undone.',
@@ -272,8 +290,7 @@ export function SharedVoteScreen({ route }: Props) {
               : details.candidateMedia[candidate.id];
             const isLeader = leaderState.leaderIds.includes(candidate.id);
             const isSelected = selectedIds.has(candidate.id);
-            const isPending = pendingCandidateId === candidate.id;
-            const canMutate = lifecycle === 'open' && !pendingCandidateId && !isClosing;
+            const canMutate = lifecycle === 'open' && !isClosing;
             const leaderLabel = isLeader && leaderState.isTie ? 'Tied leader' : isLeader ? 'Leading' : null;
 
             return (
@@ -303,19 +320,19 @@ export function SharedVoteScreen({ route }: Props) {
                 <Pressable
                   accessibilityLabel={`${isSelected ? 'Remove your vote from' : 'Vote for'} ${media?.title ?? 'this candidate'}`}
                   accessibilityRole="button"
-                  accessibilityState={{ busy: isPending, disabled: !canMutate, selected: isSelected }}
+                  accessibilityState={{ disabled: !canMutate, selected: isSelected }}
                   disabled={!canMutate}
                   onPress={() => void handleVote(candidate.id)}
                   style={({ pressed }) => [
                     styles.voteButton,
                     isSelected ? styles.voteButtonSelected : null,
-                    !canMutate || isPending ? styles.disabled : null,
+                    !canMutate ? styles.disabled : null,
                     pressed ? styles.pressed : null,
                   ]}
                 >
                   {isSelected ? <Check color={colors.textOnAccent} size={15} strokeWidth={3} /> : null}
                   <Text style={[styles.voteButtonText, isSelected ? styles.voteButtonTextSelected : null]}>
-                    {isPending ? 'Saving…' : isSelected ? 'Selected' : lifecycle === 'open' ? 'Vote' : 'Closed'}
+                    {isSelected ? 'Selected' : lifecycle === 'open' ? 'Vote' : 'Closed'}
                   </Text>
                 </Pressable>
               </View>
@@ -328,7 +345,7 @@ export function SharedVoteScreen({ route }: Props) {
         <View style={styles.closeArea}>
           <Button
             compact
-            disabled={!canCloseVote(true, session, now) || Boolean(pendingCandidateId)}
+            disabled={!canCloseVote(true, session, now) || pendingVoteCount > 0}
             label="Close voting early"
             loading={isClosing}
             onPress={confirmClose}

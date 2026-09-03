@@ -138,8 +138,8 @@ assert.match(addToWatchlist, /<BottomActionSheet footer=\{footer\}/, 'watchlist 
 assert.match(library, /footer=\{createListFooter\}/, 'list creation must use the screen footer');
 assert.match(
   settings,
-  /footer=\{isDirty \|\| status === 'saving' \? \([\s\S]*label="Save changes"/,
-  'settings save must use the screen footer only while changes are pending',
+  /footer=\{isDirty \? \([\s\S]*label="Save changes"/,
+  'settings save must disappear from the screen footer as soon as local changes are accepted',
 );
 assert.match(
   onboarding,

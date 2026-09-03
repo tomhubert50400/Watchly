@@ -12,7 +12,7 @@ import {
   type ProfileBackdropSelection,
 } from '../api/profile';
 import { getViewingStats, type ViewingStats } from '../api/viewings';
-import { useAuthSession, useSocialRevision } from '../auth/AuthSessionContext';
+import { useAuthSession } from '../auth/AuthSessionContext';
 import { ProfileAuthCard } from '../auth/ProfileAuthCard';
 import { BrandWordmark } from '../brand/BrandWordmark';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
@@ -44,6 +44,7 @@ import {
 import { chooseAndUploadProfileAvatar } from './uploadProfileAvatar';
 import { useHydratedProfileMediaItems } from './useHydratedProfileMediaItems';
 import { useProfileBackdropArtwork } from './useProfileBackdropArtwork';
+import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
 import {
   hydrateProfileOpinions,
   type HydratedProfileOpinion,
@@ -86,10 +87,8 @@ export function ProfileScreen() {
   const {
     currentUser,
     firebaseIdToken,
-    notifySocialChanged,
-    trackingRevision,
   } = useAuthSession();
-  const socialRevision = useSocialRevision();
+  const profileRevision = useUserDataRevision('opinions', 'profile', 'socialGraph', 'viewings');
   const [avatarOverride, setAvatarOverride] = useState<string | null | undefined>(undefined);
   const [avatarStatus, setAvatarStatus] = useState<'idle' | 'saving'>('idle');
   const [avatarError, setAvatarError] = useState<string | null>(null);
@@ -97,20 +96,18 @@ export function ProfileScreen() {
     ProfileBackdropSelection | null | undefined
   >(undefined);
   const [backdropPickerOpen, setBackdropPickerOpen] = useState(false);
-  const [backdropStatus, setBackdropStatus] = useState<'idle' | 'saving'>('idle');
   const [backdropError, setBackdropError] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const { refreshSeries } = useCatalogueCache();
   const userId = currentUser?.id ?? null;
   const loadProfile = useCallback(async (cached?: CachedProfile): Promise<CachedProfile> => {
-    void socialRevision;
-    void trackingRevision;
+    void profileRevision;
     if (!firebaseIdToken) {
       throw new Error('Your session expired. Sign in again to refresh your profile.');
     }
 
     return loadProfileData(firebaseIdToken, refreshSeries, cached);
-  }, [firebaseIdToken, refreshSeries, socialRevision, trackingRevision]);
+  }, [firebaseIdToken, profileRevision, refreshSeries]);
   const resource = useCachedResource<CachedProfile>({
     enabled: Boolean(firebaseIdToken && userId),
     key: getProfileResourceKey(userId ?? 'visitor'),
@@ -170,7 +167,7 @@ export function ProfileScreen() {
       if (!updatedProfile) return;
 
       setAvatarOverride(updatedProfile.avatarUrl);
-      notifySocialChanged();
+      notifyUserDataChanged('profile');
       hapticSuccess();
     } catch (error) {
       setAvatarError(
@@ -180,7 +177,7 @@ export function ProfileScreen() {
     } finally {
       setAvatarStatus('idle');
     }
-  }, [avatarStatus, firebaseIdToken, notifySocialChanged, profile?.avatarUploadsEnabled]);
+  }, [avatarStatus, firebaseIdToken, profile?.avatarUploadsEnabled]);
 
   const deleteAvatar = useCallback(async () => {
     if (!firebaseIdToken || avatarStatus === 'saving') return;
@@ -190,7 +187,7 @@ export function ProfileScreen() {
     try {
       const updatedProfile = await removeAvatar(firebaseIdToken);
       setAvatarOverride(updatedProfile.avatarUrl);
-      notifySocialChanged();
+      notifyUserDataChanged('profile');
       hapticSuccess();
     } catch (error) {
       setAvatarError(
@@ -200,7 +197,7 @@ export function ProfileScreen() {
     } finally {
       setAvatarStatus('idle');
     }
-  }, [avatarStatus, firebaseIdToken, notifySocialChanged]);
+  }, [avatarStatus, firebaseIdToken]);
 
   const openAvatarActions = useCallback(() => {
     if (!profile?.avatarUploadsEnabled || avatarStatus === 'saving') return;
@@ -230,27 +227,25 @@ export function ProfileScreen() {
   const selectProfileBackdrop = useCallback(async (
     selection: ProfileBackdropSelection | null,
   ) => {
-    if (!firebaseIdToken || backdropStatus === 'saving') return;
+    if (!firebaseIdToken) return;
 
     const previous = profileBackdrop;
     setBackdropOverride(selection);
-    setBackdropStatus('saving');
+    setBackdropPickerOpen(false);
     setBackdropError(null);
     try {
       const updatedProfile = await updateProfileBackdrop(firebaseIdToken, selection);
       setBackdropOverride(updatedProfile.profileBackdrop);
-      setBackdropPickerOpen(false);
-      hapticSuccess();
+      notifyUserDataChanged('profile');
     } catch (error) {
       setBackdropOverride(previous);
+      setBackdropPickerOpen(true);
       setBackdropError(
         error instanceof Error ? error.message : 'Could not update your profile background.',
       );
       hapticError();
-    } finally {
-      setBackdropStatus('idle');
     }
-  }, [backdropStatus, firebaseIdToken, profileBackdrop]);
+  }, [firebaseIdToken, profileBackdrop]);
 
   if (!firebaseIdToken || !userId) {
     return (
@@ -370,7 +365,6 @@ export function ProfileScreen() {
         />
       ) : null}
       <ProfileBackdropPickerSheet
-        busy={backdropStatus === 'saving'}
         error={backdropError}
         items={hydratedBackdropCandidates}
         onClose={() => setBackdropPickerOpen(false)}

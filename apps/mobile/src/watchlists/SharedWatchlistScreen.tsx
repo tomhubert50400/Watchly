@@ -24,8 +24,9 @@ import { LoadingState } from '../components/LoadingState';
 import { SectionHeader } from '../components/SectionHeader';
 import { TextInput } from '../components/TextInput';
 import { colors, radii, spacing, typography } from '../design/tokens';
-import { hapticConfirm, hapticError, hapticSuccess } from '../feedback/haptics';
+import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { RootStackParamList } from '../navigation/types';
+import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { getVoteLifecycle, getVoteLeaders, getVoteRemainingLabel } from './sharedVoteModel';
 import { takeHydrationItems } from './requestBoundaries';
 import {
@@ -160,7 +161,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
       if (ownerIdRef.current !== expectedOwnerId) return;
       setMemberUserId('');
       resource.revalidate();
-      hapticConfirm();
+      notifyUserDataChanged('watchlists');
     } catch (error) {
       if (ownerIdRef.current === expectedOwnerId) {
         setMemberError(error instanceof Error ? error.message : 'Could not add this member.');
