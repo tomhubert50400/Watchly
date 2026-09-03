@@ -91,6 +91,12 @@ export function SeriesDetailScreen({ navigation, route }: Props) {
         ) : series ? (
           <SeriesDetailContent
             onOpenRelated={(item) => openRelatedSeries(navigation, item)}
+            onOpenSeason={(seasonNumber) => navigation.push('SeasonDetail', {
+              seasonNumber,
+              seriesTitle: series.title,
+              title: `Season ${seasonNumber}`,
+              tmdbId: series.tmdbId,
+            })}
             series={series}
           />
         ) : null}
@@ -99,8 +105,9 @@ export function SeriesDetailScreen({ navigation, route }: Props) {
   );
 }
 
-function SeriesDetailContent({ onOpenRelated, series }: {
+function SeriesDetailContent({ onOpenRelated, onOpenSeason, series }: {
   onOpenRelated: (item: CatalogueRelatedItem) => void;
+  onOpenSeason: (seasonNumber: number) => void;
   series: SeriesDetails;
 }) {
   const [activeView, setActiveView] = useState<'details' | 'episodes'>('details');
@@ -149,7 +156,12 @@ function SeriesDetailContent({ onOpenRelated, series }: {
           value={activeView}
         />
         {activeView === 'episodes' ? (
-          <SeriesEpisodesPanel seasons={series.seasons} seriesTitle={series.title} seriesTmdbId={series.tmdbId} />
+          <SeriesEpisodesPanel
+            onOpenSeason={onOpenSeason}
+            seasons={series.seasons}
+            seriesTitle={series.title}
+            seriesTmdbId={series.tmdbId}
+          />
         ) : (
           <>
             {series.tagline ? <Text style={styles.tagline}>{series.tagline}</Text> : null}
@@ -182,7 +194,8 @@ function openRelatedSeries(navigation: Props['navigation'], item: CatalogueRelat
   navigation.push('SeriesDetail', { title: item.title, tmdbId: item.tmdbId });
 }
 
-function SeriesEpisodesPanel({ seasons, seriesTitle, seriesTmdbId }: {
+function SeriesEpisodesPanel({ onOpenSeason, seasons, seriesTitle, seriesTmdbId }: {
+  onOpenSeason: (seasonNumber: number) => void;
   seasons: SeriesDetails['seasons'];
   seriesTitle: string;
   seriesTmdbId: number;
@@ -231,6 +244,12 @@ function SeriesEpisodesPanel({ seasons, seriesTitle, seriesTmdbId }: {
           ))}
         </View>
       ) : null}
+      <Button
+        fullWidth
+        label={`Open Season ${selected}`}
+        onPress={() => onOpenSeason(selected)}
+        variant="secondary"
+      />
       <SeasonEpisodeList seasonNumber={selected} seriesTitle={seriesTitle} seriesTmdbId={seriesTmdbId} />
     </View>
   );

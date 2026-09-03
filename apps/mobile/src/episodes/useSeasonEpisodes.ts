@@ -9,17 +9,16 @@ import {
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { getPrivateCacheKey, getPublicCacheKey, writePersistedCache } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
-import { hapticConfirm, hapticError } from '../feedback/haptics';
+import { hapticError } from '../feedback/haptics';
 import { useToast } from '../notifications/ToastContext';
+import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
 import {
   applyEpisodeMutation,
-  createEpisodeKey,
+  applyEpisodeWatchedThroughMutation,
   createWatchedEpisodeState,
-  EpisodeMutationIntent,
   getNextEpisode,
   getScopedWatchedEpisodeState,
   getSeasonProgressFraction,
-  rollbackEpisodeMutation,
   WatchedEpisodeState,
 } from './episodeModel';
 
@@ -36,12 +35,14 @@ export function useSeasonEpisodes({
   seasonNumber,
   seriesTmdbId,
 }: UseSeasonEpisodesOptions) {
-  const { currentUser, firebaseIdToken, notifyTrackingChanged, trackingRevision } = useAuthSession();
+  const { currentUser, firebaseIdToken } = useAuthSession();
+  const episodeProgressRevision = useUserDataRevision('episodeProgress');
   const { showToast } = useToast();
   const [watchedState, setWatchedState] = useState<WatchedEpisodeState>({});
-  const [isSaving, setIsSaving] = useState(false);
+  const batchFailedRef = useRef(false);
   const isMountedRef = useRef(true);
-  const mutationLockRef = useRef(false);
+  const mutationQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingMutationCountRef = useRef(0);
   const watchedStateRef = useRef(watchedState);
 
   useEffect(() => {
@@ -79,7 +80,7 @@ export function useSeasonEpisodes({
     }
 
     return listSeasonProgress(firebaseIdToken, seriesTmdbId, seasonNumber);
-  }, [firebaseIdToken, seasonNumber, seriesTmdbId, trackingRevision]);
+  }, [episodeProgressRevision, firebaseIdToken, seasonNumber, seriesTmdbId]);
   const progressResource = useCachedResource<SeasonProgress>({
     enabled: Boolean(firebaseIdToken && currentUser),
     key: privateCacheKey,
@@ -129,140 +130,109 @@ export function useSeasonEpisodes({
     return writePersistedCache(privateCacheKey, progress);
   }, [currentUser, privateCacheKey, seasonNumber, seriesTmdbId]);
 
-  const performUndo = useCallback(async (intent: EpisodeMutationIntent) => {
-    if (
-      !firebaseIdToken ||
-      !isMountedRef.current ||
-      mutationLockRef.current ||
-      watchedStateOwnerRef.current !== privateCacheKey
-    ) {
-      return;
+  const syncProgress = useCallback(async () => {
+    if (!firebaseIdToken) {
+      return watchedStateRef.current;
     }
 
-    mutationLockRef.current = true;
-    setIsSaving(true);
-    const stateBeforeUndo = watchedStateRef.current;
-    const restoredState = rollbackEpisodeMutation(stateBeforeUndo, intent);
-    setWatchedState(restoredState);
-    watchedStateRef.current = restoredState;
-    void persistState(restoredState).catch(() => undefined);
+    const latest = await listSeasonProgress(firebaseIdToken, seriesTmdbId, seasonNumber);
+    const confirmedState = createWatchedEpisodeState(latest.episodes);
 
-    try {
-      if (intent.undoAction === 'mark') {
-        const restoredProgress = await markEpisodeWatched(
-          firebaseIdToken,
-          intent.seriesTmdbId,
-          intent.seasonNumber,
-          intent.episodeNumber,
-        );
-        if (!isMountedRef.current || watchedStateOwnerRef.current !== privateCacheKey) {
-          return;
-        }
-        const confirmed = {
-          ...restoredState,
-          [createEpisodeKey(intent.seasonNumber, intent.episodeNumber)]: restoredProgress,
-        };
-        setWatchedState(confirmed);
-        watchedStateRef.current = confirmed;
-        await persistState(confirmed);
-      } else {
-        await clearEpisodeProgress(
-          firebaseIdToken,
-          intent.seriesTmdbId,
-          intent.seasonNumber,
-          intent.episodeNumber,
-        );
-        if (!isMountedRef.current || watchedStateOwnerRef.current !== privateCacheKey) {
-          return;
-        }
-        await persistState(restoredState);
-      }
-      if (!isMountedRef.current || watchedStateOwnerRef.current !== privateCacheKey) {
-        return;
-      }
-      notifyTrackingChanged();
-      hapticConfirm();
-      showToast('Episode progress restored.', 'success');
-    } catch {
-      if (isMountedRef.current && watchedStateOwnerRef.current === privateCacheKey) {
-        setWatchedState(stateBeforeUndo);
-        watchedStateRef.current = stateBeforeUndo;
-        void persistState(stateBeforeUndo).catch(() => undefined);
-        hapticError();
-        showToast('Could not undo episode progress.');
-      }
-    } finally {
-      mutationLockRef.current = false;
-      setIsSaving(false);
+    if (isMountedRef.current && watchedStateOwnerRef.current === privateCacheKey) {
+      setWatchedState(confirmedState);
+      watchedStateRef.current = confirmedState;
+      await persistState(confirmedState);
     }
-  }, [firebaseIdToken, notifyTrackingChanged, persistState, privateCacheKey, showToast]);
 
-  const setEpisodeWatched = useCallback(async (episodeNumber: number, watched: boolean) => {
+    return confirmedState;
+  }, [firebaseIdToken, persistState, privateCacheKey, seasonNumber, seriesTmdbId]);
+
+  const setEpisodeWatched = useCallback(async (
+    episodeNumber: number,
+    watched: boolean,
+  ) => {
     if (
       !firebaseIdToken ||
-      mutationLockRef.current ||
       watchedStateOwnerRef.current !== privateCacheKey
     ) {
       return;
     }
 
     const currentState = watchedStateRef.current;
-    const optimistic = applyEpisodeMutation(currentState, {
-      episodeNumber,
-      now: new Date().toISOString(),
-      seasonNumber,
-      seriesTmdbId,
-      watched,
-    });
+    const optimisticState = watched
+      ? applyEpisodeWatchedThroughMutation(currentState, {
+          episodeNumber,
+          now: new Date().toISOString(),
+          seasonNumber,
+          seriesTmdbId,
+        })
+      : applyEpisodeMutation(currentState, {
+          episodeNumber,
+          now: new Date().toISOString(),
+          seasonNumber,
+          seriesTmdbId,
+          watched,
+        }).state;
 
-    if (optimistic.intent.previouslyWatched === watched) {
+    if (optimisticState === currentState || (
+      Object.keys(optimisticState).length === Object.keys(currentState).length &&
+      Object.keys(optimisticState).every((key) => optimisticState[key] === currentState[key])
+    )) {
       return;
     }
 
-    mutationLockRef.current = true;
-    setIsSaving(true);
-    setWatchedState(optimistic.state);
-    watchedStateRef.current = optimistic.state;
-    void persistState(optimistic.state).catch(() => undefined);
+    setWatchedState(optimisticState);
+    watchedStateRef.current = optimisticState;
+    void persistState(optimisticState).catch(() => undefined);
+    pendingMutationCountRef.current += 1;
 
-    try {
-      let confirmedState = optimistic.state;
-      if (watched) {
-        const saved = await markEpisodeWatched(firebaseIdToken, seriesTmdbId, seasonNumber, episodeNumber);
-        confirmedState = {
-          ...optimistic.state,
-          [createEpisodeKey(seasonNumber, episodeNumber)]: saved,
-        };
-      } else {
-        await clearEpisodeProgress(firebaseIdToken, seriesTmdbId, seasonNumber, episodeNumber);
+    const commitMutation = async () => {
+      try {
+        if (watched) {
+          await markEpisodeWatched(
+            firebaseIdToken,
+            seriesTmdbId,
+            seasonNumber,
+            episodeNumber,
+          );
+        } else {
+          await clearEpisodeProgress(firebaseIdToken, seriesTmdbId, seasonNumber, episodeNumber);
+        }
+      } catch {
+        batchFailedRef.current = true;
+        if (isMountedRef.current && watchedStateOwnerRef.current === privateCacheKey) {
+          hapticError();
+          showToast('Could not save your episode progress.');
+        }
+      } finally {
+        pendingMutationCountRef.current -= 1;
+        if (pendingMutationCountRef.current === 0) {
+          if (batchFailedRef.current) {
+            batchFailedRef.current = false;
+            try {
+              await syncProgress();
+            } catch {
+              // Keep the locally persisted state until a later silent refresh can reconcile it.
+            }
+          }
+          notifyUserDataChanged('episodeProgress');
+        }
       }
+    };
+    const queuedMutation = mutationQueueRef.current.then(commitMutation, commitMutation);
+    mutationQueueRef.current = queuedMutation.catch(() => undefined);
+    await queuedMutation;
+  }, [firebaseIdToken, persistState, privateCacheKey, seasonNumber, seriesTmdbId, showToast, syncProgress]);
 
-      if (!isMountedRef.current || watchedStateOwnerRef.current !== privateCacheKey) {
-        return;
-      }
-      setWatchedState(confirmedState);
-      watchedStateRef.current = confirmedState;
-      await persistState(confirmedState);
-      notifyTrackingChanged();
-      hapticConfirm();
-      showToast(watched ? 'Episode marked watched.' : 'Episode marked unwatched.', 'success', {
-        label: 'Undo',
-        onPress: () => void performUndo(optimistic.intent),
-      });
-    } catch {
-      if (isMountedRef.current && watchedStateOwnerRef.current === privateCacheKey) {
-        const rolledBack = rollbackEpisodeMutation(optimistic.state, optimistic.intent);
-        setWatchedState(rolledBack);
-        watchedStateRef.current = rolledBack;
-        void persistState(rolledBack).catch(() => undefined);
-        hapticError();
-        showToast('Could not save your episode progress.');
-      }
-    } finally {
-      mutationLockRef.current = false;
-      setIsSaving(false);
+  const setSeasonWatched = useCallback(async (episodeNumbers: readonly number[]) => {
+    const lastEpisodeNumber = [...episodeNumbers].sort((left, right) => left - right).at(-1);
+
+    if (lastEpisodeNumber === undefined) {
+      return;
     }
-  }, [firebaseIdToken, notifyTrackingChanged, performUndo, persistState, privateCacheKey, seasonNumber, seriesTmdbId, showToast]);
+
+    await setEpisodeWatched(lastEpisodeNumber, true);
+  }, [setEpisodeWatched]);
 
   const season = initialSeason ?? seasonResource.data?.item ?? null;
   const episodes = season?.episodes ?? [];
@@ -283,7 +253,6 @@ export function useSeasonEpisodes({
       seasonResource.isRefreshing ||
       progressResource.isInitialLoading ||
       progressResource.isRefreshing,
-    isSaving,
     isSignedIn: Boolean(firebaseIdToken),
     nextEpisode,
     progress,
@@ -293,6 +262,7 @@ export function useSeasonEpisodes({
     },
     season,
     setEpisodeWatched,
+    setSeasonWatched,
     watchedState: scopedWatchedState,
   };
 }

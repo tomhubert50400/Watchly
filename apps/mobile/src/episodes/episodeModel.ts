@@ -103,6 +103,47 @@ export function applyEpisodeMutation(
   };
 }
 
+export function applyEpisodeWatchedThroughMutation(
+  state: WatchedEpisodeState,
+  mutation: EpisodeIdentity & {
+    now: string;
+    seriesTmdbId: number;
+  },
+) {
+  let nextState = state;
+
+  for (let episodeNumber = 1; episodeNumber <= mutation.episodeNumber; episodeNumber += 1) {
+    nextState = applyEpisodeMutation(nextState, {
+      episodeNumber,
+      now: mutation.now,
+      seasonNumber: mutation.seasonNumber,
+      seriesTmdbId: mutation.seriesTmdbId,
+      watched: true,
+    }).state;
+  }
+
+  return nextState;
+}
+
+export function getWatchedEpisodeRestorationPlan(
+  currentState: WatchedEpisodeState,
+  targetState: WatchedEpisodeState,
+) {
+  const currentKeys = new Set(Object.keys(currentState));
+  const targetKeys = new Set(Object.keys(targetState));
+
+  return {
+    markEpisodeNumbers: Object.values(targetState)
+      .filter((episode) => !currentKeys.has(createEpisodeKey(episode.seasonNumber, episode.episodeNumber)))
+      .map((episode) => episode.episodeNumber)
+      .sort((left, right) => left - right),
+    unmarkEpisodeNumbers: Object.values(currentState)
+      .filter((episode) => !targetKeys.has(createEpisodeKey(episode.seasonNumber, episode.episodeNumber)))
+      .map((episode) => episode.episodeNumber)
+      .sort((left, right) => left - right),
+  };
+}
+
 export function rollbackEpisodeMutation(
   state: WatchedEpisodeState,
   intent: EpisodeMutationIntent,

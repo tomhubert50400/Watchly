@@ -4,11 +4,13 @@ import assert from 'node:assert/strict';
 import type { EpisodeProgress } from '../api/progress';
 import {
   applyEpisodeMutation,
+  applyEpisodeWatchedThroughMutation,
   createEpisodeKey,
   createWatchedEpisodeState,
   getNextEpisode,
   getScopedWatchedEpisodeState,
   getSeasonProgressFraction,
+  getWatchedEpisodeRestorationPlan,
   isEpisodeWatched,
   rollbackEpisodeMutation,
 } from './episodeModel';
@@ -56,6 +58,21 @@ assert.equal(mark.intent.action, 'mark');
 assert.equal(mark.intent.undoAction, 'unmark', 'mark creates an inverse undo intent');
 assert.equal(mark.intent.previouslyWatched, false);
 assert.equal(isEpisodeWatched(rollbackEpisodeMutation(mark.state, mark.intent), 1, 2), false, 'mark rollback restores previous state');
+
+const watchedThrough = applyEpisodeWatchedThroughMutation(initial, {
+  episodeNumber: 3,
+  now: watchedAt,
+  seasonNumber: 1,
+  seriesTmdbId: 1399,
+});
+assert.equal(isEpisodeWatched(watchedThrough, 1, 1), true, 'watched-through keeps existing progress');
+assert.equal(isEpisodeWatched(watchedThrough, 1, 2), true, 'watched-through fills the first gap');
+assert.equal(isEpisodeWatched(watchedThrough, 1, 3), true, 'watched-through includes the target episode');
+assert.deepEqual(
+  getWatchedEpisodeRestorationPlan(watchedThrough, initial),
+  { markEpisodeNumbers: [], unmarkEpisodeNumbers: [2, 3] },
+  'restoration identifies only progress added by the watched-through mutation',
+);
 
 const unmark = applyEpisodeMutation(initial, {
   episodeNumber: 1,

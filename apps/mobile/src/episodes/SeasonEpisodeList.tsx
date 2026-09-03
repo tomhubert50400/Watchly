@@ -1,14 +1,15 @@
 import { useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Check, Star } from 'lucide-react-native';
+import { Check, ChevronRight, Circle, Play } from 'lucide-react-native';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { SeasonDetails } from '../api/catalogue';
+import { ensureEpisodeDetails } from '../catalogue/cataloguePrefetch';
+import { isReleasedDate } from '../catalogue/releaseDates';
+import { Button } from '../components/Button';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
-import { isReleasedDate } from '../catalogue/releaseDates';
-import { ensureEpisodeDetails } from '../catalogue/cataloguePrefetch';
 import { isEpisodeWatched } from './episodeModel';
 import { useSeasonEpisodes } from './useSeasonEpisodes';
 
@@ -27,9 +28,17 @@ export function SeasonEpisodeList({
 }: SeasonEpisodeListProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const model = useSeasonEpisodes({ initialSeason, seasonNumber, seriesTmdbId });
+  const releasedEpisodes = model.episodes.filter((episode) => isReleasedDate(episode.airDate));
+  const watchedReleasedCount = releasedEpisodes.filter((episode) =>
+    isEpisodeWatched(model.watchedState, episode.seasonNumber, episode.episodeNumber),
+  ).length;
+  const nextEpisode = releasedEpisodes.find((episode) =>
+    !isEpisodeWatched(model.watchedState, episode.seasonNumber, episode.episodeNumber),
+  ) ?? null;
+  const likelyEpisode = nextEpisode ?? releasedEpisodes[0] ?? null;
+  const releasedComplete = releasedEpisodes.length > 0 && watchedReleasedCount === releasedEpisodes.length;
 
   useEffect(() => {
-    const likelyEpisode = model.nextEpisode ?? model.episodes[0];
     if (likelyEpisode) {
       void ensureEpisodeDetails(
         seriesTmdbId,
@@ -37,7 +46,7 @@ export function SeasonEpisodeList({
         likelyEpisode.episodeNumber,
       ).catch(() => undefined);
     }
-  }, [model.episodes, model.nextEpisode, seriesTmdbId]);
+  }, [likelyEpisode, seriesTmdbId]);
 
   if (model.isLoading && !model.season) {
     return (
@@ -59,23 +68,99 @@ export function SeasonEpisodeList({
     );
   }
 
+  function openEpisode(episode: SeasonDetails['episodes'][number]) {
+    navigation.navigate('EpisodeDetail', {
+      episodeNumber: episode.episodeNumber,
+      seasonNumber: episode.seasonNumber,
+      seriesTitle,
+      title: episode.title,
+      tmdbId: seriesTmdbId,
+    });
+  }
+
   return (
     <View style={styles.container}>
-      <View style={styles.progressRow}>
-        <View>
-          <Text style={styles.progressTitle}>Season {seasonNumber}</Text>
-          <Text style={styles.progressMeta}>
-            {model.isSignedIn
-              ? `${model.progress.completed} watched · ${Math.round(model.progress.fraction * 100)}% complete`
-              : 'Sign in to track progress'}
-          </Text>
+      <View style={styles.progressSection}>
+        <View style={styles.progressHeader}>
+          <View style={styles.progressCopy}>
+            <Text style={styles.progressTitle}>Season progress</Text>
+            <Text style={styles.progressMeta}>
+              {model.isSignedIn
+                ? `${model.progress.completed} of ${model.progress.total} episodes watched`
+                : 'Sign in to track your progress'}
+            </Text>
+          </View>
+          <Text style={styles.progressPercent}>{Math.round(model.progress.fraction * 100)}%</Text>
         </View>
-        <View style={styles.progressCount}>
-          <Text style={styles.progressCountStrong}>
-            {model.progress.completed} / {model.progress.total}
-          </Text>
-          <Text style={styles.progressCountMeta}>episodes</Text>
+        <View
+          accessibilityLabel={`${Math.round(model.progress.fraction * 100)} percent watched`}
+          accessibilityRole="progressbar"
+          accessibilityValue={{ max: 100, min: 0, now: Math.round(model.progress.fraction * 100) }}
+          style={styles.progressTrack}
+        >
+          <View style={[styles.progressFill, { width: `${model.progress.fraction * 100}%` }]} />
         </View>
+        {model.isSignedIn && releasedEpisodes.length > 0 ? (
+          <Button
+            disabled={releasedComplete}
+            fullWidth
+            icon={<Check color={releasedComplete ? colors.textSubtle : colors.text} size={18} strokeWidth={2.4} />}
+            label={releasedComplete ? 'All released episodes watched' : 'Mark season watched'}
+            onPress={() => void model.setSeasonWatched(releasedEpisodes.map((episode) => episode.episodeNumber))}
+            variant="secondary"
+          />
+        ) : null}
+      </View>
+
+      {nextEpisode ? (
+        <Pressable
+          accessibilityLabel={`Open next episode, ${nextEpisode.title}`}
+          accessibilityRole="button"
+          onPress={() => openEpisode(nextEpisode)}
+          onPressIn={() => {
+            void ensureEpisodeDetails(
+              seriesTmdbId,
+              nextEpisode.seasonNumber,
+              nextEpisode.episodeNumber,
+            ).catch(() => undefined);
+          }}
+          style={({ pressed }) => [styles.nextCard, pressed && styles.pressed]}
+        >
+          <Text style={styles.nextEyebrow}>Up next</Text>
+          <View style={styles.nextContent}>
+            {nextEpisode.stillUrl ? (
+              <Image
+                accessibilityIgnoresInvertColors
+                accessibilityLabel={`${nextEpisode.title} still`}
+                source={{ uri: nextEpisode.stillUrl }}
+                style={styles.nextStill}
+              />
+            ) : <View style={styles.nextStillPlaceholder} />}
+            <View style={styles.nextCopy}>
+              <Text numberOfLines={2} style={styles.nextTitle}>
+                S{nextEpisode.seasonNumber} E{nextEpisode.episodeNumber} · {nextEpisode.title}
+              </Text>
+              <Text style={styles.nextMeta}>{formatEpisodeMeta(nextEpisode)}</Text>
+              <View style={styles.openEpisodeAction}>
+                <Play color={colors.textOnAccent} fill={colors.textOnAccent} size={14} />
+                <Text style={styles.openEpisodeLabel}>Open episode</Text>
+              </View>
+            </View>
+          </View>
+        </Pressable>
+      ) : releasedComplete ? (
+        <View style={styles.caughtUpPanel}>
+          <Check color={colors.success} size={20} strokeWidth={2.5} />
+          <View style={styles.caughtUpCopy}>
+            <Text style={styles.caughtUpTitle}>You are caught up</Text>
+            <Text style={styles.caughtUpBody}>Every released episode in this season is marked watched.</Text>
+          </View>
+        </View>
+      ) : null}
+
+      <View style={styles.listHeader}>
+        <Text style={styles.listTitle}>Episodes</Text>
+        <Text style={styles.listMeta}>First aired</Text>
       </View>
 
       {model.episodes.length > 0 ? model.episodes.map((episode) => {
@@ -84,22 +169,14 @@ export function SeasonEpisodeList({
           episode.seasonNumber,
           episode.episodeNumber,
         );
-        const isNext = model.nextEpisode?.episodeNumber === episode.episodeNumber;
+        const isNext = nextEpisode?.episodeNumber === episode.episodeNumber;
         const released = isReleasedDate(episode.airDate);
-        const runtime = episode.runtimeMinutes ? `${episode.runtimeMinutes}m` : null;
-        const displayRating = released && episode.voteAverage
-          ? `${(episode.voteAverage / 2).toFixed(1)}`
-          : null;
-        const episodeMeta = [
-          isNext ? 'Next episode' : episode.airDate,
-          runtime,
-        ].filter(Boolean).join(' · ');
-
         return (
           <Pressable
-            accessibilityLabel={`Open ${episode.title}${watched ? ', watched' : isNext ? ', next episode' : ''}`}
+            accessibilityLabel={`Open ${episode.title}${watched ? ', watched' : isNext ? ', next episode' : !released ? ', not released' : ''}`}
             accessibilityRole="button"
             key={episode.id}
+            onPress={() => openEpisode(episode)}
             onPressIn={() => {
               void ensureEpisodeDetails(
                 seriesTmdbId,
@@ -107,18 +184,7 @@ export function SeasonEpisodeList({
                 episode.episodeNumber,
               ).catch(() => undefined);
             }}
-            onPress={() => navigation.navigate('EpisodeDetail', {
-              episodeNumber: episode.episodeNumber,
-              seasonNumber: episode.seasonNumber,
-              seriesTitle,
-              title: episode.title,
-              tmdbId: seriesTmdbId,
-            })}
-            style={({ pressed }) => [
-              styles.episode,
-              isNext && styles.nextEpisode,
-              pressed && styles.pressed,
-            ]}
+            style={({ pressed }) => [styles.episode, isNext && styles.nextEpisode, pressed && styles.pressed]}
           >
             <View style={styles.imageFrame}>
               {episode.stillUrl ? (
@@ -129,47 +195,39 @@ export function SeasonEpisodeList({
                   style={styles.still}
                 />
               ) : <View style={styles.stillPlaceholder} />}
+              {isNext ? <Text style={styles.imageBadge}>Up next</Text> : null}
             </View>
             <View style={styles.copy}>
-              <View style={styles.titleRow}>
-                <Text numberOfLines={2} style={styles.title}>
-                  {episode.episodeNumber} · {episode.title}
-                </Text>
-                {model.isSignedIn && released ? (
-                  <Pressable
-                    accessibilityLabel={watched ? `Mark episode ${episode.episodeNumber} unwatched` : `Mark episode ${episode.episodeNumber} watched`}
-                    accessibilityRole="button"
-                    accessibilityState={{ disabled: model.isSaving, selected: watched }}
-                    disabled={model.isSaving}
-                    onPress={(event) => {
-                      event.stopPropagation();
-                      void model.setEpisodeWatched(episode.episodeNumber, !watched);
-                    }}
-                    style={({ pressed }) => [
-                      styles.statusButton,
-                      watched && styles.statusButtonActive,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <Check
-                      color={watched ? colors.textOnAccent : colors.textSubtle}
-                      size={18}
-                      strokeWidth={watched ? 3 : 2}
-                    />
-                  </Pressable>
-                ) : null}
+              <Text numberOfLines={2} style={styles.title}>
+                {episode.episodeNumber} · {episode.title}
+              </Text>
+              <View style={styles.metaRow}>
+                <Text style={styles.meta}>{released ? formatEpisodeMeta(episode) : 'Not released'}</Text>
               </View>
-              {episodeMeta || displayRating ? (
-                <View style={styles.metaRow}>
-                  {episodeMeta ? <Text style={[styles.meta, isNext && styles.nextMeta]}>{episodeMeta}</Text> : null}
-                  {episodeMeta && displayRating ? <Text style={styles.separator}>·</Text> : null}
-                  {displayRating ? (
-                    <View style={styles.ratingRow}>
-                      <Star color={colors.rating} fill={colors.rating} size={13} />
-                      <Text style={styles.ratingText}>{displayRating} / 5</Text>
+            </View>
+            <View style={styles.actions}>
+              <ChevronRight color={colors.textSubtle} size={20} />
+              {model.isSignedIn && released ? (
+                <Pressable
+                  accessibilityLabel={watched
+                    ? `Mark episode ${episode.episodeNumber} unwatched`
+                    : `Mark episode ${episode.episodeNumber} watched`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: watched }}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    void model.setEpisodeWatched(episode.episodeNumber, !watched);
+                  }}
+                  style={({ pressed }) => [styles.statusButton, pressed && styles.statusButtonPressed]}
+                >
+                  {watched ? (
+                    <View style={styles.statusButtonActive}>
+                      <Check color={colors.background} size={18} strokeWidth={3} />
                     </View>
-                  ) : null}
-                </View>
+                  ) : (
+                    <Circle color={colors.textSubtle} size={30} strokeWidth={1.8} />
+                  )}
+                </Pressable>
               ) : null}
             </View>
           </Pressable>
@@ -181,52 +239,64 @@ export function SeasonEpisodeList({
   );
 }
 
+function formatEpisodeMeta(episode: SeasonDetails['episodes'][number]) {
+  return [formatShortDate(episode.airDate), episode.runtimeMinutes ? `${episode.runtimeMinutes}m` : null]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function formatShortDate(value: string | null) {
+  if (!value) return null;
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return value;
+
+  return new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short' })
+    .format(new Date(Date.UTC(year, month - 1, day)));
+}
+
 const styles = StyleSheet.create({
+  actions: { alignItems: 'center', alignSelf: 'stretch', justifyContent: 'space-between' },
+  caughtUpBody: { ...typography.meta, color: colors.textSubtle, marginTop: 2 },
+  caughtUpCopy: { flex: 1 },
+  caughtUpPanel: { alignItems: 'center', backgroundColor: colors.successBackground, borderColor: colors.successBorder, borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xl, padding: spacing.md },
+  caughtUpTitle: { color: colors.text, fontSize: 15, fontWeight: '800' },
   container: { gap: 0 },
   copy: { flex: 1, justifyContent: 'center', minWidth: 0 },
   empty: { ...typography.body, color: colors.muted, paddingVertical: spacing.md },
-  episode: {
-    borderBottomColor: colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderLeftColor: 'transparent',
-    borderLeftWidth: 2,
-    flexDirection: 'row',
-    gap: spacing.md,
-    minHeight: 94,
-    paddingLeft: spacing.sm,
-    paddingRight: spacing.xs,
-    paddingVertical: spacing.md,
-  },
-  imageFrame: { alignSelf: 'center' },
+  episode: { backgroundColor: colors.panelElevated, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', gap: spacing.md, marginBottom: spacing.sm, minHeight: 98, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  imageBadge: { backgroundColor: colors.accent, borderRadius: radii.xs, color: colors.textOnAccent, fontSize: 10, fontWeight: '900', left: spacing.xs, overflow: 'hidden', paddingHorizontal: spacing.xs, paddingVertical: 3, position: 'absolute', textTransform: 'uppercase', top: spacing.xs },
+  imageFrame: { alignSelf: 'center', position: 'relative' },
+  listHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingBottom: spacing.sm, paddingTop: spacing.sm },
+  listMeta: { ...typography.meta, color: colors.textSubtle },
+  listTitle: { ...typography.title, color: colors.text },
   loading: { alignItems: 'center', flexDirection: 'row', gap: spacing.md, paddingVertical: spacing.lg },
   loadingText: { ...typography.body, color: colors.muted },
   meta: { ...typography.meta, color: colors.muted },
-  metaRow: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs },
-  nextEpisode: { borderLeftColor: colors.accent },
-  nextMeta: { color: colors.accentText },
-  pressed: { backgroundColor: colors.panelSoft, opacity: 0.84 },
-  separator: { ...typography.meta, color: colors.textSubtle },
-  statusButton: {
-    alignItems: 'center',
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minHeight: touchTargets.min,
-    minWidth: touchTargets.min,
-  },
-  statusButtonActive: { backgroundColor: colors.accent, borderColor: colors.accent },
-  progressCount: { alignItems: 'flex-end' },
-  progressCountMeta: { ...typography.meta, color: colors.muted },
-  progressCountStrong: { color: colors.text, fontSize: 14, fontWeight: '900' },
+  metaRow: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs },
+  nextCard: { backgroundColor: colors.panelElevated, borderColor: colors.borderStrong, borderRadius: radii.lg, borderWidth: 1, marginBottom: spacing.xl, overflow: 'hidden', padding: spacing.md },
+  nextContent: { alignItems: 'center', flexDirection: 'row', gap: spacing.md },
+  nextCopy: { flex: 1, minWidth: 0 },
+  nextEpisode: { backgroundColor: colors.accentSoft, borderColor: colors.accentBorder, borderRadius: radii.md, borderWidth: 1, marginVertical: spacing.xs, paddingHorizontal: spacing.sm },
+  nextEyebrow: { ...typography.eyebrow, alignSelf: 'flex-start', backgroundColor: colors.accentSoft, borderRadius: radii.xs, color: colors.accentText, marginBottom: spacing.sm, overflow: 'hidden', paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  nextMeta: { ...typography.meta, color: colors.textMuted, marginTop: spacing.xs },
+  nextStill: { backgroundColor: colors.panelSoft, borderRadius: radii.md, height: 98, width: 132 },
+  nextStillPlaceholder: { backgroundColor: colors.panelSoft, borderRadius: radii.md, height: 98, width: 132 },
+  nextTitle: { color: colors.text, fontSize: 17, fontWeight: '800', lineHeight: 22 },
+  openEpisodeAction: { alignItems: 'center', alignSelf: 'flex-start', backgroundColor: colors.accent, borderRadius: radii.sm, flexDirection: 'row', gap: spacing.xs, marginTop: spacing.md, minHeight: touchTargets.min, paddingHorizontal: spacing.md },
+  openEpisodeLabel: { color: colors.textOnAccent, fontSize: 13, fontWeight: '800' },
+  pressed: { opacity: 0.8 },
+  progressCopy: { flex: 1, minWidth: 0 },
+  progressFill: { backgroundColor: colors.accent, borderRadius: 999, bottom: 0, left: 0, position: 'absolute', top: 0 },
+  progressHeader: { alignItems: 'center', flexDirection: 'row', gap: spacing.md, justifyContent: 'space-between' },
   progressMeta: { ...typography.meta, color: colors.muted, marginTop: 2 },
-  progressRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.sm },
+  progressPercent: { color: colors.accentText, fontSize: 15, fontWeight: '900' },
+  progressSection: { gap: spacing.md, paddingBottom: spacing.xl },
   progressTitle: { ...typography.title, color: colors.text },
-  ratingRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.xs },
-  ratingText: { color: colors.rating, fontSize: 12, fontWeight: '800' },
-  still: { backgroundColor: colors.panelSoft, borderRadius: radii.sm, height: 64, width: 108 },
-  stillPlaceholder: { backgroundColor: colors.panelSoft, borderRadius: radii.sm, height: 64, width: 108 },
-  title: { ...typography.title, color: colors.text, flex: 1, fontSize: 15, lineHeight: 20 },
-  titleRow: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm },
+  progressTrack: { backgroundColor: colors.panelSoft, borderRadius: 999, height: 8, overflow: 'hidden' },
+  statusButton: { alignItems: 'center', justifyContent: 'center', minHeight: touchTargets.min, minWidth: touchTargets.min },
+  statusButtonActive: { alignItems: 'center', backgroundColor: colors.success, borderRadius: 15, height: 30, justifyContent: 'center', width: 30 },
+  statusButtonPressed: { opacity: 0.72 },
+  still: { backgroundColor: colors.panelSoft, borderRadius: radii.sm, height: 74, width: 112 },
+  stillPlaceholder: { backgroundColor: colors.panelSoft, borderRadius: radii.sm, height: 74, width: 112 },
+  title: { color: colors.text, fontSize: 15, fontWeight: '800', lineHeight: 20 },
 });
