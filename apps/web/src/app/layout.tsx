@@ -1,12 +1,12 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import watchlyFavicon from '../../../mobile/assets/favicon.png';
-import watchlySocialPreview from '../../../mobile/assets/watchly-wordmark-background.png';
 import './globals.css';
 
 const description =
   'Track films and series, log every watch, rate in half-stars, write reviews, and keep your viewing history in one place.';
 const siteUrl = 'https://trywatchly.com';
+const socialPreviewUrl = `${siteUrl}/watchly-social-preview-v2.png`;
 
 export const metadata: Metadata = {
   alternates: {
@@ -22,9 +22,11 @@ export const metadata: Metadata = {
     images: [
       {
         alt: 'Watchly',
-        height: 887,
-        url: watchlySocialPreview.src,
-        width: 1774,
+        height: 627,
+        secureUrl: socialPreviewUrl,
+        type: 'image/png',
+        url: socialPreviewUrl,
+        width: 1200,
       },
     ],
     siteName: 'Watchly',
@@ -39,7 +41,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     description,
-    images: [watchlySocialPreview.src],
+    images: [socialPreviewUrl],
     title: 'Watchly',
   },
 };
