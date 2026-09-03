@@ -55,7 +55,7 @@ export function WaitlistForm() {
 
       form.reset();
       setState('success');
-      setMessage("You're on the list.");
+      setMessage("Thank you for joining our waitlist, we'll notify you when Watchly is available");
     } catch (error) {
       setState('error');
       setMessage(
