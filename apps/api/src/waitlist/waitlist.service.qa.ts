@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { BadRequestException } from '@nestjs/common';
 import { WaitlistService } from './waitlist.service';
 
 async function run() {
@@ -29,6 +30,12 @@ async function run() {
     { status: 'joined' },
   );
   assert.equal(upserts.length, 1, 'honeypot submissions must not reach the database');
+
+  await assert.rejects(
+    () => service.join({ email: 'not-an-email' }),
+    BadRequestException,
+  );
+  assert.equal(upserts.length, 1, 'invalid emails must not reach the database');
 
   console.log('Waitlist API QA passed.');
 }

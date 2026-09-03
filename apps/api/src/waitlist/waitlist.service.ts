@@ -1,4 +1,5 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { isEmail } from 'class-validator';
 import { PrismaService } from '../database/prisma.service';
 import { JoinWaitlistDto } from './waitlist.dto';
 
@@ -12,6 +13,10 @@ export class WaitlistService {
     }
 
     const emailNormalized = email.trim().toLowerCase();
+
+    if (emailNormalized.length > 320 || !isEmail(emailNormalized)) {
+      throw new BadRequestException('Enter a valid email address.');
+    }
 
     await this.prisma.withConnectionRetry(() =>
       this.prisma.waitlistSubscriber.upsert({
