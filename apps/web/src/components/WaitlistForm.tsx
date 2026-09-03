@@ -63,20 +63,22 @@ export function WaitlistForm() {
 
   return (
     <form className={styles.form} onSubmit={submit}>
-      <label className={styles.label} htmlFor={emailId}>Email address</label>
-      <input
-        autoComplete="email"
-        className={styles.input}
-        id={emailId}
-        maxLength={320}
-        name="email"
-        placeholder="Email address"
-        required
-        type="email"
-      />
-      <button className={styles.submit} disabled={state === 'submitting'} type="submit">
-        {state === 'submitting' ? 'Joining...' : 'Join the waitlist'}
-      </button>
+      <div className={styles.control}>
+        <label className={styles.label} htmlFor={emailId}>Email address</label>
+        <input
+          autoComplete="email"
+          className={styles.input}
+          id={emailId}
+          maxLength={320}
+          name="email"
+          placeholder="Email address"
+          required
+          type="email"
+        />
+        <button className={styles.submit} disabled={state === 'submitting'} type="submit">
+          {state === 'submitting' ? 'Joining...' : 'Join the waitlist'}
+        </button>
+      </div>
       <div aria-hidden="true" className={styles.honeypot}>
         <label htmlFor={honeypotId}>Website</label>
         <input autoComplete="off" id={honeypotId} name="website" tabIndex={-1} type="text" />

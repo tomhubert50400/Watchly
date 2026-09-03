@@ -1,25 +1,37 @@
 .form {
-  display: grid;
-  gap: 0.65rem;
-  grid-template-columns: minmax(0, 1fr) auto;
   margin-top: 2.35rem;
   max-width: 34rem;
   position: relative;
 }
 
-.input,
-.submit {
-  border-radius: 0.52rem;
-  min-height: 3.65rem;
+.control {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.075);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 0.68rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0.3rem;
+  transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.control:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.26);
+}
+
+.control:focus-within {
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 0 3px rgba(239, 45, 97, 0.2);
 }
 
 .input {
-  background: rgba(255, 255, 255, 0.075);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: transparent;
+  border: 0;
   color: #f7f7f5;
+  min-height: 3.05rem;
   min-width: 0;
   padding: 0.8rem 1rem;
-  transition: background-color 180ms ease, border-color 180ms ease;
   width: 100%;
 }
 
@@ -27,17 +39,17 @@
   color: rgba(255, 255, 255, 0.44);
 }
 
-.input:hover,
-.input:focus {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.34);
+.input:focus-visible {
+  outline: none;
 }
 
 .submit {
   background: var(--landing-accent);
   border: 1px solid var(--landing-accent);
+  border-radius: 0.48rem;
   color: white;
   font-weight: 680;
+  min-height: 3.05rem;
   min-width: 10.5rem;
   padding: 0.8rem 1.2rem;
   transition: background-color 180ms ease, border-color 180ms ease, transform 180ms ease;
@@ -61,9 +73,8 @@
 .status {
   color: rgba(255, 255, 255, 0.7);
   font-size: 0.82rem;
-  grid-column: 1 / -1;
   line-height: 1.45;
-  margin: 0.1rem 0 0;
+  margin: 0.7rem 0 0;
 }
 
 .status[data-state="success"] {
@@ -94,19 +105,21 @@
 
 @media (max-width: 620px) {
   .form {
-    grid-template-columns: 1fr;
     margin-top: 1.8rem;
   }
+}
 
-  .input,
+@media (max-width: 390px) {
   .submit {
-    min-height: 3.5rem;
-    width: 100%;
+    font-size: 0.88rem;
+    min-width: 9.25rem;
+    padding-left: 0.9rem;
+    padding-right: 0.9rem;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .input,
+  .control,
   .submit {
     transition: none;
   }
