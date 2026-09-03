@@ -68,6 +68,7 @@ export default function HomePage() {
           <div className={styles.heroCopy}>
             <h1><span className={styles.heroLine}>Your watching,</span><span className={styles.heroAccent}>remembered.</span></h1>
             <p>Films, series, ratings, reviews and every episode in one place.</p>
+            <span className={styles.storeEyebrow}>Coming soon on</span>
             <div className={styles.storeActions}>
               <StoreButton href={appStoreUrl} platform="App Store" />
               <StoreButton href={googlePlayUrl} platform="Google Play" />
@@ -128,6 +129,7 @@ export default function HomePage() {
           <h2>Your films.<br />Your series.<br /><span>Your history.</span></h2>
           <div>
             <p>Keep watching. Watchly keeps the rest.</p>
+            <span className={styles.storeEyebrow}>Coming soon on</span>
             <div className={styles.storeActions}>
               <StoreButton href={appStoreUrl} platform="App Store" />
               <StoreButton href={googlePlayUrl} platform="Google Play" />

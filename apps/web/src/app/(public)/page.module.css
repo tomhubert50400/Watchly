@@ -103,11 +103,20 @@
   max-width: 34rem;
 }
 
+.storeEyebrow {
+  color: rgba(255, 255, 255, 0.64);
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.015em;
+  margin-top: 2.35rem;
+}
+
 .storeActions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.9rem;
-  margin-top: 2.35rem;
+  margin-top: 0.7rem;
 }
 
 .storeButton {
@@ -592,6 +601,9 @@
   .storeActions {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .storeEyebrow {
     margin-top: 1.8rem;
   }
 
