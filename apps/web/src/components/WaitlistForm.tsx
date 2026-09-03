@@ -5,6 +5,7 @@ import styles from './WaitlistForm.module.css';
 
 type SubmissionState = 'error' | 'idle' | 'submitting' | 'success';
 
+const requestErrorMessage = 'We could not add you right now. Try again shortly.';
 const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '');
 const apiUrl = configuredApiUrl
   || (process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : null);
@@ -49,7 +50,7 @@ export function WaitlistForm() {
           throw new Error('Too many attempts. Try again in a minute.');
         }
 
-        throw new Error('We could not add you right now. Try again shortly.');
+        throw new Error(requestErrorMessage);
       }
 
       form.reset();
@@ -57,7 +58,11 @@ export function WaitlistForm() {
       setMessage("You're on the list.");
     } catch (error) {
       setState('error');
-      setMessage(error instanceof Error ? error.message : 'We could not add you right now.');
+      setMessage(
+        error instanceof Error && error.message === 'Too many attempts. Try again in a minute.'
+          ? error.message
+          : requestErrorMessage,
+      );
     }
   }
 

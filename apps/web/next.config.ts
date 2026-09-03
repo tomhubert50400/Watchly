@@ -1,6 +1,9 @@
 import type { NextConfig } from 'next';
 
-const apiOrigin = getOrigin(process.env.NEXT_PUBLIC_API_URL);
+const apiOrigin = getOrigin(
+  process.env.NEXT_PUBLIC_API_URL
+    || (process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : undefined),
+);
 const developmentScriptSource = process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : '';
 const connectSources = [
   "'self'",
