@@ -1,6 +1,6 @@
 # Watchly, roadmap du travail restant
 
-Mise à jour: 12 août 2026
+Mise à jour: 3 septembre 2026
 
 Ce document classe le travail restant par priorité. Il ne signifie pas que chaque fonctionnalité part de zéro. L'onboarding, les alertes internes, les profils publics et les pages d'épisodes possèdent déjà une base qui doit être terminée et validée.
 
@@ -246,6 +246,8 @@ Critères de validation:
 - Un même événement ne génère pas plusieurs push identiques.
 
 ### 10. Améliorer les pages de saisons et d'épisodes
+
+Statut au 3 septembre 2026: terminé. Le propriétaire du produit confirme la validation finale du rendu et des interactions des pages de saisons et d'épisodes.
 
 Objectif: faciliter la navigation, le suivi et la reprise d'une série.
 
