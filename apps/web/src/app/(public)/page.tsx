@@ -4,55 +4,59 @@ import Link from 'next/link';
 import watchlyLogo from '../../../../mobile/assets/watchly-logo-ui.png';
 
 export const metadata: Metadata = {
-  description: 'A home for the films you discover, watch, rate, remember, and share.',
-  title: 'A home for your life in films',
+  description: 'Track films and series, log every watch, rate in half-stars, write reviews, and keep your whole viewing history in one place.',
+  title: 'Track films, series, ratings and reviews',
 };
 
-const reelChapters = [
+const productJourneys = [
   {
-    alt: 'Watchly Explore screen with search, trending films, and upcoming releases',
-    copy: 'Search the catalogue, follow what is coming, and find the film that fits tonight.',
+    alt: 'Watchly Explore showing search, trending films and upcoming releases',
+    copy: 'Search films, series and people. Browse what is trending, see what is coming, then save the title before you forget it.',
     image: '/landing/watchly-explore.png',
-    number: '01',
-    overline: 'Discover',
-    title: 'Start with a feeling.',
+    label: 'Find your next watch',
+    title: 'Start with the whole catalogue.',
   },
   {
-    alt: 'Watchly Home screen featuring a film and trending titles',
-    copy: 'Return to what you started and keep every film and episode in the right place.',
-    image: '/landing/watchly-home.png',
-    number: '02',
-    overline: 'Watch',
-    title: 'Never lose the thread.',
-  },
-  {
-    alt: 'Watchly film detail screen with watchlist and viewing status controls',
-    copy: 'Save the title, log the watch, rate it, and keep the thoughts that came after.',
+    alt: 'Watchly film page with watch status, watchlist and rating controls',
+    copy: 'Mark what you are watching, watched or dropped. Add a half-star rating, write the review, and keep it attached to the title.',
     image: '/landing/watchly-detail.jpg',
-    number: '03',
-    overline: 'Remember',
-    title: 'Give every film a place.',
+    label: 'Log it properly',
+    title: 'A checkmark is not a film journal.',
+  },
+  {
+    alt: 'Watchly Home showing a featured film and current viewing activity',
+    copy: 'Keep film history and episode progress together. Watchly brings you back to the title or episode that actually comes next.',
+    image: '/landing/watchly-home.png',
+    label: 'Never lose your place',
+    title: 'Films and series belong in the same history.',
   },
 ] as const;
 
-const questions = [
+const productFacts = [
   {
-    answer: 'Films and series, including viewing status, episode progress, ratings, reviews, watchlists, and release dates.',
-    question: 'What can I keep in Watchly?',
+    detail: 'Films, series, seasons and episodes, with real metadata and artwork.',
+    label: 'Catalogue',
   },
   {
-    answer: 'Yes. Watchly uses real TMDB catalogue metadata for discovery, artwork, film details, series, seasons, episodes, and release information.',
-    question: 'Is the catalogue real?',
+    detail: 'Watching, watched and dropped states, plus episode-by-episode progress.',
+    label: 'Tracking',
   },
   {
-    answer: 'You decide how your profile and activity appear. Public taste and private viewing history do not have to be the same thing.',
-    question: 'Can I control what people see?',
+    detail: 'Half-star ratings, written reviews and a chronological viewing journal.',
+    label: 'Your take',
   },
   {
-    answer: 'Watchly is in active development for iPhone. Public availability will be announced when the experience is ready.',
-    question: 'When can I download it?',
+    detail: 'Personal and shared watchlists, voting, release alerts and a calendar.',
+    label: 'What is next',
+  },
+  {
+    detail: 'Public or private profiles, follows, blocks and control over shared activity.',
+    label: 'Community',
   },
 ] as const;
+
+const appStoreUrl = getStoreUrl(process.env.NEXT_PUBLIC_APP_STORE_URL);
+const googlePlayUrl = getStoreUrl(process.env.NEXT_PUBLIC_GOOGLE_PLAY_URL);
 
 export default function HomePage() {
   return (
@@ -60,99 +64,74 @@ export default function HomePage() {
       <section className="cine-hero" id="top">
         <div aria-hidden="true" className="cine-grain" />
         <div className="cine-shell cine-hero__meta">
-          <span>Watchly presents</span>
-          <span>For people who stay through the credits</span>
-          <span>Picture 001</span>
+          <span>A film and series journal</span>
+          <span>For iPhone and Android</span>
+          <span>Made for people who keep watching after the credits</span>
         </div>
 
         <div className="cine-shell cine-hero__layout">
           <div className="cine-hero__copy">
-            <p className="cine-label">A personal cinema companion</p>
-            <h1>Your life<br /><em>in films.</em></h1>
+            <p className="cine-label">Watchly keeps the whole watch</p>
+            <h1>Keep a real record of what you watch.</h1>
             <p className="cine-hero__lede">
-              Find what to watch. Keep the films that mattered. Build a journal of your taste, one title at a time.
+              Find films and series, log every watch, rate in half-stars, write reviews, follow friends, and pick up the next episode without digging through five apps.
             </p>
             <div className="cine-actions">
-              <Link className="cine-link cine-link--primary" href="#reel">
-                Enter Watchly
-                <span aria-hidden="true">↓</span>
-              </Link>
-              <Link className="cine-link" href="#journal">See the film journal</Link>
+              <StoreButton href={appStoreUrl} platform="App Store" />
+              <StoreButton href={googlePlayUrl} platform="Google Play" />
+              <Link className="cine-link" href="#product">See what Watchly keeps <span aria-hidden="true">↓</span></Link>
             </div>
           </div>
 
           <div className="cine-hero__contact-sheet">
             <div className="cine-frame cine-frame--home">
-              <Image
-                alt="Watchly Home screen"
-                fill
-                priority
-                sizes="(max-width: 760px) 38vw, 260px"
-                src="/landing/watchly-home.png"
-              />
+              <Image alt="Watchly Home screen" fill priority sizes="(max-width: 760px) 35vw, 250px" src="/landing/watchly-home.png" />
             </div>
             <div className="cine-frame cine-frame--hero">
-              <Image
-                alt="Watchly film page with tracking and watchlist controls"
-                fill
-                priority
-                sizes="(max-width: 760px) 58vw, 430px"
-                src="/landing/watchly-detail.jpg"
-              />
-              <div className="cine-frame__slate">
-                <span>Now screening</span>
-                <strong>Watchly</strong>
-                <span>Take 01</span>
-              </div>
+              <Image alt="Watchly film page with tracking, watchlist, synopsis and activity" fill loading="eager" priority sizes="(max-width: 760px) 58vw, 420px" src="/landing/watchly-detail.jpg" />
+              <p className="cine-frame__slate">Everything about the film stays with the film.</p>
             </div>
             <div className="cine-frame cine-frame--explore">
-              <Image
-                alt="Watchly Explore screen"
-                fill
-                sizes="(max-width: 760px) 35vw, 230px"
-                src="/landing/watchly-explore.png"
-              />
+              <Image alt="Watchly Explore screen" fill sizes="(max-width: 760px) 34vw, 230px" src="/landing/watchly-explore.png" />
             </div>
           </div>
         </div>
 
-        <div className="cine-hero__marquee" aria-label="Watchly product actions">
-          <span>Discover</span><i>✦</i><span>Track</span><i>✦</i><span>Rate</span><i>✦</i><span>Review</span><i>✦</i><span>Remember</span>
+        <div className="cine-hero__marquee" aria-label="Watchly features">
+          <span>Watched dates</span><i>•</i><span>Half-star ratings</span><i>•</i><span>Reviews</span><i>•</i><span>Episode progress</span><i>•</i><span>Shared lists</span><i>•</i><span>Release calendar</span>
         </div>
       </section>
 
-      <section className="cine-statement">
+      <section className="cine-statement" id="product">
         <div className="cine-shell cine-statement__layout">
-          <p className="cine-index">001 / The point</p>
+          <p className="cine-index">What Watchly is</p>
           <div>
-            <h2>A film is more than a poster in a grid.</h2>
-            <p>
-              It is the night you watched it, the line you kept thinking about, the person who recommended it, and the review you wrote after the credits.
-            </p>
+            <h2>Watchly is a film and series journal, not a streaming service.</h2>
+            <p>It keeps the title, your progress, rating, review, lists and release dates together, without deciding what subscription you should open next.</p>
           </div>
         </div>
       </section>
 
-      <section aria-labelledby="reel-title" className="cine-reel" id="reel">
+      <section aria-labelledby="reel-title" className="cine-reel" id="features">
         <div className="cine-shell cine-section-heading">
           <div>
-            <p className="cine-index">002 / The ritual</p>
-            <h2 id="reel-title">From first look<br />to lasting memory.</h2>
+            <p className="cine-index">How it works</p>
+            <h2 id="reel-title">From finding it to remembering why it mattered.</h2>
           </div>
-          <p>Three acts, one uninterrupted record of everything you watch.</p>
+          <p>No streaks to maintain. No points to collect. Just the useful parts of being serious about what you watch.</p>
         </div>
 
-        <div aria-label="Watchly product journey" className="cine-reel__track" role="region">
-          {reelChapters.map((chapter) => (
-            <article className="cine-reel-card" key={chapter.number}>
+        <div aria-label="Watchly product tour" className="cine-reel__track">
+          {productJourneys.map((journey) => (
+            <article className="cine-reel-card" key={journey.label}>
               <div className="cine-reel-card__perforation" aria-hidden="true" />
               <div className="cine-reel-card__image">
-                <Image alt={chapter.alt} fill sizes="(max-width: 620px) 72vw, 360px" src={chapter.image} />
+                <Image alt={journey.alt} fill sizes="(max-width: 720px) 80vw, 390px" src={journey.image} />
               </div>
               <div className="cine-reel-card__copy">
-                <span>{chapter.number} / {chapter.overline}</span>
-                <h3>{chapter.title}</h3>
-                <p>{chapter.copy}</p>
+                <span>{journey.label}</span>
+                <h3>{journey.title}</h3>
+                <p>{journey.copy}</p>
               </div>
             </article>
           ))}
@@ -163,46 +142,37 @@ export default function HomePage() {
         <div className="cine-shell">
           <div className="cine-section-heading cine-section-heading--journal">
             <div>
-              <p className="cine-index">003 / Your archive</p>
-              <h2 id="journal-title">Build a life<br />in film.</h2>
+              <p className="cine-index">Your journal</p>
+              <h2 id="journal-title">A history that still feels like yours.</h2>
             </div>
-            <p>Watchly keeps the catalogue useful by making it personal.</p>
+            <p>Keep the facts when you want them. Keep the feeling when you have something to say.</p>
           </div>
 
           <div className="cine-archive-grid">
             <article className="cine-archive-panel cine-archive-panel--journal">
-              <div className="cine-archive-panel__topline">
-                <span>Viewing journal</span>
-                <span>Chronological / personal</span>
-              </div>
-              <div className="cine-diary-entry">
-                <time dateTime="2026-08-24"><strong>24</strong><span>Aug</span></time>
-                <div><span>Watched</span><h3>The film, the date, the feeling.</h3></div>
-              </div>
-              <div className="cine-diary-entry cine-diary-entry--muted">
-                <time dateTime="2026-08-19"><strong>19</strong><span>Aug</span></time>
-                <div><span>Reviewed</span><h3>Your history becomes your story.</h3></div>
-              </div>
+              <div className="cine-archive-panel__topline"><span>One viewing history</span><span>Films + series</span></div>
+              <div className="cine-diary-entry"><span>01</span><div><span>Log the watch</span><h3>Status, date, rating and review stay together.</h3></div></div>
+              <div className="cine-diary-entry cine-diary-entry--muted"><span>02</span><div><span>Return to it</span><h3>Open your journal instead of rebuilding your memory.</h3></div></div>
             </article>
 
             <article className="cine-archive-panel cine-archive-panel--lists">
-              <span className="cine-panel-number">A</span>
-              <p className="cine-label">Lists with a point of view</p>
-              <h3>Not everything belongs in “watch later.”</h3>
-              <p>Build shelves for moods, directors, eras, friends, and the films you will defend forever.</p>
+              <span className="cine-panel-number">+</span>
+              <p className="cine-label">Lists with other people</p>
+              <h3>Plan movie night without another group chat poll.</h3>
+              <p>Create shared watchlists, add titles together and vote on what gets played.</p>
             </article>
 
             <article className="cine-archive-panel cine-archive-panel--calendar">
-              <span className="cine-panel-number">B</span>
+              <span className="cine-panel-number">↗</span>
               <p className="cine-label">Release calendar</p>
-              <h3>Know when the next story begins.</h3>
-              <p>Keep films, seasons, and episodes on one personal timeline.</p>
+              <h3>Know when the film, season or next episode actually lands.</h3>
+              <p>Follow only the releases connected to titles you care about.</p>
             </article>
 
             <article className="cine-archive-panel cine-archive-panel--opinion">
               <div><span>½</span><span>★</span><span>5</span></div>
-              <p className="cine-label">Half stars. Full thoughts.</p>
-              <h3>A score marks the moment. A review explains why it stayed.</h3>
+              <p className="cine-label">Your rating, your words</p>
+              <h3>Sometimes three stars says enough. Sometimes it needs a paragraph.</h3>
             </article>
           </div>
         </div>
@@ -210,16 +180,12 @@ export default function HomePage() {
 
       <section className="cine-community" id="community">
         <div className="cine-shell cine-community__layout">
-          <p className="cine-index">004 / After the credits</p>
-          <blockquote>
-            <p>“Taste gets better when it becomes a conversation.”</p>
-          </blockquote>
+          <p className="cine-index">Community without performance</p>
+          <div className="cine-community__statement"><p>Follow people whose taste means something to you.</p></div>
           <div className="cine-community__copy">
-            <h2>Follow people,<br />not an algorithm.</h2>
-            <p>
-              Find members whose taste challenges yours. Share ratings and reviews. Keep your viewing history under your control.
-            </p>
-            <Link className="cine-text-link" href="/support">Talk to Watchly <span aria-hidden="true">→</span></Link>
+            <h2>See the review. Skip the follower-count theatre.</h2>
+            <p>Watchly connects profiles, ratings and reviews around the films themselves. You decide what stays private, what friends can see, and who gets access to your activity.</p>
+            <Link className="cine-text-link" href="#download">Get Watchly <span aria-hidden="true">↓</span></Link>
           </div>
         </div>
       </section>
@@ -228,36 +194,56 @@ export default function HomePage() {
         <div className="cine-shell">
           <div className="cine-section-heading cine-section-heading--questions">
             <div>
-              <p className="cine-index">005 / Before opening night</p>
-              <h2 id="questions-title">The essentials.</h2>
+              <p className="cine-index">Inside Watchly</p>
+              <h2 id="questions-title">The useful details, without the pitch.</h2>
             </div>
           </div>
           <div className="cine-questions__grid">
-            {questions.map((item, index) => (
-              <article key={item.question}>
-                <span>{String(index + 1).padStart(2, '0')}</span>
-                <h3>{item.question}</h3>
-                <p>{item.answer}</p>
-              </article>
+            {productFacts.map((fact) => (
+              <article key={fact.label}><span aria-hidden="true">•</span><h3>{fact.label}</h3><p>{fact.detail}</p></article>
             ))}
           </div>
         </div>
       </section>
 
-      <section className="cine-closing">
+      <section className="cine-closing" id="download">
         <div aria-hidden="true" className="cine-grain" />
         <div className="cine-shell cine-closing__layout">
           <div>
             <Image alt="Watchly" className="cine-closing__mark" src={watchlyLogo} />
-            <p className="cine-index">Coming to iPhone</p>
+            <p className="cine-index">For iPhone and Android</p>
           </div>
-          <h2>Make every<br /><em>watch count.</em></h2>
+          <h2>Keep the film after the credits.</h2>
           <div className="cine-closing__action">
-            <p>Watchly is being made for people who never say “it was just a movie.”</p>
-            <Link className="cine-link cine-link--primary" href="/support">Contact Watchly <span aria-hidden="true">→</span></Link>
+            <p>Download Watchly when the official Store pages go live.</p>
+            <div className="store-actions"><StoreButton href={appStoreUrl} platform="App Store" /><StoreButton href={googlePlayUrl} platform="Google Play" /></div>
           </div>
         </div>
       </section>
     </>
   );
+}
+
+function StoreButton({ href, platform }: Readonly<{ href: string | null; platform: 'App Store' | 'Google Play' }>) {
+  const content = (
+    <>
+      <span className="store-button__icon" aria-hidden="true">{platform === 'App Store' ? 'iOS' : 'GP'}</span>
+      <span><small>{href ? 'Download on the' : 'Coming soon on'}</small><strong>{platform}</strong></span>
+    </>
+  );
+
+  if (!href) return <span aria-disabled="true" className="store-button store-button--disabled">{content}</span>;
+
+  return <a className="store-button" href={href} rel="noreferrer" target="_blank">{content}</a>;
+}
+
+function getStoreUrl(value: string | undefined) {
+  if (!value) return null;
+
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
 }

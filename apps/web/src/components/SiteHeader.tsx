@@ -18,22 +18,20 @@ export function SiteHeader() {
           <Image alt="Watchly" className="brand__wordmark" priority src={watchlyWordmark} />
         </Link>
         <nav aria-label="Primary navigation" className="site-nav">
-          <Link href="/#reel"><span>01</span> Screens</Link>
-          <Link href="/#journal"><span>02</span> Journal</Link>
-          <Link href="/#community"><span>03</span> Community</Link>
-          <Link href="/#info"><span>04</span> Info</Link>
-          <Link className="site-nav__cta" href="/support">Contact</Link>
+          <Link href="/#features">How it works</Link>
+          <Link href="/#journal">Journal</Link>
+          <Link href="/#community">Community</Link>
+          <Link className="site-nav__cta" href="/#download">Get Watchly</Link>
         </nav>
         <details className="mobile-nav">
           <summary aria-label="Open navigation">
             Menu
           </summary>
           <nav aria-label="Mobile navigation">
-            <Link href="/#reel" onClick={closeMobileNavigation}>Screens</Link>
+            <Link href="/#features" onClick={closeMobileNavigation}>How it works</Link>
             <Link href="/#journal" onClick={closeMobileNavigation}>Journal</Link>
             <Link href="/#community" onClick={closeMobileNavigation}>Community</Link>
-            <Link href="/#info" onClick={closeMobileNavigation}>Info</Link>
-            <Link href="/support" onClick={closeMobileNavigation}>Contact</Link>
+            <Link href="/#download" onClick={closeMobileNavigation}>Get Watchly</Link>
           </nav>
         </details>
       </div>

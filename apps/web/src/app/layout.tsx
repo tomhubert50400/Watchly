@@ -5,10 +5,10 @@ import './globals.css';
 const siteUrl = getSiteUrl();
 
 export const metadata: Metadata = {
-  description: 'A home for the films you discover, watch, rate, remember, and share.',
+  description: 'Track films and series, log every watch, rate in half-stars, write reviews, and keep your viewing history in one place.',
   metadataBase: new URL(siteUrl),
   openGraph: {
-    description: 'A home for the films you discover, watch, rate, remember, and share.',
+    description: 'Track films and series, log every watch, rate in half-stars, write reviews, and keep your viewing history in one place.',
     siteName: 'Watchly',
     title: 'Watchly',
     type: 'website',

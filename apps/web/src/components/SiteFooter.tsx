@@ -16,7 +16,7 @@ export function SiteFooter() {
       <div className="site-footer__inner">
         <div>
           <Image alt="Watchly" className="site-footer__brand" src={watchlyWordmark} />
-          <p>Your films, series, and conversations, kept on your terms.</p>
+          <p>Track films and series. Rate them, review them, remember them.</p>
         </div>
         <nav aria-label="Legal and support links">
           {footerLinks.map(([label, href]) => (
