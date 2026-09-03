@@ -22,6 +22,7 @@ export function SiteFooter() {
           {footerLinks.map(([label, href]) => (
             <Link href={href} key={href}>{label}</Link>
           ))}
+          <a href="https://x.com/WatchlyTV" rel="noreferrer" target="_blank">Follow @WatchlyTV on X</a>
         </nav>
       </div>
       <div className="site-footer__fineprint">

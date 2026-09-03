@@ -112,6 +112,31 @@
   margin-top: 2.35rem;
 }
 
+.heroCopy form + .storeEyebrow,
+.socialLink + .storeEyebrow {
+  margin-top: 1.65rem;
+}
+
+.socialLink {
+  align-items: center;
+  color: rgba(255, 255, 255, 0.72);
+  display: inline-flex;
+  font-size: 0.88rem;
+  font-weight: 620;
+  gap: 0.45rem;
+  margin-top: 1.15rem;
+  text-decoration: none;
+  transition: color 180ms ease;
+}
+
+.socialLink:hover {
+  color: white;
+}
+
+.socialLink span {
+  color: var(--landing-accent);
+}
+
 .storeActions {
   display: flex;
   flex-wrap: wrap;

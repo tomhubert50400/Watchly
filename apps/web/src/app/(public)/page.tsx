@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
+import { WaitlistForm } from '../../components/WaitlistForm';
 import styles from './page.module.css';
 
 export const metadata: Metadata = {
@@ -68,6 +69,7 @@ export default function HomePage() {
           <div className={styles.heroCopy}>
             <h1><span className={styles.heroLine}>Your watching,</span><span className={styles.heroAccent}>remembered.</span></h1>
             <p>Films, series, ratings, reviews and every episode in one place.</p>
+            <WaitlistForm />
             <span className={styles.storeEyebrow}>Coming soon on</span>
             <div className={styles.storeActions}>
               <StoreButton href={appStoreUrl} platform="App Store" />
@@ -129,6 +131,10 @@ export default function HomePage() {
           <h2>Your films.<br />Your series.<br /><span>Your history.</span></h2>
           <div>
             <p>Keep watching. Watchly keeps the rest.</p>
+            <WaitlistForm />
+            <a className={styles.socialLink} href="https://x.com/WatchlyTV" rel="noreferrer" target="_blank">
+              Follow @WatchlyTV on X <span aria-hidden="true">↗</span>
+            </a>
             <span className={styles.storeEyebrow}>Coming soon on</span>
             <div className={styles.storeActions}>
               <StoreButton href={appStoreUrl} platform="App Store" />
