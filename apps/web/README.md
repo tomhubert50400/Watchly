@@ -22,7 +22,7 @@ Copy `.env.example` to `.env.local` and set the real development values. In part
 - `NEXT_PUBLIC_SUPPORT_EMAIL` must be the verified publisher support address used in the store listings.
 - The Firebase values must come from the matching environment project.
 
-The API `CORS_ORIGIN` must equal the deployed web origin. Start the app with `pnpm --filter web dev`.
+The API `CORS_ORIGIN` or `CORS_ADDITIONAL_ORIGIN` must include the deployed web origin. The public waitlist form posts to `POST /waitlist` on `NEXT_PUBLIC_API_URL`. Start the app with `pnpm --filter web dev`.
 
 ## Administrator access
 
@@ -44,7 +44,7 @@ Use Node.js 20.9 or later. Build with `pnpm --filter web build` and run with `pn
 Before publishing store URLs:
 
 - configure the final stable domain and support email;
-- deploy the API migration that creates `admin_audit_logs`;
+- deploy the API migrations that create `admin_audit_logs` and `waitlist_subscribers`;
 - verify all five public routes without authentication;
 - verify `/admin` returns no report data for a regular account, an admin without MFA, and a revoked admin;
 - process one test report through New, In progress, Resolved, and Rejected as appropriate;

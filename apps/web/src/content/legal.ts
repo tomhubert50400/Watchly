@@ -97,6 +97,13 @@ export const legalDocuments = {
       },
       {
         body: [
+          'If you join the Watchly waitlist, we store your email address and signup date so we can contact you about availability and launch updates.',
+          'You can ask us to remove your waitlist email at any time through the Support page. Waitlist data is separate from any Watchly account you may create later.',
+        ],
+        title: 'Waitlist',
+      },
+      {
+        body: [
           'We use this information to create and secure your account, synchronize your library, show activity according to your privacy choices, operate shared lists and votes, deliver requested alerts, respond to support requests, and enforce the community rules.',
           'Private viewing activity is not published unless you change the matching privacy setting.',
         ],
@@ -128,7 +135,7 @@ export const legalDocuments = {
       },
     ],
     title: 'Privacy policy',
-    updatedAt: 'August 13, 2026',
+    updatedAt: 'September 3, 2026',
   },
   terms: {
     description: 'The agreement that governs access to Watchly and its social features.',

@@ -22,6 +22,7 @@ for (const [id, document] of Object.entries(legalDocuments)) {
 const privacyText = legalDocuments.privacy.sections.flatMap((section) => section.body).join(' ');
 assert.match(privacyText, /export a copy/i);
 assert.match(privacyText, /delete your account/i);
+assert.match(privacyText, /waitlist email/i);
 
 const deletionText = legalDocuments.accountDeletion.sections
   .flatMap((section) => section.body)
