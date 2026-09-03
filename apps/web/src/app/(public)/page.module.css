@@ -301,8 +301,6 @@
   position: relative;
   scroll-snap-align: start;
   text-decoration: none;
-  transform: translateZ(0) translateY(0);
-  transition: border-color 220ms ease, transform 220ms ease;
 }
 
 .featureArtwork {
@@ -316,11 +314,6 @@
 .featureArtwork img {
   object-fit: contain;
   object-position: center;
-}
-
-.featureCard:hover {
-  border-color: rgba(255, 255, 255, 0.3);
-  transform: translateZ(0) translateY(-4px);
 }
 
 .featureCard span {
@@ -702,7 +695,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .featureCard,
   .storeButton {
     transition: none;
   }
