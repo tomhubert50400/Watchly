@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import { RotateCcw } from 'lucide-react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { History, RotateCcw } from 'lucide-react-native';
 import {
   EpisodeViewingSummary,
   getEpisodeViewingSummary,
@@ -12,11 +12,19 @@ import {
   SeriesViewingSummary,
 } from '../api/viewings';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import {
+  getPrivateCacheKey,
+  readPersistedCache,
+  writePersistedCache,
+} from '../cache/persistedCache';
 import { colors, radii, spacing, touchTargets } from '../design/tokens';
-import { hapticConfirm, hapticError } from '../feedback/haptics';
+import { hapticError } from '../feedback/haptics';
 import { useToast } from '../notifications/ToastContext';
+import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
 
-type Props =
+type Props = {
+  variant?: 'activity' | 'default';
+} & (
   | { contentType: 'movie'; tmdbId: number }
   | { contentType: 'series'; seriesTmdbId: number }
   | {
@@ -24,95 +32,156 @@ type Props =
       episodeNumber: number;
       seasonNumber: number;
       seriesTmdbId: number;
-    };
+    }
+);
 
 type Summary = MovieViewingSummary | SeriesViewingSummary | EpisodeViewingSummary;
 
 export function ViewingCountControl(props: Props) {
   const {
+    currentUser,
     firebaseIdToken,
     getFirebaseIdToken,
-    notifyTrackingChanged,
-    trackingRevision,
   } = useAuthSession();
+  const viewingRevision = useUserDataRevision('episodeProgress', 'viewings');
   const { showToast } = useToast();
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const lastConfirmedSummaryRef = useRef<Summary | null>(null);
+  const mutationQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingMutationCountRef = useRef(0);
+  const summaryRef = useRef(summary);
   const resourceKey = getResourceKey(props);
+  const cacheKey = currentUser
+    ? getPrivateCacheKey(currentUser.id, `viewings:${resourceKey}`)
+    : null;
+  const requestScope = `${currentUser?.id ?? 'signed-out'}:${resourceKey}`;
+  const requestRef = useRef({ scope: requestScope, version: 0 });
+  summaryRef.current = summary;
+
+  if (requestRef.current.scope !== requestScope) {
+    requestRef.current = { scope: requestScope, version: requestRef.current.version + 1 };
+  }
 
   const loadSummary = useCallback(async () => {
+    const scope = requestScope;
+    const version = requestRef.current.version + 1;
+    requestRef.current = { scope, version };
+    const isCurrent = () => requestRef.current.scope === scope && requestRef.current.version === version;
+
     if (!firebaseIdToken) {
-      setSummary(null);
+      if (isCurrent()) setSummary(null);
       return;
     }
 
-    setIsLoading(true);
-
     try {
+      if (cacheKey) {
+        const cached = await readPersistedCache<Summary>(cacheKey).catch(() => null);
+        if (cached && isCurrent()) setSummary(cached.data);
+      }
       const token = await getFirebaseIdToken();
 
-      if (!token) {
+      if (!token || !isCurrent()) {
         return;
       }
 
-      setSummary(await getSummary(token, props));
+      const loadedSummary = await getSummary(token, props);
+      if (!isCurrent()) return;
+      setSummary(loadedSummary);
+      if (cacheKey) void writePersistedCache(cacheKey, loadedSummary).catch(() => undefined);
     } catch {
-      setSummary(null);
-    } finally {
-      setIsLoading(false);
+      // Existing local data stays mounted while the backend refreshes silently.
     }
-  }, [firebaseIdToken, getFirebaseIdToken, resourceKey, trackingRevision]);
+  }, [cacheKey, firebaseIdToken, getFirebaseIdToken, requestScope, viewingRevision]);
 
   useEffect(() => {
     void loadSummary();
   }, [loadSummary]);
 
   async function logAnotherWatch() {
-    if (!firebaseIdToken || isSaving || props.contentType === 'series') {
+    if (!firebaseIdToken || props.contentType === 'series') {
       return;
     }
+    const scope = requestScope;
+    requestRef.current = { scope, version: requestRef.current.version + 1 };
+    const currentSummary = summaryRef.current;
+    if (!currentSummary || !('viewCount' in currentSummary)) return;
 
-    setIsSaving(true);
+    const optimisticSummary = { ...currentSummary, viewCount: currentSummary.viewCount + 1 };
+    setSummary(optimisticSummary);
+    summaryRef.current = optimisticSummary;
+    if (cacheKey) void writePersistedCache(cacheKey, optimisticSummary).catch(() => undefined);
+    pendingMutationCountRef.current += 1;
 
-    try {
-      const token = await getFirebaseIdToken();
+    const commitMutation = async () => {
+      try {
+        const token = await getFirebaseIdToken();
+        if (!token) throw new Error('Sign in again to log another watch.');
 
-      if (!token) {
-        throw new Error('Sign in again to log another watch.');
+        lastConfirmedSummaryRef.current = props.contentType === 'movie'
+          ? await logMovieViewing(token, props.tmdbId)
+          : await logEpisodeViewing(
+              token,
+              props.seriesTmdbId,
+              props.seasonNumber,
+              props.episodeNumber,
+            );
+      } catch (error) {
+        const rolledBack = summaryRef.current && 'viewCount' in summaryRef.current
+          ? { ...summaryRef.current, viewCount: Math.max(0, summaryRef.current.viewCount - 1) }
+          : summaryRef.current;
+        setSummary(rolledBack);
+        summaryRef.current = rolledBack;
+        if (cacheKey && rolledBack) {
+          void writePersistedCache(cacheKey, rolledBack).catch(() => undefined);
+        }
+        hapticError();
+        showToast(error instanceof Error ? error.message : 'Could not log another watch.');
+      } finally {
+        pendingMutationCountRef.current -= 1;
+        if (pendingMutationCountRef.current === 0 && requestRef.current.scope === scope) {
+          const confirmed = lastConfirmedSummaryRef.current;
+          if (confirmed) {
+            setSummary(confirmed);
+            summaryRef.current = confirmed;
+            if (cacheKey) void writePersistedCache(cacheKey, confirmed).catch(() => undefined);
+          }
+          lastConfirmedSummaryRef.current = null;
+          notifyUserDataChanged('viewings');
+        }
       }
-
-      const next = props.contentType === 'movie'
-        ? await logMovieViewing(token, props.tmdbId)
-        : await logEpisodeViewing(
-            token,
-            props.seriesTmdbId,
-            props.seasonNumber,
-            props.episodeNumber,
-          );
-
-      setSummary(next);
-      notifyTrackingChanged();
-      hapticConfirm();
-      showToast('Another watch was logged.', 'success');
-    } catch (error) {
-      hapticError();
-      showToast(error instanceof Error ? error.message : 'Could not log another watch.');
-    } finally {
-      setIsSaving(false);
-    }
+    };
+    const queuedMutation = mutationQueueRef.current.then(commitMutation, commitMutation);
+    mutationQueueRef.current = queuedMutation.catch(() => undefined);
+    await queuedMutation;
   }
 
   if (!firebaseIdToken) {
     return null;
   }
 
-  if (isLoading && !summary) {
-    return null;
-  }
-
   const viewCount = summary && 'viewCount' in summary ? summary.viewCount : 0;
   const canLogAgain = props.contentType !== 'series' && viewCount > 0;
+
+  if (props.variant === 'activity') {
+    return (
+      <Pressable
+        accessibilityHint={canLogAgain ? 'Logs another viewing' : undefined}
+        accessibilityLabel={formatActivityViewingCount(viewCount)}
+        accessibilityRole={canLogAgain ? 'button' : 'text'}
+        disabled={!canLogAgain}
+        onPress={canLogAgain ? () => void logAnotherWatch() : undefined}
+        style={({ pressed }) => [
+          styles.activityContainer,
+          pressed && styles.activityContainerPressed,
+        ]}
+      >
+        <History color={colors.textMuted} size={23} strokeWidth={2.1} />
+        <Text accessibilityLiveRegion="polite" style={styles.activityValue}>
+          {formatActivityViewingCount(viewCount)}
+        </Text>
+      </Pressable>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -126,17 +195,13 @@ export function ViewingCountControl(props: Props) {
         <Pressable
           accessibilityLabel="Log another watch"
           accessibilityRole="button"
-          disabled={isSaving}
           onPress={() => void logAnotherWatch()}
           style={({ pressed }) => [
             styles.rewatchButton,
             pressed ? styles.rewatchButtonPressed : null,
-            isSaving ? styles.rewatchButtonDisabled : null,
           ]}
         >
-          {isSaving
-            ? <ActivityIndicator color={colors.accentText} size="small" />
-            : <RotateCcw color={colors.accentText} size={15} strokeWidth={2.3} />}
+          <RotateCcw color={colors.accentText} size={15} strokeWidth={2.3} />
           <Text style={styles.rewatchLabel}>Log another watch</Text>
         </Pressable>
       ) : null}
@@ -194,7 +259,27 @@ function formatSummary(props: Props, summary: Summary | null) {
   return `Watched ${viewCount} ${viewCount === 1 ? 'time' : 'times'}`;
 }
 
+function formatActivityViewingCount(viewCount: number) {
+  return `${viewCount} ${viewCount === 1 ? 'viewing' : 'viewings'}`;
+}
+
 const styles = StyleSheet.create({
+  activityContainer: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    justifyContent: 'center',
+    minHeight: 58,
+  },
+  activityContainerPressed: {
+    opacity: 0.72,
+  },
+  activityValue: {
+    color: colors.textMuted,
+    fontSize: 14,
+    fontWeight: '700',
+  },
   container: {
     alignItems: 'center',
     borderBottomColor: colors.border,
@@ -229,9 +314,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: touchTargets.min,
     paddingHorizontal: spacing.sm,
-  },
-  rewatchButtonDisabled: {
-    opacity: 0.55,
   },
   rewatchButtonPressed: {
     backgroundColor: 'rgba(212, 58, 92, 0.22)',

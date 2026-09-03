@@ -1,7 +1,6 @@
-import { CheckCircle2, PlayCircle } from 'lucide-react-native';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { SegmentedControl } from '../components/SegmentedControl';
-import { colors, spacing } from '../design/tokens';
+import { CheckCircle2, Circle } from 'lucide-react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { colors, radii, spacing, touchTargets } from '../design/tokens';
 import { isEpisodeWatched } from '../episodes/episodeModel';
 import { useSeasonEpisodes } from '../episodes/useSeasonEpisodes';
 
@@ -9,57 +8,56 @@ type Props = {
   episodeNumber: number;
   seasonNumber: number;
   seriesTmdbId: number;
+  variant?: 'activity' | 'default';
 };
 
-type Status = 'watching' | 'watched';
-
-const statusOptions: { Icon: typeof PlayCircle; label: string; value: Status }[] = [
-  { Icon: PlayCircle, label: 'Watching', value: 'watching' },
-  { Icon: CheckCircle2, label: 'Watched', value: 'watched' },
-];
-
-export function EpisodeProgressControl({ episodeNumber, seasonNumber, seriesTmdbId }: Props) {
+export function EpisodeProgressControl({
+  episodeNumber,
+  seasonNumber,
+  seriesTmdbId,
+  variant = 'default',
+}: Props) {
   const model = useSeasonEpisodes({ loadSeason: false, seasonNumber, seriesTmdbId });
   const watched = isEpisodeWatched(model.watchedState, seasonNumber, episodeNumber);
-  const currentStatus: Status = watched ? 'watched' : 'watching';
 
   if (!model.isSignedIn) {
     return null;
   }
 
   return (
-    <View style={styles.container}>
-      <SegmentedControl<Status>
-        buttonMinHeight={46}
-        onChange={(status) => void model.setEpisodeWatched(episodeNumber, status === 'watched')}
-        options={statusOptions.map(({ Icon, label, value }) => ({
-          accessibilityLabel: `Set ${label}`,
-          label,
-          render: ({ selected }) => (
-            <View style={styles.statusContent}>
-              <Icon color={selected ? colors.textOnAccent : colors.text} size={16} strokeWidth={2.2} />
-              <Text numberOfLines={1} style={[styles.statusLabel, selected && styles.statusLabelSelected]}>
-                {label}
-              </Text>
-            </View>
-          ),
-          value,
-        }))}
-        value={currentStatus}
-      />
-      {model.isSaving ? (
-        <View style={styles.loadingOverlay} pointerEvents="none">
-          <ActivityIndicator color={colors.textOnAccent} />
-        </View>
-      ) : null}
+    <View style={[styles.container, variant === 'activity' && styles.containerActivity]}>
+      <Pressable
+        accessibilityLabel={watched ? 'Mark episode unwatched' : 'Mark episode watched'}
+        accessibilityRole="button"
+        accessibilityState={{ selected: watched }}
+        onPress={() => void model.setEpisodeWatched(episodeNumber, !watched)}
+        style={({ pressed }) => [
+          styles.button,
+          variant === 'activity' && styles.buttonActivity,
+          watched && styles.buttonWatched,
+          pressed && styles.buttonPressed,
+        ]}
+      >
+        {watched ? (
+          <CheckCircle2 color={colors.success} size={21} strokeWidth={2.4} />
+        ) : (
+          <Circle color={colors.accentText} size={21} strokeWidth={2.2} />
+        )}
+        <Text style={[styles.label, watched && styles.labelWatched]}>
+          {watched ? 'Watched' : 'Mark watched'}
+        </Text>
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  button: { alignItems: 'center', backgroundColor: colors.accentSoft, borderColor: colors.accentBorder, borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', gap: spacing.sm, justifyContent: 'center', minHeight: touchTargets.min, paddingHorizontal: spacing.md },
+  buttonActivity: { alignSelf: 'stretch', backgroundColor: 'transparent', minHeight: 58 },
+  buttonPressed: { opacity: 0.78 },
+  buttonWatched: { backgroundColor: colors.successBackground, borderColor: colors.successBorder },
   container: { marginBottom: spacing.md, position: 'relative' },
-  loadingOverlay: { alignItems: 'center', bottom: 0, justifyContent: 'center', left: 0, position: 'absolute', right: 0, top: 0 },
-  statusContent: { alignItems: 'center', flexDirection: 'row', gap: spacing.xs, justifyContent: 'center', minWidth: 0 },
-  statusLabel: { color: colors.text, fontSize: 14, fontWeight: '800', textAlign: 'center' },
-  statusLabelSelected: { color: colors.textOnAccent },
+  containerActivity: { flex: 1, justifyContent: 'center', marginBottom: 0 },
+  label: { color: colors.accentText, fontSize: 14, fontWeight: '800' },
+  labelWatched: { color: colors.success },
 });

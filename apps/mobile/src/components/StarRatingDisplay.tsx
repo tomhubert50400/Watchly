@@ -7,16 +7,31 @@ type StarRatingDisplayProps = {
   rating: number;
   showValue?: boolean;
   size?: number;
+  spread?: boolean;
 };
 
-export function StarRatingDisplay({ accessibilityLabel, rating, showValue = false, size = 18 }: StarRatingDisplayProps) {
+export function StarRatingDisplay({
+  accessibilityLabel,
+  rating,
+  showValue = false,
+  size = 18,
+  spread = false,
+}: StarRatingDisplayProps) {
   const normalized = normalizeRating(rating);
   const fills = getStarFillRatios(normalized);
   const label = accessibilityLabel ?? `Rating ${normalized} out of 5`;
 
   return (
-    <View accessibilityLabel={label} accessibilityRole="image" style={styles.container}>
-      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.stars}>
+    <View
+      accessibilityLabel={label}
+      accessibilityRole="image"
+      style={[styles.container, spread && styles.containerSpread]}
+    >
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={[styles.stars, spread && styles.starsSpread]}
+      >
         {fills.map((fill, index) => (
           <View key={index} style={[styles.star, { height: size, width: size }]}>
             <Text style={[styles.glyph, { color: colors.textSubtle, fontSize: size, lineHeight: size }]}>★</Text>
@@ -38,6 +53,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
   },
+  containerSpread: {
+    alignSelf: 'stretch',
+    flex: 1,
+  },
   fillClip: {
     left: 0,
     overflow: 'hidden',
@@ -56,6 +75,10 @@ const styles = StyleSheet.create({
   },
   stars: {
     flexDirection: 'row',
+  },
+  starsSpread: {
+    flex: 1,
+    justifyContent: 'space-between',
   },
   value: {
     color: colors.ratingText,

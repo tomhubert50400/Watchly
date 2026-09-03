@@ -1,14 +1,17 @@
-import { useCallback, useLayoutEffect } from 'react';
+import { useCallback, useEffect, useLayoutEffect } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { CalendarClock, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from 'react-native-svg';
 import { EpisodeDetails, EpisodeDetailsResponse } from '../api/catalogue';
 import { useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
-import { mediaHeroFadeColors } from '../components/mediaHeroGradient';
-import { colors, spacing, typography } from '../design/tokens';
+import { mediaHeroGradientStops } from '../components/mediaHeroGradient';
+import { colors, radii, spacing, typography } from '../design/tokens';
+import { useSeasonEpisodes } from '../episodes/useSeasonEpisodes';
 import { RootStackParamList } from '../navigation/types';
 import { EpisodeReviewEditor } from '../reviews/EpisodeReviewEditor';
 import { EpisodeProgressControl } from '../tracking/EpisodeProgressControl';
@@ -18,6 +21,7 @@ import { ensureEpisodeDetails, getEpisodeResourceKey } from './cataloguePrefetch
 import { EpisodeCommunityPanel } from './EpisodeCommunityPanel';
 import { HeaderInfoItem, HeaderInfoPills } from './HeaderInfoPills';
 import { SynopsisPanel } from './SynopsisPanel';
+import { formatDetailDate } from './detailModel';
 
 type EpisodeDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'EpisodeDetail'>;
 
@@ -59,6 +63,7 @@ export function EpisodeDetailScreen({ navigation, route }: EpisodeDetailScreenPr
         ) : episode ? (
           <EpisodeDetailContent
             episode={episode}
+            navigation={navigation}
             seriesTitle={route.params.seriesTitle}
           />
         ) : null}
@@ -69,11 +74,19 @@ export function EpisodeDetailScreen({ navigation, route }: EpisodeDetailScreenPr
 
 function EpisodeDetailContent({
   episode,
+  navigation,
   seriesTitle,
 }: {
   episode: EpisodeDetails;
+  navigation: EpisodeDetailScreenProps['navigation'];
   seriesTitle: string;
 }) {
+  const seasonModel = useSeasonEpisodes({
+    seasonNumber: episode.seasonNumber,
+    seriesTmdbId: episode.seriesTmdbId,
+  });
+  const { width } = useWindowDimensions();
+  const heroHeight = Math.min(Math.max(width * 0.78, 300), 340);
   const runtime = episode.runtimeMinutes ? `${episode.runtimeMinutes}m` : null;
   const cast = episode.cast ?? [];
   const crew = episode.crew ?? [];
@@ -81,9 +94,10 @@ function EpisodeDetailContent({
   const episodeCode = `S${episode.seasonNumber} E${episode.episodeNumber}`;
   const rating = isReleased && episode.voteAverage ? (episode.voteAverage / 2).toFixed(1) : null;
   const infoItems = [
-    episodeCode,
-    episode.airDate,
-    runtime,
+    episode.airDate
+      ? { icon: 'calendar', label: formatDetailDate(episode.airDate) ?? episode.airDate } satisfies HeaderInfoItem
+      : null,
+    runtime ? { icon: 'clock', label: runtime } satisfies HeaderInfoItem : null,
     rating ? { icon: 'star', label: rating } satisfies HeaderInfoItem : null,
   ].filter(Boolean) as HeaderInfoItem[];
   const detailItems = [
@@ -91,10 +105,37 @@ function EpisodeDetailContent({
     `Episode ${episode.episodeNumber}`,
     runtime,
   ].filter(Boolean);
+  const currentIndex = seasonModel.episodes.findIndex(
+    (item) => item.episodeNumber === episode.episodeNumber,
+  );
+  const previousEpisode = currentIndex > 0 ? seasonModel.episodes[currentIndex - 1] : null;
+  const nextEpisode = currentIndex >= 0 ? seasonModel.episodes[currentIndex + 1] ?? null : null;
+
+  useEffect(() => {
+    for (const adjacent of [previousEpisode, nextEpisode]) {
+      if (adjacent) {
+        void ensureEpisodeDetails(
+          episode.seriesTmdbId,
+          adjacent.seasonNumber,
+          adjacent.episodeNumber,
+        ).catch(() => undefined);
+      }
+    }
+  }, [episode.seriesTmdbId, nextEpisode, previousEpisode]);
+
+  function openEpisode(target: NonNullable<typeof previousEpisode>) {
+    navigation.replace('EpisodeDetail', {
+      episodeNumber: target.episodeNumber,
+      seasonNumber: target.seasonNumber,
+      seriesTitle,
+      title: target.title,
+      tmdbId: episode.seriesTmdbId,
+    });
+  }
 
   return (
     <View>
-      <View style={styles.hero}>
+      <View style={[styles.hero, { height: heroHeight }]}>
         {episode.stillUrl ? (
           <Image
             accessibilityIgnoresInvertColors
@@ -106,32 +147,73 @@ function EpisodeDetailContent({
           <View style={styles.stillPlaceholder} />
         )}
         <View style={styles.heroScrim} />
-        <View pointerEvents="none" style={styles.heroFade}>
-          {mediaHeroFadeColors.map((backgroundColor) => (
-            <View key={backgroundColor} style={[styles.fadeBand, { backgroundColor }]} />
-          ))}
-        </View>
+        <Svg pointerEvents="none" style={styles.heroFade}>
+          <Defs>
+            <SvgLinearGradient id="episodeHeroFade" x1="0" x2="0" y1="0" y2="1">
+              {mediaHeroGradientStops.map((stop) => (
+                <Stop
+                  key={stop.offset}
+                  offset={stop.offset}
+                  stopColor={colors.background}
+                  stopOpacity={stop.opacity}
+                />
+              ))}
+            </SvgLinearGradient>
+          </Defs>
+          <Rect fill="url(#episodeHeroFade)" height="100%" width="100%" />
+        </Svg>
         <View style={styles.heroCopy}>
-          <Text numberOfLines={1} style={styles.eyebrow}>{seriesTitle} · Episode</Text>
+          <Text numberOfLines={1} style={styles.eyebrow}>{seriesTitle} · {episodeCode}</Text>
           <Text style={styles.title}>{episode.title}</Text>
           <HeaderInfoPills items={infoItems} />
         </View>
       </View>
       <View style={styles.bodyStack}>
-        <SynopsisPanel overview={episode.overview} />
+        {previousEpisode || nextEpisode ? (
+          <View style={styles.episodeNavigation}>
+            <AdjacentEpisodeButton
+              direction="previous"
+              episode={previousEpisode}
+              onPress={previousEpisode ? () => openEpisode(previousEpisode) : undefined}
+            />
+            <View style={styles.navigationDivider} />
+            <AdjacentEpisodeButton
+              direction="next"
+              episode={nextEpisode}
+              onPress={nextEpisode ? () => openEpisode(nextEpisode) : undefined}
+            />
+          </View>
+        ) : null}
+
+        <SynopsisPanel overview={episode.overview} spoilerProtected variant="card" />
         <View style={styles.personalSection}>
           <Text style={styles.personalEyebrow}>Your activity</Text>
-          <EpisodeProgressControl
-            episodeNumber={episode.episodeNumber}
-            seasonNumber={episode.seasonNumber}
-            seriesTmdbId={episode.seriesTmdbId}
-          />
-          <ViewingCountControl
-            contentType="episode"
-            episodeNumber={episode.episodeNumber}
-            seasonNumber={episode.seasonNumber}
-            seriesTmdbId={episode.seriesTmdbId}
-          />
+          {isReleased ? (
+            <>
+              <View style={styles.activityTopRow}>
+                <EpisodeProgressControl
+                  episodeNumber={episode.episodeNumber}
+                  seasonNumber={episode.seasonNumber}
+                  seriesTmdbId={episode.seriesTmdbId}
+                  variant="activity"
+                />
+                <View style={styles.activityVerticalDivider} />
+                <ViewingCountControl
+                  contentType="episode"
+                  episodeNumber={episode.episodeNumber}
+                  seasonNumber={episode.seasonNumber}
+                  seriesTmdbId={episode.seriesTmdbId}
+                  variant="activity"
+                />
+              </View>
+              <View style={styles.activityHorizontalDivider} />
+            </>
+          ) : (
+            <View style={styles.futureNotice}>
+              <CalendarClock color={colors.textSubtle} size={20} strokeWidth={2.2} />
+              <Text style={styles.futureNoticeText}>Tracking will be available after this episode is released.</Text>
+            </View>
+          )}
           {isReleased ? (
             <EpisodeReviewEditor
               episodeNumber={episode.episodeNumber}
@@ -139,6 +221,7 @@ function EpisodeDetailContent({
               posterUrl={episode.stillUrl}
               seasonNumber={episode.seasonNumber}
               seriesTmdbId={episode.seriesTmdbId}
+              variant="activity"
             />
           ) : null}
         </View>
@@ -147,6 +230,7 @@ function EpisodeDetailContent({
           episodeNumber={episode.episodeNumber}
           seasonNumber={episode.seasonNumber}
           seriesTmdbId={episode.seriesTmdbId}
+          spoilerProtected
         />
 
         <EpisodeCreditRail
@@ -175,6 +259,45 @@ function EpisodeDetailContent({
         </View>
       </View>
     </View>
+  );
+}
+
+function AdjacentEpisodeButton({
+  direction,
+  episode,
+  onPress,
+}: {
+  direction: 'next' | 'previous';
+  episode: { episodeNumber: number; seasonNumber: number; title: string } | null;
+  onPress: (() => void) | undefined;
+}) {
+  const previous = direction === 'previous';
+  const episodeCode = episode ? `S${episode.seasonNumber} EP${episode.episodeNumber}` : null;
+
+  return (
+    <Pressable
+      accessibilityLabel={episode
+        ? `${previous ? 'Previous' : 'Next'} episode, season ${episode.seasonNumber}, episode ${episode.episodeNumber}, ${episode.title}`
+        : undefined}
+      accessibilityRole={episode ? 'button' : undefined}
+      accessibilityState={{ disabled: !episode }}
+      disabled={!episode}
+      onPress={onPress}
+      style={({ pressed }) => [styles.navigationButton, pressed && styles.navigationButtonPressed]}
+    >
+      {previous ? <ChevronLeft color={episode ? colors.accentText : colors.textSubtle} size={24} /> : null}
+      <View style={[styles.navigationCopy, !previous && styles.navigationCopyNext]}>
+        <View style={styles.navigationMeta}>
+          {!previous && episodeCode ? <Text style={styles.navigationCode}>{episodeCode}</Text> : null}
+          <Text style={styles.navigationLabel}>{previous ? 'Previous' : 'Next'}</Text>
+          {previous && episodeCode ? <Text style={styles.navigationCode}>{episodeCode}</Text> : null}
+        </View>
+        <Text numberOfLines={2} style={[styles.navigationTitle, !episode && styles.navigationTitleDisabled]}>
+          {episode?.title ?? 'No episode'}
+        </Text>
+      </View>
+      {!previous ? <ChevronRight color={episode ? colors.accentText : colors.textSubtle} size={24} /> : null}
+    </Pressable>
   );
 }
 
@@ -241,6 +364,22 @@ function getPersonInitial(name: string) {
 }
 
 const styles = StyleSheet.create({
+  activityHorizontalDivider: {
+    backgroundColor: colors.border,
+    height: StyleSheet.hairlineWidth,
+    marginVertical: spacing.sm,
+  },
+  activityTopRow: {
+    alignItems: 'stretch',
+    flexDirection: 'row',
+    minHeight: 70,
+  },
+  activityVerticalDivider: {
+    alignSelf: 'stretch',
+    backgroundColor: colors.border,
+    marginHorizontal: spacing.md,
+    width: StyleSheet.hairlineWidth,
+  },
   creditCard: {
     width: 92,
   },
@@ -287,7 +426,7 @@ const styles = StyleSheet.create({
     paddingTop: 0,
   },
   bodyStack: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
   },
   detailsSection: {
     gap: spacing.xs,
@@ -302,12 +441,18 @@ const styles = StyleSheet.create({
     color: colors.accentText,
     marginBottom: spacing.xs,
   },
-  fadeBand: {
-    flex: 1,
+  episodeNavigation: {
+    alignItems: 'stretch',
+    backgroundColor: colors.panelElevated,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    marginTop: spacing.md,
+    overflow: 'hidden',
   },
   hero: {
     backgroundColor: colors.panelSoft,
-    height: 340,
     marginBottom: spacing.sm,
     overflow: 'hidden',
   },
@@ -318,8 +463,8 @@ const styles = StyleSheet.create({
     right: spacing.xl,
   },
   heroFade: {
-    bottom: 0,
-    height: 180,
+    bottom: -1,
+    height: 220,
     left: 0,
     position: 'absolute',
     right: 0,
@@ -334,13 +479,17 @@ const styles = StyleSheet.create({
   },
   personalEyebrow: {
     ...typography.eyebrow,
-    color: colors.textSubtle,
-    marginBottom: spacing.sm,
+    color: colors.textMuted,
+    marginBottom: spacing.md,
   },
   personalSection: {
-    borderBottomColor: colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingTop: spacing.xl,
+    backgroundColor: colors.panelElevated,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    marginBottom: spacing.sm,
+    marginTop: spacing.md,
+    padding: spacing.lg,
   },
   safeArea: {
     backgroundColor: colors.background,
@@ -354,6 +503,68 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panelSoft,
     height: '100%',
     width: '100%',
+  },
+  futureNotice: {
+    alignItems: 'center',
+    backgroundColor: colors.panelSoft,
+    borderRadius: radii.sm,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    padding: spacing.md,
+  },
+  futureNoticeText: {
+    ...typography.body,
+    color: colors.textMuted,
+    flex: 1,
+  },
+  navigationButton: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    minHeight: 72,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.md,
+  },
+  navigationButtonPressed: {
+    backgroundColor: colors.accentSoft,
+  },
+  navigationCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  navigationCopyNext: {
+    alignItems: 'flex-end',
+  },
+  navigationDivider: {
+    backgroundColor: colors.border,
+    marginVertical: spacing.md,
+    width: StyleSheet.hairlineWidth,
+  },
+  navigationCode: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  navigationLabel: {
+    ...typography.meta,
+    color: colors.textSubtle,
+  },
+  navigationMeta: {
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 3,
+  },
+  navigationTitle: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '800',
+    lineHeight: 17,
+  },
+  navigationTitleDisabled: {
+    color: colors.textSubtle,
   },
   stillPlaceholder: {
     backgroundColor: colors.panelSoft,

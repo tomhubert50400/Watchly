@@ -1,9 +1,10 @@
-import { Star, Trash2 } from 'lucide-react-native';
+import { SquarePen, Star, Trash2 } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   GestureResponderEvent,
   Image,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -15,10 +16,16 @@ import {
   BottomActionSheetScrollView,
 } from '../components/BottomActionSheet';
 import { Button } from '../components/Button';
+import { StarRatingDisplay } from '../components/StarRatingDisplay';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInSheet } from '../auth/SignInRequired';
+import {
+  getPrivateCacheKey,
+  readPersistedCache,
+  writePersistedCache,
+} from '../cache/persistedCache';
 import { colors, radii, shadows, spacing, touchTargets, typography } from '../design/tokens';
-import { hapticConfirm, hapticError, hapticSelection } from '../feedback/haptics';
+import { hapticError } from '../feedback/haptics';
 import { useToast } from '../notifications/ToastContext';
 import {
   MAX_REVIEW_LENGTH,
@@ -44,6 +51,7 @@ const STAR_ICON_SIZE = 34;
 const STAR_GAP = 2;
 const STAR_VALUES = [1, 2, 3, 4, 5] as const;
 const STAR_TRACK_WIDTH = STAR_TARGET_SIZE * STAR_VALUES.length + STAR_GAP * (STAR_VALUES.length - 1);
+const ACTIVITY_STAR_TRACK_WIDTH = 138;
 
 type LoadedOpinion = {
   rating: number | null;
@@ -61,6 +69,7 @@ type OpinionSheetProps = {
   posterUrl?: string | null;
   resourceKey?: string;
   signedOutMessage: string;
+  triggerVariant?: 'activity' | 'default';
 };
 
 export function OpinionSheet({
@@ -74,17 +83,27 @@ export function OpinionSheet({
   posterUrl,
   resourceKey,
   signedOutMessage,
+  triggerVariant = 'default',
 }: OpinionSheetProps) {
   const { currentUser } = useAuthSession();
   const { showToast } = useToast();
   const { fontScale } = useWindowDimensions();
-  const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [opinion, setOpinion] = useState<OpinionState>(() => createOpinionState(null, null));
+  const activityBatchChangedRef = useRef(false);
+  const activityConfirmedRatingRef = useRef<number | null>(null);
+  const activityMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const activityPendingMutationCountRef = useRef(0);
+  const activityRatingGestureActiveRef = useRef(false);
+  const activityRatingTrackWidthRef = useRef(ACTIVITY_STAR_TRACK_WIDTH);
   const requestScope = JSON.stringify([ownerKey ?? currentUser?.id ?? null, resourceKey ?? mediaLabel, isSignedIn]);
+  const cacheOwnerId = ownerKey ?? currentUser?.id ?? null;
+  const cacheKey = cacheOwnerId
+    ? getPrivateCacheKey(cacheOwnerId, `opinion:${resourceKey ?? mediaLabel}`)
+    : null;
   const draftRatingRef = useRef(opinion.draftRating);
   const ratingTrackWidthRef = useRef(STAR_TRACK_WIDTH);
   const requestRef = useRef({ scope: requestScope, version: 0 });
@@ -102,25 +121,28 @@ export function OpinionSheet({
     const isCurrent = () => requestRef.current.scope === scope && requestRef.current.version === version;
 
     if (!isSignedIn) {
-      setIsLoading(false);
       setOpinion(createOpinionState(null, null));
       setLoadError(null);
       return;
     }
 
-    setIsLoading(true);
     setLoadError(null);
     try {
+      if (cacheKey) {
+        const cached = await readPersistedCache<LoadedOpinion>(cacheKey).catch(() => null);
+        if (cached && isCurrent()) {
+          setOpinion(createOpinionState(cached.data.rating, cached.data.review));
+        }
+      }
       const loaded = await load();
       if (!isCurrent()) return;
       setOpinion(createOpinionState(loaded.rating, loaded.review));
+      if (cacheKey) void writePersistedCache(cacheKey, loaded).catch(() => undefined);
     } catch {
       if (!isCurrent()) return;
       setLoadError('Could not load your opinion.');
-    } finally {
-      if (isCurrent()) setIsLoading(false);
     }
-  }, [isSignedIn, load, requestScope]);
+  }, [cacheKey, isSignedIn, load, requestScope]);
 
   useEffect(() => {
     setIsOpen(false);
@@ -148,7 +170,6 @@ export function OpinionSheet({
   function selectDraftRating(draftRating: number | null) {
     if (draftRating === draftRatingRef.current) return;
     draftRatingRef.current = draftRating;
-    hapticSelection();
     setOpinion((current) => ({ ...current, draftRating, error: null }));
   }
 
@@ -159,15 +180,36 @@ export function OpinionSheet({
     ));
   }
 
-  async function runOperations(operations: OpinionOperation[]) {
+  function openTrigger() {
+    if (!isSignedIn) {
+      setIsSignInOpen(true);
+      return;
+    }
+
+    if (loadError) {
+      void loadOpinion();
+      return;
+    }
+
+    setIsOpen(true);
+  }
+
+  async function runOperations(operations: OpinionOperation[], baseOpinion = opinion) {
     if (operations.length === 0 || isSaving) return false;
 
     const scope = requestScope;
     const version = requestRef.current.version + 1;
     requestRef.current = { scope, version };
     const isCurrent = () => requestRef.current.scope === scope && requestRef.current.version === version;
-    let next = beginOpinionOperations(opinion);
-    setOpinion(next);
+    let confirmed = beginOpinionOperations(baseOpinion);
+    const optimistic = operations.reduce(applyOperationSuccess, confirmed);
+    setOpinion(optimistic);
+    if (cacheKey) {
+      void writePersistedCache(cacheKey, {
+        rating: optimistic.savedRating,
+        review: optimistic.savedReview,
+      }).catch(() => undefined);
+    }
     setIsSaving(true);
     let changed = false;
 
@@ -176,18 +218,24 @@ export function OpinionSheet({
         try {
           await perform(operation);
           if (!isCurrent()) return false;
-          next = applyOperationSuccess(next, operation);
+          confirmed = applyOperationSuccess(confirmed, operation);
           changed = true;
-          setOpinion(next);
         } catch {
           if (!isCurrent()) return false;
-          next = applyOperationFailure(next, operation, operationError(operation));
-          setOpinion(next);
+          const failed = applyOperationFailure(confirmed, operation, operationError(operation));
+          setOpinion(failed);
+          if (cacheKey) {
+            void writePersistedCache(cacheKey, {
+              rating: failed.savedRating,
+              review: failed.savedReview,
+            }).catch(() => undefined);
+          }
           hapticError();
+          showToast(failed.error ?? operationError(operation));
           return false;
         }
       }
-      if (changed) hapticConfirm();
+      setOpinion(confirmed);
       return true;
     } finally {
       if (isCurrent()) {
@@ -198,12 +246,125 @@ export function OpinionSheet({
   }
 
   async function save() {
-    const succeeded = await runOperations(buildSavePlan(opinion));
-    if (!succeeded) return;
-
     setIsOpen(false);
+    const succeeded = await runOperations(buildSavePlan(opinion));
+    if (!succeeded) {
+      setIsOpen(true);
+      return;
+    }
     setOpinion((current) => resetOpinionDraft(current));
-    showToast('Your opinion was saved.', 'success');
+  }
+
+  async function saveActivityRating(score: number) {
+    if (!isSignedIn) {
+      setIsSignInOpen(true);
+      return;
+    }
+
+    if (loadError) {
+      void loadOpinion();
+      return;
+    }
+
+    if (opinion.savedRating === score) return;
+    if (activityPendingMutationCountRef.current === 0) {
+      activityConfirmedRatingRef.current = opinion.savedRating;
+      activityBatchChangedRef.current = false;
+    }
+    const scope = requestScope;
+    requestRef.current = { scope, version: requestRef.current.version + 1 };
+    draftRatingRef.current = score;
+    setOpinion((current) => {
+      const optimistic = applyOperationSuccess(
+        beginOpinionOperations({ ...current, draftRating: score }),
+        { kind: 'saveRating', score },
+      );
+      if (cacheKey) {
+        void writePersistedCache(cacheKey, {
+          rating: optimistic.savedRating,
+          review: optimistic.savedReview,
+        }).catch(() => undefined);
+      }
+      return optimistic;
+    });
+    activityPendingMutationCountRef.current += 1;
+
+    const commitMutation = async () => {
+      try {
+        await perform({ kind: 'saveRating', score });
+        activityConfirmedRatingRef.current = score;
+        activityBatchChangedRef.current = true;
+      } catch {
+        hapticError();
+        showToast('Could not save your rating.');
+      } finally {
+        activityPendingMutationCountRef.current -= 1;
+        if (activityPendingMutationCountRef.current === 0) {
+          const confirmedRating = activityConfirmedRatingRef.current;
+          if (!activityRatingGestureActiveRef.current) {
+            draftRatingRef.current = confirmedRating;
+          }
+          setOpinion((current) => {
+            const confirmed = {
+              ...current,
+              draftRating: activityRatingGestureActiveRef.current
+                ? current.draftRating
+                : confirmedRating,
+              error: null,
+              savedRating: confirmedRating,
+              successfulOperations: [],
+            };
+            if (cacheKey) {
+              void writePersistedCache(cacheKey, {
+                rating: confirmed.savedRating,
+                review: confirmed.savedReview,
+              }).catch(() => undefined);
+            }
+            return confirmed;
+          });
+          if (activityBatchChangedRef.current) onChanged();
+          activityBatchChangedRef.current = false;
+        }
+      }
+    };
+    const queuedMutation = activityMutationQueueRef.current.then(commitMutation, commitMutation);
+    activityMutationQueueRef.current = queuedMutation.catch(() => undefined);
+    await queuedMutation;
+  }
+
+  function beginActivityRatingGesture(event: GestureResponderEvent) {
+    if (!isSignedIn) {
+      setIsSignInOpen(true);
+      return;
+    }
+
+    if (loadError) {
+      void loadOpinion();
+      return;
+    }
+
+    activityRatingGestureActiveRef.current = true;
+    selectActivityRatingAtTouch(event);
+  }
+
+  function selectActivityRatingAtTouch(event: GestureResponderEvent) {
+    if (!isSignedIn || loadError) return;
+    selectDraftRating(getRatingFromTrackPosition(
+      event.nativeEvent.locationX,
+      activityRatingTrackWidthRef.current,
+    ));
+  }
+
+  function saveActivityRatingAtRelease() {
+    activityRatingGestureActiveRef.current = false;
+    const score = draftRatingRef.current;
+    if (score !== null) void saveActivityRating(score);
+  }
+
+  function cancelActivityRatingGesture() {
+    activityRatingGestureActiveRef.current = false;
+    draftRatingRef.current = opinion.savedRating;
+    setOpinion((current) => ({ ...current, draftRating: current.savedRating }));
   }
 
   function confirmDeleteReview() {
@@ -215,8 +376,7 @@ export function OpinionSheet({
         {
           onPress: () => {
             void (async () => {
-              const succeeded = await runOperations(buildDeleteReviewPlan(opinion));
-              if (succeeded) showToast('Your review was deleted.', 'success');
+              await runOperations(buildDeleteReviewPlan(opinion));
             })();
           },
           style: 'destructive',
@@ -238,10 +398,9 @@ export function OpinionSheet({
         {
           onPress: () => {
             void (async () => {
-              const succeeded = await runOperations(buildClearPlan(opinion));
-              if (!succeeded) return;
               setIsOpen(false);
-              showToast('Your rating was cleared.', 'success');
+              const succeeded = await runOperations(buildClearPlan(opinion));
+              if (!succeeded) setIsOpen(true);
             })();
           },
           style: 'destructive',
@@ -271,27 +430,82 @@ export function OpinionSheet({
     </View>
   );
 
-  if (isLoading) {
-    return null;
-  }
-
   return (
-    <View style={styles.triggerPanel}>
-      <Text style={styles.triggerTitle}>Your opinion</Text>
-      <View style={styles.triggerContent}>
-        <Text style={[styles.triggerBody, loadError ? styles.errorText : null]}>{summary}</Text>
-        <View style={styles.triggerAction}>
-          {isSignedIn && !loadError ? (
-            <Button
-              fullWidth
-              label={opinion.savedRating === null ? 'Rate & review' : 'Edit opinion'}
-              onPress={() => setIsOpen(true)}
-            />
-          ) : null}
-          {!isSignedIn ? <Button fullWidth label="Sign in here" onPress={() => setIsSignInOpen(true)} /> : null}
-          {loadError && isSignedIn ? <Button fullWidth label="Retry" onPress={() => void loadOpinion()} variant="ghost" /> : null}
+    <View style={triggerVariant === 'activity' ? styles.activityRoot : styles.triggerPanel}>
+      {triggerVariant === 'activity' ? (
+        <View style={styles.activityOpinionRow}>
+          <View style={styles.activityRatingCell}>
+            <Text style={styles.activityLabel}>Your rating</Text>
+            <View
+              accessibilityActions={[
+                { label: 'Increase rating by half a star', name: 'increment' },
+                { label: 'Decrease rating by half a star', name: 'decrement' },
+              ]}
+              accessibilityLabel="Episode rating"
+              accessibilityRole="adjustable"
+              accessibilityState={{}}
+              accessibilityValue={getRatingAccessibilityValue(opinion.savedRating)}
+              onAccessibilityAction={(event) => {
+                const value = opinion.savedRating ?? 0;
+                const score = event.nativeEvent.actionName === 'increment'
+                  ? Math.min(5, value + 0.5)
+                  : Math.max(0.5, value - 0.5);
+                void saveActivityRating(score);
+              }}
+              onLayout={(event) => {
+                activityRatingTrackWidthRef.current = event.nativeEvent.layout.width;
+              }}
+              onMoveShouldSetResponder={() => true}
+              onResponderGrant={beginActivityRatingGesture}
+              onResponderMove={selectActivityRatingAtTouch}
+              onResponderRelease={saveActivityRatingAtRelease}
+              onResponderTerminate={cancelActivityRatingGesture}
+              onResponderTerminationRequest={() => false}
+              onStartShouldSetResponder={() => true}
+              style={styles.activityStars}
+            >
+              <View
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+                pointerEvents="none"
+                style={styles.activityStarDisplay}
+              >
+                <StarRatingDisplay rating={opinion.draftRating ?? 0} size={26} spread />
+              </View>
+            </View>
+          </View>
+          <View style={styles.activityDivider} />
+          <Pressable
+            accessibilityLabel={opinion.savedReview ? 'Edit your review' : 'Write a review'}
+            accessibilityRole="button"
+            onPress={openTrigger}
+            style={({ pressed }) => [styles.activityReviewCell, pressed && styles.activityPressed]}
+          >
+            <SquarePen color={colors.accentText} size={22} strokeWidth={2.1} />
+            <Text style={styles.activityReviewLabel}>
+              {opinion.savedReview ? 'Edit review' : 'Write a review'}
+            </Text>
+          </Pressable>
         </View>
-      </View>
+      ) : (
+        <>
+          <Text style={styles.triggerTitle}>Your opinion</Text>
+          <View style={styles.triggerContent}>
+            <Text style={[styles.triggerBody, loadError ? styles.errorText : null]}>{summary}</Text>
+            <View style={styles.triggerAction}>
+              {isSignedIn && !loadError ? (
+                <Button
+                  fullWidth
+                  label={opinion.savedRating === null ? 'Rate & review' : 'Edit opinion'}
+                  onPress={() => setIsOpen(true)}
+                />
+              ) : null}
+              {!isSignedIn ? <Button fullWidth label="Sign in here" onPress={() => setIsSignInOpen(true)} /> : null}
+              {loadError && isSignedIn ? <Button fullWidth label="Retry" onPress={() => void loadOpinion()} variant="ghost" /> : null}
+            </View>
+          </View>
+        </>
+      )}
 
       <BottomActionSheet footer={sheetFooter} onClose={closeSheet} title="Your opinion" visible={isOpen}>
         <BottomActionSheetScrollView keyboardShouldPersistTaps="handled">
@@ -433,6 +647,16 @@ function operationError(operation: OpinionOperation) {
 
 const styles = StyleSheet.create({
   actionButton: { flex: 1 },
+  activityDivider: { alignSelf: 'stretch', backgroundColor: colors.border, width: StyleSheet.hairlineWidth },
+  activityLabel: { ...typography.meta, color: colors.textSubtle, marginBottom: spacing.xs },
+  activityOpinionRow: { alignItems: 'stretch', flexDirection: 'row', minHeight: 70 },
+  activityPressed: { opacity: 0.72 },
+  activityRatingCell: { flex: 1, justifyContent: 'center', paddingRight: spacing.md },
+  activityReviewCell: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: spacing.sm, justifyContent: 'center', paddingLeft: spacing.md },
+  activityReviewLabel: { color: colors.accentText, fontSize: 14, fontWeight: '800' },
+  activityRoot: { alignSelf: 'stretch' },
+  activityStarDisplay: { flex: 1 },
+  activityStars: { alignItems: 'center', alignSelf: 'stretch', flexDirection: 'row', minHeight: touchTargets.min },
   counter: { ...typography.meta, color: colors.textSubtle },
   destructiveActions: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginTop: spacing.sm },
   errorText: { color: colors.danger },

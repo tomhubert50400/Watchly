@@ -1,38 +1,37 @@
-import { Flag } from 'lucide-react-native';
+import { Flag, ShieldAlert, Star } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ReportTarget } from '../api/reports';
 import { EpisodeCommunityResponse, getEpisodeCommunity } from '../api/reviews';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { useCachedResource } from '../cache/useCachedResource';
-import { StarRatingDisplay } from '../components/StarRatingDisplay';
 import { UserAvatar } from '../components/UserAvatar';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
 import { ReportSheet } from '../reports/ReportSheet';
+import { useUserDataRevision } from '../sync/userDataEvents';
 
 type EpisodeCommunityPanelProps = {
   episodeNumber: number;
   seasonNumber: number;
   seriesTmdbId: number;
+  spoilerProtected?: boolean;
 };
 
 export function EpisodeCommunityPanel({
   episodeNumber,
   seasonNumber,
   seriesTmdbId,
+  spoilerProtected = false,
 }: EpisodeCommunityPanelProps) {
-  const {
-    currentUser,
-    firebaseIdToken,
-    getFirebaseIdToken,
-    trackingRevision,
-  } = useAuthSession();
+  const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
+  const opinionRevision = useUserDataRevision('opinions');
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const loadCommunity = useCallback(async () => {
+    void opinionRevision;
     const token = firebaseIdToken ? await getFirebaseIdToken() : null;
 
     return getEpisodeCommunity(token, seriesTmdbId, seasonNumber, episodeNumber);
-  }, [episodeNumber, firebaseIdToken, getFirebaseIdToken, seasonNumber, seriesTmdbId]);
+  }, [episodeNumber, firebaseIdToken, getFirebaseIdToken, opinionRevision, seasonNumber, seriesTmdbId]);
   const resource = useCachedResource<EpisodeCommunityResponse>({
     key: [
       'watchly',
@@ -41,7 +40,6 @@ export function EpisodeCommunityPanel({
       seriesTmdbId,
       seasonNumber,
       episodeNumber,
-      trackingRevision,
     ].join(':'),
     load: loadCommunity,
   });
@@ -56,11 +54,13 @@ export function EpisodeCommunityPanel({
       <Text style={styles.sectionTitle}>Ratings & reviews</Text>
       <CommunityContent
         community={community}
+        key={`${seriesTmdbId}:${seasonNumber}:${episodeNumber}:${spoilerProtected}`}
         onReport={(review) => setReportTarget({
           id: review.id,
           label: `Review by ${review.author.displayName?.trim() || 'Watchly member'}`,
           type: 'episodeReview',
         })}
+        spoilerProtected={spoilerProtected}
         viewerUserId={currentUser?.id ?? null}
       />
       <ReportSheet onClose={() => setReportTarget(null)} target={reportTarget} />
@@ -71,13 +71,16 @@ export function EpisodeCommunityPanel({
 function CommunityContent({
   community,
   onReport,
+  spoilerProtected,
   viewerUserId,
 }: {
   community: EpisodeCommunityResponse;
   onReport: (review: EpisodeCommunityResponse['reviews'][number]) => void;
+  spoilerProtected: boolean;
   viewerUserId: string | null;
 }) {
   const hasRatings = community.averageScore !== null && community.ratingCount > 0;
+  const [revealedReviewIds, setRevealedReviewIds] = useState<Set<string>>(() => new Set());
 
   if (!hasRatings && community.reviews.length === 0) {
     return <Text style={styles.status}>No public ratings or reviews yet.</Text>;
@@ -87,7 +90,8 @@ function CommunityContent({
     <View>
       {hasRatings ? (
         <View style={styles.summaryRow}>
-          <StarRatingDisplay rating={community.averageScore!} showValue size={16} />
+          <Text style={styles.summaryScore}>{community.averageScore!.toFixed(1)}/5</Text>
+          <Text style={styles.summaryDot}>·</Text>
           <Text style={styles.ratingCount}>{formatRatingCount(community.ratingCount)}</Text>
         </View>
       ) : null}
@@ -104,7 +108,8 @@ function CommunityContent({
                 <Text numberOfLines={1} style={styles.author}>
                   {review.author.displayName ?? 'Unnamed profile'}
                 </Text>
-                <StarRatingDisplay rating={review.score} showValue size={13} />
+                <Star color={colors.rating} fill={colors.rating} size={17} strokeWidth={2} />
+                <Text style={styles.reviewScore}>{review.score.toFixed(1)}</Text>
                 {viewerUserId && viewerUserId !== review.author.id ? (
                   <Pressable
                     accessibilityLabel={`Report ${review.author.displayName?.trim() || 'Watchly member'}'s review`}
@@ -117,7 +122,24 @@ function CommunityContent({
                   </Pressable>
                 ) : null}
               </View>
-              <Text numberOfLines={4} style={styles.reviewBody}>{review.body}</Text>
+              {spoilerProtected && !revealedReviewIds.has(review.id) ? (
+                <View style={styles.spoilerReview}>
+                  <View style={styles.spoilerCopy}>
+                    <ShieldAlert color={colors.textSubtle} size={17} strokeWidth={2.2} />
+                    <Text style={styles.spoilerLabel}>Review contains spoilers</Text>
+                  </View>
+                  <Pressable
+                    accessibilityLabel={`Reveal ${review.author.displayName?.trim() || 'member'} review`}
+                    accessibilityRole="button"
+                    onPress={() => setRevealedReviewIds((current) => new Set(current).add(review.id))}
+                    style={({ pressed }) => [styles.revealButton, pressed && styles.reportButtonPressed]}
+                  >
+                    <Text style={styles.revealLabel}>Reveal review</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Text numberOfLines={4} style={styles.reviewBody}>{review.body}</Text>
+              )}
             </View>
           ))}
         </View>
@@ -129,7 +151,11 @@ function CommunityContent({
 }
 
 function formatRatingCount(count: number) {
-  return `${count} ${count === 1 ? 'rating' : 'ratings'}`;
+  const formatted = count >= 1_000
+    ? `${(count / 1_000).toFixed(count >= 10_000 ? 0 : 1).replace('.0', '')}K`
+    : String(count);
+
+  return `${formatted} ${count === 1 ? 'rating' : 'ratings'}`;
 }
 
 const styles = StyleSheet.create({
@@ -141,14 +167,17 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   panel: {
-    borderBottomColor: colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    backgroundColor: colors.panelElevated,
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
     gap: spacing.md,
-    paddingVertical: spacing.xl,
+    marginTop: spacing.md,
+    padding: spacing.lg,
   },
   ratingCount: {
-    ...typography.meta,
-    color: colors.textSubtle,
+    ...typography.body,
+    color: colors.textMuted,
   },
   reportButton: {
     alignItems: 'center',
@@ -160,6 +189,20 @@ const styles = StyleSheet.create({
   },
   reportButtonPressed: {
     opacity: 0.72,
+  },
+  revealButton: {
+    alignItems: 'center',
+    borderColor: colors.accentBorder,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: touchTargets.min,
+    paddingHorizontal: spacing.md,
+  },
+  revealLabel: {
+    color: colors.accentText,
+    fontSize: 13,
+    fontWeight: '800',
   },
   review: {
     gap: spacing.sm,
@@ -182,9 +225,27 @@ const styles = StyleSheet.create({
     marginBottom: -spacing.md,
     marginTop: spacing.sm,
   },
+  spoilerCopy: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  spoilerLabel: {
+    ...typography.meta,
+    color: colors.textSubtle,
+  },
+  spoilerReview: {
+    alignItems: 'center',
+    backgroundColor: colors.panelSoft,
+    borderRadius: radii.sm,
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'space-between',
+    padding: spacing.sm,
+  },
   sectionTitle: {
-    ...typography.title,
-    color: colors.text,
+    ...typography.eyebrow,
+    color: colors.textMuted,
   },
   status: {
     ...typography.body,
@@ -195,5 +256,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
+  },
+  summaryDot: {
+    color: colors.textSubtle,
+    fontSize: 15,
+  },
+  summaryScore: {
+    ...typography.body,
+    color: colors.textMuted,
+  },
+  reviewScore: {
+    color: colors.textMuted,
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

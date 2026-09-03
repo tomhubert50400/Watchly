@@ -60,6 +60,7 @@ assert.deepEqual(buildSavePlan({ ...existing, draftRating: 4.5, draftReview: 'Up
 let partial: OpinionState = { ...existing, draftRating: 4.5, draftReview: 'Updated review' };
 partial = applyOperationSuccess(partial, { kind: 'saveRating', score: 4.5 });
 assert.equal(partial.savedRating, 4.5);
+assert.equal(partial.draftRating, 4.5);
 assert.equal(partial.savedReview, 'Original review');
 assert.equal(isOpinionDirty(partial), true);
 partial = applyOperationFailure(partial, { body: 'Updated review', kind: 'saveReview' }, 'Could not save your review.');

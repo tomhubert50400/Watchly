@@ -93,7 +93,13 @@ export function applyOperationSuccess(state: OpinionState, operation: OpinionOpe
 
   switch (operation.kind) {
     case 'saveRating':
-      return { ...state, error: null, savedRating: operation.score, successfulOperations };
+      return {
+        ...state,
+        draftRating: operation.score,
+        error: null,
+        savedRating: operation.score,
+        successfulOperations,
+      };
     case 'saveReview':
       return {
         ...state,
