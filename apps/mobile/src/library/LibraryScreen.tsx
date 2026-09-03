@@ -77,7 +77,8 @@ export function LibraryScreen() {
   useEffect(() => { setActionError(null); setBusyKey(null); }, [currentUser?.id]);
   const summary = useMemo(() => buildLibrarySummary(data?.items ?? [], data?.lists.length ?? 0), [data]);
   const continueItems = (data?.items ?? []).filter((item) => item.contentType === 'series' && item.resumeEpisodeNumber !== null);
-  const visibleItems = tab === 'progress' ? continueItems : data?.items ?? [];
+  const alertItems = (data?.items ?? []).filter((item) => item.hasReleaseAlert);
+  const visibleItems = tab === 'progress' ? continueItems : alertItems;
   const lastWatchedItem = getLastWatchedLibraryItem(data?.items ?? []);
   const atmosphereUrl = lastWatchedItem?.posterUrl ?? lastWatchedItem?.backdropUrl ?? null;
 
@@ -196,7 +197,7 @@ export function LibraryScreen() {
         {tab !== 'lists' && continueItems.length > 0 ? <View style={styles.section}><SectionHeader title="Continue watching" /><ContinueWatchingCard item={continueItems[0]!} onPress={() => openItem(continueItems[0]!, true)} /></View> : null}
         {tab !== 'progress' ? <View style={styles.section}><SectionHeader actionLabel="Journal" onActionPress={() => navigation.navigate('Journal')} title="My lists" />{data.lists.length ? <WatchlistRail lists={data.lists} onOpen={openList} /> : <Text style={styles.emptyInline}>No personal or shared lists yet.</Text>}</View> : null}
         {tab === 'lists' ? <View style={styles.create}><SegmentedControl buttonMinHeight={36} options={[{ label: 'Personal', value: 'personal' }, { label: 'Shared', value: 'shared' }]} value={newListKind} onChange={setNewListKind} /><TextInput label="New list" value={newListName} onChangeText={setNewListName} placeholder="Weekend ideas" /></View> : null}
-        {tab !== 'lists' ? <View style={styles.section}><SectionHeader title={tab === 'progress' ? 'In progress' : 'Tracked titles & alerts'} />{visibleItems.map((item) => <ReleaseAlertRow item={item} key={item.key} onOpen={() => openItem(item)} onToggle={() => void toggleAlert(item)} />)}{visibleItems.length === 0 ? <Text style={styles.emptyInline}>Nothing in progress right now.</Text> : null}</View> : null}
+        {tab !== 'lists' ? <View style={styles.section}><SectionHeader title={tab === 'progress' ? 'In progress' : 'Release alerts'} />{visibleItems.map((item) => <ReleaseAlertRow item={item} key={item.key} onOpen={() => openItem(item)} onToggle={() => void toggleAlert(item)} />)}{visibleItems.length === 0 ? <Text style={styles.emptyInline}>{tab === 'progress' ? 'Nothing in progress right now.' : 'No active release alerts.'}</Text> : null}</View> : null}
       </View> : null}
   </Screen>;
 }

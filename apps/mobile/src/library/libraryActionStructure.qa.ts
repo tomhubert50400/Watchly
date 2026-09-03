@@ -101,5 +101,15 @@ assert.match(
   /accessibilityLabel: 'In progress', label: 'Progress'/,
   'the constrained Library segment must keep the full accessible name while using a non-truncating visible label',
 );
+assert.match(
+  librarySource,
+  /const alertItems = \(data\?\.items \?\? \[\]\)\.filter\(\(item\) => item\.hasReleaseAlert\);[\s\S]*const visibleItems = tab === 'progress' \? continueItems : alertItems;/,
+  'the Library release-alert list must only render titles with an active bell',
+);
+assert.match(
+  librarySource,
+  /tab === 'progress' \? 'In progress' : 'Release alerts'/,
+  'the filtered Library section must be labelled as release alerts',
+);
 
 console.log('Library action structure QA passed.');
