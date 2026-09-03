@@ -12,6 +12,13 @@
 .chapter,
 .download {
   background:
+    linear-gradient(
+      to bottom,
+      var(--landing-bg) 0%,
+      rgba(7, 8, 11, 0) 16%,
+      rgba(7, 8, 11, 0) 84%,
+      var(--landing-bg) 100%
+    ),
     radial-gradient(circle at 82% 24%, rgba(141, 23, 56, 0.34), transparent 31%),
     radial-gradient(circle at 48% 100%, rgba(103, 20, 45, 0.13), transparent 36%),
     var(--landing-bg);
@@ -383,6 +390,13 @@
 
 .chapter:nth-of-type(odd) {
   background:
+    linear-gradient(
+      to bottom,
+      var(--landing-bg) 0%,
+      rgba(7, 8, 11, 0) 16%,
+      rgba(7, 8, 11, 0) 84%,
+      var(--landing-bg) 100%
+    ),
     radial-gradient(circle at 18% 58%, rgba(141, 23, 56, 0.28), transparent 32%),
     var(--landing-bg);
 }
