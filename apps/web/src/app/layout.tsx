@@ -1,11 +1,15 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
+import watchlyFavicon from '../../../mobile/assets/favicon.png';
 import './globals.css';
 
 const siteUrl = getSiteUrl();
 
 export const metadata: Metadata = {
   description: 'Track films and series, log every watch, rate in half-stars, write reviews, and keep your viewing history in one place.',
+  icons: {
+    icon: watchlyFavicon.src,
+  },
   metadataBase: new URL(siteUrl),
   openGraph: {
     description: 'Track films and series, log every watch, rate in half-stars, write reviews, and keep your viewing history in one place.',

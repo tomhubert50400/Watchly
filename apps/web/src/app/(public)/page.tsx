@@ -6,7 +6,6 @@ import styles from './page.module.css';
 
 export const metadata: Metadata = {
   description: 'Find films and series, track every episode, rate what you watch, and keep your viewing history with Watchly.',
-  title: 'Your watching, remembered',
 };
 
 const features = [
