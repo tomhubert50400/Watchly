@@ -28,6 +28,7 @@ import {
 import { SharedWatchlistsController } from '../shared-watchlists/shared-watchlists.controller';
 import { TrackingController } from '../tracking/tracking.controller';
 import { WatchlistsController } from '../watchlists/watchlists.controller';
+import { WaitlistController } from '../waitlist/waitlist.controller';
 import { createEnvironmentIsolationMiddleware } from '../environment-isolation';
 import {
   ProxyAwareThrottlerGuard,
@@ -54,7 +55,7 @@ const protectedControllers = [
   WatchlistsController,
 ];
 
-const publicControllers = [CatalogueController];
+const publicControllers = [CatalogueController, WaitlistController];
 const optionalAuthControllers = [EpisodeCommunityController];
 
 async function main() {

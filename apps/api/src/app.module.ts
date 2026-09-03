@@ -26,6 +26,7 @@ import { SharedWatchlistsModule } from './shared-watchlists/shared-watchlists.mo
 import { TrackingModule } from './tracking/tracking.module';
 import { WatchlistsModule } from './watchlists/watchlists.module';
 import { ViewingsModule } from './viewings/viewings.module';
+import { WaitlistModule } from './waitlist/waitlist.module';
 
 export const apiEnvironmentSchema = Joi.object({
   APP_ENV: Joi.string().valid('development', 'staging', 'production').default('development'),
@@ -122,6 +123,7 @@ export const apiEnvironmentSchema = Joi.object({
     SharedWatchlistsModule,
     TrackingModule,
     ViewingsModule,
+    WaitlistModule,
     WatchlistsModule,
   ],
   providers: [

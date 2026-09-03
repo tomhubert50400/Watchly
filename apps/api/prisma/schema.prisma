@@ -213,6 +213,14 @@ model OAuthAttempt {
   @@map("oauth_attempts")
 }
 
+model WaitlistSubscriber {
+  id              String   @id @default(uuid()) @db.Uuid
+  emailNormalized String   @unique @db.VarChar(320)
+  createdAt       DateTime @default(now())
+
+  @@map("waitlist_subscribers")
+}
+
 model AuthIdentity {
   id              String       @id @default(uuid()) @db.Uuid
   userId          String       @db.Uuid

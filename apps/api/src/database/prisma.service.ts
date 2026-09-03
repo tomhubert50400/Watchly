@@ -169,6 +169,10 @@ export class PrismaService implements OnModuleDestroy {
     return this.client.viewingEvent;
   }
 
+  get waitlistSubscriber() {
+    return this.client.waitlistSubscriber;
+  }
+
   $queryRaw: PrismaClient['$queryRaw'] = ((...args: Parameters<PrismaClient['$queryRaw']>) =>
     (this.client.$queryRaw as (...queryArgs: Parameters<PrismaClient['$queryRaw']>) => ReturnType<PrismaClient['$queryRaw']>)(
       ...args,
