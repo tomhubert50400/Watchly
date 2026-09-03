@@ -14,7 +14,7 @@ import {
 import { FeedItem, getFeed, setFeedItemLiked } from '../api/feed';
 import { listNotifications } from '../api/notifications';
 import { listSeriesProgressSummaries, SeriesProgressSummary } from '../api/progress';
-import { useAuthSession, useSocialRevision } from '../auth/AuthSessionContext';
+import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { BrandWordmark } from '../brand/BrandWordmark';
 import { getPrivateCacheKey, getPublicCacheKey } from '../cache/persistedCache';
@@ -44,6 +44,7 @@ import {
   HomeTrendingItem,
 } from './homeData';
 import { SocialActivityList } from './SocialActivityList';
+import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
 
 type HomeNavigation = CompositeNavigationProp<
   BottomTabNavigationProp<RootTabParamList, 'Home'>,
@@ -70,18 +71,19 @@ export function HomeScreen() {
     currentUser,
     firebaseIdToken,
     getFirebaseIdToken,
-    trackingRevision,
   } = useAuthSession();
-  const socialRevision = useSocialRevision();
+  const feedRevision = useUserDataRevision('feed', 'opinions', 'profile', 'socialGraph');
+  const notificationRevision = useUserDataRevision('notifications');
+  const progressRevision = useUserDataRevision('episodeProgress');
   const isSignedIn = Boolean(currentUser && firebaseIdToken);
   const loadCatalogue = useCallback(loadHomeCatalogue, []);
   const loadProgress = useCallback(
     () => firebaseIdToken ? loadHomeProgress(firebaseIdToken) : Promise.resolve([]),
-    [firebaseIdToken, trackingRevision],
+    [firebaseIdToken, progressRevision],
   );
   const loadFeed = useCallback(
     () => firebaseIdToken ? loadHomeFeed(firebaseIdToken) : Promise.resolve([]),
-    [firebaseIdToken, socialRevision],
+    [feedRevision, firebaseIdToken],
   );
   const loadNotifications = useCallback(async () => {
     const token = await getFirebaseIdToken();
@@ -91,7 +93,7 @@ export function HomeScreen() {
     }
 
     return loadHomeNotifications(token);
-  }, [getFirebaseIdToken]);
+  }, [getFirebaseIdToken, notificationRevision]);
   const catalogue = useCachedResource({ key: PUBLIC_HOME_KEY, load: loadCatalogue });
   const progress = useCachedResource({
     enabled: isSignedIn,
@@ -251,7 +253,10 @@ export function HomeScreen() {
                         return Promise.reject(new Error('Sign in again to update this like.'));
                       }
 
-                      return setFeedItemLiked(firebaseIdToken, item, liked);
+                      return setFeedItemLiked(firebaseIdToken, item, liked).then((result) => {
+                        notifyUserDataChanged('feed');
+                        return result;
+                      });
                     }}
                   />
                 ) : null}

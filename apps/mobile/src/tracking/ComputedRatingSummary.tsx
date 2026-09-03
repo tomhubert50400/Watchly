@@ -6,7 +6,7 @@ import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
-import { useToast } from '../notifications/ToastContext';
+import { useUserDataRevision } from '../sync/userDataEvents';
 
 type ComputedRatingSummaryProps = {
   seasonNumber?: number;
@@ -19,17 +19,13 @@ export function ComputedRatingSummary({
   seriesTmdbId,
   title,
 }: ComputedRatingSummaryProps) {
-  const { currentUser, firebaseIdToken, trackingRevision } = useAuthSession();
-  const { showToast } = useToast();
+  const { currentUser, firebaseIdToken } = useAuthSession();
+  const opinionRevision = useUserDataRevision('opinions');
 
-  const loadSummary = useCallback(async (): Promise<SeriesRatingSummary> => {
-    try {
-      return await getSeriesRatingSummary(firebaseIdToken!, seriesTmdbId);
-    } catch {
-      showToast('Could not load your computed rating.');
-      throw new Error('Could not update your computed rating.');
-    }
-  }, [firebaseIdToken, seriesTmdbId, showToast, trackingRevision]);
+  const loadSummary = useCallback(
+    (): Promise<SeriesRatingSummary> => getSeriesRatingSummary(firebaseIdToken!, seriesTmdbId),
+    [firebaseIdToken, opinionRevision, seriesTmdbId],
+  );
   const resource = useCachedResource({
     enabled: Boolean(currentUser && firebaseIdToken),
     key: getPrivateCacheKey(currentUser?.id ?? 'visitor', `series-rating:${seriesTmdbId}:v1`),

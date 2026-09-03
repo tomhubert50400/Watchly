@@ -5,7 +5,7 @@ import { useAuthSession } from '../auth/AuthSessionContext';
 import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
-import { useToast } from '../notifications/ToastContext';
+import { useUserDataRevision } from '../sync/userDataEvents';
 
 type SeasonProgressSummaryProps = {
   episodeCount: number;
@@ -18,17 +18,13 @@ export function useSeasonProgressSummary({
   seasonNumber,
   seriesTmdbId,
 }: SeasonProgressSummaryProps) {
-  const { currentUser, firebaseIdToken, trackingRevision } = useAuthSession();
-  const { showToast } = useToast();
+  const { currentUser, firebaseIdToken } = useAuthSession();
+  const episodeProgressRevision = useUserDataRevision('episodeProgress');
 
-  const loadProgress = useCallback(async (): Promise<SeasonProgress> => {
-    try {
-      return await listSeasonProgress(firebaseIdToken!, seriesTmdbId, seasonNumber);
-    } catch {
-      showToast('Could not load your season progress.');
-      throw new Error('Could not update your season progress.');
-    }
-  }, [firebaseIdToken, seasonNumber, seriesTmdbId, showToast, trackingRevision]);
+  const loadProgress = useCallback(
+    (): Promise<SeasonProgress> => listSeasonProgress(firebaseIdToken!, seriesTmdbId, seasonNumber),
+    [episodeProgressRevision, firebaseIdToken, seasonNumber, seriesTmdbId],
+  );
   const resource = useCachedResource({
     enabled: Boolean(currentUser && firebaseIdToken),
     key: getPrivateCacheKey(

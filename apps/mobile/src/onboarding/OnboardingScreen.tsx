@@ -36,6 +36,7 @@ import {
   getProfile,
 } from '../api/profile';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { BrandWordmark } from '../brand/BrandWordmark';
 import {
   BottomActionSheet,
@@ -118,8 +119,6 @@ export function OnboardingScreen() {
   const {
     currentUser,
     firebaseIdToken,
-    notifySocialChanged,
-    notifyTrackingChanged,
     refreshCurrentUser,
   } = useAuthSession();
   const { width: windowWidth } = useWindowDimensions();
@@ -230,7 +229,7 @@ export function OnboardingScreen() {
           const savedProfile = await copyRemoteProfileAvatar(firebaseIdToken, currentUser.photoUrl);
           if (!active) return;
           setAvatarUrl(savedProfile.avatarUrl);
-          notifySocialChanged();
+          notifyUserDataChanged('profile', 'socialGraph');
         } catch {
           if (!active) return;
           setAvatarMessage('We could not copy your sign-in photo. Choose another photo or continue without one.');
@@ -364,7 +363,7 @@ export function OnboardingScreen() {
       if (!profile) return;
 
       setAvatarUrl(profile.avatarUrl);
-      notifySocialChanged();
+      notifyUserDataChanged('profile', 'socialGraph');
       hapticSuccess();
     } catch (caughtError) {
       setAvatarMessage(
@@ -461,7 +460,9 @@ export function OnboardingScreen() {
           })),
       });
       await clearOnboardingDraft(currentUser.id);
-      if (!importSatisfied && tasteItems.length > 0) notifyTrackingChanged();
+      if (!importSatisfied && tasteItems.length > 0) {
+        notifyUserDataChanged('opinions', 'tracking');
+      }
       await refreshCurrentUser();
     } catch (caughtError) {
       const message = caughtError instanceof Error

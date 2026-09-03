@@ -16,6 +16,7 @@ import {
   SupportedImportSource,
 } from '../api/imports';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { notifyUserDataChanged } from '../sync/userDataEvents';
 import {
   BottomActionSheet,
   BottomActionSheetScrollView,
@@ -170,8 +171,6 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
 }, ref) {
   const {
     firebaseIdToken,
-    notifySocialChanged,
-    notifyTrackingChanged,
   } = useAuthSession();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [activeSource, setActiveSource] = useState<ImportBrand | null>(null);
@@ -291,16 +290,14 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
         titlesProcessed: combinedPreview.summary.ready,
       });
       setPreviews([]);
-      notifySocialChanged();
-      notifyTrackingChanged();
+      notifyUserDataChanged('episodeProgress', 'opinions', 'profile', 'tracking', 'viewings');
       hapticSuccess();
       completedBatch = true;
     } catch (importError) {
       if (completedImportIds.length > 0) {
         setPreviews((current) => current.filter((preview) => !completedImportIds.includes(preview.importId)));
         setResult(combineImportResults(importResults));
-        notifySocialChanged();
-        notifyTrackingChanged();
+        notifyUserDataChanged('episodeProgress', 'opinions', 'profile', 'tracking', 'viewings');
       }
       setError(importError instanceof Error ? importError.message : 'The import could not be completed.');
       hapticError();

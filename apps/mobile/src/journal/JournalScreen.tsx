@@ -16,6 +16,7 @@ import { LoadingState } from '../components/LoadingState';
 import { Screen } from '../components/Screen';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
+import { useUserDataRevision } from '../sync/userDataEvents';
 import { JournalCalendar } from './JournalCalendar';
 import { JournalEntryCard } from './JournalEntryCard';
 import { buildJournal, filterJournalEntries, filterJournalEntriesByDate, getJournalMonthKeys, groupJournalEntriesByMonth, JournalEntry, JournalFilter } from './journalModel';
@@ -27,7 +28,8 @@ const MAX_JOURNAL_HYDRATIONS = 24;
 
 export function JournalScreen() {
   const navigation = useNavigation<Navigation>();
-  const { currentUser, getFirebaseIdToken, trackingRevision } = useAuthSession();
+  const { currentUser, getFirebaseIdToken } = useAuthSession();
+  const journalRevision = useUserDataRevision('episodeProgress', 'opinions', 'viewings');
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [calendarMonthKey, setCalendarMonthKey] = useState<string | null>(null);
   const [filter, setFilter] = useState<JournalFilter>('all');
@@ -54,7 +56,7 @@ export function JournalScreen() {
         : Promise.resolve(fallback ? { ...fallback, ...entry } : toJournalFallback(entry));
     }));
     return { ...model, entries, partialError: failures.length ? `Some Journal data could not update: ${failures.join(', ')}.` : null };
-  }, [currentUser, getFirebaseIdToken, key, trackingRevision]);
+  }, [currentUser, getFirebaseIdToken, journalRevision, key]);
   const resource = useCachedResource({ enabled: Boolean(currentUser), key, load });
   const filteredEntries = filterJournalEntries(resource.data?.entries ?? [], filter);
   const monthKeys = getJournalMonthKeys(filteredEntries);

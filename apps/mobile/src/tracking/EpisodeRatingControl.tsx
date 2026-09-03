@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { deleteEpisodeRating, getEpisodeRating, upsertEpisodeRating } from '../api/ratings';
 import { deleteEpisodeReview, getEpisodeReview, upsertEpisodeReview } from '../api/reviews';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { OpinionSheet } from '../opinions/OpinionSheet';
 import { OpinionOperation } from '../opinions/opinionState';
 import { buildEpisodeOpinionResourceKey } from './episodeOpinionScope';
@@ -12,6 +13,7 @@ type EpisodeRatingControlProps = {
   posterUrl?: string | null;
   seasonNumber: number;
   seriesTmdbId: number;
+  variant?: 'activity' | 'default';
 };
 
 export function EpisodeRatingControl({
@@ -20,8 +22,9 @@ export function EpisodeRatingControl({
   posterUrl,
   seasonNumber,
   seriesTmdbId,
+  variant = 'default',
 }: EpisodeRatingControlProps) {
-  const { currentUser, firebaseIdToken, notifyTrackingChanged } = useAuthSession();
+  const { currentUser, firebaseIdToken } = useAuthSession();
   const resourceKey = buildEpisodeOpinionResourceKey(
     currentUser?.id,
     seriesTmdbId,
@@ -60,12 +63,13 @@ export function EpisodeRatingControl({
       load={load}
       mediaLabel={mediaTitle}
       mediaMeta={`Season ${seasonNumber} · Episode ${episodeNumber}`}
-      onChanged={notifyTrackingChanged}
+      onChanged={() => notifyUserDataChanged('opinions')}
       ownerKey={currentUser?.id}
       perform={perform}
       posterUrl={posterUrl}
       resourceKey={resourceKey}
       signedOutMessage="You need to be signed in to rate or review this episode. Sign in here to continue."
+      triggerVariant={variant}
     />
   );
 }

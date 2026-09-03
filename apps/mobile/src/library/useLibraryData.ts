@@ -10,6 +10,7 @@ import { useAuthSession } from '../auth/AuthSessionContext';
 import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
+import { useUserDataRevision } from '../sync/userDataEvents';
 import { createRequestCoalescer, takeHydrationItems } from '../watchlists/requestBoundaries';
 import { loadWatchlistPreviewUrls } from '../watchlists/watchlistPreview';
 import { calculateResumeEpisode, LibraryItemBase, mapLibrarySourceErrors, mergeLibraryItems, shouldShowTrackedTitle } from './libraryModel';
@@ -43,11 +44,18 @@ export function getLibraryResourceKey(userId: string) {
 }
 
 export function useLibraryData(enabled = true) {
-  const { currentUser, getFirebaseIdToken, trackingRevision } = useAuthSession();
+  const { currentUser, getFirebaseIdToken } = useAuthSession();
+  const libraryRevision = useUserDataRevision(
+    'episodeProgress',
+    'opinions',
+    'releaseAlerts',
+    'tracking',
+    'watchlists',
+  );
   const { refreshMovie, refreshSeries } = useCatalogueCache();
   const key = getLibraryResourceKey(currentUser?.id ?? 'visitor');
   const load = useCallback(async (cached?: LibraryData): Promise<LibraryData> => {
-    void trackingRevision;
+    void libraryRevision;
     if (!currentUser) throw new Error('Sign in to load your library.');
     const token = await getFirebaseIdToken();
     if (!token) throw new Error('Sign in again to load your library.');
@@ -55,7 +63,7 @@ export function useLibraryData(enabled = true) {
       loadMovie: refreshMovie,
       loadSeries: refreshSeries,
     });
-  }, [currentUser, getFirebaseIdToken, key, refreshMovie, refreshSeries, trackingRevision]);
+  }, [currentUser, getFirebaseIdToken, key, libraryRevision, refreshMovie, refreshSeries]);
   return { key, ...useCachedResource({ enabled: enabled && Boolean(currentUser), key, load }) };
 }
 

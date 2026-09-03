@@ -6,7 +6,7 @@ import type { MovieDetails } from '../api/catalogue';
 import { getEpisodeDetails } from '../api/catalogue';
 import { FeedItem, getFeed, setFeedItemLiked } from '../api/feed';
 import type { ReportTarget } from '../api/reports';
-import { useAuthSession, useSocialRevision } from '../auth/AuthSessionContext';
+import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { useCachedResource } from '../cache/useCachedResource';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
@@ -18,6 +18,7 @@ import { SocialReviewPost } from '../components/SocialReviewPost';
 import { colors, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { ReportSheet } from '../reports/ReportSheet';
+import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
 
 type FeedNavigation = NativeStackNavigationProp<RootStackParamList>;
 export type HydratedFeedItem = FeedItem & {
@@ -49,7 +50,7 @@ export async function loadCommunityFeed(
 export function FeedScreen() {
   const navigation = useNavigation<FeedNavigation>();
   const { currentUser, firebaseIdToken } = useAuthSession();
-  const socialRevision = useSocialRevision();
+  const feedRevision = useUserDataRevision('feed', 'opinions', 'profile', 'socialGraph');
   const { refreshMovie, refreshSeries } = useCatalogueCache();
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const resourceKey = getCommunityFeedKey(currentUser?.id ?? 'signed-out');
@@ -57,7 +58,7 @@ export function FeedScreen() {
     (cached?: HydratedFeedItem[]) => firebaseIdToken
       ? loadCommunityFeed(firebaseIdToken, refreshMovie, refreshSeries, cached)
       : Promise.resolve([]),
-    [firebaseIdToken, refreshMovie, refreshSeries, socialRevision],
+    [feedRevision, firebaseIdToken, refreshMovie, refreshSeries],
   );
   const resource = useCachedResource<HydratedFeedItem[]>({
     enabled: Boolean(currentUser && firebaseIdToken),
@@ -148,7 +149,10 @@ export function FeedScreen() {
                 label: `Review by ${item.author.displayName?.trim() || 'Watchly member'}`,
                 type: item.type,
               })}
-              onSetLiked={(liked) => setFeedItemLiked(firebaseIdToken, item, liked)}
+              onSetLiked={(liked) => setFeedItemLiked(firebaseIdToken, item, liked).then((result) => {
+                notifyUserDataChanged('feed');
+                return result;
+              })}
               rating={item.score}
               updatedAt={item.updatedAt}
             />

@@ -10,7 +10,7 @@ import { useCachedResource } from '../cache/useCachedResource';
 import { SeriesDetails } from '../api/catalogue';
 import { colors, radii, shadows, spacing } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
-import { useToast } from '../notifications/ToastContext';
+import { useUserDataRevision } from '../sync/userDataEvents';
 
 type SeriesProgressSummaryProps = {
   seasons: SeriesDetails['seasons'];
@@ -29,17 +29,13 @@ export function SeriesProgressSummary({
   seriesTmdbId,
 }: SeriesProgressSummaryProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { currentUser, firebaseIdToken, trackingRevision } = useAuthSession();
-  const { showToast } = useToast();
+  const { currentUser, firebaseIdToken } = useAuthSession();
+  const episodeProgressRevision = useUserDataRevision('episodeProgress');
 
-  const loadProgress = useCallback(async (): Promise<SeriesProgress> => {
-    try {
-      return await listSeriesProgress(firebaseIdToken!, seriesTmdbId);
-    } catch {
-      showToast('Could not load your series progress.');
-      throw new Error('Could not update your series progress.');
-    }
-  }, [firebaseIdToken, seriesTmdbId, showToast, trackingRevision]);
+  const loadProgress = useCallback(
+    (): Promise<SeriesProgress> => listSeriesProgress(firebaseIdToken!, seriesTmdbId),
+    [episodeProgressRevision, firebaseIdToken, seriesTmdbId],
+  );
   const resource = useCachedResource({
     enabled: Boolean(currentUser && firebaseIdToken),
     key: getPrivateCacheKey(currentUser?.id ?? 'visitor', `series-progress:${seriesTmdbId}:v1`),

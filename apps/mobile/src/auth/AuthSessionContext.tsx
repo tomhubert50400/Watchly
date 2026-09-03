@@ -50,9 +50,7 @@ type AuthSessionContextValue = {
   authErrorMessage: string | null;
   currentUser: CurrentUser | null;
   getFirebaseIdToken: () => Promise<string | null>;
-  notifySocialChanged: () => void;
   firebaseIdToken: string | null;
-  notifyTrackingChanged: () => void;
   linkApple: (identityToken: string, rawNonce: string) => Promise<void>;
   linkExternal: (provider: ExternalAuthProvider) => Promise<boolean>;
   linkGoogle: (googleIdToken: string) => Promise<void>;
@@ -64,19 +62,15 @@ type AuthSessionContextValue = {
   signInWithMicrosoft: (tokens: MicrosoftTokens) => Promise<ProviderSignInResult>;
   signOut: () => Promise<void>;
   status: AuthSessionStatus;
-  trackingRevision: number;
 };
 
 const AuthSessionContext = createContext<AuthSessionContextValue | null>(null);
-const SocialRevisionContext = createContext(0);
 
 export function AuthSessionProvider({ children }: PropsWithChildren) {
   const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [firebaseIdToken, setFirebaseIdToken] = useState<string | null>(null);
-  const [socialRevision, setSocialRevision] = useState(0);
   const [status, setStatus] = useState<AuthSessionStatus>('loading');
-  const [trackingRevision, setTrackingRevision] = useState(0);
   const explicitSignOutRef = useRef(false);
   const explicitProviderSignInRef = useRef(false);
   const devSignInAttemptedRef = useRef(false);
@@ -88,12 +82,6 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     latestFirebaseIdTokenRef.current = firebaseIdToken;
   }, [firebaseIdToken]);
 
-  const notifySocialChanged = useCallback(() => {
-    setSocialRevision((revision) => revision + 1);
-  }, []);
-  const notifyTrackingChanged = useCallback(() => {
-    setTrackingRevision((revision) => revision + 1);
-  }, []);
   const getFirebaseIdToken = useCallback(async () => {
     const transition = authTransitionsRef.current.current();
     try {
@@ -511,8 +499,6 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     setFirebaseIdToken(null);
     setCurrentUser(null);
     setAuthErrorMessage(null);
-    setSocialRevision(0);
-    setTrackingRevision(0);
 
     try {
       await Promise.all([
@@ -541,8 +527,6 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       linkExternal,
       linkGoogle,
       linkMicrosoft,
-      notifySocialChanged,
-      notifyTrackingChanged,
       refreshCurrentUser,
       signInWithApple,
       signInWithExternal,
@@ -550,7 +534,6 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       signInWithMicrosoft,
       signOut,
       status,
-      trackingRevision,
     }),
     [
       authErrorMessage,
@@ -561,8 +544,6 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       linkExternal,
       linkGoogle,
       linkMicrosoft,
-      notifySocialChanged,
-      notifyTrackingChanged,
       refreshCurrentUser,
       signInWithApple,
       signInWithExternal,
@@ -570,17 +551,10 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       signInWithMicrosoft,
       signOut,
       status,
-      trackingRevision,
     ],
   );
 
-  return (
-    <AuthSessionContext.Provider value={value}>
-      <SocialRevisionContext.Provider value={socialRevision}>
-        {children}
-      </SocialRevisionContext.Provider>
-    </AuthSessionContext.Provider>
-  );
+  return <AuthSessionContext.Provider value={value}>{children}</AuthSessionContext.Provider>;
 }
 
 function getSessionAccessMessage(error: unknown) {
@@ -627,8 +601,4 @@ export function useAuthSession() {
   if (!context) throw new Error('useAuthSession must be used inside AuthSessionProvider.');
 
   return context;
-}
-
-export function useSocialRevision() {
-  return useContext(SocialRevisionContext);
 }

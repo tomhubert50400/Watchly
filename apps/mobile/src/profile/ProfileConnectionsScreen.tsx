@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ChevronLeft, ChevronRight, Users } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { getProfileConnections, type ProfileSearchItem } from '../api/profile';
-import { useAuthSession, useSocialRevision } from '../auth/AuthSessionContext';
+import { useAuthSession } from '../auth/AuthSessionContext';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
@@ -12,6 +12,7 @@ import { UserAvatar } from '../components/UserAvatar';
 import { colors, spacing } from '../design/tokens';
 import type { RootStackParamList } from '../navigation/types';
 import { ProfileHeaderButton } from './ProfileHeaderButton';
+import { useUserDataRevision } from '../sync/userDataEvents';
 
 type ProfileConnectionsScreenProps = NativeStackScreenProps<
   RootStackParamList,
@@ -20,13 +21,15 @@ type ProfileConnectionsScreenProps = NativeStackScreenProps<
 
 export function ProfileConnectionsScreen({ navigation, route }: ProfileConnectionsScreenProps) {
   const { currentUser, firebaseIdToken } = useAuthSession();
-  const socialRevision = useSocialRevision();
+  const socialRevision = useUserDataRevision('profile', 'socialGraph');
   const [items, setItems] = useState<ProfileSearchItem[]>([]);
+  const itemsRef = useRef(items);
   const [message, setMessage] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
   const [status, setStatus] = useState<'error' | 'loading' | 'ready'>('loading');
   const { kind, userId } = route.params;
   const title = kind === 'followers' ? 'Followers' : 'Following';
+  itemsRef.current = items;
 
   useEffect(() => {
     let isCurrent = true;
@@ -37,7 +40,7 @@ export function ProfileConnectionsScreen({ navigation, route }: ProfileConnectio
       return;
     }
 
-    setStatus('loading');
+    if (itemsRef.current.length === 0) setStatus('loading');
     setMessage(null);
 
     getProfileConnections(firebaseIdToken, userId, kind)
@@ -50,9 +53,9 @@ export function ProfileConnectionsScreen({ navigation, route }: ProfileConnectio
       .catch((error) => {
         if (!isCurrent) return;
 
-        setItems([]);
+        if (itemsRef.current.length === 0) setItems([]);
         setMessage(error instanceof Error ? error.message : 'This list could not load.');
-        setStatus('error');
+        setStatus(itemsRef.current.length === 0 ? 'error' : 'ready');
       });
 
     return () => {
@@ -80,7 +83,7 @@ export function ProfileConnectionsScreen({ navigation, route }: ProfileConnectio
 
   return (
     <Screen leading={leading} title={title}>
-      {status === 'loading' ? (
+      {status === 'loading' && items.length === 0 ? (
         <LoadingState label={`Loading ${kind}`} />
       ) : status === 'error' ? (
         <EmptyState body={message ?? 'Try again later.'} title="List unavailable">

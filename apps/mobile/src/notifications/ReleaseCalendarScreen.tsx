@@ -4,6 +4,7 @@ import { CalendarClock, ChevronRight, Clapperboard, Tv } from 'lucide-react-nati
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { listReleaseCalendar } from '../api/notifications';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { useUserDataRevision } from '../sync/userDataEvents';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
@@ -38,14 +39,14 @@ export function ReleaseCalendarScreen({ navigation }: ReleaseCalendarScreenProps
     currentUser,
     firebaseIdToken,
     getFirebaseIdToken,
-    trackingRevision,
   } = useAuthSession();
+  const releaseAlertRevision = useUserDataRevision('releaseAlerts');
   const ownerId = currentUser?.id ?? null;
   const [filter, setFilter] = useState<ReleaseCalendarFilter>('all');
   const [monthKey, setMonthKey] = useState<string | null>(null);
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const load = useCallback(async () => {
-    void trackingRevision;
+    void releaseAlertRevision;
     const token = await getFirebaseIdToken();
 
     if (!ownerId || !token) {
@@ -53,7 +54,7 @@ export function ReleaseCalendarScreen({ navigation }: ReleaseCalendarScreenProps
     }
 
     return (await listReleaseCalendar(token)).items;
-  }, [getFirebaseIdToken, ownerId, trackingRevision]);
+  }, [getFirebaseIdToken, ownerId, releaseAlertRevision]);
   const resource = useCachedResource<ReleaseCalendarItem[]>({
     enabled: Boolean(ownerId && firebaseIdToken),
     key: getPrivateCacheKey(ownerId ?? 'visitor', 'release-calendar:v1'),

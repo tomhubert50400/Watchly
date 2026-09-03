@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { deleteMovieRating, getMovieRating, upsertMovieRating } from '../api/ratings';
 import { deleteMovieReview, getMovieReview, upsertMovieReview } from '../api/reviews';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { OpinionSheet } from '../opinions/OpinionSheet';
 import { OpinionOperation } from '../opinions/opinionState';
 
@@ -12,7 +13,7 @@ type MovieRatingControlProps = {
 };
 
 export function MovieRatingControl({ mediaTitle = 'This film', posterUrl, tmdbId }: MovieRatingControlProps) {
-  const { currentUser, firebaseIdToken, notifyTrackingChanged } = useAuthSession();
+  const { currentUser, firebaseIdToken } = useAuthSession();
   const load = useCallback(async () => {
     if (!firebaseIdToken) return { rating: null, review: null };
     const [rating, review] = await Promise.all([
@@ -45,7 +46,7 @@ export function MovieRatingControl({ mediaTitle = 'This film', posterUrl, tmdbId
       key={`${currentUser?.id ?? 'signed-out'}:movie:${tmdbId}`}
       load={load}
       mediaLabel={mediaTitle}
-      onChanged={notifyTrackingChanged}
+      onChanged={() => notifyUserDataChanged('opinions')}
       ownerKey={currentUser?.id ?? null}
       perform={perform}
       posterUrl={posterUrl}

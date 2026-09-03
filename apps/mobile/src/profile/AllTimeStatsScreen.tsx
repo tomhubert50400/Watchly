@@ -15,6 +15,7 @@ import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
 import { colors, spacing, touchTargets, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
+import { useUserDataRevision } from '../sync/userDataEvents';
 import { ViewingHighlightCard } from './ViewingHighlightCard';
 import { hydrateViewingStatsArtwork } from './hydrateViewingStatsArtwork';
 
@@ -22,13 +23,14 @@ type ExpandedStat = 'rewatches' | 'habits' | 'ratings' | null;
 type Props = NativeStackScreenProps<RootStackParamList, 'AllTimeStats'>;
 
 export function AllTimeStatsScreen({ route }: Props) {
-  const { currentUser, getFirebaseIdToken, trackingRevision } = useAuthSession();
+  const { currentUser, getFirebaseIdToken } = useAuthSession();
+  const statsRevision = useUserDataRevision('episodeProgress', 'opinions', 'viewings');
   const { refreshMovie, refreshSeries } = useCatalogueCache();
   const [expanded, setExpanded] = useState<ExpandedStat>(null);
   const providedStats = route.params.stats;
   const userId = currentUser?.id ?? 'visitor';
   const load = useCallback(async () => {
-    void trackingRevision;
+    void statsRevision;
     const token = await getFirebaseIdToken();
 
     if (!token) {
@@ -37,7 +39,7 @@ export function AllTimeStatsScreen({ route }: Props) {
 
     const stats = await getViewingStats(token);
     return hydrateViewingStatsArtwork(stats, refreshMovie, refreshSeries);
-  }, [getFirebaseIdToken, refreshMovie, refreshSeries, trackingRevision]);
+  }, [getFirebaseIdToken, refreshMovie, refreshSeries, statsRevision]);
   const resource = useCachedResource<ViewingStats>({
     enabled: !providedStats && Boolean(currentUser),
     key: getPrivateCacheKey(userId, 'profile:all-time:v2'),
