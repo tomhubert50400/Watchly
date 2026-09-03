@@ -278,11 +278,10 @@
 .featureRail {
   display: grid;
   gap: clamp(1rem, 1.8vw, 1.75rem);
-  grid-auto-columns: clamp(240px, 20vw, 300px);
-  grid-auto-flow: column;
-  overflow-x: auto;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0 auto;
+  max-width: 1200px;
   padding: 0 clamp(0.25rem, 1vw, 1rem) 1rem;
-  scroll-snap-type: x proximity;
   scrollbar-width: none;
 }
 
@@ -297,7 +296,7 @@
   color: white;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  min-height: 210px;
+  min-height: 0;
   min-width: 0;
   overflow: hidden;
   scroll-snap-align: start;
@@ -307,24 +306,16 @@
 }
 
 .featureArtwork {
+  aspect-ratio: 590 / 1280;
+  background: #080a0f;
   min-height: 0;
   overflow: hidden;
   position: relative;
 }
 
-.featureArtwork::after {
-  background: linear-gradient(to top, rgba(3, 4, 7, 0.34), transparent 55%);
-  content: "";
-  inset: 0;
-  pointer-events: none;
-  position: absolute;
-  z-index: 1;
-}
-
 .featureArtwork img {
-  object-fit: cover;
-  object-position: center 14%;
-  transition: transform 450ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  object-fit: contain;
+  object-position: center;
 }
 
 .featureCard:hover {
@@ -332,13 +323,9 @@
   transform: translateZ(0) translateY(-4px);
 }
 
-.featureCard:hover .featureArtwork img {
-  transform: scale(1.035);
-}
-
 .featureCard span {
   background: #101218;
-  font-size: clamp(1.05rem, 1.3vw, 1.35rem);
+  font-size: clamp(0.9rem, 1.15vw, 1.08rem);
   font-weight: 720;
   letter-spacing: -0.035em;
   padding: 1rem 1.1rem 1.05rem;
@@ -478,10 +465,6 @@
     width: 88%;
   }
 
-  .featureRail {
-    grid-auto-columns: clamp(240px, 29vw, 280px);
-  }
-
   .chapterInner,
   .chapterInnerReverse {
     gap: 5rem;
@@ -518,9 +501,15 @@
   }
 
   .featureRail {
-    grid-auto-columns: min(43vw, 280px);
+    grid-auto-columns: min(44vw, 220px);
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    margin: 0;
+    max-width: none;
+    overflow-x: auto;
     padding-left: clamp(1.25rem, 6vw, 3.5rem);
     padding-right: clamp(1.25rem, 6vw, 3.5rem);
+    scroll-snap-type: x proximity;
   }
 
   .chapterInner,
@@ -640,7 +629,7 @@
 
   .featureRail {
     gap: 1rem;
-    grid-auto-columns: min(78vw, 290px);
+    grid-auto-columns: min(62vw, 220px);
   }
 
   .featureCard span {
@@ -695,7 +684,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .featureArtwork img,
   .featureCard,
   .storeButton {
     transition: none;
