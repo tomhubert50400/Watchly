@@ -430,18 +430,6 @@
   height: min(74vh, 760px);
 }
 
-.journalPhone .phoneScreen::before {
-  background: linear-gradient(to bottom, transparent, #080b11 70%);
-  bottom: 0;
-  content: "";
-  height: 16%;
-  left: 0;
-  pointer-events: none;
-  position: absolute;
-  right: 0;
-  z-index: 2;
-}
-
 .download {
   min-height: min(860px, 100dvh);
 }

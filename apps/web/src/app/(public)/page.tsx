@@ -14,25 +14,25 @@ const features = [
     alt: 'Watchly Explore showing search, trending films and upcoming releases',
     copy: 'Search films, series and people. See what is trending and what is coming next.',
     id: 'find',
-    image: '/landing/watchly-find.jpg',
+    image: '/landing/watchly-explore-trending.jpg',
     label: 'Find Anything',
     lead: 'Find',
   },
   {
     accent: 'progress.',
-    alt: 'Watchly season page showing episode progress and the next episode',
+    alt: 'Watchly episode page showing watched status, rating and episode navigation',
     copy: 'Keep every season and episode exactly where you left it.',
     id: 'progress',
-    image: '/landing/watchly-progress.jpg',
+    image: '/landing/watchly-episode-activity.jpg',
     label: 'Track Progress',
     lead: 'Track',
   },
   {
     accent: 'honestly.',
-    alt: 'Watchly episode page showing a rating and review activity',
+    alt: 'Watchly rating sheet for Spider-Man with stars and a written review',
     copy: 'Rate in half-stars, write a review, or simply mark it watched.',
     id: 'rating',
-    image: '/landing/watchly-rating.jpg',
+    image: '/landing/watchly-review-sheet.jpg',
     label: 'Rate Honestly',
     lead: 'Rate',
   },
@@ -41,16 +41,16 @@ const features = [
     alt: 'Watchly Journal showing a chronological viewing history',
     copy: 'Your viewing history, ratings and reviews stay together.',
     id: 'journal',
-    image: '/landing/watchly-journal.jpg',
+    image: '/landing/watchly-journal-history.jpg',
     label: 'Keep Memories',
     lead: 'Your whole',
   },
   {
     accent: 'lists.',
-    alt: 'Watchly Library showing personal and shared lists',
+    alt: 'Watchly Library showing continue watching and personal lists',
     copy: 'Keep personal picks or build a shared list with friends.',
     id: 'lists',
-    image: '/landing/watchly-lists.jpg',
+    image: '/landing/watchly-library-lists.jpg',
     label: 'Build Lists',
     lead: 'Build',
   },
@@ -76,15 +76,15 @@ export default function HomePage() {
 
           <div className={styles.heroDevices}>
             <IPhoneFrame
-              alt="Watchly series page for Breaking Bad with seasons, episode progress and watchlist controls"
+              alt="Watchly home showing a weekly spotlight, continue watching and trending titles"
               className={styles.heroPhoneMain}
-              image="/landing/watchly-series.jpg"
+              image="/landing/watchly-home-spotlight.jpg"
               priority
             />
             <IPhoneFrame
-              alt="Watchly season page showing progress and the next episode"
+              alt="Watchly Spider-Man details showing synopsis, watchlist and viewing activity"
               className={styles.heroPhoneSecondary}
-              image="/landing/watchly-progress.jpg"
+              image="/landing/watchly-detail-spiderman.jpg"
             />
           </div>
         </div>
@@ -114,7 +114,7 @@ export default function HomePage() {
             <div className={styles.captureStage}>
               <IPhoneFrame
                 alt={feature.alt}
-                className={`${styles.chapterPhone} ${feature.id === 'journal' ? styles.journalPhone : ''}`}
+                className={styles.chapterPhone}
                 image={feature.image}
               />
             </div>
