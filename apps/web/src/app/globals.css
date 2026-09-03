@@ -184,6 +184,40 @@ summary {
   color: var(--text);
 }
 
+.site-social-link {
+  align-items: center;
+  background: var(--text);
+  border: 1px solid var(--text);
+  border-radius: 999px;
+  color: var(--background);
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  font-weight: 720;
+  gap: 0.5rem;
+  justify-content: center;
+  min-height: 2.65rem;
+  padding: 0.6rem 0.9rem;
+  text-decoration: none;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.site-social-link svg {
+  fill: currentColor;
+  height: 0.9rem;
+  width: 0.9rem;
+}
+
+.site-social-link:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.site-social-link:active {
+  transform: scale(0.98);
+}
+
 .site-nav .site-nav__cta {
   border-bottom: 1px solid var(--accent);
   color: var(--text);
@@ -3212,6 +3246,10 @@ summary {
   margin-right: auto;
 }
 
+.public-shell:has(.watchly-landing) .site-social-link {
+  margin-left: 2rem;
+}
+
 .public-shell:has(.watchly-landing) .site-nav a {
   color: rgba(255, 255, 255, 0.82);
   font-size: clamp(0.76rem, 0.9vw, 0.94rem);
@@ -3245,6 +3283,11 @@ summary {
     flex: 0 0 auto;
   }
 
+  .public-shell:has(.watchly-landing) .site-social-link {
+    margin-left: auto;
+    margin-right: 0.65rem;
+  }
+
   .public-shell:has(.watchly-landing) .site-header__inner {
     max-width: 100%;
     width: 100%;
@@ -3270,5 +3313,38 @@ summary {
   .public-shell:has(.watchly-landing) .mobile-nav nav a {
     letter-spacing: 0;
     text-transform: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .public-shell:has(.watchly-landing) .brand__wordmark {
+    width: 112px;
+  }
+
+  .public-shell:has(.watchly-landing) .site-social-link {
+    font-size: 0.72rem;
+    min-height: 2.45rem;
+    padding: 0.5rem 0.72rem;
+  }
+
+  .public-shell:has(.watchly-landing) .site-social-link__verb {
+    display: none;
+  }
+}
+
+@media (max-width: 380px) {
+  .public-shell:has(.watchly-landing) .brand__wordmark {
+    width: 102px;
+  }
+
+  .public-shell:has(.watchly-landing) .mobile-nav summary {
+    width: 54px;
+  }
+
+  .public-shell:has(.watchly-landing) .site-social-link {
+    gap: 0.38rem;
+    margin-right: 0.45rem;
+    padding-left: 0.6rem;
+    padding-right: 0.6rem;
   }
 }
