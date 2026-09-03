@@ -187,14 +187,6 @@
   position: absolute;
 }
 
-.featureCard::after {
-  background: linear-gradient(to top, rgba(3, 4, 7, 0.72), transparent 48%);
-  content: "";
-  inset: 0;
-  pointer-events: none;
-  position: absolute;
-}
-
 .phone {
   aspect-ratio: 0.48 / 1;
   background: linear-gradient(145deg, #2d2d30, #08080a 18%, #18181b 78%, #3a3a3d);
@@ -277,50 +269,79 @@
 }
 
 .railWindow {
-  height: clamp(6.5rem, 11vw, 10rem);
-  margin: clamp(1rem, 2.5vh, 2.5rem) auto 0;
+  margin: clamp(2.5rem, 5vh, 4rem) auto 0;
   max-width: 1560px;
   overflow: hidden;
+  padding-bottom: clamp(4rem, 7vw, 7rem);
 }
 
 .featureRail {
   display: grid;
-  gap: clamp(1.25rem, 2vw, 2rem);
-  grid-auto-columns: minmax(270px, 1fr);
+  gap: clamp(1rem, 1.8vw, 1.75rem);
+  grid-auto-columns: clamp(240px, 20vw, 300px);
   grid-auto-flow: column;
-  padding: 0 0.15rem;
+  overflow-x: auto;
+  padding: 0 clamp(0.25rem, 1vw, 1rem) 1rem;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.featureRail::-webkit-scrollbar {
+  display: none;
 }
 
 .featureCard {
-  aspect-ratio: 1.72 / 1;
+  background: #0d0f14;
   border: 1px solid var(--landing-border);
-  border-radius: 1.15rem;
+  border-radius: 1rem;
   color: white;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 210px;
   min-width: 0;
   overflow: hidden;
-  position: relative;
+  scroll-snap-align: start;
   text-decoration: none;
-  transform: translateZ(0);
+  transform: translateZ(0) translateY(0);
+  transition: border-color 220ms ease, transform 220ms ease;
 }
 
-.featureCard img {
+.featureArtwork {
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.featureArtwork::after {
+  background: linear-gradient(to top, rgba(3, 4, 7, 0.34), transparent 55%);
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+}
+
+.featureArtwork img {
   object-fit: cover;
   object-position: center 14%;
   transition: transform 450ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.featureCard:hover img {
-  transform: scale(1.04);
+.featureCard:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: translateZ(0) translateY(-4px);
+}
+
+.featureCard:hover .featureArtwork img {
+  transform: scale(1.035);
 }
 
 .featureCard span {
-  bottom: 1.2rem;
+  background: #101218;
   font-size: clamp(1.05rem, 1.3vw, 1.35rem);
   font-weight: 720;
-  left: 1.25rem;
   letter-spacing: -0.035em;
-  position: absolute;
-  z-index: 1;
+  padding: 1rem 1.1rem 1.05rem;
 }
 
 .chapter {
@@ -409,9 +430,16 @@
   height: min(74vh, 760px);
 }
 
-.journalScreen {
-  transform: scale(1.12);
-  transform-origin: top center;
+.journalPhone .phoneScreen::before {
+  background: linear-gradient(to bottom, transparent, #080b11 70%);
+  bottom: 0;
+  content: "";
+  height: 16%;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  z-index: 2;
 }
 
 .download {
@@ -463,7 +491,7 @@
   }
 
   .featureRail {
-    grid-auto-columns: minmax(260px, 31vw);
+    grid-auto-columns: clamp(240px, 29vw, 280px);
   }
 
   .chapterInner,
@@ -497,21 +525,14 @@
   }
 
   .railWindow {
-    height: 9rem;
     margin-left: calc(clamp(1.25rem, 6vw, 3.5rem) * -1);
     margin-right: calc(clamp(1.25rem, 6vw, 3.5rem) * -1);
   }
 
   .featureRail {
-    grid-auto-columns: minmax(260px, 43vw);
-    overflow-x: auto;
+    grid-auto-columns: min(43vw, 280px);
     padding-left: clamp(1.25rem, 6vw, 3.5rem);
     padding-right: clamp(1.25rem, 6vw, 3.5rem);
-    scrollbar-width: none;
-  }
-
-  .featureRail::-webkit-scrollbar {
-    display: none;
   }
 
   .chapterInner,
@@ -625,17 +646,17 @@
   }
 
   .railWindow {
-    height: 8rem;
-    margin-top: 2.5rem;
+    margin-top: 3rem;
+    padding-bottom: 5rem;
   }
 
   .featureRail {
     gap: 1rem;
-    grid-auto-columns: 76vw;
+    grid-auto-columns: min(78vw, 290px);
   }
 
   .featureCard span {
-    font-size: 1.1rem;
+    font-size: 1rem;
   }
 
   .chapterInner,
@@ -686,7 +707,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .featureCard img,
+  .featureArtwork img,
+  .featureCard,
   .storeButton {
     transition: none;
   }

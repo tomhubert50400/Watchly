@@ -93,7 +93,9 @@ export default function HomePage() {
           <nav aria-label="Watchly features" className={styles.featureRail}>
             {features.map((feature) => (
               <Link className={styles.featureCard} href={`#${feature.id}`} key={feature.id}>
-                <Image alt="" fill sizes="(max-width: 640px) 76vw, 24vw" src={feature.image} />
+                <div className={styles.featureArtwork}>
+                  <Image alt="" fill sizes="(max-width: 640px) 78vw, 20vw" src={feature.image} />
+                </div>
                 <span>{feature.label}</span>
               </Link>
             ))}
@@ -112,9 +114,8 @@ export default function HomePage() {
             <div className={styles.captureStage}>
               <IPhoneFrame
                 alt={feature.alt}
-                className={styles.chapterPhone}
+                className={`${styles.chapterPhone} ${feature.id === 'journal' ? styles.journalPhone : ''}`}
                 image={feature.image}
-                imageClassName={feature.id === 'journal' ? styles.journalScreen : undefined}
               />
             </div>
           </div>
@@ -142,13 +143,11 @@ function IPhoneFrame({
   alt,
   className,
   image,
-  imageClassName,
   priority = false,
 }: Readonly<{
   alt: string;
   className: string;
   image: string;
-  imageClassName?: string;
   priority?: boolean;
 }>) {
   return (
@@ -156,7 +155,7 @@ function IPhoneFrame({
       <div className={styles.phoneScreen}>
         <Image
           alt={alt}
-          className={`${styles.phoneImage} ${imageClassName ?? ''}`}
+          className={styles.phoneImage}
           height={1280}
           priority={priority}
           sizes="(max-width: 620px) 78vw, 350px"
