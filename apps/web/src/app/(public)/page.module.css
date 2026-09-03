@@ -1,0 +1,618 @@
+.root {
+  --landing-accent: #ef2d61;
+  --landing-bg: #07080b;
+  --landing-border: rgba(255, 255, 255, 0.14);
+  --landing-muted: #b8b8bd;
+  background: var(--landing-bg);
+  color: #f7f7f5;
+  overflow: clip;
+}
+
+.hero,
+.chapter,
+.download {
+  background:
+    radial-gradient(circle at 82% 24%, rgba(141, 23, 56, 0.34), transparent 31%),
+    radial-gradient(circle at 48% 100%, rgba(103, 20, 45, 0.13), transparent 36%),
+    var(--landing-bg);
+  isolation: isolate;
+  position: relative;
+}
+
+.hero {
+  min-height: 100dvh;
+  padding: clamp(8.5rem, 12vh, 10rem) clamp(1.25rem, 4vw, 4.5rem) 0;
+}
+
+.grain {
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.22) 0.45px, transparent 0.55px),
+    radial-gradient(rgba(239, 45, 97, 0.2) 0.4px, transparent 0.5px);
+  background-position: 0 0, 5px 7px;
+  background-size: 8px 8px, 13px 13px;
+  inset: 0;
+  mask-image: linear-gradient(to bottom, black, transparent 94%);
+  opacity: 0.08;
+  pointer-events: none;
+  position: absolute;
+  z-index: -1;
+}
+
+.heroInner,
+.chapterInner,
+.downloadInner {
+  margin: 0 auto;
+  max-width: 1480px;
+}
+
+.heroInner {
+  align-items: center;
+  display: grid;
+  gap: clamp(3rem, 5vw, 6rem);
+  grid-template-columns: minmax(460px, 0.9fr) minmax(480px, 1.1fr);
+  min-height: clamp(550px, 68vh, 720px);
+}
+
+.heroCopy {
+  min-width: 0;
+  padding-bottom: clamp(2rem, 6vh, 5rem);
+  position: relative;
+  z-index: 2;
+}
+
+.heroCopy h1,
+.chapterCopy h2,
+.download h2 {
+  font-family: "Watchly Sans", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 830;
+  letter-spacing: -0.072em;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.heroCopy h1 {
+  font-size: clamp(4rem, 5.6vw, 6.4rem);
+  line-height: 0.88;
+}
+
+.chapterCopy h2 span,
+.download h2 span {
+  color: var(--landing-accent);
+}
+
+.heroLine,
+.heroAccent {
+  display: block;
+  white-space: nowrap;
+}
+
+.heroAccent {
+  color: var(--landing-accent);
+}
+
+.heroCopy > p,
+.chapterCopy > p,
+.downloadInner > div > p {
+  color: var(--landing-muted);
+  font-size: clamp(1rem, 1.25vw, 1.16rem);
+  line-height: 1.65;
+}
+
+.heroCopy > p {
+  margin: 2rem 0 0;
+  max-width: 34rem;
+}
+
+.storeActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin-top: 2.35rem;
+}
+
+.storeButton {
+  align-items: center;
+  background: #f4f4f2;
+  border: 1px solid #f4f4f2;
+  border-radius: 0.52rem;
+  color: #08090c;
+  display: inline-flex;
+  gap: 0.75rem;
+  justify-content: center;
+  min-height: 3.65rem;
+  min-width: 11.4rem;
+  padding: 0.8rem 1.25rem;
+  text-decoration: none;
+  transition: background-color 220ms ease, border-color 220ms ease, color 220ms ease, transform 220ms ease;
+}
+
+.storeButton:first-child {
+  background: var(--landing-accent);
+  border-color: var(--landing-accent);
+  color: white;
+}
+
+.storeButton:hover {
+  background: white;
+  border-color: white;
+  color: #08090c;
+  transform: translateY(-3px);
+}
+
+.storeButton:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.storeButtonDisabled,
+.storeButtonDisabled:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.62);
+  cursor: default;
+  transform: none;
+}
+
+.storeButtonDisabled:first-child,
+.storeButtonDisabled:first-child:hover {
+  background: rgba(239, 45, 97, 0.48);
+  border-color: rgba(239, 45, 97, 0.62);
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.storeButton strong {
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.storeIcon {
+  fill: currentColor;
+  flex: 0 0 auto;
+  height: 1.65rem;
+  width: 1.65rem;
+}
+
+.heroVisual {
+  aspect-ratio: 1.38 / 1;
+  border: 1px solid rgba(255, 255, 255, 0.17);
+  border-radius: clamp(1.25rem, 2vw, 2rem);
+  box-shadow: 0 3rem 7rem rgba(45, 4, 19, 0.42);
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+  transform: rotate(-0.75deg);
+}
+
+.heroVisual::after,
+.capture::after,
+.featureCard::after {
+  background: linear-gradient(to top, rgba(3, 4, 7, 0.72), transparent 48%);
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.heroImage {
+  object-fit: cover;
+  object-position: center 17%;
+  transform: scale(1.015);
+}
+
+.railWindow {
+  height: clamp(6.5rem, 11vw, 10rem);
+  margin: clamp(1rem, 2.5vh, 2.5rem) auto 0;
+  max-width: 1560px;
+  overflow: hidden;
+}
+
+.featureRail {
+  display: grid;
+  gap: clamp(1.25rem, 2vw, 2rem);
+  grid-auto-columns: minmax(270px, 1fr);
+  grid-auto-flow: column;
+  padding: 0 0.15rem;
+}
+
+.featureCard {
+  aspect-ratio: 1.72 / 1;
+  border: 1px solid var(--landing-border);
+  border-radius: 1.15rem;
+  color: white;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+  text-decoration: none;
+  transform: translateZ(0);
+}
+
+.featureCard img {
+  object-fit: cover;
+  object-position: center 14%;
+  transition: transform 450ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.featureCard:hover img {
+  transform: scale(1.04);
+}
+
+.featureCard span {
+  bottom: 1.2rem;
+  font-size: clamp(1.05rem, 1.3vw, 1.35rem);
+  font-weight: 720;
+  left: 1.25rem;
+  letter-spacing: -0.035em;
+  position: absolute;
+  z-index: 1;
+}
+
+.chapter {
+  min-height: 100dvh;
+  scroll-margin-top: 5rem;
+}
+
+.chapter:nth-of-type(odd) {
+  background:
+    radial-gradient(circle at 18% 58%, rgba(141, 23, 56, 0.28), transparent 32%),
+    var(--landing-bg);
+}
+
+.chapterGlow {
+  background: radial-gradient(circle, rgba(239, 45, 97, 0.1), transparent 68%);
+  filter: blur(32px);
+  height: 56vw;
+  max-height: 800px;
+  max-width: 800px;
+  pointer-events: none;
+  position: absolute;
+  right: -10%;
+  top: 12%;
+  width: 56vw;
+}
+
+.chapterInner {
+  align-items: center;
+  display: grid;
+  gap: clamp(4rem, 10vw, 11rem);
+  grid-template-columns: minmax(320px, 0.72fr) minmax(430px, 1.28fr);
+  min-height: 100dvh;
+  padding: clamp(7rem, 11vh, 10rem) clamp(1.25rem, 5vw, 5.25rem);
+  position: relative;
+  z-index: 1;
+}
+
+.chapterInnerReverse {
+  grid-template-columns: minmax(430px, 1.28fr) minmax(320px, 0.72fr);
+}
+
+.chapterInnerReverse .chapterCopy {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.chapterInnerReverse .captureStage {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.chapterCopy {
+  min-width: 0;
+}
+
+.chapterCopy h2 {
+  font-size: clamp(4.1rem, 6.4vw, 7rem);
+  line-height: 0.87;
+}
+
+.chapterCopy > p {
+  margin: 2rem 0 0;
+  max-width: 31rem;
+}
+
+.captureStage {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-height: min(78vh, 850px);
+  min-width: 0;
+  position: relative;
+}
+
+.captureStage::before {
+  background: rgba(124, 18, 50, 0.18);
+  border-radius: 50%;
+  content: "";
+  filter: blur(50px);
+  height: 70%;
+  position: absolute;
+  width: 82%;
+}
+
+.capture {
+  aspect-ratio: 0.72 / 1;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: clamp(1.2rem, 2vw, 2rem);
+  box-shadow: 0 3.4rem 8rem rgba(1, 2, 5, 0.6);
+  max-height: 820px;
+  overflow: hidden;
+  position: relative;
+  width: min(76%, 590px);
+}
+
+.captureImage {
+  object-fit: cover;
+  object-position: top center;
+}
+
+.capture::after {
+  background: linear-gradient(to top, rgba(4, 5, 8, 0.72), transparent 27%);
+}
+
+.download {
+  min-height: min(860px, 100dvh);
+}
+
+.downloadInner {
+  align-items: end;
+  display: grid;
+  gap: clamp(4rem, 10vw, 12rem);
+  grid-template-columns: minmax(0, 1fr) minmax(310px, 0.55fr);
+  min-height: min(860px, 100dvh);
+  padding: clamp(8rem, 14vh, 12rem) clamp(1.25rem, 5vw, 5.25rem);
+  position: relative;
+  z-index: 1;
+}
+
+.download h2 {
+  font-size: clamp(4.4rem, 7.8vw, 8.8rem);
+  line-height: 0.86;
+}
+
+.downloadInner > div {
+  padding-bottom: 0.65rem;
+}
+
+.downloadInner > div > p {
+  margin: 0;
+}
+
+@media (max-width: 1180px) {
+  .hero {
+    padding-top: 9rem;
+  }
+
+  .heroInner {
+    gap: 4.5rem;
+    grid-template-columns: 1fr;
+    padding-bottom: 3rem;
+  }
+
+  .heroCopy {
+    padding-bottom: 0;
+  }
+
+  .heroVisual {
+    justify-self: end;
+    width: 88%;
+  }
+
+  .featureRail {
+    grid-auto-columns: minmax(260px, 31vw);
+  }
+
+  .chapterInner,
+  .chapterInnerReverse {
+    gap: 5rem;
+    grid-template-columns: minmax(300px, 0.78fr) minmax(400px, 1.22fr);
+  }
+
+  .chapterInnerReverse .chapterCopy {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 900px) {
+  .hero {
+    min-height: auto;
+    padding-left: clamp(1.25rem, 6vw, 3.5rem);
+    padding-right: clamp(1.25rem, 6vw, 3.5rem);
+  }
+
+  .heroInner {
+    gap: 4rem;
+  }
+
+  .heroCopy h1 {
+    max-width: 12ch;
+  }
+
+  .heroVisual {
+    width: 92%;
+  }
+
+  .railWindow {
+    height: 9rem;
+    margin-left: calc(clamp(1.25rem, 6vw, 3.5rem) * -1);
+    margin-right: calc(clamp(1.25rem, 6vw, 3.5rem) * -1);
+  }
+
+  .featureRail {
+    grid-auto-columns: minmax(260px, 43vw);
+    overflow-x: auto;
+    padding-left: clamp(1.25rem, 6vw, 3.5rem);
+    padding-right: clamp(1.25rem, 6vw, 3.5rem);
+    scrollbar-width: none;
+  }
+
+  .featureRail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .chapterInner,
+  .chapterInnerReverse {
+    gap: 4.5rem;
+    grid-template-columns: 1fr;
+    min-height: auto;
+    padding-bottom: 8rem;
+    padding-top: 8rem;
+  }
+
+  .chapterInnerReverse .chapterCopy,
+  .chapterInnerReverse .captureStage {
+    grid-column: 1;
+  }
+
+  .chapterInnerReverse .chapterCopy {
+    grid-row: 1;
+  }
+
+  .chapterInnerReverse .captureStage {
+    grid-row: 2;
+  }
+
+  .chapterCopy {
+    max-width: 39rem;
+  }
+
+  .captureStage {
+    min-height: 720px;
+  }
+
+  .capture {
+    width: min(78%, 520px);
+  }
+
+  .downloadInner {
+    align-items: start;
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .hero {
+    padding-top: 7.75rem;
+  }
+
+  .heroInner {
+    gap: 3.5rem;
+    min-height: 0;
+  }
+
+  .heroCopy h1 {
+    font-size: clamp(3.05rem, 13.4vw, 4.6rem);
+    line-height: 0.89;
+  }
+
+  .heroLine,
+  .heroAccent {
+    white-space: normal;
+  }
+
+  .heroCopy > p {
+    font-size: 0.98rem;
+    margin-top: 1.55rem;
+    max-width: 23rem;
+  }
+
+  .storeActions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    margin-top: 1.8rem;
+  }
+
+  .storeButton {
+    gap: 0.5rem;
+    min-height: 3.4rem;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0.7rem 0.6rem;
+    white-space: nowrap;
+    width: 100%;
+  }
+
+  .storeButton strong {
+    font-size: 0.82rem;
+  }
+
+  .storeIcon {
+    height: 1.4rem;
+    width: 1.4rem;
+  }
+
+  .heroVisual {
+    aspect-ratio: 0.92 / 1;
+    justify-self: center;
+    transform: none;
+    width: 100%;
+  }
+
+  .heroImage {
+    object-position: center top;
+  }
+
+  .railWindow {
+    height: 8rem;
+    margin-top: 2.5rem;
+  }
+
+  .featureRail {
+    gap: 1rem;
+    grid-auto-columns: 76vw;
+  }
+
+  .featureCard span {
+    font-size: 1.1rem;
+  }
+
+  .chapterInner,
+  .chapterInnerReverse {
+    gap: 3.75rem;
+    padding-bottom: 6rem;
+    padding-top: 6rem;
+  }
+
+  .chapterCopy h2 {
+    font-size: clamp(3.6rem, 16vw, 5.2rem);
+    line-height: 0.88;
+  }
+
+  .chapterCopy > p {
+    font-size: 0.98rem;
+    margin-top: 1.5rem;
+  }
+
+  .captureStage {
+    min-height: 610px;
+  }
+
+  .capture {
+    width: min(92%, 420px);
+  }
+
+  .downloadInner {
+    align-content: center;
+    min-height: 780px;
+    padding-bottom: 7rem;
+    padding-top: 7rem;
+  }
+
+  .download h2 {
+    font-size: clamp(3.75rem, 16vw, 5.6rem);
+  }
+}
+
+@media (max-width: 390px) {
+  .storeActions {
+    grid-template-columns: 1fr;
+  }
+
+  .captureStage {
+    min-height: 560px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .featureCard img,
+  .storeButton {
+    transition: none;
+  }
+}
