@@ -12,7 +12,6 @@ const screens = [
   '../catalogue/EpisodeDetailScreen.tsx',
   '../catalogue/ExploreScreen.tsx',
   '../catalogue/FilmDetailScreen.tsx',
-  '../catalogue/SeasonDetailScreen.tsx',
   '../catalogue/SeriesDetailScreen.tsx',
   '../episodes/SeasonEpisodeList.tsx',
   '../home/HomeScreen.tsx',

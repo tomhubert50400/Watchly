@@ -70,12 +70,6 @@ export type RootStackParamList = {
     previewOwnProfile?: boolean;
     userId: string;
   };
-  SeasonDetail: {
-    seasonNumber: number;
-    seriesTitle: string;
-    tmdbId: number;
-    title: string;
-  };
   SeriesDetail: {
     title: string;
     tmdbId: number;

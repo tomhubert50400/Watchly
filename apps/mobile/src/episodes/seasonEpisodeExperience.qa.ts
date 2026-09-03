@@ -8,7 +8,6 @@ function source(path: string) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
 }
 
-const seasonDetailSource = source('../catalogue/SeasonDetailScreen.tsx');
 const seasonListSource = source('./SeasonEpisodeList.tsx');
 const episodeDetailSource = source('../catalogue/EpisodeDetailScreen.tsx');
 const synopsisSource = source('../catalogue/SynopsisPanel.tsx');
@@ -19,24 +18,29 @@ const seriesDetailSource = source('../catalogue/SeriesDetailScreen.tsx');
 const starRatingSource = source('../components/StarRatingDisplay.tsx');
 
 assert.match(
-  seasonDetailSource,
-  /horizontal[\s\S]*setSeasonNumber\(item\.seasonNumber\)/,
-  'season detail must expose a horizontal quick season selector',
-);
-assert.match(
-  seasonDetailSource,
-  /width \* 0\.82/,
-  'season detail must keep the compact hero proportion from the approved overview',
+  seriesDetailSource,
+  /horizontal[\s\S]*setSelected\(item\.seasonNumber\)/,
+  'series episodes must expose the horizontal quick season selector',
 );
 assert.doesNotMatch(
-  seasonDetailSource,
-  /Choose season/,
-  'the quick season selector must not add a label absent from the approved visual',
+  seriesDetailSource,
+  /Choose season|Open Season|navigation\.push\('SeasonDetail'/,
+  'series episodes must not retain the season dropdown or route to a duplicate screen',
 );
 assert.match(
   seasonListSource,
-  /label=\{releasedComplete \? 'All released episodes watched' : 'Mark season watched'\}/,
-  'season detail must expose one explicit released-season completion action',
+  /model\.isSignedIn && releasedEpisodes\.length > 0 && !releasedComplete[\s\S]*label="Mark season watched"/,
+  'series episodes must only expose the season completion action while work remains',
+);
+assert.doesNotMatch(
+  seasonListSource,
+  /All released episodes watched|You are caught up|caughtUpPanel/,
+  'completed seasons must not render a disabled action or a caught-up panel',
+);
+assert.match(
+  seasonListSource,
+  /<SynopsisPanel overview=\{model\.season\.overview\} \/>[\s\S]*<ComputedRatingSummary/,
+  'the merged series episodes view must preserve the selected season synopsis and computed rating',
 );
 assert.match(
   seasonListSource,
@@ -59,12 +63,6 @@ assert.doesNotMatch(
   /displayRating|episode\.voteAverage/,
   'compact episode rows must not add ratings absent from the approved visual',
 );
-assert.match(
-  seriesDetailSource,
-  /navigation\.push\('SeasonDetail'/,
-  'the redesigned season page must be reachable from series details',
-);
-
 const navigationIndex = episodeDetailSource.indexOf('<AdjacentEpisodeButton');
 const synopsisIndex = episodeDetailSource.indexOf('<SynopsisPanel');
 const activityIndex = episodeDetailSource.indexOf('style={styles.personalSection}');

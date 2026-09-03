@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ChevronDown } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CatalogueRelatedItem, SeriesDetails } from '../api/catalogue';
@@ -91,12 +90,6 @@ export function SeriesDetailScreen({ navigation, route }: Props) {
         ) : series ? (
           <SeriesDetailContent
             onOpenRelated={(item) => openRelatedSeries(navigation, item)}
-            onOpenSeason={(seasonNumber) => navigation.push('SeasonDetail', {
-              seasonNumber,
-              seriesTitle: series.title,
-              title: `Season ${seasonNumber}`,
-              tmdbId: series.tmdbId,
-            })}
             series={series}
           />
         ) : null}
@@ -105,9 +98,8 @@ export function SeriesDetailScreen({ navigation, route }: Props) {
   );
 }
 
-function SeriesDetailContent({ onOpenRelated, onOpenSeason, series }: {
+function SeriesDetailContent({ onOpenRelated, series }: {
   onOpenRelated: (item: CatalogueRelatedItem) => void;
-  onOpenSeason: (seasonNumber: number) => void;
   series: SeriesDetails;
 }) {
   const [activeView, setActiveView] = useState<'details' | 'episodes'>('details');
@@ -157,7 +149,6 @@ function SeriesDetailContent({ onOpenRelated, onOpenSeason, series }: {
         />
         {activeView === 'episodes' ? (
           <SeriesEpisodesPanel
-            onOpenSeason={onOpenSeason}
             seasons={series.seasons}
             seriesTitle={series.title}
             seriesTmdbId={series.tmdbId}
@@ -194,8 +185,7 @@ function openRelatedSeries(navigation: Props['navigation'], item: CatalogueRelat
   navigation.push('SeriesDetail', { title: item.title, tmdbId: item.tmdbId });
 }
 
-function SeriesEpisodesPanel({ onOpenSeason, seasons, seriesTitle, seriesTmdbId }: {
-  onOpenSeason: (seasonNumber: number) => void;
+function SeriesEpisodesPanel({ seasons, seriesTitle, seriesTmdbId }: {
   seasons: SeriesDetails['seasons'];
   seriesTitle: string;
   seriesTmdbId: number;
@@ -206,7 +196,6 @@ function SeriesEpisodesPanel({ onOpenSeason, seasons, seriesTitle, seriesTmdbId 
     return a.seasonNumber - b.seasonNumber;
   });
   const [selected, setSelected] = useState(ordered.find((season) => season.seasonNumber > 0)?.seasonNumber ?? ordered[0]?.seasonNumber ?? null);
-  const [pickerOpen, setPickerOpen] = useState(false);
 
   if (selected === null) {
     return <Text style={styles.body}>No season data available yet.</Text>;
@@ -214,42 +203,41 @@ function SeriesEpisodesPanel({ onOpenSeason, seasons, seriesTitle, seriesTmdbId 
 
   return (
     <View style={styles.episodesPanel}>
-      <Pressable
-        accessibilityLabel="Choose season"
-        accessibilityRole="button"
-        accessibilityState={{ expanded: pickerOpen }}
-        onPress={() => setPickerOpen((value) => !value)}
-        style={({ pressed }) => [styles.seasonButton, pressed && styles.pressed]}
-      >
-        <Text style={styles.seasonButtonText}>Season {selected}</Text>
-        <ChevronDown color={colors.accent} size={20} style={pickerOpen ? styles.chevronOpen : undefined} />
-      </Pressable>
-      {pickerOpen ? (
-        <View style={styles.picker}>
-          {ordered.map((season) => (
-            <Pressable
-              accessibilityLabel={`Select ${season.name || `Season ${season.seasonNumber}`}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected: selected === season.seasonNumber }}
-              key={season.id}
-              onPress={() => {
-                setSelected(season.seasonNumber);
-                setPickerOpen(false);
-              }}
-              style={({ pressed }) => [styles.pickerRow, selected === season.seasonNumber && styles.pickerRowActive, pressed && styles.pressed]}
-            >
-              <Text style={styles.pickerTitle}>{season.name || `Season ${season.seasonNumber}`}</Text>
-              <Text style={styles.pickerMeta}>{season.episodeCount ?? 0} episodes{season.airDate ? ` · ${season.airDate}` : ''}</Text>
-            </Pressable>
-          ))}
+      {ordered.length > 1 ? (
+        <View style={styles.seasonSelectorSection}>
+          <ScrollView
+            contentContainerStyle={styles.seasonSelector}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+          >
+            {ordered.map((item) => {
+              const isSelected = item.seasonNumber === selected;
+
+              return (
+                <Pressable
+                  accessibilityLabel={`Select ${item.name || `Season ${item.seasonNumber}`}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  key={item.id}
+                  onPress={() => setSelected(item.seasonNumber)}
+                  onPressIn={() => {
+                    void ensureSeasonDetails(seriesTmdbId, item.seasonNumber).catch(() => undefined);
+                  }}
+                  style={({ pressed }) => [
+                    styles.seasonChip,
+                    isSelected && styles.seasonChipSelected,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Text style={[styles.seasonChipLabel, isSelected && styles.seasonChipLabelSelected]}>
+                    {item.seasonNumber === 0 ? 'SP' : `S${item.seasonNumber}`}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         </View>
       ) : null}
-      <Button
-        fullWidth
-        label={`Open Season ${selected}`}
-        onPress={() => onOpenSeason(selected)}
-        variant="secondary"
-      />
       <SeasonEpisodeList seasonNumber={selected} seriesTitle={seriesTitle} seriesTmdbId={seriesTmdbId} />
     </View>
   );
@@ -263,21 +251,19 @@ function formatTmdbRating(voteAverage: number | null) {
 const styles = StyleSheet.create({
   body: { ...typography.body, color: colors.muted, marginTop: spacing.sm },
   bodyStack: { paddingBottom: spacing.xxl, paddingHorizontal: spacing.xl },
-  chevronOpen: { transform: [{ rotate: '180deg' }] },
   content: { flexGrow: 1, paddingBottom: spacing.xxxl },
-  episodesPanel: { gap: spacing.sm, marginTop: spacing.sm },
+  episodesPanel: { marginTop: spacing.sm },
   genres: { ...typography.meta, color: colors.textMuted, marginTop: spacing.sm, textAlign: 'center' },
   personalEyebrow: { ...typography.eyebrow, color: colors.textSubtle, marginBottom: spacing.sm },
   personalSection: { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, paddingTop: spacing.xl },
-  picker: { backgroundColor: colors.panelSoft, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, overflow: 'hidden' },
-  pickerMeta: { ...typography.meta, color: colors.muted, marginTop: 2 },
-  pickerRow: { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, padding: spacing.md },
-  pickerRowActive: { backgroundColor: colors.accentSoft },
-  pickerTitle: { ...typography.body, color: colors.text, fontWeight: '800' },
   pressed: { opacity: 0.76 },
   safeArea: { backgroundColor: colors.background, flex: 1 },
-  seasonButton: { alignItems: 'center', backgroundColor: colors.panelSoft, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', justifyContent: 'space-between', minHeight: 44, paddingHorizontal: spacing.md },
-  seasonButtonText: { ...typography.body, color: colors.text, fontWeight: '900' },
+  seasonChip: { alignItems: 'center', backgroundColor: colors.panelSoft, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, justifyContent: 'center', minHeight: 52, minWidth: 64, paddingHorizontal: spacing.md },
+  seasonChipLabel: { color: colors.textMuted, fontSize: 15, fontWeight: '800' },
+  seasonChipLabelSelected: { color: colors.accentText },
+  seasonChipSelected: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
+  seasonSelector: { gap: spacing.sm, paddingRight: spacing.xl },
+  seasonSelectorSection: { paddingBottom: spacing.xl, paddingTop: spacing.sm },
   stateFrame: { flex: 1, paddingHorizontal: spacing.xl, paddingTop: 120 },
   tagline: { color: colors.accentText, fontSize: 16, fontStyle: 'italic', fontWeight: '700', lineHeight: 23, paddingTop: spacing.lg, textAlign: 'center' },
   viewSwitchControl: { backgroundColor: colors.interactiveSurface, marginBottom: spacing.md, marginTop: spacing.md },

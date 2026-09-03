@@ -6,10 +6,12 @@ import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'rea
 import type { SeasonDetails } from '../api/catalogue';
 import { ensureEpisodeDetails } from '../catalogue/cataloguePrefetch';
 import { isReleasedDate } from '../catalogue/releaseDates';
+import { SynopsisPanel } from '../catalogue/SynopsisPanel';
 import { Button } from '../components/Button';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
+import { ComputedRatingSummary } from '../tracking/ComputedRatingSummary';
 import { isEpisodeWatched } from './episodeModel';
 import { useSeasonEpisodes } from './useSeasonEpisodes';
 
@@ -100,12 +102,11 @@ export function SeasonEpisodeList({
         >
           <View style={[styles.progressFill, { width: `${model.progress.fraction * 100}%` }]} />
         </View>
-        {model.isSignedIn && releasedEpisodes.length > 0 ? (
+        {model.isSignedIn && releasedEpisodes.length > 0 && !releasedComplete ? (
           <Button
-            disabled={releasedComplete}
             fullWidth
-            icon={<Check color={releasedComplete ? colors.textSubtle : colors.text} size={18} strokeWidth={2.4} />}
-            label={releasedComplete ? 'All released episodes watched' : 'Mark season watched'}
+            icon={<Check color={colors.text} size={18} strokeWidth={2.4} />}
+            label="Mark season watched"
             onPress={() => void model.setSeasonWatched(releasedEpisodes.map((episode) => episode.episodeNumber))}
             variant="secondary"
           />
@@ -148,14 +149,6 @@ export function SeasonEpisodeList({
             </View>
           </View>
         </Pressable>
-      ) : releasedComplete ? (
-        <View style={styles.caughtUpPanel}>
-          <Check color={colors.success} size={20} strokeWidth={2.5} />
-          <View style={styles.caughtUpCopy}>
-            <Text style={styles.caughtUpTitle}>You are caught up</Text>
-            <Text style={styles.caughtUpBody}>Every released episode in this season is marked watched.</Text>
-          </View>
-        </View>
       ) : null}
 
       <View style={styles.listHeader}>
@@ -235,6 +228,17 @@ export function SeasonEpisodeList({
       }) : (
         <Text style={styles.empty}>No episode data available yet.</Text>
       )}
+
+      {model.season ? (
+        <>
+          <SynopsisPanel overview={model.season.overview} />
+          <ComputedRatingSummary
+            seasonNumber={model.season.seasonNumber}
+            seriesTmdbId={model.season.seriesTmdbId}
+            title="My computed season rating"
+          />
+        </>
+      ) : null}
     </View>
   );
 }
@@ -256,10 +260,6 @@ function formatShortDate(value: string | null) {
 
 const styles = StyleSheet.create({
   actions: { alignItems: 'center', alignSelf: 'stretch', justifyContent: 'space-between' },
-  caughtUpBody: { ...typography.meta, color: colors.textSubtle, marginTop: 2 },
-  caughtUpCopy: { flex: 1 },
-  caughtUpPanel: { alignItems: 'center', backgroundColor: colors.successBackground, borderColor: colors.successBorder, borderRadius: radii.md, borderWidth: 1, flexDirection: 'row', gap: spacing.md, marginBottom: spacing.xl, padding: spacing.md },
-  caughtUpTitle: { color: colors.text, fontSize: 15, fontWeight: '800' },
   container: { gap: 0 },
   copy: { flex: 1, justifyContent: 'center', minWidth: 0 },
   empty: { ...typography.body, color: colors.muted, paddingVertical: spacing.md },

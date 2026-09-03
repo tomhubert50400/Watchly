@@ -14,7 +14,6 @@ import { EpisodeDetailScreen } from './src/catalogue/EpisodeDetailScreen';
 import { ExploreDiscoveryScreen, getDiscoveryLabel } from './src/catalogue/ExploreDiscoveryScreen';
 import { ExploreScreen } from './src/catalogue/ExploreScreen';
 import { FilmDetailScreen } from './src/catalogue/FilmDetailScreen';
-import { SeasonDetailScreen } from './src/catalogue/SeasonDetailScreen';
 import { SeriesDetailScreen } from './src/catalogue/SeriesDetailScreen';
 import { colors } from './src/design/tokens';
 import { FeedScreen } from './src/feed/FeedScreen';
@@ -308,11 +307,6 @@ function AppNavigator() {
             <Stack.Screen
               component={PersonalWatchlistScreen}
               name="PersonalWatchlist"
-              options={({ route }) => ({ title: route.params.title })}
-            />
-            <Stack.Screen
-              component={SeasonDetailScreen}
-              name="SeasonDetail"
               options={({ route }) => ({ title: route.params.title })}
             />
             <Stack.Screen component={SeriesDetailScreen} name="SeriesDetail" options={{ title: '' }} />
