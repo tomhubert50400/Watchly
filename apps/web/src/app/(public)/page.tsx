@@ -74,14 +74,17 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className={styles.heroVisual}>
-            <Image
+          <div className={styles.heroDevices}>
+            <IPhoneFrame
               alt="Watchly series page for Breaking Bad with seasons, episode progress and watchlist controls"
-              className={styles.heroImage}
-              fill
+              className={styles.heroPhoneMain}
+              image="/landing/watchly-series.jpg"
               priority
-              sizes="(max-width: 900px) 92vw, 58vw"
-              src="/landing/watchly-series.jpg"
+            />
+            <IPhoneFrame
+              alt="Watchly season page showing progress and the next episode"
+              className={styles.heroPhoneSecondary}
+              image="/landing/watchly-progress.jpg"
             />
           </div>
         </div>
@@ -107,15 +110,12 @@ export default function HomePage() {
               <p>{feature.copy}</p>
             </div>
             <div className={styles.captureStage}>
-              <div className={styles.capture}>
-                <Image
-                  alt={feature.alt}
-                  className={styles.captureImage}
-                  fill
-                  sizes="(max-width: 900px) 84vw, 42vw"
-                  src={feature.image}
-                />
-              </div>
+              <IPhoneFrame
+                alt={feature.alt}
+                className={styles.chapterPhone}
+                image={feature.image}
+                imageClassName={feature.id === 'journal' ? styles.journalScreen : undefined}
+              />
             </div>
           </div>
         </section>
@@ -134,6 +134,38 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+    </div>
+  );
+}
+
+function IPhoneFrame({
+  alt,
+  className,
+  image,
+  imageClassName,
+  priority = false,
+}: Readonly<{
+  alt: string;
+  className: string;
+  image: string;
+  imageClassName?: string;
+  priority?: boolean;
+}>) {
+  return (
+    <div className={`${styles.phone} ${className}`}>
+      <div className={styles.phoneScreen}>
+        <Image
+          alt={alt}
+          className={`${styles.phoneImage} ${imageClassName ?? ''}`}
+          height={1280}
+          priority={priority}
+          sizes="(max-width: 620px) 78vw, 350px"
+          src={image}
+          width={590}
+        />
+      </div>
+      <span aria-hidden="true" className={styles.dynamicIsland} />
+      <span aria-hidden="true" className={styles.phoneButtons} />
     </div>
   );
 }

@@ -171,19 +171,22 @@
   width: 1.65rem;
 }
 
-.heroVisual {
-  aspect-ratio: 1.38 / 1;
-  border: 1px solid rgba(255, 255, 255, 0.17);
-  border-radius: clamp(1.25rem, 2vw, 2rem);
-  box-shadow: 0 3rem 7rem rgba(45, 4, 19, 0.42);
+.heroDevices {
+  height: min(69vh, 720px);
+  min-height: 540px;
   min-width: 0;
-  overflow: hidden;
   position: relative;
-  transform: rotate(-0.75deg);
 }
 
-.heroVisual::after,
-.capture::after,
+.heroDevices::before {
+  background: rgba(130, 20, 52, 0.24);
+  border-radius: 50%;
+  content: "";
+  filter: blur(55px);
+  inset: 14% 4% 8%;
+  position: absolute;
+}
+
 .featureCard::after {
   background: linear-gradient(to top, rgba(3, 4, 7, 0.72), transparent 48%);
   content: "";
@@ -192,10 +195,85 @@
   position: absolute;
 }
 
-.heroImage {
+.phone {
+  aspect-ratio: 0.48 / 1;
+  background: linear-gradient(145deg, #2d2d30, #08080a 18%, #18181b 78%, #3a3a3d);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: clamp(2.15rem, 3.1vw, 3.2rem);
+  box-shadow:
+    0 2.8rem 6rem rgba(1, 2, 5, 0.62),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  padding: clamp(0.35rem, 0.48vw, 0.52rem);
+  position: relative;
+}
+
+.phoneScreen {
+  border-radius: clamp(1.8rem, 2.75vw, 2.75rem);
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+
+.phoneImage {
+  display: block;
+  height: 100%;
   object-fit: cover;
-  object-position: center 17%;
-  transform: scale(1.015);
+  object-position: top center;
+  width: 100%;
+}
+
+.phoneScreen::after {
+  background: linear-gradient(112deg, rgba(255, 255, 255, 0.11), transparent 18%, transparent 74%, rgba(255, 255, 255, 0.035));
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 1;
+}
+
+.dynamicIsland {
+  background: #020203;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 999px;
+  height: 2.7%;
+  left: 50%;
+  min-height: 0.9rem;
+  position: absolute;
+  top: 2.2%;
+  transform: translateX(-50%);
+  width: 28%;
+  z-index: 2;
+}
+
+.phoneButtons {
+  background: #1a1a1d;
+  border-radius: 2px 0 0 2px;
+  box-shadow: 0 2.7rem 0 #1a1a1d, 0 5rem 0 #1a1a1d;
+  height: 4.8%;
+  left: -0.28rem;
+  position: absolute;
+  top: 18%;
+  width: 0.25rem;
+}
+
+.heroPhoneMain {
+  height: min(66vh, 680px);
+  position: absolute;
+  right: 8%;
+  top: 49%;
+  transform: translateY(-50%) rotate(2.5deg);
+  z-index: 2;
+}
+
+.heroPhoneSecondary {
+  height: min(53vh, 540px);
+  left: 5%;
+  opacity: 0.82;
+  position: absolute;
+  top: 51%;
+  transform: translateY(-50%) rotate(-5deg);
+  z-index: 1;
 }
 
 .railWindow {
@@ -327,24 +405,13 @@
   width: 82%;
 }
 
-.capture {
-  aspect-ratio: 0.72 / 1;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  border-radius: clamp(1.2rem, 2vw, 2rem);
-  box-shadow: 0 3.4rem 8rem rgba(1, 2, 5, 0.6);
-  max-height: 820px;
-  overflow: hidden;
-  position: relative;
-  width: min(76%, 590px);
+.chapterPhone {
+  height: min(74vh, 760px);
 }
 
-.captureImage {
-  object-fit: cover;
-  object-position: top center;
-}
-
-.capture::after {
-  background: linear-gradient(to top, rgba(4, 5, 8, 0.72), transparent 27%);
+.journalScreen {
+  transform: scale(1.12);
+  transform-origin: top center;
 }
 
 .download {
@@ -390,7 +457,7 @@
     padding-bottom: 0;
   }
 
-  .heroVisual {
+  .heroDevices {
     justify-self: end;
     width: 88%;
   }
@@ -425,7 +492,7 @@
     max-width: 12ch;
   }
 
-  .heroVisual {
+  .heroDevices {
     width: 92%;
   }
 
@@ -477,8 +544,8 @@
     min-height: 720px;
   }
 
-  .capture {
-    width: min(78%, 520px);
+  .chapterPhone {
+    height: min(70vh, 720px);
   }
 
   .downloadInner {
@@ -538,15 +605,23 @@
     width: 1.4rem;
   }
 
-  .heroVisual {
-    aspect-ratio: 0.92 / 1;
+  .heroDevices {
+    height: 610px;
     justify-self: center;
-    transform: none;
+    min-height: 0;
     width: 100%;
   }
 
-  .heroImage {
-    object-position: center top;
+  .heroPhoneSecondary {
+    display: none;
+  }
+
+  .heroPhoneMain {
+    height: min(68vh, 580px);
+    left: 50%;
+    right: auto;
+    top: 50%;
+    transform: translate(-50%, -50%) rotate(1deg);
   }
 
   .railWindow {
@@ -581,11 +656,11 @@
   }
 
   .captureStage {
-    min-height: 610px;
+    min-height: 640px;
   }
 
-  .capture {
-    width: min(92%, 420px);
+  .chapterPhone {
+    height: min(72vh, 620px);
   }
 
   .downloadInner {
