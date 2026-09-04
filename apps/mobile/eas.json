@@ -72,7 +72,11 @@
         "track": "internal"
       },
       "ios": {
-        "ascAppId": "6808506784"
+        "ascAppId": "6808506784",
+        "bundleIdentifier": "com.trywatchly.app",
+        "ascApiKeyPath": "credentials/ios/AuthKey_87QC3565C9.p8",
+        "ascApiKeyIssuerId": "3ace3810-b542-4e3d-989d-cfd639de2491",
+        "ascApiKeyId": "87QC3565C9"
       }
     }
   }
