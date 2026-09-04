@@ -85,7 +85,13 @@ const testflightProfile = easConfig.build.testflight;
 assert.equal(easConfig.cli.appVersionSource, 'remote');
 assert.equal(easConfig.build.production.autoIncrement, true);
 assert.equal(easConfig.submit?.production?.android?.track, 'internal');
-assert.deepEqual(easConfig.submit?.production?.ios, {});
+assert.deepEqual(easConfig.submit?.production?.ios, {
+  ascAppId: '6808506784',
+  bundleIdentifier: 'com.trywatchly.app',
+  ascApiKeyPath: 'credentials/ios/AuthKey_87QC3565C9.p8',
+  ascApiKeyIssuerId: '3ace3810-b542-4e3d-989d-cfd639de2491',
+  ascApiKeyId: '87QC3565C9',
+});
 assert.equal(productionInternalProfile.extends, 'production');
 assert.equal(productionInternalProfile.distribution, 'internal');
 assert.equal(productionInternalProfile.developmentClient, undefined);
