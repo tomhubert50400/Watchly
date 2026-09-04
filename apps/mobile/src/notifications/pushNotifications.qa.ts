@@ -10,6 +10,7 @@ const alertSource = readFileSync(new URL('./ReleaseAlertControl.tsx', import.met
 const nativeSource = readFileSync(new URL('./nativePushNotifications.ts', import.meta.url), 'utf8');
 const observerSource = readFileSync(new URL('./PushNavigationObserver.tsx', import.meta.url), 'utf8');
 const onboardingSource = readFileSync(new URL('../onboarding/OnboardingScreen.tsx', import.meta.url), 'utf8');
+const registrationSyncSource = readFileSync(new URL('./PushRegistrationSync.tsx', import.meta.url), 'utf8');
 const settingsSource = readFileSync(new URL('../profile/SettingsScreen.tsx', import.meta.url), 'utf8');
 
 assert.ok(
@@ -49,6 +50,16 @@ assert.ok(
     appSource.includes('component={NotificationPreferencesScreen} name="NotificationPreferences"') &&
     appSource.includes('<PushRegistrationSync />'),
   'Settings and the app root must expose preference and token-renewal flows.',
+);
+assert.match(
+  registrationSyncSource,
+  /if \(synchronization\) return synchronization;/,
+  'Concurrent push registration triggers must share one in-flight synchronization.',
+);
+assert.match(
+  registrationSyncSource,
+  /if \(!firebaseIdToken \|\| tokenKey === lastObservedToken\) return;/,
+  'Repeated native token events must not start an endless registration loop.',
 );
 
 console.log('Push notification mobile QA passed.');
