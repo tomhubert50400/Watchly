@@ -4,11 +4,22 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   assertProfileAvatarSize,
+  getHighResolutionProfileAvatarUrl,
   PROFILE_AVATAR_EDGE_PX,
+  PROFILE_AVATAR_JPEG_QUALITY,
   PROFILE_AVATAR_MAX_BYTES,
 } from './avatarModel';
 
 assert.equal(PROFILE_AVATAR_EDGE_PX, 512);
+assert.equal(PROFILE_AVATAR_JPEG_QUALITY, 0.92);
+assert.equal(
+  getHighResolutionProfileAvatarUrl('https://lh3.googleusercontent.com/a/example=s96-c'),
+  'https://lh3.googleusercontent.com/a/example=s512-c',
+);
+assert.equal(
+  getHighResolutionProfileAvatarUrl('https://images.example.com/avatar.jpg'),
+  'https://images.example.com/avatar.jpg',
+);
 assert.doesNotThrow(() => assertProfileAvatarSize(PROFILE_AVATAR_MAX_BYTES));
 assert.throws(() => assertProfileAvatarSize(PROFILE_AVATAR_MAX_BYTES + 1), /too large/);
 assert.throws(() => assertProfileAvatarSize(0), /could not be read/);
@@ -34,6 +45,11 @@ assert(
   profileScreenSource.includes('profile.providerAvatarImportEnabled') &&
     profileScreenSource.includes('copyRemoteProfileAvatar(firebaseIdToken, currentUser.photoUrl)'),
   'The owner profile must repair a missing persisted avatar from the sign-in photo.',
+);
+assert(
+  profileScreenSource.includes("text: avatarUrl ? 'Refresh sign-in photo' : 'Use sign-in photo'")
+    && profileScreenSource.includes('onPress: () => void importProviderAvatar()'),
+  'An existing low-resolution provider avatar must be replaceable without overwriting custom photos automatically.',
 );
 
 console.log('Profile avatar model QA passed.');

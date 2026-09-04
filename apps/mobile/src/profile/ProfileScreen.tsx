@@ -231,20 +231,63 @@ export function ProfileScreen() {
     }
   }, [avatarStatus, firebaseIdToken]);
 
+  const importProviderAvatar = useCallback(async () => {
+    if (
+      !firebaseIdToken
+      || !currentUser?.photoUrl
+      || avatarStatus === 'saving'
+      || !profile?.avatarUploadsEnabled
+    ) return;
+
+    setAvatarStatus('saving');
+    setAvatarError(null);
+    try {
+      const updatedProfile = await copyRemoteProfileAvatar(firebaseIdToken, currentUser.photoUrl);
+      setAvatarOverride(updatedProfile.avatarUrl);
+      notifyUserDataChanged('profile', 'socialGraph');
+      hapticSuccess();
+    } catch (error) {
+      setAvatarError(
+        error instanceof Error ? error.message : 'Could not import your sign-in photo.',
+      );
+      hapticError();
+    } finally {
+      setAvatarStatus('idle');
+    }
+  }, [avatarStatus, currentUser?.photoUrl, firebaseIdToken, profile?.avatarUploadsEnabled]);
+
   const openAvatarActions = useCallback(() => {
     if (!profile?.avatarUploadsEnabled || avatarStatus === 'saving') return;
 
-    if (!avatarUrl) {
+    if (!avatarUrl && !currentUser?.photoUrl) {
       void changeAvatar();
       return;
     }
 
-    Alert.alert('Profile photo', 'Choose a new photo or return to your initials.', [
+    Alert.alert('Profile photo', avatarUrl
+      ? 'Choose a new photo, refresh your sign-in photo, or return to your initials.'
+      : 'Use your sign-in photo or choose one from your library.', [
+      ...(currentUser?.photoUrl ? [{
+        onPress: () => void importProviderAvatar(),
+        text: avatarUrl ? 'Refresh sign-in photo' : 'Use sign-in photo',
+      }] : []),
       { onPress: () => void changeAvatar(), text: 'Choose a new photo' },
-      { onPress: () => void deleteAvatar(), style: 'destructive', text: 'Remove photo' },
+      ...(avatarUrl ? [{
+        onPress: () => void deleteAvatar(),
+        style: 'destructive' as const,
+        text: 'Remove photo',
+      }] : []),
       { style: 'cancel', text: 'Cancel' },
     ]);
-  }, [avatarStatus, avatarUrl, changeAvatar, deleteAvatar, profile?.avatarUploadsEnabled]);
+  }, [
+    avatarStatus,
+    avatarUrl,
+    changeAvatar,
+    currentUser?.photoUrl,
+    deleteAvatar,
+    importProviderAvatar,
+    profile?.avatarUploadsEnabled,
+  ]);
 
   const shareProfile = useCallback(async () => {
     if (!profile) return;

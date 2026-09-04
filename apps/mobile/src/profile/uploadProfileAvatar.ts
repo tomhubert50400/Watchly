@@ -3,7 +3,12 @@ import {
   createAvatarUpload,
   type UserProfile,
 } from '../api/profile';
-import { assertProfileAvatarSize, PROFILE_AVATAR_EDGE_PX } from './avatarModel';
+import {
+  assertProfileAvatarSize,
+  getHighResolutionProfileAvatarUrl,
+  PROFILE_AVATAR_EDGE_PX,
+  PROFILE_AVATAR_JPEG_QUALITY,
+} from './avatarModel';
 
 export async function chooseAndUploadProfileAvatar(
   firebaseIdToken: string,
@@ -51,7 +56,10 @@ export async function copyRemoteProfileAvatar(
   const localUri = `${FileSystem.cacheDirectory}watchly-oauth-avatar-${Date.now()}.img`;
 
   try {
-    const download = await FileSystem.downloadAsync(remoteUrl, localUri);
+    const download = await FileSystem.downloadAsync(
+      getHighResolutionProfileAvatarUrl(remoteUrl),
+      localUri,
+    );
     if (download.status < 200 || download.status >= 300) {
       throw new Error('Could not download your sign-in profile photo.');
     }
@@ -71,7 +79,7 @@ export async function uploadProfileAvatarFromUri(
   const image = await manipulateAsync(
     uri,
     [{ resize: { height: PROFILE_AVATAR_EDGE_PX, width: PROFILE_AVATAR_EDGE_PX } }],
-    { compress: 0.78, format: SaveFormat.JPEG },
+    { compress: PROFILE_AVATAR_JPEG_QUALITY, format: SaveFormat.JPEG },
   );
   const imageResponse = await fetch(image.uri);
   const imageBlob = await imageResponse.blob();
