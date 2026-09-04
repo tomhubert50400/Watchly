@@ -1,15 +1,13 @@
 export function formatCompactHours(minutes: number) {
   if (minutes <= 0) {
-    return '0m';
+    return '0h';
   }
 
   const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
 
-  if (hours === 0) return `${remainingMinutes}m`;
-  if (remainingMinutes === 0) return `${hours}h`;
+  if (hours === 0) return '<1h';
 
-  return `${hours}h${remainingMinutes}`;
+  return `${hours}h`;
 }
 
 export function formatStoryTime(minutes: number) {

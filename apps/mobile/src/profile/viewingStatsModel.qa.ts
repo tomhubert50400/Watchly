@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { formatCompactHours, formatStoryTime, formatViewCount } from './viewingStatsModel';
 
-assert.equal(formatCompactHours(108), '1h48');
-assert.equal(formatCompactHours(45), '45m');
-assert.equal(formatCompactHours(36_750), '612h30');
+assert.equal(formatCompactHours(0), '0h');
+assert.equal(formatCompactHours(108), '1h');
+assert.equal(formatCompactHours(45), '<1h');
+assert.equal(formatCompactHours(36_750), '612h');
 assert.equal(formatStoryTime(533), '8 hours watching stories and making memories');
 assert.equal(formatStoryTime(60), '1 hour watching stories and making memories');
 assert.equal(formatStoryTime(45), '45 minutes watching stories and making memories');
@@ -21,6 +22,11 @@ assert(
   allTimeSource.includes('minimumFontScale={0.5}')
     && allTimeSource.includes('fontSize: 64'),
   'The All Time watch duration must remain within the screen for triple and quadruple digit hours.',
+);
+assert(
+  allTimeSource.includes("textAlign: 'center'")
+    && allTimeSource.includes("width: '100%'"),
+  'The story time copy must stay centered below the watch duration.',
 );
 assert(
   highlightCardSource.includes('<SvgLinearGradient')

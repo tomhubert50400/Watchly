@@ -318,6 +318,8 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '500',
     letterSpacing: 0.3,
+    textAlign: 'center',
+    width: '100%',
   },
   summaryDivider: {
     alignSelf: 'center',
