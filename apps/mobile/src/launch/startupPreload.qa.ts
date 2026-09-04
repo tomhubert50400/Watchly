@@ -65,6 +65,16 @@ assert.match(
   /status === 'loading'/,
   'private preloading must wait until authentication resolves',
 );
+assert.match(
+  preloadSource,
+  /status === 'signedIn'\s*&&\s*currentUser\s*&&\s*currentUser\.onboardingCompleted\s*&&\s*currentUser\.handle/,
+  'private preloading must not cache empty account data before onboarding is complete',
+);
+assert.match(
+  preloadSource,
+  /currentUser\?\.handle,[\s\S]*currentUser\?\.id,[\s\S]*currentUser\?\.onboardingCompleted,/,
+  'private preloading must restart when onboarding completion updates the current user',
+);
 assert.doesNotMatch(
   preloadSource,
   /setReady\(false\)/,

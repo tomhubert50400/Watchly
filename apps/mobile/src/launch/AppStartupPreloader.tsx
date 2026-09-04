@@ -91,7 +91,12 @@ export function AppStartupPreloader() {
       let library: LibraryData | undefined;
       let profile: CachedProfile | undefined;
 
-      if (status === 'signedIn' && currentUser) {
+      if (
+        status === 'signedIn'
+        && currentUser
+        && currentUser.onboardingCompleted
+        && currentUser.handle
+      ) {
         const token = await getFirebaseIdToken();
 
         if (token) {
@@ -151,7 +156,9 @@ export function AppStartupPreloader() {
       });
     })();
   }, [
+    currentUser?.handle,
     currentUser?.id,
+    currentUser?.onboardingCompleted,
     getFirebaseIdToken,
     preloadCatalogueItems,
     preloadWatchlists,
