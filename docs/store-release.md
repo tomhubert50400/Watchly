@@ -7,7 +7,9 @@ This file is the source of truth for the first Watchly beta and the future publi
 | Field | Value |
 | --- | --- |
 | Product name | Watchly |
+| App Store name | Watchly: Movies & TV |
 | Bundle ID / application ID | `com.trywatchly.app` |
+| App Store ID | `6808506784` |
 | Version | `1.0.0` |
 | Default language | English (U.S.) |
 | Support URL | `https://trywatchly.com/support` |
@@ -80,7 +82,7 @@ Please test sign-in, onboarding, discovery, tracking a film and an episode, rati
 - [x] Register `com.trywatchly.app` in Firebase and replace the production Firebase iOS app ID and Google iOS client ID.
 - [x] Register the App ID and Sign in with Apple capability in Apple Developer.
 - [ ] Download the generated App Store provisioning profile and connect it to the EAS TestFlight credentials.
-- [ ] Create the Watchly record in App Store Connect and add its numeric ID to `eas.json`.
+- [x] Create the Watchly record in App Store Connect and add its numeric ID to `eas.json`.
 - [ ] Complete a TestFlight build, submit it and test that exact binary on a physical iPhone.
 - [ ] Replace the expired Sentry organization token before the public production build.
 - [ ] Enable managed database backups and perform a restore drill. Railway Hobby currently has no backups or PITR.
