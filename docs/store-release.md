@@ -84,7 +84,8 @@ Please test sign-in, onboarding, discovery, tracking a film and an episode, rati
 - [x] Download the generated App Store provisioning profile and connect it to the EAS TestFlight credentials.
 - [x] Create the Watchly record in App Store Connect and add its numeric ID to `eas.json`.
 - [x] Build and upload the store-signed TestFlight binary, version `1.0.0` build `3`.
-- [ ] Complete Apple processing, add the build to an internal group and test that exact binary on a physical iPhone.
+- [x] Complete Apple processing and add build `3` to the automatic `Watchly Internal` group with an internal tester.
+- [ ] Install and test build `1.0.0` (`3`) on a physical iPhone.
 - [ ] Replace the expired Sentry organization token before the public production build.
 - [ ] Enable managed database backups and perform a restore drill. Railway Hobby currently has no backups or PITR.
 - [ ] Decide whether the first public release supports iPad. If `supportsTablet` stays enabled, provide the required 13-inch iPad screenshots and device validation.
