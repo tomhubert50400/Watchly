@@ -68,6 +68,7 @@ type OpinionSheetProps = {
   perform: (operation: OpinionOperation) => Promise<void>;
   posterUrl?: string | null;
   resourceKey?: string;
+  reviewsEnabled?: boolean;
   signedOutMessage: string;
   triggerVariant?: 'activity' | 'default';
 };
@@ -82,6 +83,7 @@ export function OpinionSheet({
   perform,
   posterUrl,
   resourceKey,
+  reviewsEnabled = true,
   signedOutMessage,
   triggerVariant = 'default',
 }: OpinionSheetProps) {
@@ -155,11 +157,16 @@ export function OpinionSheet({
   const summary = useMemo(() => {
     if (!isSignedIn) return signedOutMessage;
     if (loadError) return loadError;
-    if (opinion.savedRating === null) return 'Add a half-star rating and an optional written review.';
+    if (opinion.savedRating === null) {
+      return reviewsEnabled
+        ? 'Add a half-star rating and an optional written review.'
+        : 'Add a half-star rating.';
+    }
+    if (!reviewsEnabled) return `${opinion.savedRating}/5`;
     return opinion.savedReview
       ? `${opinion.savedRating}/5 · Review added`
       : `${opinion.savedRating}/5 · No written review`;
-  }, [isSignedIn, loadError, opinion.savedRating, opinion.savedReview, signedOutMessage]);
+  }, [isSignedIn, loadError, opinion.savedRating, opinion.savedReview, reviewsEnabled, signedOutMessage]);
 
   function closeSheet() {
     if (isSaving) return;
@@ -489,14 +496,16 @@ export function OpinionSheet({
         </View>
       ) : (
         <>
-          <Text style={styles.triggerTitle}>Your opinion</Text>
+          <Text style={styles.triggerTitle}>{reviewsEnabled ? 'Your opinion' : 'Your rating'}</Text>
           <View style={styles.triggerContent}>
             <Text style={[styles.triggerBody, loadError ? styles.errorText : null]}>{summary}</Text>
             <View style={styles.triggerAction}>
               {isSignedIn && !loadError ? (
                 <Button
                   fullWidth
-                  label={opinion.savedRating === null ? 'Rate & review' : 'Edit opinion'}
+                  label={opinion.savedRating === null
+                    ? reviewsEnabled ? 'Rate & review' : 'Rate series'
+                    : reviewsEnabled ? 'Edit opinion' : 'Edit rating'}
                   onPress={() => setIsOpen(true)}
                 />
               ) : null}
@@ -507,7 +516,12 @@ export function OpinionSheet({
         </>
       )}
 
-      <BottomActionSheet footer={sheetFooter} onClose={closeSheet} title="Your opinion" visible={isOpen}>
+      <BottomActionSheet
+        footer={sheetFooter}
+        onClose={closeSheet}
+        title={reviewsEnabled ? 'Your opinion' : 'Your rating'}
+        visible={isOpen}
+      >
         <BottomActionSheetScrollView keyboardShouldPersistTaps="handled">
           <View style={styles.identity}>
             {posterUrl ? (
@@ -565,28 +579,32 @@ export function OpinionSheet({
             <Text style={styles.help}>Tap or slide across the stars. With VoiceOver, swipe up or down to adjust.</Text>
           </View>
 
-          <View style={styles.reviewHeader}>
-            <Text style={styles.reviewLabel}>Optional written review</Text>
-            <Text style={styles.counter}>{opinion.draftReview.length} / {MAX_REVIEW_LENGTH}</Text>
-          </View>
-          <TextInput
-            accessibilityLabel="Written review"
-            editable={!isSaving && opinion.draftRating !== null}
-            maxLength={MAX_REVIEW_LENGTH}
-            multiline
-            onChangeText={(draftReview) => setOpinion((current) => ({ ...current, draftReview, error: null }))}
-            placeholder={opinion.draftRating === null ? 'Choose a rating before writing a review' : 'Write your review'}
-            placeholderTextColor={colors.textSubtle}
-            style={styles.reviewInput}
-            textAlignVertical="top"
-            value={opinion.draftReview}
-          />
-          <Text style={styles.reviewHelp}>Written reviews stay private or public according to your profile privacy setting.</Text>
+          {reviewsEnabled ? (
+            <>
+              <View style={styles.reviewHeader}>
+                <Text style={styles.reviewLabel}>Optional written review</Text>
+                <Text style={styles.counter}>{opinion.draftReview.length} / {MAX_REVIEW_LENGTH}</Text>
+              </View>
+              <TextInput
+                accessibilityLabel="Written review"
+                editable={!isSaving && opinion.draftRating !== null}
+                maxLength={MAX_REVIEW_LENGTH}
+                multiline
+                onChangeText={(draftReview) => setOpinion((current) => ({ ...current, draftReview, error: null }))}
+                placeholder={opinion.draftRating === null ? 'Choose a rating before writing a review' : 'Write your review'}
+                placeholderTextColor={colors.textSubtle}
+                style={styles.reviewInput}
+                textAlignVertical="top"
+                value={opinion.draftReview}
+              />
+              <Text style={styles.reviewHelp}>Written reviews stay private or public according to your profile privacy setting.</Text>
+            </>
+          ) : null}
 
           {opinion.error ? <Text accessibilityLiveRegion="assertive" style={styles.operationError}>{opinion.error}</Text> : null}
 
           <View style={styles.destructiveActions}>
-            {opinion.savedReview !== null ? (
+            {reviewsEnabled && opinion.savedReview !== null ? (
               <Button
                 disabled={isSaving}
                 icon={<Trash2 color={colors.danger} size={17} />}
@@ -604,7 +622,7 @@ export function OpinionSheet({
       <SignInSheet
         body={signedOutMessage}
         onClose={() => setIsSignInOpen(false)}
-        title="Sign in to rate and review"
+        title={reviewsEnabled ? 'Sign in to rate and review' : 'Sign in to rate'}
         visible={isSignInOpen && !isSignedIn}
       />
     </View>

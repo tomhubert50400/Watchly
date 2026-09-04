@@ -15,6 +15,7 @@ import { SeasonEpisodeList } from '../episodes/SeasonEpisodeList';
 import { RootStackParamList } from '../navigation/types';
 import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 import { SeriesProgressSummary } from '../tracking/SeriesProgressSummary';
+import { SeriesRatingControl } from '../tracking/SeriesRatingControl';
 import { TrackingControls } from '../tracking/TrackingControls';
 import { ViewingCountControl } from '../viewings/ViewingCountControl';
 import { AddToWatchlistControl } from '../watchlists/AddToWatchlistControl';
@@ -160,6 +161,11 @@ function SeriesDetailContent({ onOpenRelated, series }: {
             <View style={styles.personalSection}>
               <Text style={styles.personalEyebrow}>Your activity</Text>
               <TrackingControls contentType="series" tmdbId={series.tmdbId} />
+              <SeriesRatingControl
+                posterUrl={series.posterUrl}
+                seriesTitle={series.title}
+                seriesTmdbId={series.tmdbId}
+              />
               <SeriesProgressSummary seasons={series.seasons} seriesTitle={series.title} seriesTmdbId={series.tmdbId} />
               <ViewingCountControl contentType="series" seriesTmdbId={series.tmdbId} />
             </View>

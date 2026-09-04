@@ -110,4 +110,9 @@ assert.match(movieOpinion, /key=\{`\$\{currentUser\?\.id \?\? 'signed-out'\}:mov
 assert.match(movieOpinion, /ownerKey=\{currentUser\?\.id \?\? null\}/);
 assert.match(movieOpinion, /resourceKey=\{`movie:\$\{tmdbId\}`\}/);
 
+const seriesRating = source('../tracking/SeriesRatingControl.tsx');
+assert.match(seriesRating, /key=\{`\$\{currentUser\?\.id \?\? 'signed-out'\}:series:\$\{seriesTmdbId\}`\}/);
+assert.match(seriesRating, /ownerKey=\{currentUser\?\.id \?\? null\}/);
+assert.match(seriesRating, /resourceKey=\{`series:\$\{seriesTmdbId\}`\}/);
+
 console.log('Private control isolation QA passed.');

@@ -118,6 +118,7 @@ for (const file of [
   '../tracking/ComputedRatingSummary.tsx',
   '../tracking/EpisodeRatingControl.tsx',
   '../tracking/MovieRatingControl.tsx',
+  '../tracking/SeriesRatingControl.tsx',
   '../tracking/SeasonProgressSummary.tsx',
   '../tracking/SeriesProgressSummary.tsx',
 ]) {
