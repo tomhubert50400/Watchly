@@ -25,6 +25,7 @@ async function main() {
     await prisma.userEpisodeReview.count();
     await prisma.userMovieRating.count();
     await prisma.userMovieReview.count();
+    await prisma.userSeriesRating.count();
     await prisma.userBlock.count();
     await prisma.userFollow.count();
     await prisma.personalWatchlist.count();

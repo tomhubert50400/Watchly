@@ -177,6 +177,64 @@ export class RatingsService {
     );
   }
 
+  async getSeriesRating(identity: AuthenticatedIdentity, seriesTmdbId: number) {
+    const userId = await this.getUserId(identity);
+    const rating = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userSeriesRating.findUnique({
+        where: {
+          userId_seriesTmdbId: {
+            seriesTmdbId,
+            userId,
+          },
+        },
+      }),
+    );
+
+    return rating ? toApiSeriesRating(rating) : null;
+  }
+
+  async upsertSeriesRating(
+    identity: AuthenticatedIdentity,
+    seriesTmdbId: number,
+    score: number,
+  ) {
+    const userId = await this.getUserId(identity);
+    const scoreHalfSteps = toScoreHalfSteps(score);
+    const rating = await this.prisma.withConnectionRetry(() =>
+      this.prisma.userSeriesRating.upsert({
+        create: {
+          scoreHalfSteps,
+          seriesTmdbId,
+          userId,
+        },
+        update: {
+          scoreHalfSteps,
+        },
+        where: {
+          userId_seriesTmdbId: {
+            seriesTmdbId,
+            userId,
+          },
+        },
+      }),
+    );
+
+    return toApiSeriesRating(rating);
+  }
+
+  async deleteSeriesRating(identity: AuthenticatedIdentity, seriesTmdbId: number) {
+    const userId = await this.getUserId(identity);
+
+    await this.prisma.withConnectionRetry(() =>
+      this.prisma.userSeriesRating.deleteMany({
+        where: {
+          seriesTmdbId,
+          userId,
+        },
+      }),
+    );
+  }
+
   async getSeriesRatingSummary(identity: AuthenticatedIdentity, seriesTmdbId: number) {
     const userId = await this.getUserId(identity);
     const ratings = await this.prisma.withConnectionRetry(() =>
@@ -242,6 +300,13 @@ type UserEpisodeRatingRecord = {
   updatedAt: Date;
 };
 
+type UserSeriesRatingRecord = {
+  id: string;
+  scoreHalfSteps: number;
+  seriesTmdbId: number;
+  updatedAt: Date;
+};
+
 function toApiMovieRating(rating: UserMovieRatingRecord) {
   return {
     id: rating.id,
@@ -257,6 +322,15 @@ function toApiEpisodeRating(rating: UserEpisodeRatingRecord) {
     id: rating.id,
     score: rating.scoreHalfSteps / 2,
     seasonNumber: rating.seasonNumber,
+    seriesTmdbId: rating.seriesTmdbId,
+    updatedAt: rating.updatedAt.toISOString(),
+  };
+}
+
+function toApiSeriesRating(rating: UserSeriesRatingRecord) {
+  return {
+    id: rating.id,
+    score: rating.scoreHalfSteps / 2,
     seriesTmdbId: rating.seriesTmdbId,
     updatedAt: rating.updatedAt.toISOString(),
   };

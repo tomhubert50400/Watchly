@@ -108,6 +108,31 @@ export class EpisodeRatingsController {
 export class SeriesRatingsController {
   constructor(@Inject(RatingsService) private readonly ratings: RatingsService) {}
 
+  @Get(':seriesTmdbId')
+  async get(@Req() request: AuthenticatedRequest, @Param('seriesTmdbId') seriesTmdbId: string) {
+    return this.ratings.getSeriesRating(getIdentity(request), parseTmdbId(seriesTmdbId));
+  }
+
+  @Put(':seriesTmdbId')
+  async upsert(
+    @Req() request: AuthenticatedRequest,
+    @Param('seriesTmdbId') seriesTmdbId: string,
+    @Body() body: RatingScoreDto,
+  ) {
+    return this.ratings.upsertSeriesRating(
+      getIdentity(request),
+      parseTmdbId(seriesTmdbId),
+      body.score,
+    );
+  }
+
+  @Delete(':seriesTmdbId')
+  async delete(@Req() request: AuthenticatedRequest, @Param('seriesTmdbId') seriesTmdbId: string) {
+    await this.ratings.deleteSeriesRating(getIdentity(request), parseTmdbId(seriesTmdbId));
+
+    return { deleted: true };
+  }
+
   @Get(':seriesTmdbId/summary')
   async getSummary(
     @Req() request: AuthenticatedRequest,

@@ -161,6 +161,10 @@ export class PrismaService implements OnModuleDestroy {
     return this.client.userMovieReview;
   }
 
+  get userSeriesRating() {
+    return this.client.userSeriesRating;
+  }
+
   get userSuspension() {
     return this.client.userSuspension;
   }

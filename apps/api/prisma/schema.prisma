@@ -171,6 +171,7 @@ model User {
   movieRatings               UserMovieRating[]
   movieReviewLikes           MovieReviewLike[]
   movieReviews               UserMovieReview[]
+  seriesRatings              UserSeriesRating[]
   reportsReceived            ContentReport[]            @relation("ReportedUser")
   reportsSubmitted           ContentReport[]            @relation("ReportReporter")
   suspensions                UserSuspension[]
@@ -302,6 +303,21 @@ model UserEpisodeRating {
   @@index([userId])
   @@index([seriesTmdbId, seasonNumber])
   @@map("user_episode_ratings")
+}
+
+model UserSeriesRating {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @db.Uuid
+  seriesTmdbId   Int
+  scoreHalfSteps Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, seriesTmdbId])
+  @@index([userId])
+  @@index([seriesTmdbId])
+  @@map("user_series_ratings")
 }
 
 model UserMovieReview {
