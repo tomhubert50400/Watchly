@@ -60,6 +60,7 @@
     },
     "testflight": {
       "extends": "production",
+      "credentialsSource": "local",
       "env": {
         "SENTRY_ALLOW_FAILURE": "true"
       }
