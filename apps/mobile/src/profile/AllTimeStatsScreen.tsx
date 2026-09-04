@@ -18,6 +18,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useUserDataRevision } from '../sync/userDataEvents';
 import { ViewingHighlightCard } from './ViewingHighlightCard';
 import { hydrateViewingStatsArtwork } from './hydrateViewingStatsArtwork';
+import { formatWatchTime } from './viewingStatsModel';
 
 type ExpandedStat = 'rewatches' | 'habits' | 'ratings' | null;
 type Props = NativeStackScreenProps<RootStackParamList, 'AllTimeStats'>;
@@ -88,14 +89,17 @@ function AllTimeContent({
   stats: ViewingStats;
 }) {
   const tasteTotal = Math.max(1, stats.taste.reduce((total, item) => total + item.count, 0));
-  const hours = formatAllTimeHours(stats.summary.watchMinutes);
+  const watchTime = formatWatchTime(
+    stats.summary.watchMinutes,
+    stats.summary.watchTimeIsEstimated,
+  );
 
   return (
     <View style={styles.stack}>
       <View style={styles.hero}>
         <Text style={styles.heroEyebrow}>TIME WATCHED</Text>
         <Text adjustsFontSizeToFit numberOfLines={1} style={styles.heroValue}>
-          {stats.summary.watchTimeIsEstimated ? '~' : ''}{hours}<Text style={styles.heroUnit}>h</Text>
+          {watchTime}
         </Text>
         <Text style={styles.storyTime}>{formatStoryTime(stats.summary.watchMinutes)}</Text>
       </View>
@@ -225,16 +229,6 @@ function MoreStatRow({
   );
 }
 
-function formatAllTimeHours(minutes: number) {
-  const hours = minutes / 60;
-
-  if (hours >= 100) {
-    return Math.floor(hours).toLocaleString('en-US');
-  }
-
-  return Number.isInteger(hours) ? String(hours) : hours.toFixed(1);
-}
-
 function formatStoryTime(minutes: number) {
   if (minutes < 1440) {
     const hours = Math.floor(minutes / 60);
@@ -273,10 +267,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: 1.3,
-  },
-  heroUnit: {
-    fontSize: 39,
-    letterSpacing: -1,
   },
   heroValue: {
     color: '#F2EFEA',

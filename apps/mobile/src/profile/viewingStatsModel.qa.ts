@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { formatCompactHours, formatViewCount, formatWatchTime } from './viewingStatsModel';
 
-assert.equal(formatCompactHours(90), '1.5');
-assert.equal(formatCompactHours(36_750), '612');
+assert.equal(formatCompactHours(108), '1h48');
+assert.equal(formatCompactHours(45), '45m');
+assert.equal(formatCompactHours(36_750), '612h30');
 assert.equal(formatWatchTime(125, false), '2 h 5 min');
 assert.equal(formatWatchTime(120, true), '~2 h');
 assert.equal(formatViewCount(1), '1 view');

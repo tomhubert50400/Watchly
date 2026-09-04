@@ -1,15 +1,15 @@
 export function formatCompactHours(minutes: number) {
   if (minutes <= 0) {
-    return '0';
+    return '0m';
   }
 
-  const hours = minutes / 60;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
 
-  if (hours < 10 && !Number.isInteger(hours)) {
-    return hours.toFixed(1);
-  }
+  if (hours === 0) return `${remainingMinutes}m`;
+  if (remainingMinutes === 0) return `${hours}h`;
 
-  return String(Math.floor(hours));
+  return `${hours}h${remainingMinutes}`;
 }
 
 export function formatWatchTime(minutes: number, estimated: boolean) {
