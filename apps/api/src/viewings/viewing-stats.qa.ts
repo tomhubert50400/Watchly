@@ -52,18 +52,47 @@ const events: ViewingStatsEvent[] = [
   },
 ];
 
-const stats = buildViewingStats(events, [
-  { scoreHalfSteps: 9 },
-  { scoreHalfSteps: 9 },
-  { scoreHalfSteps: 8 },
-]);
+const stats = buildViewingStats(
+  events,
+  [
+    { scoreHalfSteps: 9 },
+    { scoreHalfSteps: 9 },
+    { scoreHalfSteps: 8 },
+  ],
+  [
+    {
+      artworkUrl: 'arrival.jpg',
+      contentType: 'MOVIE',
+      genres: ['Drama', 'Science Fiction'],
+      runtimeMinutes: 108,
+      title: 'Arrival',
+      tmdbId: 3,
+    },
+    {
+      artworkUrl: 'dark.jpg',
+      contentType: 'SERIES',
+      genres: ['Drama', 'Mystery'],
+      runtimeMinutes: null,
+      title: 'Dark',
+      tmdbId: 4,
+    },
+    {
+      artworkUrl: 'duplicate.jpg',
+      contentType: 'MOVIE',
+      genres: ['Drama'],
+      runtimeMinutes: 120,
+      title: 'Past Lives',
+      tmdbId: 1,
+    },
+  ],
+);
 
 assert.deepEqual(stats.summary, {
   episodeCount: 2,
-  movieCount: 1,
-  seriesCount: 1,
-  totalViewCount: 4,
-  watchMinutes: 290,
+  movieCount: 2,
+  seriesCount: 2,
+  totalViewCount: 6,
+  watchMinutes: 398,
   watchTimeIsEstimated: true,
 });
 assert.equal(stats.more.rewatchCount, 1);
@@ -71,6 +100,7 @@ assert.equal(stats.more.favoriteWatchDay, 'Friday');
 assert.equal(stats.more.averageRating, 4.3);
 assert.equal(stats.more.mostUsedRating, 4.5);
 assert.equal(stats.highlights[0]?.title, 'Past Lives');
-assert.deepEqual(stats.taste[0], { count: 4, genre: 'Drama' });
+assert.equal(stats.highlights.filter((item) => item.tmdbId === 1).length, 1);
+assert.deepEqual(stats.taste[0], { count: 6, genre: 'Drama' });
 
 console.log('Viewing stats QA passed.');

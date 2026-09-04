@@ -15,7 +15,20 @@ export type ViewingRating = {
   scoreHalfSteps: number;
 };
 
-export function buildViewingStats(events: ViewingStatsEvent[], ratings: ViewingRating[]) {
+export type ViewingStatsWatchedTitle = {
+  artworkUrl: string | null;
+  contentType: 'MOVIE' | 'SERIES';
+  genres: string[];
+  runtimeMinutes: number | null;
+  title: string | null;
+  tmdbId: number;
+};
+
+export function buildViewingStats(
+  events: ViewingStatsEvent[],
+  ratings: ViewingRating[],
+  watchedTitles: ViewingStatsWatchedTitle[] = [],
+) {
   const movieKeys = new Set<string>();
   const episodeKeys = new Set<string>();
   const seriesKeys = new Set<number>();
@@ -33,6 +46,7 @@ export function buildViewingStats(events: ViewingStatsEvent[], ratings: ViewingR
     }
   >();
   let missingRuntimeCount = 0;
+  let watchedTitleViewCount = 0;
   let watchMinutes = 0;
 
   events.forEach((event) => {
@@ -75,13 +89,50 @@ export function buildViewingStats(events: ViewingStatsEvent[], ratings: ViewingR
     });
   });
 
+  const eventUniqueViewCount = movieKeys.size + episodeKeys.size;
+
+  watchedTitles.forEach((item) => {
+    const isMovie = item.contentType === 'MOVIE';
+    const alreadyRepresented = isMovie
+      ? movieKeys.has(`movie:${item.tmdbId}`)
+      : seriesKeys.has(item.tmdbId);
+
+    if (alreadyRepresented) return;
+
+    watchedTitleViewCount += 1;
+    if (isMovie) {
+      movieKeys.add(`movie:${item.tmdbId}`);
+      if (item.runtimeMinutes === null) {
+        missingRuntimeCount += 1;
+      } else {
+        watchMinutes += item.runtimeMinutes;
+      }
+    } else {
+      seriesKeys.add(item.tmdbId);
+      missingRuntimeCount += 1;
+    }
+
+    item.genres.forEach((genre) => {
+      genreCounts.set(genre, (genreCounts.get(genre) ?? 0) + 1);
+    });
+
+    highlightGroups.set(`${isMovie ? 'movie' : 'series'}:${item.tmdbId}`, {
+      artworkUrl: item.artworkUrl,
+      contentType: isMovie ? 'movie' : 'series',
+      minutes: item.runtimeMinutes ?? 0,
+      title: item.title,
+      tmdbId: item.tmdbId,
+      views: 1,
+    });
+  });
+
   const ratingCounts = new Map<number, number>();
   const totalRatingHalfSteps = ratings.reduce((total, rating) => {
     ratingCounts.set(rating.scoreHalfSteps, (ratingCounts.get(rating.scoreHalfSteps) ?? 0) + 1);
     return total + rating.scoreHalfSteps;
   }, 0);
   const mostUsedHalfSteps = pickMostUsedRating(ratingCounts);
-  const uniqueViewCount = movieKeys.size + episodeKeys.size;
+  const totalViewCount = events.length + watchedTitleViewCount;
 
   return {
     highlights: Array.from(highlightGroups.values())
@@ -95,13 +146,13 @@ export function buildViewingStats(events: ViewingStatsEvent[], ratings: ViewingR
       favoriteWatchDay: pickFavoriteWeekday(weekdayCounts),
       mostUsedRating: mostUsedHalfSteps === null ? null : mostUsedHalfSteps / 2,
       ratingCount: ratings.length,
-      rewatchCount: Math.max(0, events.length - uniqueViewCount),
+      rewatchCount: Math.max(0, events.length - eventUniqueViewCount),
     },
     summary: {
       episodeCount: episodeKeys.size,
       movieCount: movieKeys.size,
       seriesCount: seriesKeys.size,
-      totalViewCount: events.length,
+      totalViewCount,
       watchMinutes,
       watchTimeIsEstimated: missingRuntimeCount > 0,
     },

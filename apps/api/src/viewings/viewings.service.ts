@@ -52,7 +52,7 @@ export class ViewingsService {
 
     await this.enrichMissingMetadata(userId);
 
-    const [events, movieRatings, episodeRatings] = await this.prisma.withConnectionRetry(() =>
+    const [events, movieRatings, episodeRatings, watchedStates] = await this.prisma.withConnectionRetry(() =>
       Promise.all([
         this.prisma.viewingEvent.findMany({
           orderBy: [{ watchedAt: 'desc' }, { createdAt: 'desc' }],
@@ -66,10 +66,43 @@ export class ViewingsService {
           select: { scoreHalfSteps: true },
           where: { userId },
         }),
+        this.prisma.userContentState.findMany({
+          select: { contentType: true, tmdbId: true },
+          where: { status: 'WATCHED', userId },
+        }),
       ]),
     );
 
-    return buildViewingStats(events, [...movieRatings, ...episodeRatings]);
+    const viewedMovieIds = new Set(
+      events.filter((event) => event.contentType === 'MOVIE').map((event) => event.tmdbId),
+    );
+    const viewedSeriesIds = new Set(
+      events.filter((event) => event.contentType === 'EPISODE').map((event) => event.tmdbId),
+    );
+    const watchedTitles = await Promise.all(
+      watchedStates
+        .filter((state) => state.contentType === 'MOVIE'
+          ? !viewedMovieIds.has(state.tmdbId)
+          : !viewedSeriesIds.has(state.tmdbId))
+        .map(async (state) => {
+          const metadata = state.contentType === 'MOVIE'
+            ? await this.getMovieMetadata(state.tmdbId)
+            : await this.getSeriesMetadata(state.tmdbId);
+
+          return {
+            artworkUrl: metadata?.artworkUrl ?? null,
+            contentType: state.contentType,
+            genres: metadata?.genres ?? [],
+            runtimeMinutes: state.contentType === 'MOVIE'
+              ? metadata?.runtimeMinutes ?? null
+              : null,
+            title: metadata?.title ?? null,
+            tmdbId: state.tmdbId,
+          };
+        }),
+    );
+
+    return buildViewingStats(events, [...movieRatings, ...episodeRatings], watchedTitles);
   }
 
   async getMovieSummary(identity: AuthenticatedIdentity, tmdbId: number) {
@@ -342,6 +375,20 @@ export class ViewingsService {
           genres: movie.genres,
           runtimeMinutes: movie.runtimeMinutes,
           title: movie.title,
+        }
+      : null;
+  }
+
+  private async getSeriesMetadata(tmdbId: number) {
+    const result = await this.catalogue.getSeries(tmdbId).catch(() => null);
+    const series = result?.item;
+
+    return series
+      ? {
+          artworkUrl: series.posterUrl ?? series.backdropUrl,
+          genres: series.genres,
+          runtimeMinutes: null,
+          title: series.title,
         }
       : null;
   }
