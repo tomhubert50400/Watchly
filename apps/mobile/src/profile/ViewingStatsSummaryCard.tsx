@@ -37,7 +37,7 @@ export function ViewingStatsSummaryCard({
         <View pointerEvents="none" style={styles.divider} />
         <Stat
           label="WATCH TIME"
-          value={`${stats.summary.watchTimeIsEstimated ? '~' : ''}${formatCompactHours(stats.summary.watchMinutes)}`}
+          value={formatCompactHours(stats.summary.watchMinutes)}
         />
       </View>
     </Pressable>

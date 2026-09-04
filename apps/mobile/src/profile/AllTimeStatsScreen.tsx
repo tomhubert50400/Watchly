@@ -18,7 +18,7 @@ import { RootStackParamList } from '../navigation/types';
 import { useUserDataRevision } from '../sync/userDataEvents';
 import { ViewingHighlightCard } from './ViewingHighlightCard';
 import { hydrateViewingStatsArtwork } from './hydrateViewingStatsArtwork';
-import { formatWatchTime } from './viewingStatsModel';
+import { formatCompactHours, formatStoryTime } from './viewingStatsModel';
 
 type ExpandedStat = 'rewatches' | 'habits' | 'ratings' | null;
 type Props = NativeStackScreenProps<RootStackParamList, 'AllTimeStats'>;
@@ -89,16 +89,18 @@ function AllTimeContent({
   stats: ViewingStats;
 }) {
   const tasteTotal = Math.max(1, stats.taste.reduce((total, item) => total + item.count, 0));
-  const watchTime = formatWatchTime(
-    stats.summary.watchMinutes,
-    stats.summary.watchTimeIsEstimated,
-  );
+  const watchTime = formatCompactHours(stats.summary.watchMinutes);
 
   return (
     <View style={styles.stack}>
       <View style={styles.hero}>
         <Text style={styles.heroEyebrow}>TIME WATCHED</Text>
-        <Text adjustsFontSizeToFit numberOfLines={1} style={styles.heroValue}>
+        <Text
+          adjustsFontSizeToFit
+          minimumFontScale={0.5}
+          numberOfLines={1}
+          style={styles.heroValue}
+        >
           {watchTime}
         </Text>
         <Text style={styles.storyTime}>{formatStoryTime(stats.summary.watchMinutes)}</Text>
@@ -229,16 +231,6 @@ function MoreStatRow({
   );
 }
 
-function formatStoryTime(minutes: number) {
-  if (minutes < 1440) {
-    const hours = Math.floor(minutes / 60);
-    return `${hours} ${hours === 1 ? 'hour' : 'hours'} spent with stories`;
-  }
-
-  const days = Math.floor(minutes / 1440);
-  return `${days} ${days === 1 ? 'day' : 'days'} spent with stories`;
-}
-
 function formatRatingStat(stats: ViewingStats) {
   if (stats.more.ratingCount === 0 || stats.more.averageRating === null) {
     return 'No ratings yet';
@@ -270,10 +262,10 @@ const styles = StyleSheet.create({
   },
   heroValue: {
     color: '#F2EFEA',
-    fontSize: 96,
+    fontSize: 64,
     fontWeight: '800',
-    letterSpacing: -5,
-    lineHeight: 108,
+    letterSpacing: -2,
+    lineHeight: 76,
     marginTop: spacing.sm,
     maxWidth: '100%',
   },

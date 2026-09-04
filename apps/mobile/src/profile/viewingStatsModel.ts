@@ -12,19 +12,14 @@ export function formatCompactHours(minutes: number) {
   return `${hours}h${remainingMinutes}`;
 }
 
-export function formatWatchTime(minutes: number, estimated: boolean) {
-  const prefix = estimated ? '~' : '';
+export function formatStoryTime(minutes: number) {
+  const hours = Math.floor(minutes / 60);
 
-  if (minutes < 60) {
-    return `${prefix}${minutes} min`;
+  if (hours > 0) {
+    return `${hours} ${hours === 1 ? 'hour' : 'hours'} watching stories and making memories`;
   }
 
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-
-  return remainingMinutes === 0
-    ? `${prefix}${hours} h`
-    : `${prefix}${hours} h ${remainingMinutes} min`;
+  return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} watching stories and making memories`;
 }
 
 export function formatViewCount(count: number) {
