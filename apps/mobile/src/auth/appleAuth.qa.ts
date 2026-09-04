@@ -81,6 +81,7 @@ assert.equal(stagingDevelopmentProfile.env?.EXPO_PUBLIC_APP_ENV, 'staging');
 assert.equal(stagingDevelopmentProfile.env?.WATCHLY_DEV_CLIENT, 'true');
 
 const productionInternalProfile = easConfig.build['production-internal'];
+const testflightProfile = easConfig.build.testflight;
 assert.equal(easConfig.cli.appVersionSource, 'remote');
 assert.equal(easConfig.build.production.autoIncrement, true);
 assert.equal(easConfig.submit?.production?.android?.track, 'internal');
@@ -88,6 +89,9 @@ assert.deepEqual(easConfig.submit?.production?.ios, {});
 assert.equal(productionInternalProfile.extends, 'production');
 assert.equal(productionInternalProfile.distribution, 'internal');
 assert.equal(productionInternalProfile.developmentClient, undefined);
+assert.equal(testflightProfile.extends, 'production');
+assert.equal(testflightProfile.distribution, undefined);
+assert.equal(testflightProfile.env?.SENTRY_ALLOW_FAILURE, 'true');
 assert.match(
   stagingLauncherSource,
   /--max-workers 4/,
