@@ -8,7 +8,7 @@ This document defines the repository contract that keeps local development, stag
 | --- | --- | --- | --- | --- | --- |
 | Local development | `development` | `development` | `development` | `development` | `com.tom.tvapp.dev` |
 | Staging | `staging` | `production` | `staging` | `preview` | `com.tom.tvapp.staging` |
-| Production | `production` | `production` | `production` | `production` | Set with `WATCHLY_PRODUCTION_APPLICATION_ID` |
+| Production | `production` | `production` | `production` | `production` | `com.trywatchly.app` |
 
 The standard EAS `preview` environment backs the Watchly staging profile. This avoids requiring an EAS plan with custom environments.
 

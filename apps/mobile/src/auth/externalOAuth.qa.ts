@@ -41,11 +41,9 @@ assert.doesNotMatch(
 
 const previousVariant = process.env.APP_VARIANT;
 const previousPublicEnvironment = process.env.EXPO_PUBLIC_APP_ENV;
-const previousProductionApplicationId = process.env.WATCHLY_PRODUCTION_APPLICATION_ID;
 const previousDiscordApplicationId = process.env.EXPO_PUBLIC_DISCORD_APPLICATION_ID;
 process.env.APP_VARIANT = 'production';
 process.env.EXPO_PUBLIC_APP_ENV = 'production';
-process.env.WATCHLY_PRODUCTION_APPLICATION_ID = 'com.tom.tvapp';
 delete process.env.EXPO_PUBLIC_DISCORD_APPLICATION_ID;
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -57,11 +55,14 @@ assert.throws(
 
 process.env.EXPO_PUBLIC_DISCORD_APPLICATION_ID = '123456789012345678';
 const productionConfig = configureApp({ config: {} });
+assert.equal(productionConfig.ios.bundleIdentifier, 'com.trywatchly.app');
+assert.equal(productionConfig.android.package, 'com.trywatchly.app');
+assert(productionConfig.scheme.includes('com.trywatchly.app'));
+assert(productionConfig.scheme.includes('msauth.com.trywatchly.app'));
 assert(productionConfig.scheme.includes('discord-123456789012345678'));
 
 restoreEnvironment('APP_VARIANT', previousVariant);
 restoreEnvironment('EXPO_PUBLIC_APP_ENV', previousPublicEnvironment);
-restoreEnvironment('WATCHLY_PRODUCTION_APPLICATION_ID', previousProductionApplicationId);
 restoreEnvironment('EXPO_PUBLIC_DISCORD_APPLICATION_ID', previousDiscordApplicationId);
 
 console.log('External OAuth mobile QA passed.');

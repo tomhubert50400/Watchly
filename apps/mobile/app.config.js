@@ -1,5 +1,6 @@
 const allowedVariants = new Set(['development', 'staging', 'production']);
 const stagingDiscordApplicationId = '1539925787333890090';
+const productionApplicationId = 'com.trywatchly.app';
 
 module.exports = ({ config }) => {
   const variant = process.env.APP_VARIANT?.trim() || 'development';
@@ -87,11 +88,6 @@ function getApplicationId(variant, config) {
 
   if (variant === 'staging') {
     return 'com.tom.tvapp.staging';
-  }
-
-  const productionApplicationId = process.env.WATCHLY_PRODUCTION_APPLICATION_ID?.trim();
-  if (!productionApplicationId) {
-    throw new Error('WATCHLY_PRODUCTION_APPLICATION_ID is required for production builds.');
   }
 
   return productionApplicationId;
