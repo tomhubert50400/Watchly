@@ -23,6 +23,7 @@ export type UserProfile = {
   displayName: string | null;
   handle: string | null;
   id: string;
+  providerAvatarImportEnabled: boolean;
   profileBackdrop: ProfileBackdropSelection | null;
   privacy: ProfilePrivacy;
 };

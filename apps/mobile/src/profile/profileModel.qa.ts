@@ -39,6 +39,7 @@ const publicProfile: UserProfile = {
   displayName: 'Watchly UI Review',
   handle: 'watchly_ui_review',
   id: 'user-1',
+  providerAvatarImportEnabled: true,
   profileBackdrop: { contentType: 'series', tmdbId: 1396 },
   privacy: {
     episodeProgressVisibility: 'private',
@@ -56,6 +57,7 @@ assert.equal(publicModel.avatarUrl, publicProfile.avatarUrl);
 assert.equal(publicModel.displayName, 'Watchly UI Review');
 assert.equal(publicModel.handle, 'watchly_ui_review');
 assert.deepEqual(publicModel.opinions, [movieRating, movieReview]);
+assert.equal(publicModel.providerAvatarImportEnabled, true);
 assert.deepEqual(publicModel.profileBackdrop, publicProfile.profileBackdrop);
 assert.deepEqual(publicModel.stats, {
   followersCount: 7,

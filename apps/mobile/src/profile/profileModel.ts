@@ -22,6 +22,7 @@ export type ProfileModel = {
   handle: string;
   isPublic: boolean;
   opinions: ProfileOpinion[];
+  providerAvatarImportEnabled: boolean;
   profileBackdrop: ProfileBackdropSelection | null;
   stats: {
     followersCount: number;
@@ -45,6 +46,7 @@ export function buildProfileModel(
     handle: profile.handle ?? '',
     isPublic: profile.privacy.profileVisibility === 'public',
     opinions,
+    providerAvatarImportEnabled: profile.providerAvatarImportEnabled,
     profileBackdrop: profile.profileBackdrop,
     stats: {
       followersCount: response.stats.followersCount,

@@ -151,6 +151,7 @@ model User {
   id                         String                     @id @default(uuid()) @db.Uuid
   firebaseUid                String                     @unique @db.VarChar(128)
   avatarObjectKey            String?
+  providerAvatarImportDisabled Boolean                  @default(false)
   profileBackdropContentType TrackedContentType?
   profileBackdropTmdbId      Int?
   displayName                String?

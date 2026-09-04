@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Alert, RefreshControl, Share, StyleSheet, Text, View } from 'react-native';
@@ -41,7 +41,7 @@ import {
   getProfileMediaPreviews,
   isProfileBackdropCandidate,
 } from './profileMediaModel';
-import { chooseAndUploadProfileAvatar } from './uploadProfileAvatar';
+import { chooseAndUploadProfileAvatar, copyRemoteProfileAvatar } from './uploadProfileAvatar';
 import { useHydratedProfileMediaItems } from './useHydratedProfileMediaItems';
 import { useProfileBackdropArtwork } from './useProfileBackdropArtwork';
 import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
@@ -92,6 +92,7 @@ export function ProfileScreen() {
   const [avatarOverride, setAvatarOverride] = useState<string | null | undefined>(undefined);
   const [avatarStatus, setAvatarStatus] = useState<'idle' | 'saving'>('idle');
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  const providerAvatarImportAttemptedForUser = useRef<string | null>(null);
   const [backdropOverride, setBackdropOverride] = useState<
     ProfileBackdropSelection | null | undefined
   >(undefined);
@@ -156,6 +157,37 @@ export function ProfileScreen() {
     ?? profile?.opinions[0]?.contentImageUrl
     ?? null;
   const avatarUrl = avatarOverride === undefined ? profile?.avatarUrl ?? null : avatarOverride;
+
+  useEffect(() => {
+    if (
+      !firebaseIdToken
+      || !userId
+      || !currentUser?.photoUrl
+      || !profile?.avatarUploadsEnabled
+      || !profile.providerAvatarImportEnabled
+      || profile.avatarUrl
+      || avatarOverride !== undefined
+      || providerAvatarImportAttemptedForUser.current === userId
+    ) {
+      return;
+    }
+
+    providerAvatarImportAttemptedForUser.current = userId;
+    setAvatarStatus('saving');
+    setAvatarError(null);
+
+    void copyRemoteProfileAvatar(firebaseIdToken, currentUser.photoUrl)
+      .then((updatedProfile) => {
+        setAvatarOverride(updatedProfile.avatarUrl);
+        notifyUserDataChanged('profile', 'socialGraph');
+      })
+      .catch((error: unknown) => {
+        setAvatarError(
+          error instanceof Error ? error.message : 'Could not import your sign-in photo.',
+        );
+      })
+      .finally(() => setAvatarStatus('idle'));
+  }, [avatarOverride, currentUser?.photoUrl, firebaseIdToken, profile, userId]);
 
   const changeAvatar = useCallback(async () => {
     if (!firebaseIdToken || avatarStatus === 'saving' || !profile?.avatarUploadsEnabled) return;

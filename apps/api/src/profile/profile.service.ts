@@ -553,7 +553,10 @@ export class ProfileService {
 
     await this.prisma.withConnectionRetry(() =>
       this.prisma.user.update({
-        data: { avatarObjectKey: null },
+        data: {
+          avatarObjectKey: null,
+          providerAvatarImportDisabled: true,
+        },
         where: { id: userId },
       }),
     );
@@ -1010,6 +1013,7 @@ export class ProfileService {
       displayName: user.displayName,
       handle: user.handle,
       id: user.id,
+      providerAvatarImportEnabled: !user.providerAvatarImportDisabled,
       profileBackdrop: toApiProfileBackdrop(
         user.profileBackdropContentType,
         user.profileBackdropTmdbId,

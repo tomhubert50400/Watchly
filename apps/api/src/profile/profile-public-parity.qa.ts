@@ -31,6 +31,11 @@ assert.match(
 );
 assert.match(
   source,
+  /removeAvatar[\s\S]*providerAvatarImportDisabled: true[\s\S]*providerAvatarImportEnabled: !user\.providerAvatarImportDisabled/,
+  'removing an avatar must prevent a later automatic provider-photo import',
+);
+assert.match(
+  source,
   /const socialStats = canViewContent[\s\S]*this\.getProfileSocialStats\(user\.id\)[\s\S]*followersCount: socialStats\?\.followersCount[\s\S]*followingCount: socialStats\?\.followingCount/,
   'private profile projections must retain follower and following counts',
 );

@@ -30,5 +30,10 @@ assert(
     profileScreenSource.includes('chooseAndUploadProfileAvatar(firebaseIdToken)'),
   'The owner profile must allow changing the avatar without opening settings.',
 );
+assert(
+  profileScreenSource.includes('profile.providerAvatarImportEnabled') &&
+    profileScreenSource.includes('copyRemoteProfileAvatar(firebaseIdToken, currentUser.photoUrl)'),
+  'The owner profile must repair a missing persisted avatar from the sign-in photo.',
+);
 
 console.log('Profile avatar model QA passed.');
