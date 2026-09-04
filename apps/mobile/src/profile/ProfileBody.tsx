@@ -244,7 +244,9 @@ function getRecentProfileOpinions(items: readonly HydratedProfileOpinion[]) {
   return items.filter((item) => {
     const key = item.content.contentType === 'movie'
       ? `movie:${item.content.tmdbId}`
-      : `episode:${item.content.seriesTmdbId}:${item.content.seasonNumber}:${item.content.episodeNumber}`;
+      : item.content.contentType === 'series'
+        ? `series:${item.content.seriesTmdbId}`
+        : `episode:${item.content.seriesTmdbId}:${item.content.seasonNumber}:${item.content.episodeNumber}`;
 
     if (seenContent.has(key)) return false;
     seenContent.add(key);

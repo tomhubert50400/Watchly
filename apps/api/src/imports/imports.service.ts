@@ -393,9 +393,6 @@ function prepareMatchedItem(
   match: ImportMatch,
 ): PreparedImportItem {
   const issues = [...item.warnings];
-  if (match.contentType === 'series' && item.rating !== null) {
-    issues.push('Series ratings cannot be represented in Watchly yet and will be skipped.');
-  }
   if (match.contentType === 'series' && item.review !== null) {
     issues.push('Series reviews cannot be represented in Watchly yet and will be skipped.');
   }
@@ -412,17 +409,26 @@ export async function commitPreparedItems(
     (item): item is PreparedImportItem & { match: ImportMatch } => item.status === 'ready' && item.match !== null,
   );
   const movieItems = ready.filter((item) => item.match.contentType === 'movie');
+  const seriesItems = ready.filter((item) => item.match.contentType === 'series');
   const movieIds = [...new Set(movieItems.map((item) => item.match.tmdbId))];
-  const ratingItems = movieItems.filter(
+  const seriesIds = [...new Set(seriesItems.map((item) => item.match.tmdbId))];
+  const movieRatingItems = movieItems.filter(
+    (item): item is typeof item & { rating: number } => item.rating !== null,
+  );
+  const seriesRatingItems = seriesItems.filter(
     (item): item is typeof item & { rating: number } => item.rating !== null,
   );
   const reviewItems = movieItems.filter(
     (item): item is typeof item & { review: string } => item.review !== null,
   );
-  const [existingRatings, existingReviews, existingStates, existingViewings] = await Promise.all([
+  const [existingMovieRatings, existingSeriesRatings, existingReviews, existingStates, existingViewings] = await Promise.all([
     transaction.userMovieRating.findMany({
       select: { tmdbId: true },
       where: { tmdbId: { in: movieIds }, userId },
+    }),
+    transaction.userSeriesRating.findMany({
+      select: { seriesTmdbId: true },
+      where: { seriesTmdbId: { in: seriesIds }, userId },
     }),
     transaction.userMovieReview.findMany({
       select: { tmdbId: true },
@@ -442,17 +448,35 @@ export async function commitPreparedItems(
       where: { contentType: ViewingContentType.MOVIE, tmdbId: { in: movieIds }, userId },
     }),
   ]);
-  const existingRatingIds = new Set(existingRatings.map((item) => item.tmdbId));
+  const existingMovieRatingIds = new Set(existingMovieRatings.map((item) => item.tmdbId));
+  const existingSeriesRatingIds = new Set(existingSeriesRatings.map((item) => item.seriesTmdbId));
   const existingReviewIds = new Set(existingReviews.map((item) => item.tmdbId));
-  const ratingsToCreate = ratingItems.filter((item) => !existingRatingIds.has(item.match.tmdbId));
+  const movieRatingsToCreate = movieRatingItems.filter(
+    (item) => !existingMovieRatingIds.has(item.match.tmdbId),
+  );
+  const seriesRatingsToCreate = seriesRatingItems.filter(
+    (item) => !existingSeriesRatingIds.has(item.match.tmdbId),
+  );
   const reviewsToCreate = reviewItems.filter((item) => !existingReviewIds.has(item.match.tmdbId));
 
-  if (ratingsToCreate.length > 0) {
+  if (movieRatingsToCreate.length > 0) {
     await transaction.userMovieRating.createMany({
-      data: ratingsToCreate.map((item) => ({
+      data: movieRatingsToCreate.map((item) => ({
         createdAt: toActivityDate(item.activityDate),
         scoreHalfSteps: Math.round(item.rating * 2),
         tmdbId: item.match.tmdbId,
+        updatedAt: toActivityDate(item.activityDate),
+        userId,
+      })),
+    });
+  }
+
+  if (seriesRatingsToCreate.length > 0) {
+    await transaction.userSeriesRating.createMany({
+      data: seriesRatingsToCreate.map((item) => ({
+        createdAt: toActivityDate(item.activityDate),
+        scoreHalfSteps: Math.round(item.rating * 2),
+        seriesTmdbId: item.match.tmdbId,
         updatedAt: toActivityDate(item.activityDate),
         userId,
       })),
@@ -554,8 +578,10 @@ export async function commitPreparedItems(
 
   return {
     preservedExisting:
-      ratingItems.length - ratingsToCreate.length + reviewItems.length - reviewsToCreate.length,
-    ratingsCreated: ratingsToCreate.length,
+      movieRatingItems.length - movieRatingsToCreate.length
+      + seriesRatingItems.length - seriesRatingsToCreate.length
+      + reviewItems.length - reviewsToCreate.length,
+    ratingsCreated: movieRatingsToCreate.length + seriesRatingsToCreate.length,
     reviewsCreated: reviewsToCreate.length,
     statesChanged,
     titlesProcessed: ready.length,
@@ -571,7 +597,7 @@ function buildImportSummary(items: PreparedImportItem[]): ImportSummary {
   return {
     favorites: ready.filter((item) => item.favorite).length,
     needsAttention: items.length - ready.length,
-    ratings: ready.filter((item) => item.rating !== null && item.match.contentType === 'movie').length,
+    ratings: ready.filter((item) => item.rating !== null).length,
     ready: ready.length,
     reviews: ready.filter((item) => item.review !== null && item.match.contentType === 'movie').length,
     total: items.length,
@@ -589,7 +615,7 @@ function toPublicPreview(importId: string, preview: StoredImportPreview) {
     items: preview.items.map((item, itemIndex) => ({
       actions: {
         hasReview: item.review !== null && item.match?.contentType === 'movie',
-        rating: item.match?.contentType === 'movie' ? item.rating : null,
+        rating: item.rating,
         sourceRating: item.rating,
         viewingCount: item.match?.contentType === 'movie' && item.watched
           ? Math.max(1, item.watchedDates.length)

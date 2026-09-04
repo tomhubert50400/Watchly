@@ -49,6 +49,22 @@ async function hydrateProfileOpinion(
     }
   }
 
+  if (item.content.contentType === 'series') {
+    try {
+      const series = await loadSeries(item.content.seriesTmdbId);
+
+      return {
+        ...item,
+        contentImageUrl: series.posterUrl,
+        contentSubtitle: 'Series',
+        contentTitle: series.title,
+        seriesTitle: series.title,
+      };
+    } catch {
+      return previous ? { ...previous, ...item } : null;
+    }
+  }
+
   try {
     const [episodeResponse, series] = await Promise.all([
       withTimeout(
@@ -83,6 +99,22 @@ async function hydrateProfileOpinionTitle(
     return previous ? { ...previous, ...item } : null;
   }
 
+  if (item.content.contentType === 'series') {
+    try {
+      const series = await loadSeries(item.content.seriesTmdbId);
+
+      return {
+        ...fallbackOpinion(item),
+        contentImageUrl: previous?.contentImageUrl ?? series.posterUrl,
+        contentSubtitle: 'Series',
+        contentTitle: series.title,
+        seriesTitle: series.title,
+      };
+    } catch {
+      return previous ? { ...previous, ...item } : null;
+    }
+  }
+
   try {
     const series = await loadSeries(item.content.seriesTmdbId);
 
@@ -105,6 +137,16 @@ function fallbackOpinion(item: ProfileOpinion): HydratedProfileOpinion {
       contentImageUrl: null,
       contentSubtitle: 'Movie',
       contentTitle: 'Movie',
+      seriesTitle: null,
+    };
+  }
+
+  if (item.content.contentType === 'series') {
+    return {
+      ...item,
+      contentImageUrl: null,
+      contentSubtitle: 'Series',
+      contentTitle: `Series ${item.content.seriesTmdbId}`,
       seriesTitle: null,
     };
   }

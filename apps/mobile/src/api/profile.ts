@@ -125,6 +125,17 @@ type ProfileEpisodeRatingOpinion = {
   updatedAt: string;
 };
 
+type ProfileSeriesRatingOpinion = {
+  content: {
+    contentType: 'series';
+    seriesTmdbId: number;
+  };
+  id: string;
+  score: number;
+  type: 'seriesRating';
+  updatedAt: string;
+};
+
 type ProfileMovieReviewOpinion = {
   body: string;
   content: {
@@ -155,7 +166,8 @@ export type ProfileOpinion =
   | ProfileEpisodeRatingOpinion
   | ProfileEpisodeReviewOpinion
   | ProfileMovieRatingOpinion
-  | ProfileMovieReviewOpinion;
+  | ProfileMovieReviewOpinion
+  | ProfileSeriesRatingOpinion;
 
 export type ProfileOpinionsResponse = {
   items: ProfileOpinion[];

@@ -247,6 +247,14 @@ export class ProfileService {
               updatedAt: true,
             },
           },
+          seriesRatings: {
+            orderBy: { updatedAt: 'desc' },
+            select: {
+              scoreHalfSteps: true,
+              seriesTmdbId: true,
+              updatedAt: true,
+            },
+          },
           sharedWatchlistMemberships: {
             orderBy: { createdAt: 'desc' },
             select: {
@@ -1159,10 +1167,15 @@ export class ProfileService {
   }
 
   private async listOpinionsForUser(userId: string) {
-    const [[movieRatings, episodeRatings, movieReviews, episodeReviews], stats] =
+    const [[movieRatings, seriesRatings, episodeRatings, movieReviews, episodeReviews], stats] =
       await Promise.all([
         this.prisma.withConnectionRetry(() => Promise.all([
           this.prisma.userMovieRating.findMany({
+            orderBy: { updatedAt: 'desc' },
+            take: PROFILE_OPINION_LIMIT,
+            where: { userId },
+          }),
+          this.prisma.userSeriesRating.findMany({
             orderBy: { updatedAt: 'desc' },
             take: PROFILE_OPINION_LIMIT,
             where: { userId },
@@ -1197,6 +1210,7 @@ export class ProfileService {
       ...movieRatings
         .filter((rating) => !movieReviewTmdbIds.has(rating.tmdbId))
         .map(toMovieRatingOpinion),
+      ...seriesRatings.map(toSeriesRatingOpinion),
       ...episodeRatings
         .filter((rating) => !episodeReviewKeys.has(getEpisodeOpinionKey(rating)))
         .map(toEpisodeRatingOpinion),
@@ -1347,6 +1361,7 @@ export class ProfileService {
               },
               movieRatings: true,
               movieReviews: { where: { moderationHiddenAt: null } },
+              seriesRatings: true,
             },
           },
         },
@@ -1357,7 +1372,10 @@ export class ProfileService {
     return {
       followersCount: stats._count.followers,
       followingCount: stats._count.following,
-      postsCount: stats._count.movieRatings + stats._count.episodeRatings,
+      postsCount:
+        stats._count.movieRatings
+        + stats._count.seriesRatings
+        + stats._count.episodeRatings,
       reviewsCount: stats._count.movieReviews + stats._count.episodeReviews,
     };
   }
@@ -1616,6 +1634,13 @@ type EpisodeRatingOpinionRecord = {
   updatedAt: Date;
 };
 
+type SeriesRatingOpinionRecord = {
+  id: string;
+  scoreHalfSteps: number;
+  seriesTmdbId: number;
+  updatedAt: Date;
+};
+
 type MovieReviewOpinionRecord = {
   body: string;
   id: string;
@@ -1656,6 +1681,19 @@ function toEpisodeRatingOpinion(rating: EpisodeRatingOpinionRecord) {
     id: rating.id,
     score: rating.scoreHalfSteps / 2,
     type: 'episodeRating' as const,
+    updatedAt: rating.updatedAt.toISOString(),
+  };
+}
+
+function toSeriesRatingOpinion(rating: SeriesRatingOpinionRecord) {
+  return {
+    content: {
+      contentType: 'series' as const,
+      seriesTmdbId: rating.seriesTmdbId,
+    },
+    id: rating.id,
+    score: rating.scoreHalfSteps / 2,
+    type: 'seriesRating' as const,
     updatedAt: rating.updatedAt.toISOString(),
   };
 }

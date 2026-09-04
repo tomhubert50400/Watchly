@@ -54,7 +54,7 @@ export class ViewingsService {
     await this.initializeWatchedSeriesEpisodes(userId);
     await this.enrichMissingMetadata(userId);
 
-    const [events, movieRatings, episodeRatings, watchedStates] = await this.prisma.withConnectionRetry(() =>
+    const [events, movieRatings, episodeRatings, seriesRatings, watchedStates] = await this.prisma.withConnectionRetry(() =>
       Promise.all([
         this.prisma.viewingEvent.findMany({
           orderBy: [{ watchedAt: 'desc' }, { createdAt: 'desc' }],
@@ -65,6 +65,10 @@ export class ViewingsService {
           where: { userId },
         }),
         this.prisma.userEpisodeRating.findMany({
+          select: { scoreHalfSteps: true },
+          where: { userId },
+        }),
+        this.prisma.userSeriesRating.findMany({
           select: { scoreHalfSteps: true },
           where: { userId },
         }),
@@ -104,7 +108,7 @@ export class ViewingsService {
         }),
     );
 
-    return buildViewingStats(events, [...movieRatings, ...episodeRatings], watchedTitles);
+    return buildViewingStats(events, [...movieRatings, ...episodeRatings, ...seriesRatings], watchedTitles);
   }
 
   async initializeWatchedSeriesEpisodes(userId: string) {

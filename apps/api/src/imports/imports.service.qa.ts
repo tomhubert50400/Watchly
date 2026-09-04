@@ -6,6 +6,7 @@ import { applyImportSuggestion, commitPreparedItems } from './imports.service';
 
 async function main() {
 const createdRatings: unknown[] = [];
+const createdSeriesRatings: unknown[] = [];
 const createdReviews: unknown[] = [];
 const createdStates: unknown[] = [];
 const createdViewings: unknown[] = [];
@@ -19,6 +20,10 @@ const transaction = {
   userMovieReview: {
     createMany: async ({ data }: { data: unknown[] }) => { createdReviews.push(...data); },
     findMany: async () => [{ tmdbId: 1 }],
+  },
+  userSeriesRating: {
+    createMany: async ({ data }: { data: unknown[] }) => { createdSeriesRatings.push(...data); },
+    findMany: async () => [],
   },
   userContentState: {
     create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -102,7 +107,7 @@ const acceptedSuggestion = applyImportSuggestion({
 assert.equal(acceptedSuggestion.status, 'ready');
 assert.equal(acceptedSuggestion.match?.tmdbId, 1396);
 assert.equal(acceptedSuggestion.suggestion, null);
-assert.equal(acceptedSuggestion.issues.length, 2);
+assert.equal(acceptedSuggestion.issues.length, 1);
 const result = await commitPreparedItems(transaction, 'user-id', [
   baseItem,
   {
@@ -119,7 +124,7 @@ const result = await commitPreparedItems(transaction, 'user-id', [
     contentHint: 'series',
     favorite: true,
     match: { ...baseItem.match, contentType: 'series', title: 'Breaking Bad', tmdbId: 3 },
-    rating: null,
+    rating: 4.5,
     review: null,
     sourceKey: 'tvdb:81189',
     sourceTitle: 'Breaking Bad',
@@ -134,7 +139,7 @@ const result = await commitPreparedItems(transaction, 'user-id', [
 
 assert.deepEqual(result, {
   preservedExisting: 2,
-  ratingsCreated: 1,
+  ratingsCreated: 2,
   reviewsCreated: 1,
   statesChanged: 2,
   titlesProcessed: 3,
@@ -143,6 +148,9 @@ assert.deepEqual(result, {
 assert.equal(createdRatings.length, 1);
 assert.equal((createdRatings[0] as { scoreHalfSteps: number }).scoreHalfSteps, 8);
 assert.equal((createdRatings[0] as { tmdbId: number }).tmdbId, 2);
+assert.equal(createdSeriesRatings.length, 1);
+assert.equal((createdSeriesRatings[0] as { scoreHalfSteps: number }).scoreHalfSteps, 9);
+assert.equal((createdSeriesRatings[0] as { seriesTmdbId: number }).seriesTmdbId, 3);
 assert.equal(createdReviews.length, 1);
 assert.equal(createdStates.length, 1);
 assert.equal(createdViewings.length, 1);

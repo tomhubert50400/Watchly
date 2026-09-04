@@ -13,7 +13,8 @@ type OpinionPresentation = {
 
 export type ProfileOpinionTarget =
   | { name: 'EpisodeDetail'; params: RootStackParamList['EpisodeDetail'] }
-  | { name: 'FilmDetail'; params: RootStackParamList['FilmDetail'] };
+  | { name: 'FilmDetail'; params: RootStackParamList['FilmDetail'] }
+  | { name: 'SeriesDetail'; params: RootStackParamList['SeriesDetail'] };
 
 export type ProfileModel = {
   avatarUploadsEnabled: boolean;
@@ -70,6 +71,13 @@ export function getProfileOpinionTarget(
     return {
       name: 'FilmDetail',
       params: { title: presentation.contentTitle, tmdbId: opinion.content.tmdbId },
+    };
+  }
+
+  if (opinion.content.contentType === 'series') {
+    return {
+      name: 'SeriesDetail',
+      params: { title: presentation.contentTitle, tmdbId: opinion.content.seriesTmdbId },
     };
   }
 

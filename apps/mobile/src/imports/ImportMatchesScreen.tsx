@@ -1,6 +1,6 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useState } from 'react';
-import { Info, RotateCcw, Star } from 'lucide-react-native';
+import { RotateCcw, Star } from 'lucide-react-native';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { retryImportSuggestion } from '../api/imports';
@@ -27,7 +27,6 @@ export function ImportMatchesScreen({ route }: Props) {
   const [activeTab, setActiveTab] = useState<ReviewTab>(matchedItems.length > 0 ? 'matched' : 'skipped');
   const [retryingKey, setRetryingKey] = useState<string | null>(null);
   const cardWidth = (width - (spacing.xl * 2) - (spacing.sm * (MATCH_COLUMNS - 1))) / MATCH_COLUMNS;
-  const hasSeriesRating = matchedItems.some((item) => item.contentType === 'series' && item.rating !== null);
   const retryableItems = skippedItems.filter(
     (item) => item.suggestion !== null && item.retryTargets.length > 0,
   );
@@ -107,7 +106,6 @@ export function ImportMatchesScreen({ route }: Props) {
           key="matched-imports"
           keyExtractor={(item) => `${item.contentType}:${item.tmdbId}`}
           ListEmptyComponent={<EmptyTab label="No matched titles." />}
-          ListFooterComponent={hasSeriesRating ? <SeriesRatingNotice /> : null}
           numColumns={MATCH_COLUMNS}
           renderItem={({ item }) => <ImportMatchCard item={item} width={cardWidth} />}
           showsVerticalScrollIndicator={false}
@@ -355,17 +353,6 @@ function EmptyTab({ label }: { label: string }) {
   return <Text style={styles.emptyText}>{label}</Text>;
 }
 
-function SeriesRatingNotice() {
-  return (
-    <View style={styles.notice}>
-      <Info color={colors.textSubtle} size={18} strokeWidth={2} />
-      <Text style={styles.noticeText}>
-        Series ratings shown here come from your export. Watchly imports the title and status, then calculates series ratings from rated episodes.
-      </Text>
-    </View>
-  );
-}
-
 function formatRating(rating: number) {
   return Number.isInteger(rating) ? rating.toFixed(0) : rating.toFixed(1);
 }
@@ -442,23 +429,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     paddingTop: spacing.xl,
     textAlign: 'center',
-  },
-  notice: {
-    alignItems: 'flex-start',
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.xl,
-    padding: spacing.md,
-  },
-  noticeText: {
-    ...typography.meta,
-    color: colors.textMuted,
-    flex: 1,
-    fontWeight: '500',
   },
   posterShell: {
     position: 'relative',

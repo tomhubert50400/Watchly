@@ -21,6 +21,13 @@ const movieReview: ProfileOpinion = {
   type: 'movieReview',
   updatedAt: '2026-07-09T12:00:00.000Z',
 };
+const seriesRating: ProfileOpinion = {
+  content: { contentType: 'series', seriesTmdbId: 1399 },
+  id: 'series-rating',
+  score: 4.5,
+  type: 'seriesRating',
+  updatedAt: '2026-09-05T00:00:00.000Z',
+};
 const episodeReview: ProfileOpinion = {
   body: 'A perfect bottle episode.',
   content: { contentType: 'episode', episodeNumber: 7, seasonNumber: 2, seriesTmdbId: 1396 },
@@ -76,6 +83,10 @@ assert.deepEqual(getProfileOpinionTarget(movieReview, presentation), {
 assert.deepEqual(getProfileOpinionTarget(movieRating, presentation), {
   name: 'FilmDetail',
   params: { title: 'The Matrix', tmdbId: 603 },
+});
+assert.deepEqual(getProfileOpinionTarget(seriesRating, { contentTitle: 'Game of Thrones', seriesTitle: null }), {
+  name: 'SeriesDetail',
+  params: { title: 'Game of Thrones', tmdbId: 1399 },
 });
 assert.deepEqual(
   getProfileOpinionTarget(episodeReview, { contentTitle: 'Better Call Saul', seriesTitle: 'Breaking Bad' }),

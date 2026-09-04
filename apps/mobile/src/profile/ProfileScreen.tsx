@@ -518,6 +518,8 @@ function openOpinion(
 
   if (target.name === 'FilmDetail') {
     navigation.navigate(target.name, target.params);
+  } else if (target.name === 'SeriesDetail') {
+    navigation.navigate(target.name, target.params);
   } else {
     navigation.navigate(target.name, target.params);
   }
