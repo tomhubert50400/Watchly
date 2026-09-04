@@ -11,12 +11,20 @@ const appleLogo = readFileSync(new URL('../../assets/apple-signin-logo-black-44.
 const easConfig = JSON.parse(
   readFileSync(new URL('../../eas.json', import.meta.url), 'utf8'),
 ) as {
+  cli: { appVersionSource?: string };
   build: Record<string, {
+    autoIncrement?: boolean;
     developmentClient?: boolean;
     distribution?: string;
     env?: Record<string, string>;
     extends?: string;
   }>;
+  submit?: {
+    production?: {
+      android?: { track?: string };
+      ios?: Record<string, unknown>;
+    };
+  };
 };
 const authCardSource = readFileSync(new URL('./ProfileAuthCard.tsx', import.meta.url), 'utf8');
 const firebaseSource = readFileSync(new URL('./firebase.ts', import.meta.url), 'utf8');
@@ -73,6 +81,10 @@ assert.equal(stagingDevelopmentProfile.env?.EXPO_PUBLIC_APP_ENV, 'staging');
 assert.equal(stagingDevelopmentProfile.env?.WATCHLY_DEV_CLIENT, 'true');
 
 const productionInternalProfile = easConfig.build['production-internal'];
+assert.equal(easConfig.cli.appVersionSource, 'remote');
+assert.equal(easConfig.build.production.autoIncrement, true);
+assert.equal(easConfig.submit?.production?.android?.track, 'internal');
+assert.deepEqual(easConfig.submit?.production?.ios, {});
 assert.equal(productionInternalProfile.extends, 'production');
 assert.equal(productionInternalProfile.distribution, 'internal');
 assert.equal(productionInternalProfile.developmentClient, undefined);

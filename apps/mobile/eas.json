@@ -1,6 +1,7 @@
 {
   "cli": {
-    "version": ">= 16.0.0"
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
@@ -43,6 +44,7 @@
       "extends": "staging"
     },
     "production": {
+      "autoIncrement": true,
       "environment": "production",
       "env": {
         "APP_VARIANT": "production",
@@ -55,6 +57,14 @@
       "env": {
         "SENTRY_ALLOW_FAILURE": "true"
       }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "internal"
+      },
+      "ios": {}
     }
   }
 }
