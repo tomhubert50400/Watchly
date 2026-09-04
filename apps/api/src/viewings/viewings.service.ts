@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { TmdbCatalogueService } from '../catalogue/tmdb-catalogue.service';
@@ -7,6 +7,8 @@ import { buildViewingStats } from './viewing-stats';
 
 @Injectable()
 export class ViewingsService {
+  private readonly logger = new Logger(ViewingsService.name);
+
   constructor(
     @Inject(AuthService) private readonly authService: AuthService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
@@ -49,7 +51,7 @@ export class ViewingsService {
   }
 
   async getStatsForUser(userId: string) {
-
+    await this.initializeWatchedSeriesEpisodes(userId);
     await this.enrichMissingMetadata(userId);
 
     const [events, movieRatings, episodeRatings, watchedStates] = await this.prisma.withConnectionRetry(() =>
@@ -103,6 +105,34 @@ export class ViewingsService {
     );
 
     return buildViewingStats(events, [...movieRatings, ...episodeRatings], watchedTitles);
+  }
+
+  async initializeWatchedSeriesEpisodes(userId: string) {
+    try {
+      const pendingStates = await this.prisma.withConnectionRetry(() =>
+        this.prisma.userContentState.findMany({
+          select: { id: true, tmdbId: true },
+          where: {
+            contentType: 'SERIES',
+            status: 'WATCHED',
+            userId,
+            watchedEpisodesInitializedAt: null,
+          },
+        }),
+      );
+
+      await mapWithConcurrency(pendingStates, 3, async (state) => {
+        try {
+          await this.initializeWatchedSeries(userId, state.id, state.tmdbId);
+        } catch (error) {
+          this.logger.warn(
+            `Could not initialize watched episodes for series ${state.tmdbId}: ${getErrorMessage(error)}`,
+          );
+        }
+      });
+    } catch (error) {
+      this.logger.warn(`Could not load watched series initialization state: ${getErrorMessage(error)}`);
+    }
   }
 
   async getMovieSummary(identity: AuthenticatedIdentity, tmdbId: number) {
@@ -247,6 +277,74 @@ export class ViewingsService {
           userId,
           watchedAt,
         },
+      }),
+    );
+  }
+
+  private async initializeWatchedSeries(userId: string, stateId: string, seriesTmdbId: number) {
+    const series = (await this.catalogue.getSeries(seriesTmdbId)).item;
+    const seasons = series.seasons.filter((season) => season.seasonNumber > 0);
+    const seasonResults = await mapWithConcurrency(seasons, 4, (season) =>
+      this.catalogue.getSeason(seriesTmdbId, season.seasonNumber)
+    );
+    const today = new Date().toISOString().slice(0, 10);
+    const episodes = seasonResults.flatMap(({ item: season }) =>
+      season.episodes
+        .filter((episode) => episode.airDate !== null && episode.airDate <= today)
+        .map((episode) => ({
+          artworkUrl: series.posterUrl ?? series.backdropUrl ?? season.posterUrl ?? episode.stillUrl,
+          episodeNumber: episode.episodeNumber,
+          genres: series.genres,
+          runtimeMinutes: episode.runtimeMinutes,
+          seasonNumber: episode.seasonNumber,
+          subtitle: episode.title,
+          title: series.title,
+        })),
+    );
+    const markedAt = new Date();
+
+    await this.prisma.withConnectionRetry(() =>
+      this.prisma.$transaction(async (tx) => {
+        const existingEvents = await tx.viewingEvent.findMany({
+          select: { episodeNumber: true, seasonNumber: true },
+          where: { contentType: 'EPISODE', tmdbId: seriesTmdbId, userId },
+        });
+        const existingEventKeys = new Set(
+          existingEvents.map((event) => `${event.seasonNumber}:${event.episodeNumber}`),
+        );
+
+        if (episodes.length > 0) {
+          await tx.userEpisodeProgress.createMany({
+            data: episodes.map((episode) => ({
+              episodeNumber: episode.episodeNumber,
+              seasonNumber: episode.seasonNumber,
+              seriesTmdbId,
+              userId,
+              watchedAt: markedAt,
+            })),
+            skipDuplicates: true,
+          });
+
+          const missingEvents = episodes.filter(
+            (episode) => !existingEventKeys.has(`${episode.seasonNumber}:${episode.episodeNumber}`),
+          );
+          if (missingEvents.length > 0) {
+            await tx.viewingEvent.createMany({
+              data: missingEvents.map((episode) => ({
+                ...episode,
+                contentType: 'EPISODE' as const,
+                tmdbId: seriesTmdbId,
+                userId,
+                watchedAt: null,
+              })),
+            });
+          }
+        }
+
+        await tx.userContentState.update({
+          data: { watchedEpisodesInitializedAt: markedAt },
+          where: { id: stateId },
+        });
       }),
     );
   }
@@ -449,4 +547,27 @@ export class ViewingsService {
 
     return user.id;
   }
+}
+
+async function mapWithConcurrency<T, R>(
+  values: readonly T[],
+  concurrency: number,
+  operation: (value: T) => Promise<R>,
+) {
+  const results = new Array<R>(values.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (nextIndex < values.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await operation(values[index]);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'Unknown error';
 }

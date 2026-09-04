@@ -797,7 +797,12 @@ export class ProfileService {
                   tmdbId: item.tmdbId,
                   userId,
                 },
-                update: { status: UserContentStatus.WATCHED },
+                update: {
+                  status: UserContentStatus.WATCHED,
+                  ...(item.contentType === 'series'
+                    ? { watchedEpisodesInitializedAt: null }
+                    : {}),
+                },
                 where: {
                   userId_contentType_tmdbId: {
                     contentType: item.contentType === 'movie'
@@ -856,6 +861,8 @@ export class ProfileService {
 
       throw error;
     }
+
+    await this.viewings?.initializeWatchedSeriesEpisodes(userId);
 
     return {
       displayName: user.displayName,
