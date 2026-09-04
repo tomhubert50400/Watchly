@@ -15,6 +15,7 @@ import {
   compareAnnouncedCandidates,
   isAnnouncedReleaseDate,
   selectTmdbLogoAsset,
+  selectTmdbPosterPath,
   TmdbCatalogueService,
 } from './tmdb-catalogue.service';
 
@@ -25,6 +26,7 @@ async function main() {
   testGenreMovieEndpoints();
   testPopularEndpoints();
   testLogoSelection();
+  testPosterSelection();
   testWeeklySpotlightSelection();
 
   const requestedUrls: string[] = [];
@@ -37,8 +39,9 @@ async function main() {
     if (url.includes('/search/movie?')) {
       return jsonResponse({
         results: [
-          { id: 1, title: 'Breaking News' },
-          { id: 2, title: "Breakin'" },
+          { id: 1, poster_path: '/breaking-news.jpg', title: 'Breaking News' },
+          { id: 2, poster_path: '/breakin.jpg', title: "Breakin'" },
+          { id: 20, poster_path: null, title: 'Missing Movie Artwork' },
         ],
       });
     }
@@ -46,8 +49,9 @@ async function main() {
     if (url.includes('/search/tv?')) {
       return jsonResponse({
         results: [
-          { id: 3, name: 'Breaking Bad' },
-          { id: 4, name: 'Breaking News' },
+          { id: 3, name: 'Breaking Bad', poster_path: '/breaking-bad.jpg' },
+          { id: 4, name: 'Breaking News', poster_path: '/breaking-news-series.jpg' },
+          { id: 21, name: 'Missing Series Artwork', poster_path: null },
         ],
       });
     }
@@ -72,19 +76,19 @@ async function main() {
 
     if (url.includes('/trending/movie/day?')) {
       return jsonResponse({
-        results: [{ genre_ids: [18], id: 10, release_date: '2020-01-01', title: 'Trending Film' }],
+        results: [{ genre_ids: [18], id: 10, poster_path: '/trending-film.jpg', release_date: '2020-01-01', title: 'Trending Film' }],
       });
     }
 
     if (url.includes('/trending/movie/week?')) {
       return jsonResponse({
-        results: [{ backdrop_path: '/spotlight.jpg', id: 11, release_date: '2020-01-01', title: 'Spotlight Film' }],
+        results: [{ backdrop_path: '/spotlight.jpg', id: 11, poster_path: '/spotlight-poster.jpg', release_date: '2020-01-01', title: 'Spotlight Film' }],
       });
     }
 
     if (url.includes('/trending/tv/day?')) {
       return jsonResponse({
-        results: [{ first_air_date: '2025-01-01', genre_ids: [18, 35], id: 12, name: 'Trending Series' }],
+        results: [{ first_air_date: '2025-01-01', genre_ids: [18, 35], id: 12, name: 'Trending Series', poster_path: '/trending-series.jpg' }],
       });
     }
 
@@ -116,7 +120,7 @@ async function main() {
 
     if (url.includes('/discover/tv?')) {
       return jsonResponse({
-        results: [{ first_air_date: '2099-01-01', genre_ids: [18], id: 13, name: 'Upcoming Series' }],
+        results: [{ first_air_date: '2099-01-01', genre_ids: [18], id: 13, name: 'Upcoming Series', poster_path: '/upcoming-series.jpg' }],
       });
     }
 
@@ -136,13 +140,13 @@ async function main() {
 
     if (url.includes('/discover/movie?')) {
       return jsonResponse({
-        results: [{ genre_ids: [18], id: 14, release_date: '2099-01-01', title: 'Upcoming Film' }],
+        results: [{ genre_ids: [18], id: 14, poster_path: '/upcoming-film.jpg', release_date: '2099-01-01', title: 'Upcoming Film' }],
       });
     }
 
     if (url.includes('/movie/upcoming?')) {
       return jsonResponse({
-        results: [{ genre_ids: [18], id: 14, release_date: '2099-01-01', title: 'Upcoming Film' }],
+        results: [{ genre_ids: [18], id: 14, poster_path: '/upcoming-film.jpg', release_date: '2099-01-01', title: 'Upcoming Film' }],
       });
     }
 
@@ -247,12 +251,21 @@ async function main() {
           ],
         },
         id: 603,
-        images: { logos: [] },
+        images: {
+          logos: [],
+          posters: [
+            { file_path: '/matrix-neutral.jpg', iso_639_1: null, vote_average: 9 },
+            { file_path: '/matrix-english.jpg', iso_639_1: 'en', vote_average: 8 },
+          ],
+        },
         keywords: { keywords: [{ id: 4, name: 'artificial reality' }] },
         original_title: 'The Matrix',
         production_companies: [{ id: 5, logo_path: '/warner.png', name: 'Warner Bros.' }],
         recommendations: {
-          results: [{ id: 604, poster_path: '/matrix-reloaded.jpg', release_date: '2003-05-15', title: 'The Matrix Reloaded' }],
+          results: [
+            { id: 604, poster_path: '/matrix-reloaded.jpg', release_date: '2003-05-15', title: 'The Matrix Reloaded' },
+            { id: 605, poster_path: null, release_date: '2003-11-05', title: 'Missing Recommendation Artwork' },
+          ],
         },
         revenue: 463517383,
         title: 'The Matrix',
@@ -279,6 +292,7 @@ async function main() {
               width: 900,
             },
           ],
+          posters: [{ file_path: '/breaking-bad-poster.jpg', iso_639_1: 'en' }],
         },
         keywords: { results: [{ id: 3, name: 'new mexico' }] },
         last_air_date: '2013-09-29',
@@ -287,7 +301,10 @@ async function main() {
         original_name: 'Breaking Bad',
         production_companies: [{ id: 5, logo_path: null, name: 'Sony Pictures Television' }],
         recommendations: {
-          results: [{ first_air_date: '2015-02-08', id: 60059, name: 'Better Call Saul', poster_path: '/saul.jpg' }],
+          results: [
+            { first_air_date: '2015-02-08', id: 60059, name: 'Better Call Saul', poster_path: '/saul.jpg' },
+            { first_air_date: '2016-01-01', id: 60060, name: 'Missing Recommendation Artwork', poster_path: null },
+          ],
         },
         videos: {
           results: [{ id: 'tv-trailer-1', key: 'HhesaQXLuRY', name: 'Series Trailer', official: true, site: 'YouTube', type: 'Trailer' }],
@@ -318,6 +335,7 @@ async function main() {
 
     assert.deepEqual(series.items.map((item) => item.title), ['Breaking Bad', 'Breaking News']);
     assert(series.items.every((item) => item.mediaType === 'series'));
+    assert(series.items.every((item) => item.posterUrl), 'series search must omit entries without posters');
     assert.deepEqual(requestedPaths(requestedUrls), ['/3/search/tv']);
 
     requestedUrls.length = 0;
@@ -325,6 +343,7 @@ async function main() {
 
     assert.deepEqual(movies.items.map((item) => item.title), ['Breaking News', "Breakin'"]);
     assert(movies.items.every((item) => item.mediaType === 'movie'));
+    assert(movies.items.every((item) => item.posterUrl), 'movie search must omit entries without posters');
     assert.deepEqual(requestedPaths(requestedUrls), ['/3/search/movie']);
 
     requestedUrls.length = 0;
@@ -356,6 +375,11 @@ async function main() {
     assert.equal(requestedUrls.length, 9);
     assert.deepEqual(sections.trendingSeries.map((item) => item.title), ['Trending Series']);
     assert.deepEqual(sections.announcedSeries.map((item) => item.title), ['Upcoming Series']);
+    assert(
+      [...sections.trending, ...sections.announced, ...sections.trendingSeries, ...sections.announcedSeries]
+        .every((item) => item.posterUrl),
+      'home catalogue sections must only expose cards with posters',
+    );
     assertEnglishTmdbRequests(requestedUrls, 'movie sections');
 
     requestedUrls.length = 0;
@@ -367,7 +391,7 @@ async function main() {
         id: 'series:12',
         mediaType: 'series',
         overview: '',
-        posterUrl: null,
+        posterUrl: 'https://image.tmdb.org/t/p/w342/trending-series.jpg',
         releaseDate: '2025-01-01',
         title: 'Trending Series',
         tmdbId: 12,
@@ -417,11 +441,17 @@ async function main() {
     requestedUrls.length = 0;
     const movieDetails = await service.getMovie(603);
     assert.equal(movieDetails.item.budget, 63000000);
+    assert.equal(
+      movieDetails.item.posterUrl,
+      'https://image.tmdb.org/t/p/w342/matrix-english.jpg',
+      'movie details must use the best English or neutral TMDB poster when the primary poster is absent',
+    );
     assert.deepEqual(movieDetails.item.directors, ['Lana Wachowski']);
     assert.deepEqual(movieDetails.item.writers, ['Lilly Wachowski']);
     assert.equal(movieDetails.item.cast[0]?.character, 'Neo');
     assert.equal(movieDetails.item.videos[0]?.key, 'vKQi3bBA1y8');
     assert.equal(movieDetails.item.recommendations[0]?.title, 'The Matrix Reloaded');
+    assert.equal(movieDetails.item.recommendations.length, 1);
     assertEnglishTmdbRequests(requestedUrls, 'movie details');
     assertEnglishLogoRequest(requestedUrls[0]!, 'movie details');
     assert.equal(
@@ -489,6 +519,11 @@ async function main() {
     const seriesDetails = await service.getSeries(1396);
 
     assert.equal(
+      seriesDetails.item.posterUrl,
+      'https://image.tmdb.org/t/p/w342/breaking-bad-poster.jpg',
+      'series details must use an appended TMDB poster when the primary poster is absent',
+    );
+    assert.equal(
       seriesDetails.item.logoUrl,
       'https://image.tmdb.org/t/p/w500/breaking-bad.png',
       'series details must expose the selected TMDB title logo',
@@ -498,6 +533,7 @@ async function main() {
     assert.equal(seriesDetails.item.cast[0]?.name, 'Bryan Cranston');
     assert.equal(seriesDetails.item.videos[0]?.type, 'Trailer');
     assert.equal(seriesDetails.item.recommendations[0]?.title, 'Better Call Saul');
+    assert.equal(seriesDetails.item.recommendations.length, 1);
     assert.equal(requestedUrls.length, 1);
     assert.equal(
       new URL(requestedUrls[0]!).searchParams.get('append_to_response'),
@@ -558,6 +594,31 @@ function testLogoSelection() {
     'unsupported localized artwork is omitted',
   );
   assert.equal(selectTmdbLogoAsset([{ file_path: null, iso_639_1: 'en' }]), null);
+}
+
+function testPosterSelection() {
+  assert.equal(
+    selectTmdbPosterPath([
+      { file_path: '/neutral.jpg', iso_639_1: null, vote_average: 10 },
+      { file_path: '/english.jpg', iso_639_1: 'en', vote_average: 7 },
+      { file_path: '/french.jpg', iso_639_1: 'fr', vote_average: 10 },
+    ]),
+    '/english.jpg',
+    'English posters win before language-neutral posters',
+  );
+  assert.equal(
+    selectTmdbPosterPath([
+      { file_path: '/neutral-low.jpg', iso_639_1: null, vote_average: 5 },
+      { file_path: '/neutral-high.jpg', iso_639_1: null, vote_average: 9 },
+    ]),
+    '/neutral-high.jpg',
+    'poster rating breaks ties inside the same language priority',
+  );
+  assert.equal(
+    selectTmdbPosterPath([{ file_path: '/french.jpg', iso_639_1: 'fr' }]),
+    null,
+    'unsupported localized posters are not selected',
+  );
 }
 
 function assertEnglishTmdbRequests(urls: readonly string[], label: string) {

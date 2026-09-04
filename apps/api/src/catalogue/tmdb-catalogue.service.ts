@@ -57,6 +57,8 @@ type TmdbLogoImage = {
   width?: number;
 };
 
+type TmdbPosterImage = TmdbLogoImage;
+
 type TmdbMovieDetailsResponse = {
   backdrop_path?: string | null;
   budget?: number;
@@ -68,6 +70,7 @@ type TmdbMovieDetailsResponse = {
   id: number;
   images?: {
     logos?: TmdbLogoImage[];
+    posters?: TmdbPosterImage[];
   };
   keywords?: { keywords?: TmdbKeyword[] };
   original_title?: string;
@@ -101,6 +104,7 @@ type TmdbSeriesDetailsResponse = {
   id: number;
   images?: {
     logos?: TmdbLogoImage[];
+    posters?: TmdbPosterImage[];
   };
   in_production?: boolean;
   keywords?: { results?: TmdbKeyword[] };
@@ -912,7 +916,7 @@ export class TmdbCatalogueService {
     const now = new Date();
     const stored = await this.getStoredSpotlight();
 
-    if (stored && isSpotlightActive(stored.expiresAt, now)) {
+    if (stored?.posterUrl && isSpotlightActive(stored.expiresAt, now)) {
       return this.toStoredSpotlightItem(stored);
     }
 
@@ -920,7 +924,7 @@ export class TmdbCatalogueService {
     const spotlight = candidate ? this.toSpotlightItem(candidate) : null;
 
     if (!spotlight) {
-      return stored ? this.toStoredSpotlightItem(stored) : null;
+      return stored?.posterUrl ? this.toStoredSpotlightItem(stored) : null;
     }
 
     await this.storeSpotlight(spotlight, now);
@@ -1024,17 +1028,15 @@ export class TmdbCatalogueService {
     const mediaType = tmdbMediaType === 'movie' ? 'movie' : 'series';
     const title = mediaType === 'movie' ? item.title : item.name;
 
-    if (!title) {
+    if (!title || !item.poster_path) {
       return null;
     }
-
-    const posterUrl = item.poster_path ? `${this.imageBaseUrl}${item.poster_path}` : null;
 
     return {
       id: `${mediaType}:${item.id}`,
       mediaType,
       overview: item.overview ?? '',
-      posterUrl,
+      posterUrl: `${this.imageBaseUrl}${item.poster_path}`,
       releaseDate: item.release_date ?? item.first_air_date ?? null,
       title,
       tmdbId: item.id,
@@ -1101,6 +1103,7 @@ export class TmdbCatalogueService {
 
   private toMovieDetails(item: TmdbMovieDetailsResponse, displayRating: DisplayRating | null): MovieDetails {
     const logo = selectTmdbLogoAsset(item.images?.logos);
+    const posterPath = item.poster_path || selectTmdbPosterPath(item.images?.posters);
 
     return {
       backdropUrl: item.backdrop_path ? `${this.backdropBaseUrl}${item.backdrop_path}` : null,
@@ -1116,7 +1119,7 @@ export class TmdbCatalogueService {
       keywords: buildKeywords(item.keywords?.keywords),
       originalTitle: item.original_title || null,
       overview: item.overview ?? '',
-      posterUrl: item.poster_path ? `${this.imageBaseUrl}${item.poster_path}` : null,
+      posterUrl: posterPath ? `${this.imageBaseUrl}${posterPath}` : null,
       productionCompanies: buildCompanies(item.production_companies, this.imageBaseUrl),
       recommendations: buildRecommendations(item.recommendations?.results, 'movie', this.imageBaseUrl),
       releaseDate: item.release_date ?? null,
@@ -1134,6 +1137,7 @@ export class TmdbCatalogueService {
 
   private toSeriesDetails(item: TmdbSeriesDetailsResponse): SeriesDetails {
     const logo = selectTmdbLogoAsset(item.images?.logos);
+    const posterPath = item.poster_path || selectTmdbPosterPath(item.images?.posters);
 
     return {
       backdropUrl: item.backdrop_path ? `${this.backdropBaseUrl}${item.backdrop_path}` : null,
@@ -1153,7 +1157,7 @@ export class TmdbCatalogueService {
       numberOfSeasons: typeof item.number_of_seasons === 'number' ? item.number_of_seasons : null,
       originalTitle: item.original_name || null,
       overview: item.overview ?? '',
-      posterUrl: item.poster_path ? `${this.imageBaseUrl}${item.poster_path}` : null,
+      posterUrl: posterPath ? `${this.imageBaseUrl}${posterPath}` : null,
       productionCompanies: buildCompanies(item.production_companies, this.imageBaseUrl),
       recommendations: buildRecommendations(item.recommendations?.results, 'series', this.imageBaseUrl),
       seasons:
@@ -1348,14 +1352,14 @@ function buildRecommendations(
   return (items ?? []).flatMap((item) => {
     const title = mediaType === 'movie' ? item.title : item.name;
 
-    if (!title || seen.has(item.id)) {
+    if (!title || !item.poster_path || seen.has(item.id)) {
       return [];
     }
 
     seen.add(item.id);
     return [{
       mediaType,
-      posterUrl: item.poster_path ? `${imageBaseUrl}${item.poster_path}` : null,
+      posterUrl: `${imageBaseUrl}${item.poster_path}`,
       releaseDate: (mediaType === 'movie' ? item.release_date : item.first_air_date) ?? null,
       title,
       tmdbId: item.id,
@@ -1640,6 +1644,26 @@ export function selectTmdbLogoAsset(logos: readonly TmdbLogoImage[] | undefined)
     aspectRatio: hasValidDimensions ? width / height : null,
     path: logo.file_path,
   };
+}
+
+export function selectTmdbPosterPath(posters: readonly TmdbPosterImage[] | undefined) {
+  const languagePriority = new Map<string | null, number>([
+    ['en', 0],
+    [null, 1],
+  ]);
+
+  return (posters ?? [])
+    .filter((poster): poster is TmdbPosterImage & { file_path: string } =>
+      Boolean(poster.file_path) && languagePriority.has(poster.iso_639_1 ?? null))
+    .sort((left, right) => {
+      const languageDifference =
+        languagePriority.get(left.iso_639_1 ?? null)!
+        - languagePriority.get(right.iso_639_1 ?? null)!;
+
+      return languageDifference
+        || (right.vote_average ?? 0) - (left.vote_average ?? 0)
+        || (right.vote_count ?? 0) - (left.vote_count ?? 0);
+    })[0]?.file_path ?? null;
 }
 
 export function buildEpisodeCast(
