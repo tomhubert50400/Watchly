@@ -77,12 +77,12 @@ Please test sign-in, onboarding, discovery, tracking a film and an episode, rati
 - [x] Google, Apple, Microsoft and Discord readiness probes pass against production.
 - [x] Public support, privacy and terms pages return HTTPS 200.
 - [x] EAS uses remote build numbers and automatic increments.
-- [ ] Register `com.trywatchly.app` in Firebase and replace the production Firebase iOS app ID and Google iOS client ID.
-- [ ] Register the App ID and Sign in with Apple capability in Apple Developer.
+- [x] Register `com.trywatchly.app` in Firebase and replace the production Firebase iOS app ID and Google iOS client ID.
+- [x] Register the App ID and Sign in with Apple capability in Apple Developer.
+- [ ] Download the generated App Store provisioning profile and connect it to the EAS TestFlight credentials.
 - [ ] Create the Watchly record in App Store Connect and add its numeric ID to `eas.json`.
 - [ ] Complete a TestFlight build, submit it and test that exact binary on a physical iPhone.
 - [ ] Replace the expired Sentry organization token before the public production build.
 - [ ] Enable managed database backups and perform a restore drill. Railway Hobby currently has no backups or PITR.
 - [ ] Decide whether the first public release supports iPad. If `supportsTablet` stays enabled, provide the required 13-inch iPad screenshots and device validation.
 - [ ] Complete Google Play device verification, register the Android Firebase/OAuth application, build an AAB and upload it to the internal track.
-
