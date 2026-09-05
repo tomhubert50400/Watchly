@@ -18,11 +18,9 @@ export function SiteHeader() {
           <Image alt="Watchly" className="brand__wordmark" priority src={watchlyWordmark} />
         </Link>
         <nav aria-label="Primary navigation" className="site-nav">
-          <Link href="/#find">Find Anything</Link>
-          <Link href="/#progress">Track Progress</Link>
-          <Link href="/#rating">Rate Honestly</Link>
-          <Link href="/#journal">Keep Memories</Link>
-          <Link href="/#lists">Build Lists</Link>
+          <Link href="/#journal">Your journal</Link>
+          <Link href="/#series">Your series</Link>
+          <Link href="/#lists">Your lists</Link>
         </nav>
         <a
           aria-label="Follow @WatchlyTV on X"
@@ -41,12 +39,10 @@ export function SiteHeader() {
             Menu
           </summary>
           <nav aria-label="Mobile navigation">
-            <Link href="/#find" onClick={closeMobileNavigation}>Find Anything</Link>
-            <Link href="/#progress" onClick={closeMobileNavigation}>Track Progress</Link>
-            <Link href="/#rating" onClick={closeMobileNavigation}>Rate Honestly</Link>
-            <Link href="/#journal" onClick={closeMobileNavigation}>Keep Memories</Link>
-            <Link href="/#lists" onClick={closeMobileNavigation}>Build Lists</Link>
-            <Link href="/#download" onClick={closeMobileNavigation}>Get Watchly</Link>
+            <Link href="/#journal" onClick={closeMobileNavigation}>Your journal</Link>
+            <Link href="/#series" onClick={closeMobileNavigation}>Your series</Link>
+            <Link href="/#lists" onClick={closeMobileNavigation}>Your lists</Link>
+            <Link href="/#join" onClick={closeMobileNavigation}>Get Watchly</Link>
           </nav>
         </details>
       </div>
