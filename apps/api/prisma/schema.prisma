@@ -9,6 +9,7 @@ datasource db {
 }
 
 enum AuthProvider {
+  DEMO
   GOOGLE
   APPLE
   MICROSOFT

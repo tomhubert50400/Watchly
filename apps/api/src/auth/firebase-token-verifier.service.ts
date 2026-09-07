@@ -4,14 +4,17 @@ import { DecodedIdToken, getAuth } from 'firebase-admin/auth';
 import { AuthProvider } from '../generated/prisma/enums';
 import { AuthenticatedAdmin, AuthenticatedIdentity } from './auth.types';
 import { initializeFirebaseAdmin } from './firebase-admin-app';
+import { DEMO_FIREBASE_UID } from './demo-credentials';
 
 @Injectable()
 export class FirebaseTokenVerifier {
   private readonly allowEmulatorPasswordProvider: boolean;
   private readonly checkRevokedTokens: boolean;
   private readonly isAuthEmulator: boolean;
+  private readonly demoEnabled: boolean;
 
   constructor(@Inject(ConfigService) config: ConfigService) {
+    this.demoEnabled = Boolean(config.get<string>('DEMO_AUTH_USERNAME') && config.get<string>('DEMO_AUTH_PASSWORD_HASH'));
     const authEmulatorHost = config.get<string>('FIREBASE_AUTH_EMULATOR_HOST');
 
     this.isAuthEmulator = Boolean(authEmulatorHost);
@@ -35,6 +38,7 @@ export class FirebaseTokenVerifier {
     return verifyBearerTokenWithAuth(getAuth(), token, {
       allowPasswordProvider: this.allowEmulatorPasswordProvider,
       checkRevoked: this.checkRevokedTokens,
+      demoEnabled: this.demoEnabled,
     });
   }
 
@@ -48,7 +52,7 @@ type FirebaseAuthVerifier = Pick<ReturnType<typeof getAuth>, 'verifyIdToken'>;
 export async function verifyBearerTokenWithAuth(
   auth: FirebaseAuthVerifier,
   token: string,
-  options: { allowPasswordProvider?: boolean; checkRevoked?: boolean } = {},
+  options: { allowPasswordProvider?: boolean; checkRevoked?: boolean; demoEnabled?: boolean } = {},
 ): Promise<AuthenticatedIdentity> {
   let decodedToken: DecodedIdToken;
 
@@ -63,6 +67,14 @@ export async function verifyBearerTokenWithAuth(
 
   if (!provider) {
     throw new UnauthorizedException('Auth provider is not allowed.');
+  }
+
+  if ((provider === AuthProvider.DEMO || decodedToken.uid === DEMO_FIREBASE_UID || decodedToken.watchlyDemo === true) && (!options.demoEnabled
+    || decodedToken.uid !== DEMO_FIREBASE_UID
+    || (provider === AuthProvider.DEMO && decodedToken.watchlyProviderUserId !== DEMO_FIREBASE_UID)
+    || decodedToken.watchlyDemo !== true
+    || decodedToken.admin === true)) {
+    throw new UnauthorizedException('Demo access is unavailable.');
   }
 
   const providerUserId = getProviderUserId(decodedToken, provider);
@@ -213,6 +225,8 @@ function resolveFirebaseProvider(
   if (decodedToken.firebase.sign_in_provider !== 'custom') return null;
 
   switch (decodedToken.watchlyProvider) {
+    case AuthProvider.DEMO:
+      return AuthProvider.DEMO;
     case AuthProvider.DISCORD:
       return AuthProvider.DISCORD;
     case AuthProvider.MICROSOFT:

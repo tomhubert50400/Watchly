@@ -4,6 +4,7 @@ import {
   Controller,
   Get,
   HttpCode,
+  Header,
   Inject,
   Param,
   Post,
@@ -13,6 +14,8 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { DemoAuthService } from './demo-auth.service';
 import { AuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
 import { AuthenticatedRequest } from './auth.types';
@@ -25,7 +28,16 @@ export class AuthController {
   constructor(
     @Inject(AuthService) private readonly authService: AuthService,
     @Inject(ExternalOAuthService) private readonly externalOAuth: ExternalOAuthService,
+    @Inject(DemoAuthService) private readonly demoAuth: DemoAuthService,
   ) {}
+
+  @Post('demo/sign-in')
+  @HttpCode(200)
+  @Header('Cache-Control', 'no-store')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  signInDemo(@Body() body: Record<string, unknown>) {
+    return this.demoAuth.signIn(body);
+  }
 
   @Get('me')
   @UseGuards(AuthGuard)

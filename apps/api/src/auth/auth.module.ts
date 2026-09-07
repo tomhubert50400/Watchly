@@ -8,6 +8,7 @@ import { AuthService } from './auth.service';
 import { FirebaseTokenVerifier } from './firebase-token-verifier.service';
 import { ExternalOAuthService } from './external-oauth.service';
 import { OptionalAuthGuard } from './optional-auth.guard';
+import { DemoAuthService } from './demo-auth.service';
 
 @Module({
   controllers: [AuthController],
@@ -17,6 +18,7 @@ import { OptionalAuthGuard } from './optional-auth.guard';
     AdminGuard,
     AuthGuard,
     AuthService,
+    DemoAuthService,
     ExternalOAuthService,
     FirebaseTokenVerifier,
     OptionalAuthGuard,
