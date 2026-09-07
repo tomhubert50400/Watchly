@@ -1,0 +1,38 @@
+.page {
+  margin: 0 auto;
+  max-width: 720px;
+  padding: 80px 24px;
+}
+
+.page h1 {
+  font-size: clamp(32px, 6vw, 52px);
+  line-height: 1.1;
+  margin: 16px 0 24px;
+}
+
+.page p {
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 16px 0;
+}
+
+.openApp {
+  background: var(--accent);
+  border-radius: 12px;
+  color: #fff;
+  display: inline-flex;
+  font-weight: 600;
+  justify-content: center;
+  min-height: 48px;
+  padding: 12px 24px;
+  text-decoration: none;
+}
+
+.openApp:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 4px;
+}
+
+.openApp:hover {
+  background: var(--accent-pressed);
+}
