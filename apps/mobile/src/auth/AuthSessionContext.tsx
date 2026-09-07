@@ -1,5 +1,5 @@
 import { createContext, PropsWithChildren, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { getCurrentUser, CurrentUser } from '../api/auth';
+import { getCurrentUser, CurrentUser, signInDemo } from '../api/auth';
 import {
   createMicrosoftOAuthTicket,
   exchangeExternalOAuth,
@@ -61,6 +61,7 @@ type AuthSessionContextValue = {
   signInWithExternal: (provider: ExternalAuthProvider) => Promise<ProviderSignInResult>;
   signInWithMicrosoft: (tokens: MicrosoftTokens) => Promise<ProviderSignInResult>;
   signOut: () => Promise<void>;
+  signInWithDemo: (username: string, password: string) => Promise<void>;
   status: AuthSessionStatus;
 };
 
@@ -517,6 +518,33 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     }
   }, [currentUser?.id]);
 
+  const signInWithDemo = useCallback(async (username: string, password: string) => {
+    if (currentUser) throw new Error('Sign out of your current account before opening demo access.');
+    const transition = authTransitionsRef.current.begin();
+    explicitProviderSignInRef.current = true;
+    explicitSignOutRef.current = false;
+    pendingAccountLinkRef.current = null;
+    setStatus('loading');
+    try {
+      const { firebaseCustomToken } = await signInDemo(username, password);
+      if (!authTransitionsRef.current.isCurrent(transition)) return;
+      const session = await signInWithWatchlyCustomToken(firebaseCustomToken);
+      await applyFirebaseSession(session.firebaseIdToken, transition);
+    } catch (error) {
+      if (authTransitionsRef.current.isCurrent(transition)) {
+        explicitSignOutRef.current = true;
+        await signOutFromFirebase().catch(() => undefined);
+        latestFirebaseIdTokenRef.current = null;
+        setFirebaseIdToken(null);
+        setCurrentUser(null);
+        setStatus('error');
+      }
+      throw error;
+    } finally {
+      explicitProviderSignInRef.current = false;
+    }
+  }, [applyFirebaseSession, currentUser]);
+
   const value = useMemo<AuthSessionContextValue>(
     () => ({
       authErrorMessage,
@@ -532,6 +560,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       signInWithExternal,
       signInWithGoogle,
       signInWithMicrosoft,
+      signInWithDemo,
       signOut,
       status,
     }),
@@ -549,6 +578,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       signInWithExternal,
       signInWithGoogle,
       signInWithMicrosoft,
+      signInWithDemo,
       signOut,
       status,
     ],

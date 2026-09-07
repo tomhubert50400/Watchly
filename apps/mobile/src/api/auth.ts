@@ -1,4 +1,4 @@
-import { apiGet } from './client';
+import { apiGet, apiPost } from './client';
 
 export type CurrentUser = {
   displayName: string | null;
@@ -10,7 +10,11 @@ export type CurrentUser = {
   providers: AuthProvider[];
 };
 
-export type AuthProvider = 'APPLE' | 'DISCORD' | 'GOOGLE' | 'MICROSOFT';
+export type AuthProvider = 'APPLE' | 'DEMO' | 'DISCORD' | 'GOOGLE' | 'MICROSOFT';
+
+export function signInDemo(username: string, password: string) {
+  return apiPost<{ firebaseCustomToken: string }>('/auth/demo/sign-in', { username, password });
+}
 
 export function getCurrentUser(firebaseIdToken: string): Promise<CurrentUser> {
   return apiGet<CurrentUser>('/auth/me', { token: firebaseIdToken });

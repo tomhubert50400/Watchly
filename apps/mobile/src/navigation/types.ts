@@ -14,6 +14,7 @@ export type RootTabParamList = {
 };
 
 export type RootStackParamList = {
+  ReviewAccess: undefined;
   AllTimeStats: {
     profileBackdropUrl: string | null;
     stats?: ViewingStats;

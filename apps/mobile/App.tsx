@@ -27,6 +27,7 @@ import { LegalDocumentScreen } from './src/legal/LegalDocumentScreen';
 import { legalDocuments } from './src/legal/legalDocuments';
 import { LibraryScreen } from './src/library/LibraryScreen';
 import { appLinking } from './src/navigation/linking';
+import { ReviewAccessScreen } from './src/auth/ReviewAccessScreen';
 import { detailBackOptions, resolvePreviousPageLabel, rootStackScreenOptions } from './src/navigation/stackConfig';
 import { mainTabs, MainTabName } from './src/navigation/tabConfig';
 import { RootStackParamList, RootTabParamList } from './src/navigation/types';
@@ -313,6 +314,7 @@ function AppNavigator() {
           </>
         )}
         <Stack.Screen component={ImportMatchesScreen} name="ImportMatches" options={{ title: 'Review imports' }} />
+        <Stack.Screen component={ReviewAccessScreen} name="ReviewAccess" options={{ title: 'Demo access' }} />
       </Stack.Navigator>
     </>
   );

@@ -4,6 +4,7 @@ import type { RootStackParamList } from './types';
 export const appLinking: LinkingOptions<RootStackParamList> = {
   config: {
     screens: {
+      ReviewAccess: 'review-access',
       FilmDetail: {
         path: 'film/:tmdbId',
         parse: {
@@ -24,5 +25,5 @@ export const appLinking: LinkingOptions<RootStackParamList> = {
       },
     },
   },
-  prefixes: ['tvapp://', 'com.tom.tvapp.dev://'],
+  prefixes: ['tvapp://', 'com.tom.tvapp.dev://', 'com.trywatchly.app://'],
 };

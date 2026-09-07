@@ -5,9 +5,10 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 assert(
-  JSON.stringify(appLinking.prefixes) === JSON.stringify(['tvapp://', 'com.tom.tvapp.dev://']),
+  JSON.stringify(appLinking.prefixes) === JSON.stringify(['tvapp://', 'com.tom.tvapp.dev://', 'com.trywatchly.app://']),
   'Linking must accept every native scheme declared in app.json.',
 );
+assert(appLinking.config?.screens?.ReviewAccess === 'review-access', 'Review access must have its own deep link.');
 assert(appLinking.config?.screens?.Notifications === 'alerts', 'tvapp://alerts must route to Notifications.');
 const mainTabs = appLinking.config?.screens?.MainTabs;
 assert(
