@@ -469,6 +469,14 @@ export class TmdbCatalogueService {
     return this.findByExternalId(String(tvdbId), 'tvdb_id');
   }
 
+  async findEpisodeByTvdbId(tvdbId: number) {
+    const endpoint = `${this.tmdbBaseUrl}/find/${tvdbId}?external_source=tvdb_id`;
+    const result = await this.fetchTmdb<{
+      tv_episode_results?: { show_id: number; season_number: number; episode_number: number }[];
+    }>(endpoint, this.getAccessToken(), 'episode external ID');
+    return result.tv_episode_results ?? [];
+  }
+
   private async findByExternalId(
     externalId: string,
     source: 'imdb_id' | 'tvdb_id',

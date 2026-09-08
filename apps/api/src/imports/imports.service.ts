@@ -183,7 +183,7 @@ export class ImportsService {
         });
 
         return result;
-      }),
+      }, { timeout: 45_000 }),
     );
   }
 
@@ -234,9 +234,8 @@ export class ImportsService {
       return toPublicPreview(record.id, preview);
     }
 
-    const items = preview.items.map((current, index) =>
-      index === itemIndex ? applyImportSuggestion(current) : current,
-    );
+    const accepted = await this.prepareEpisodeProgress(applyImportSuggestion(item));
+    const items = preview.items.map((current, index) => index === itemIndex ? accepted : current);
     const updatedPreview: StoredImportPreview = {
       ...preview,
       items,
@@ -278,7 +277,34 @@ export class ImportsService {
       };
     }
 
-    return prepareMatchedItem(item, matchResult.match);
+    return this.prepareEpisodeProgress(prepareMatchedItem(item, matchResult.match));
+  }
+
+  private async prepareEpisodeProgress(item: PreparedImportItem) {
+    if (item.match?.contentType !== 'series' || !item.episodes?.length) return item;
+    const series = (await this.catalogue.getSeries(item.match.tmdbId)).item;
+    const seasons = await mapWithConcurrency(series.seasons, 2, (season) =>
+      this.catalogue.getSeason(item.match!.tmdbId, season.seasonNumber),
+    );
+    const catalogueEpisodes = seasons.flatMap(({ item: season }) => season.episodes);
+    const known = new Set(catalogueEpisodes.map((episode) => `${episode.seasonNumber}:${episode.episodeNumber}`));
+    if (item.episodes.some((episode) => !known.has(`${episode.seasonNumber}:${episode.episodeNumber}`))) {
+      // A numbering mismatch can also make apparently valid season/episode pairs point to the wrong episode.
+      const resolved = await mapWithConcurrency(item.episodes, 2, async (episode) => {
+        if (!episode.tvdbId) return null;
+        const matches = (await this.catalogue.findEpisodeByTvdbId(episode.tvdbId))
+          .filter((match) => match.show_id === item.match!.tmdbId);
+        if (matches.length !== 1) return null;
+        return { ...episode, seasonNumber: matches[0].season_number, episodeNumber: matches[0].episode_number };
+      });
+      const episodes = [...new Map(resolved.filter((episode) => episode !== null)
+        .map((episode) => [`${episode.seasonNumber}:${episode.episodeNumber}`, episode])).values()];
+      const skipped = resolved.filter((episode) => episode === null).length;
+      item = { ...item, episodes, issues: skipped > 0
+        ? [...item.issues, `${skipped} watched episodes could not be matched by external ID and were skipped.`]
+        : item.issues };
+    }
+    return reconcileImportedEpisodes(item, catalogueEpisodes);
   }
 
   private async findMatch(item: ParsedImportItem): Promise<
@@ -386,6 +412,26 @@ export function applyImportSuggestion(item: PreparedImportItem): PreparedImportI
   }
 
   return prepareMatchedItem(item, item.suggestion);
+}
+
+export function reconcileImportedEpisodes(
+  item: PreparedImportItem,
+  catalogueEpisodes: { seasonNumber: number; episodeNumber: number; airDate: string | null }[],
+): PreparedImportItem {
+  const today = new Date().toISOString().slice(0, 10);
+  const episodeKey = (episode: { seasonNumber: number; episodeNumber: number }) => `${episode.seasonNumber}:${episode.episodeNumber}`;
+  const known = new Set(catalogueEpisodes.map(episodeKey));
+  const episodes = (item.episodes ?? []).filter((episode) => known.has(episodeKey(episode)));
+  const seen = new Set(episodes.map(episodeKey));
+  const aired = catalogueEpisodes.filter((episode) => episode.seasonNumber > 0 && episode.airDate !== null && episode.airDate <= today);
+  const watched = aired.length > 0 && aired.every((episode) => seen.has(episodeKey(episode)));
+  const skipped = (item.episodes?.length ?? 0) - episodes.length;
+  return {
+    ...item, episodes, watched, watching: !watched, watchlisted: false,
+    issues: skipped > 0
+      ? [...item.issues, `${skipped} watched episodes could not be matched to the catalogue and were skipped.`]
+      : item.issues,
+  };
 }
 
 function prepareMatchedItem(
@@ -549,6 +595,35 @@ export async function commitPreparedItems(
     existingViewings.map((event) => getViewingKey(event.tmdbId, event.watchedAt)),
   );
   const viewingRows: Prisma.ViewingEventCreateManyInput[] = [];
+
+  const episodeItems = seriesItems.filter((item) => item.episodes?.length);
+  if (episodeItems.length > 0) {
+    const existingEpisodeViewings = await transaction.viewingEvent.findMany({
+      select: { tmdbId: true, seasonNumber: true, episodeNumber: true },
+      where: { contentType: ViewingContentType.EPISODE, tmdbId: { in: seriesIds }, userId },
+    });
+    const eventKeys = new Set(existingEpisodeViewings.map((event) => `${event.tmdbId}:${event.seasonNumber}:${event.episodeNumber}`));
+    const progressRows: Prisma.UserEpisodeProgressCreateManyInput[] = [];
+    for (const item of episodeItems) {
+      for (const episode of item.episodes!) {
+        progressRows.push({
+          seriesTmdbId: item.match.tmdbId, userId,
+          seasonNumber: episode.seasonNumber, episodeNumber: episode.episodeNumber,
+          watchedAt: toActivityDate(episode.watchedDate),
+        });
+        const key = `${item.match.tmdbId}:${episode.seasonNumber}:${episode.episodeNumber}`;
+        if (eventKeys.has(key)) continue;
+        eventKeys.add(key);
+        viewingRows.push({
+          contentType: ViewingContentType.EPISODE, tmdbId: item.match.tmdbId, userId,
+          seasonNumber: episode.seasonNumber, episodeNumber: episode.episodeNumber,
+          title: item.match.title, artworkUrl: item.match.posterUrl,
+          watchedAt: episode.watchedDate ? toActivityDate(episode.watchedDate) : null,
+        });
+      }
+    }
+    await transaction.userEpisodeProgress.createMany({ data: progressRows, skipDuplicates: true });
+  }
 
   movieItems.filter((item) => item.watched).forEach((item) => {
     const dates = item.watchedDates.length > 0 ? item.watchedDates : [null];

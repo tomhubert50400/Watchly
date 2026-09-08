@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Prisma } from '../generated/prisma/client';
 import { TrackedContentType, UserContentStatus } from '../generated/prisma/enums';
-import { applyImportSuggestion, commitPreparedItems } from './imports.service';
+import { applyImportSuggestion, commitPreparedItems, ImportsService, reconcileImportedEpisodes } from './imports.service';
 
 async function main() {
 const createdRatings: unknown[] = [];
@@ -161,6 +161,55 @@ assert.match(
   'Import previews must expose the source rating for movie and series match review.',
 );
 
+const episodeItem = {
+  ...baseItem, contentHint: 'series' as const, rating: null, review: null,
+  match: { ...baseItem.match, contentType: 'series' as const, tmdbId: 3 },
+  episodes: [1, 2].map((episodeNumber) => ({ seasonNumber: 1, episodeNumber, watchedDate: '2025-01-01' })),
+};
+const catalogueEpisodes = [1, 2].map((episodeNumber) => ({ seasonNumber: 1, episodeNumber, airDate: '2024-01-01' }));
+assert.equal(reconcileImportedEpisodes(episodeItem, catalogueEpisodes).watched, true);
+assert.equal(reconcileImportedEpisodes({ ...episodeItem, episodes: episodeItem.episodes.slice(1) }, catalogueEpisodes).watched, false, 'a gap must prevent completion');
+assert.equal(reconcileImportedEpisodes(episodeItem, [...catalogueEpisodes, { seasonNumber: 2, episodeNumber: 1, airDate: '2200-01-01' }]).watched, true, 'future episodes must not prevent being caught up');
+assert.equal(reconcileImportedEpisodes(episodeItem, [{ seasonNumber: 0, episodeNumber: 1, airDate: '2024-01-01' }]).watched, false);
+assert.equal(reconcileImportedEpisodes(episodeItem, []).episodes?.length, 0, 'unknown episode numbers must not be written');
+const storedProgress = new Map<string, unknown>([['3:1:1', { watchedAt: 'existing date' }]]);
+const storedEvents: { tmdbId: number; seasonNumber: number; episodeNumber: number }[] = [{ tmdbId: 3, seasonNumber: 1, episodeNumber: 1 }];
+const episodeTransaction = {
+  ...transaction,
+  userEpisodeProgress: {
+    createMany: async ({ data, skipDuplicates }: { data: { seriesTmdbId: number; seasonNumber: number; episodeNumber: number }[]; skipDuplicates: boolean }) => {
+      assert.equal(skipDuplicates, true);
+      for (const row of data) {
+        const key = `${row.seriesTmdbId}:${row.seasonNumber}:${row.episodeNumber}`;
+        if (!storedProgress.has(key)) storedProgress.set(key, row);
+      }
+    },
+  },
+  viewingEvent: {
+    findMany: async ({ where }: { where: { contentType: string } }) => where.contentType === 'EPISODE' ? storedEvents : [],
+    createMany: async ({ data }: { data: typeof storedEvents }) => { storedEvents.push(...data); },
+  },
+} as unknown as Prisma.TransactionClient;
+await commitPreparedItems(episodeTransaction, 'user-id', [episodeItem]);
+await commitPreparedItems(episodeTransaction, 'user-id', [episodeItem]);
+assert.equal(storedProgress.size, 2, 'reimport must fill missing episodes without duplicates');
+assert.deepEqual(storedProgress.get('3:1:1'), { watchedAt: 'existing date' }, 'existing progress dates must be preserved');
+assert.equal(storedEvents.length, 2, 'reimport must not duplicate episode viewing events');
+const catalogue = {
+  getSeries: async () => ({ item: { seasons: [{ seasonNumber: 1 }] } }),
+  getSeason: async () => ({ item: { episodes: catalogueEpisodes } }),
+  findEpisodeByTvdbId: async (id: number) => [{ show_id: 3, season_number: 1, episode_number: id === 101 ? 2 : 1 }],
+} as unknown as ConstructorParameters<typeof ImportsService>[1];
+const service = new ImportsService({} as ConstructorParameters<typeof ImportsService>[0], catalogue, {} as ConstructorParameters<typeof ImportsService>[2]);
+const renumbered = await service['prepareEpisodeProgress']({
+  ...episodeItem,
+  episodes: [
+    { seasonNumber: 1, episodeNumber: 1, tvdbId: 101, watchedDate: null },
+    { seasonNumber: 8, episodeNumber: 3, tvdbId: 102, watchedDate: null },
+  ],
+});
+assert.deepEqual(renumbered.episodes?.map((episode) => episode.episodeNumber), [2, 1], 'numbering mismatches must resolve all episodes by external ID, including plausible but wrong pairs');
+assert.equal(renumbered.watched, true);
 console.log('Imports service QA passed.');
 }
 
