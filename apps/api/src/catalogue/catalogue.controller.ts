@@ -95,6 +95,12 @@ export class CatalogueController {
     return this.catalogue.getSeries(tmdbId);
   }
 
+  @Get('collections/:collectionId')
+  @Throttle({ default: { limit: 600, ttl: 60_000 } })
+  async collectionDetails(@Param('collectionId', ParseIntPipe) collectionId: number) {
+    return this.catalogue.getCollection(collectionId);
+  }
+
   @Get('series/:tmdbId/watch-providers')
   async seriesWatchProviders(
     @Param('tmdbId', ParseIntPipe) tmdbId: number,

@@ -60,6 +60,7 @@ type TmdbLogoImage = {
 type TmdbPosterImage = TmdbLogoImage;
 
 type TmdbMovieDetailsResponse = {
+  belongs_to_collection?: { id: number; name: string } | null;
   backdrop_path?: string | null;
   budget?: number;
   credits?: {
@@ -311,6 +312,7 @@ export type CatalogueVideo = {
 };
 
 export type MovieDetails = {
+  collection?: { id: number; name: string } | null;
   backdropUrl: string | null;
   budget: number | null;
   cast: CatalogueCastMember[];
@@ -877,6 +879,26 @@ export class TmdbCatalogueService {
     return `${this.tmdbBaseUrl}/search/${endpointType}?${params.toString()}`;
   }
 
+  async getCollection(collectionId: number) {
+    const params = new URLSearchParams({ language: TMDB_LANGUAGE });
+    const payload = await this.fetchTmdb<{ name: string; parts?: TmdbSearchResult[] }>(
+      `${this.tmdbBaseUrl}/collection/${collectionId}?${params.toString()}`,
+      this.getAccessToken(),
+      'movie collection',
+    );
+    return {
+      items: (payload.parts ?? []).filter((item) => item.title).map((item): CatalogueRelatedItem => ({
+        mediaType: 'movie',
+        posterUrl: item.poster_path ? `${this.imageBaseUrl}${item.poster_path}` : null,
+        releaseDate: item.release_date || null,
+        title: item.title!,
+        tmdbId: item.id,
+      })),
+      name: payload.name,
+      provider: 'tmdb' as const,
+    };
+  }
+
   private async fetchTmdb<T>(endpoint: string, accessToken: string, label: string): Promise<T> {
     try {
       return await fetchWithTimeout(
@@ -1116,6 +1138,7 @@ export class TmdbCatalogueService {
     return {
       backdropUrl: item.backdrop_path ? `${this.backdropBaseUrl}${item.backdrop_path}` : null,
       budget: toPositiveNumber(item.budget),
+      collection: item.belongs_to_collection ?? null,
       cast: buildCatalogueCast(item.credits?.cast, this.imageBaseUrl),
       directors: buildCrewNames(item.credits?.crew, ['Director']),
       displayRating,
