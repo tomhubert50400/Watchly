@@ -4,7 +4,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Search, SlidersHorizontal } from 'lucide-react-native';
 import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { type CatalogueSearchType } from '../api/catalogue';
-import { discoverMoods, getDiscover, getDiscoverCollection, getDiscoverCollections, type DiscoverItem, type DiscoverMood } from '../api/discover';
+import { browseResourceKey, collectionFilters, discoverMoods, getDiscover, getDiscoverBrowse, getDiscoverCollections, type DiscoverItem, type DiscoverMood } from '../api/discover';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { getPrivateCacheKey, getPublicCacheKey } from '../cache/persistedCache';
 import { preloadCachedResource, useCachedResource } from '../cache/useCachedResource';
@@ -44,17 +44,19 @@ export function DiscoverScreen({ isActive = true }: { isActive?: boolean }) {
   const collections = useCachedResource({ key: getPublicCacheKey('discover:collections:v1'), load: getDiscoverCollections, staleTimeMs: 60 * 60 * 1000 });
   useEffect(() => {
     let cancelled = false;
-    void Promise.allSettled((collections.data?.items ?? []).map(async collection => {
+    if (currentUser && !firebaseIdToken) return;
+    const selections = [{}, ...(collections.data?.items ?? []).map(collection => collectionFilters(collection.id)), ...(mood ? [{ mood }] : [])];
+    void Promise.allSettled(selections.map(async filters => {
       const result = await preloadCachedResource({
-        key: getPublicCacheKey(`discover:results:${collection.id}:v1`),
-        load: () => getDiscoverCollection(collection.id, 1),
+        key: currentUser ? getPrivateCacheKey(currentUser.id, browseResourceKey(filters)) : getPublicCacheKey(browseResourceKey(filters)),
+        load: () => getDiscoverBrowse(firebaseIdToken, filters),
       });
       if (cancelled) return;
       const urls = result.items.slice(0, 8).map(item => item.posterUrl).filter((url): url is string => Boolean(url));
       await Promise.allSettled(urls.map(url => Image.prefetch(url)));
     }));
     return () => { cancelled = true; };
-  }, [collections.data]);
+  }, [collections.data, currentUser?.id, firebaseIdToken, mood]);
   const revision = useUserDataRevision('tracking', 'opinions', 'viewings', 'episodeProgress', 'watchlists');
   const lastRevision = useRef(revision);
   useEffect(() => {
@@ -62,9 +64,18 @@ export function DiscoverScreen({ isActive = true }: { isActive?: boolean }) {
   }, [isActive, revision, resource.revalidate]);
   const items = (resource.data?.items ?? []).filter(item => mediaType === 'all' || item.mediaType === mediaType);
   const featured = items.slice(0, 6);
-  const preloadKey = featured.map(item => item.id).join(',');
+  const preloadKey = items.slice(0, 12).map(item => item.id).join(',');
   useEffect(() => {
-    if (isActive && resource.data) void preloadCatalogueItems(resource.data.items.filter(item => mediaType === 'all' || item.mediaType === mediaType).slice(0, 6).map(item => ({ contentType: item.mediaType, tmdbId: item.tmdbId })));
+    if (!isActive || !resource.data) return;
+    let cancelled = false;
+    const nextItems = resource.data.items.filter(item => mediaType === 'all' || item.mediaType === mediaType).slice(0, 12);
+    void Promise.allSettled(nextItems.flatMap(item => [item.posterUrl, item.backdropUrl]).filter((url): url is string => Boolean(url)).map(url => Image.prefetch(url)));
+    void (async () => {
+      for (let index = 0; index < nextItems.length && !cancelled; index += 3) {
+        await preloadCatalogueItems(nextItems.slice(index, index + 3).map(item => ({ contentType: item.mediaType, tmdbId: item.tmdbId })));
+      }
+    })();
+    return () => { cancelled = true; };
   }, [isActive, mediaType, preloadKey, preloadCatalogueItems, resource.data]);
   const openItem = (item: DiscoverItem) => navigation.navigate(item.mediaType === 'movie' ? 'FilmDetail' : 'SeriesDetail', { title: item.title, tmdbId: item.tmdbId });
   const refresh = () => { resource.retry(); collections.retry(); };
@@ -85,7 +96,7 @@ export function DiscoverScreen({ isActive = true }: { isActive?: boolean }) {
         {resource.data?.partial ? <InlineStatusBanner title="Some picks are unavailable" detail="Pull to refresh to try again." tone="updating" /> : null}
         {items.length ? <DiscoverCarousel items={featured} onOpen={openItem} /> : resource.data && !resource.error ? <EmptyState title="No new picks here yet" body={mood ? 'Try another mood or clear it to explore more titles.' : 'Rate or favorite titles you enjoy to help shape your next recommendations.'}>{mood ? <Button label="Change mood" onPress={() => setShowMood(true)} /> : null}</EmptyState> : null}
         <View>
-          <SectionHeader title="Explore a collection" />
+          <SectionHeader title="Explore your way" actionLabel="Explore all" onActionPress={() => navigation.navigate('DiscoverResults', { title: 'Explore', mediaType, mood })} />
           {collections.error ? <EmptyState title="Collections are unavailable" body={collections.error}><Button label="Retry collections" onPress={collections.retry} /></EmptyState> : null}
           {collections.isInitialLoading && !collections.data ? <InlineStatusBanner title="Loading collections" detail="Gathering movies and shows." tone="updating" /> : null}
           {collections.data?.partial ? <InlineStatusBanner title="Some collections are unavailable" detail="Pull to refresh to try again." tone="updating" /> : null}
