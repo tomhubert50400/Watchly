@@ -69,7 +69,7 @@ type StoredImportPreview = {
   result?: ImportResult;
   source: ImportSourceValue;
   summary: ImportSummary;
-  version: 2;
+  version: 3;
 };
 
 export type ImportUpload = {
@@ -121,7 +121,7 @@ export class ImportsService {
       items,
       source,
       summary: buildImportSummary(items),
-      version: 2,
+      version: 3,
     };
     const record = await this.prisma.withConnectionRetry(() =>
       this.prisma.dataImport.create({
@@ -720,8 +720,8 @@ function toPublicPreview(importId: string, preview: StoredImportPreview) {
 function readStoredPreview(value: Prisma.JsonValue): StoredImportPreview {
   const preview = value as unknown as Partial<StoredImportPreview>;
 
-  if (preview.version !== 2 || !Array.isArray(preview.items) || !preview.summary) {
-    throw new BadRequestException('This import preview is no longer supported.');
+  if (preview.version !== 3 || !Array.isArray(preview.items) || !preview.summary) {
+    throw new BadRequestException('This import preview is no longer supported. Choose the export file again.');
   }
 
   return {
