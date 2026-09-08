@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Search, SlidersHorizontal } from 'lucide-react-native';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { type CatalogueSearchType } from '../api/catalogue';
-import { discoverMoods, getDiscover, getDiscoverCollections, type DiscoverItem, type DiscoverMood } from '../api/discover';
+import { discoverMoods, getDiscover, getDiscoverCollection, getDiscoverCollections, type DiscoverItem, type DiscoverMood } from '../api/discover';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { getPrivateCacheKey, getPublicCacheKey } from '../cache/persistedCache';
-import { useCachedResource } from '../cache/useCachedResource';
+import { preloadCachedResource, useCachedResource } from '../cache/useCachedResource';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
@@ -39,9 +39,22 @@ export function DiscoverScreen({ isActive = true }: { isActive?: boolean }) {
   const resourceKey = `discover:${mood ?? 'all'}:v1`;
   const resource = useCachedResource({
     key: currentUser ? getPrivateCacheKey(currentUser.id, resourceKey) : getPublicCacheKey(resourceKey),
-    load, enabled: isActive && (!currentUser || Boolean(firebaseIdToken)), staleTimeMs: 5 * 60 * 1000,
+    load, enabled: !currentUser || Boolean(firebaseIdToken), staleTimeMs: 5 * 60 * 1000,
   });
-  const collections = useCachedResource({ key: getPublicCacheKey('discover:collections:v1'), load: getDiscoverCollections, enabled: isActive, staleTimeMs: 60 * 60 * 1000 });
+  const collections = useCachedResource({ key: getPublicCacheKey('discover:collections:v1'), load: getDiscoverCollections, staleTimeMs: 60 * 60 * 1000 });
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.allSettled((collections.data?.items ?? []).map(async collection => {
+      const result = await preloadCachedResource({
+        key: getPublicCacheKey(`discover:results:${collection.id}:v1`),
+        load: () => getDiscoverCollection(collection.id, 1),
+      });
+      if (cancelled) return;
+      const urls = result.items.slice(0, 8).map(item => item.posterUrl).filter((url): url is string => Boolean(url));
+      await Promise.allSettled(urls.map(url => Image.prefetch(url)));
+    }));
+    return () => { cancelled = true; };
+  }, [collections.data]);
   const revision = useUserDataRevision('tracking', 'opinions', 'viewings', 'episodeProgress', 'watchlists');
   const lastRevision = useRef(revision);
   useEffect(() => {
