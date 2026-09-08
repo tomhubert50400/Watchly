@@ -6,6 +6,7 @@ import { basename } from 'node:path';
 export type ImportSourceValue = 'imdb' | 'letterboxd' | 'tv-time';
 
 export type ParsedImportItem = {
+  episodes?: { seasonNumber: number; episodeNumber: number; watchedDate: string | null; tvdbId?: number }[];
   activityDate: string | null;
   contentHint: 'episode' | 'movie' | 'series';
   favorite: boolean;
@@ -215,6 +216,16 @@ function parseImdbFiles(files: CsvFile[]) {
 
 function parseTvTimeFiles(files: CsvFile[]) {
   const items = new Map<string, MutableParsedImportItem>();
+  const v2 = files.find((file) => basename(file.name).toLowerCase() === 'tracking-prod-records-v2.csv');
+  const v2Series = new Map<string, CsvRecord>();
+  const episodeRows = v2
+    ? v2.records.filter((row) => row.key?.startsWith('watch-episode-'))
+    : files.flatMap((file) => file.records).filter(
+      (row) => row.type === 'watch' && row.entitytype === 'episode',
+    );
+  v2?.records.filter((row) => row.key?.startsWith('user-series-')).forEach((row) => {
+    if (row.uuid) v2Series.set(row.uuid, row);
+  });
 
   files.forEach((file) => {
     const fileName = basename(file.name).toLowerCase();
@@ -287,6 +298,36 @@ function parseTvTimeFiles(files: CsvFile[]) {
     });
   });
 
+  episodeRows.forEach((record) => {
+    const series = v2 ? v2Series.get(record.uuid) : undefined;
+    const tvdbId = readPositiveInteger(series?.sid || record.sid || record.seriesid);
+    const sourceTitle = (record.seriesname || series?.seriesname || '').trim();
+    const seasonValue = record.sno || record.seasonnumber;
+    const seasonNumber = Number(seasonValue);
+    const episodeNumber = readPositiveInteger(record.epno || record.episodenumber);
+    if (!tvdbId || !sourceTitle || !seasonValue || !Number.isInteger(seasonNumber) || seasonNumber < 0 || !episodeNumber) return;
+
+    const sourceKey = `tvdb:${tvdbId}`;
+    const item = items.get(sourceKey) ?? createMutableItem({
+      contentHint: 'series', imdbId: null, sourceKey, sourceTitle,
+      sourceYear: null, tmdbId: null, tvdbId,
+    });
+    item.episodes ??= [];
+    if (!item.episodes.some((episode) => episode.seasonNumber === seasonNumber && episode.episodeNumber === episodeNumber)) {
+      const tvdbEpisodeId = readPositiveInteger(record.epid || record.episodeid);
+      item.episodes.push({
+        seasonNumber, episodeNumber, watchedDate: readDate(record.watchdate || record.createdat),
+        ...(tvdbEpisodeId ? { tvdbId: tvdbEpisodeId } : {}),
+      });
+    }
+    item.watching = true;
+    items.set(sourceKey, item);
+  });
+  for (const item of items.values()) {
+    if (item.contentHint === 'series' && !item.episodes?.length) {
+      addWarning(item.warnings, 'No detailed watched episodes were found for this series. Progress could not be restored.');
+    }
+  }
   return finalizeItems(items);
 }
 
@@ -560,6 +601,7 @@ const LETTERBOXD_EXPORT_FILES = new Set([
   'watchlist.csv',
 ]);
 const TV_TIME_EXPORT_FILES = new Set([
+  'tracking-prod-records-v2.csv',
   'tracking-prod-records.csv',
   'user_tv_show_data.csv',
 ]);

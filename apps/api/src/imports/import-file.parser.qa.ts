@@ -88,3 +88,26 @@ assert.deepEqual(
 assert.equal(tvTime.items.find((item) => item.sourceTitle === 'Dune: Part Two')?.watchlisted, true);
 
 console.log('Import file parser QA passed.');
+
+const episodeExport = Buffer.from(zipSync({
+  'user_tv_show_data.csv': strToU8('tv_show_id,tv_show_name,nb_episodes_seen\n81189,Breaking Bad,62'),
+  'tracking-prod-records.csv': strToU8('type,entity_type,series_id,series_name,season_number,episode_number\nwatch,episode,81189,Breaking Bad,1,1'),
+  'tracking-prod-records-v2.csv': strToU8([
+    'key,s_id,series_name,s_no,ep_no,created_at',
+    'watch-episode-a,81189,Breaking Bad,5,16,2025-01-02',
+    'watch-episode-b,81189,Breaking Bad,5,16,2025-01-03',
+    'watch-episode-c,371980,Severance,2,10,2025-02-02',
+    'watch-episode-d,371980,Severance,0,1,2025-02-02',
+    'watch-episode-invalid,371980,Severance,-1,1,2025-02-02',
+  ].join('\n')),
+}));
+const detailed = parseImportFile('tv-time', 'export.zip', episodeExport);
+assert.equal(detailed.ignoredFileCount, 0);
+assert.deepEqual(detailed.items.find((item) => item.tvdbId === 81189)?.episodes, [
+  { seasonNumber: 5, episodeNumber: 16, watchedDate: '2025-01-02' },
+], 'V2 must take precedence over stale V1 history and deduplicate episodes');
+assert.equal(detailed.items.find((item) => item.tvdbId === 371980)?.episodes?.length, 2, 'episode-only series and specials must be retained');
+const legacy = parseImportFile('tv-time', 'tracking-prod-records.csv', Buffer.from(
+  'type,entity_type,series_id,series_name,season_number,episode_number,watch_date\nwatch,episode,81189,Breaking Bad,1,2,2024-01-01',
+));
+assert.deepEqual(legacy.items[0].episodes, [{ seasonNumber: 1, episodeNumber: 2, watchedDate: '2024-01-01' }]);
