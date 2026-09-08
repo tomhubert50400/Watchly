@@ -142,7 +142,8 @@ export function useCachedResource<T>({
       return;
     }
 
-    if (stateKeyRef.current !== key) {
+    // Restore memory data after re-enabling, before a fresh cache skips loading.
+    if (stateKeyRef.current !== key || memoryEntry) {
       stateKeyRef.current = key;
       dispatch(memoryEntry
         ? { type: 'cacheLoaded', data: memoryEntry.data, savedAt: memoryEntry.savedAt }
