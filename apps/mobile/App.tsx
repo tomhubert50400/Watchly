@@ -30,7 +30,8 @@ import { legalDocuments } from './src/legal/legalDocuments';
 import { LibraryScreen } from './src/library/LibraryScreen';
 import { appLinking } from './src/navigation/linking';
 import { ReviewAccessScreen } from './src/auth/ReviewAccessScreen';
-import { detailBackOptions, resolvePreviousPageLabel, rootStackScreenOptions } from './src/navigation/stackConfig';
+import { detailBackOptions, needsCustomStackBackButton, resolvePreviousPageLabel, rootStackScreenOptions } from './src/navigation/stackConfig';
+import { StackBackButton } from './src/navigation/StackBackButton';
 import { mainTabs, MainTabName } from './src/navigation/tabConfig';
 import { RootStackParamList, RootTabParamList } from './src/navigation/types';
 import { NotificationsScreen } from './src/notifications/NotificationsScreen';
@@ -225,6 +226,12 @@ function AppNavigator() {
           contentStyle: { backgroundColor: colors.background },
           ...rootStackScreenOptions,
           ...detailBackOptions(resolvePreviousPageLabel(navigation.getState().routes)),
+          ...(needsCustomStackBackButton(Platform.OS, Platform.Version) ? {
+            headerBackVisible: false,
+            headerLeft: ({ canGoBack, label }: { canGoBack?: boolean; label?: string }) => canGoBack ? (
+              <StackBackButton label={label ?? 'Back'} onPress={() => navigation.goBack()} />
+            ) : null,
+          } : {}),
           headerShadowVisible: false,
           headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
