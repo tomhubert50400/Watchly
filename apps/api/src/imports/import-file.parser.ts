@@ -6,6 +6,7 @@ import { basename } from 'node:path';
 export type ImportSourceValue = 'imdb' | 'letterboxd' | 'tv-time';
 
 export type ParsedImportItem = {
+  identityIssue?: string;
   episodes?: { seasonNumber: number; episodeNumber: number; watchedDate: string | null; tvdbId?: number }[];
   activityDate: string | null;
   contentHint: 'episode' | 'movie' | 'series';
@@ -226,6 +227,25 @@ function parseTvTimeFiles(files: CsvFile[]) {
   v2?.records.filter((row) => row.key?.startsWith('user-series-')).forEach((row) => {
     if (row.uuid) v2Series.set(row.uuid, row);
   });
+  const seriesNames = new Map<number, string>();
+  for (const file of files) {
+    for (const row of file.records) {
+      const isSeriesList = basename(file.name).toLowerCase() === 'user_tv_show_data.csv';
+      if (!isSeriesList && !row.key?.startsWith('user-series-')) continue;
+      const id = readPositiveInteger(isSeriesList ? row.tvshowid : row.sid);
+      const name = (isSeriesList ? row.tvshowname : row.seriesname)?.trim();
+      if (id && name && !seriesNames.has(id)) seriesNames.set(id, name);
+    }
+  }
+  const episodeOwners = new Map<number, Set<number>>();
+  for (const row of episodeRows) {
+    const episodeId = readPositiveInteger(row.epid || row.episodeid);
+    const seriesId = readPositiveInteger(v2Series.get(row.uuid)?.sid || row.sid || row.seriesid);
+    if (!episodeId || !seriesId) continue;
+    const owners = episodeOwners.get(episodeId) ?? new Set<number>();
+    owners.add(seriesId);
+    episodeOwners.set(episodeId, owners);
+  }
 
   files.forEach((file) => {
     const fileName = basename(file.name).toLowerCase();
@@ -312,9 +332,24 @@ function parseTvTimeFiles(files: CsvFile[]) {
       contentHint: 'series', imdbId: null, sourceKey, sourceTitle,
       sourceYear: null, tmdbId: null, tvdbId,
     });
+    const tvdbEpisodeId = readPositiveInteger(record.epid || record.episodeid);
+    const listedName = seriesNames.get(tvdbId);
+    const issue = tvdbEpisodeId && (episodeOwners.get(tvdbEpisodeId)?.size ?? 0) > 1
+      ? 'Conflicting series IDs were found for the same watched episode. These rows were skipped.'
+      : seriesNames.size > 0 && !listedName
+        ? 'This series appears only in episode rows and could not be verified against your series list.'
+        : listedName && normalizeTitle(listedName) !== normalizeTitle(sourceTitle)
+          ? 'The episode title conflicts with the series list. These rows were skipped.'
+          : null;
+    if (issue) {
+      addWarning(item.warnings, issue);
+      if (!item.episodes?.length) item.identityIssue = issue;
+      items.set(sourceKey, item);
+      return;
+    }
+    delete item.identityIssue;
     item.episodes ??= [];
     if (!item.episodes.some((episode) => episode.seasonNumber === seasonNumber && episode.episodeNumber === episodeNumber)) {
-      const tvdbEpisodeId = readPositiveInteger(record.epid || record.episodeid);
       item.episodes.push({
         seasonNumber, episodeNumber, watchedDate: readDate(record.watchdate || record.createdat),
         ...(tvdbEpisodeId ? { tvdbId: tvdbEpisodeId } : {}),

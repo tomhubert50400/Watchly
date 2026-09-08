@@ -201,6 +201,12 @@ const catalogue = {
   findEpisodeByTvdbId: async (id: number) => [{ show_id: 3, season_number: 1, episode_number: id === 101 ? 2 : 1 }],
 } as unknown as ConstructorParameters<typeof ImportsService>[1];
 const service = new ImportsService({} as ConstructorParameters<typeof ImportsService>[0], catalogue, {} as ConstructorParameters<typeof ImportsService>[2]);
+const blockedIdentity = await service['prepareItem']({
+  ...episodeItem, identityIssue: 'Conflicting episode ownership', warnings: ['Conflicting episode ownership'],
+});
+assert.equal(blockedIdentity.status, 'unsupported');
+assert.equal(blockedIdentity.match, null);
+assert.equal(blockedIdentity.suggestion, null, 'conflicting identities must not be accepted through suggestion retry');
 const renumbered = await service['prepareEpisodeProgress']({
   ...episodeItem,
   episodes: [

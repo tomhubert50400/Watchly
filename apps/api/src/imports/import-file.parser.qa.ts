@@ -90,7 +90,7 @@ assert.equal(tvTime.items.find((item) => item.sourceTitle === 'Dune: Part Two')?
 console.log('Import file parser QA passed.');
 
 const episodeExport = Buffer.from(zipSync({
-  'user_tv_show_data.csv': strToU8('tv_show_id,tv_show_name,nb_episodes_seen\n81189,Breaking Bad,62'),
+  'user_tv_show_data.csv': strToU8('tv_show_id,tv_show_name,nb_episodes_seen\n81189,Breaking Bad,62\n371980,Severance,0'),
   'tracking-prod-records.csv': strToU8('type,entity_type,series_id,series_name,season_number,episode_number\nwatch,episode,81189,Breaking Bad,1,1'),
   'tracking-prod-records-v2.csv': strToU8([
     'key,s_id,series_name,s_no,ep_no,created_at',
@@ -111,3 +111,20 @@ const legacy = parseImportFile('tv-time', 'tracking-prod-records.csv', Buffer.fr
   'type,entity_type,series_id,series_name,season_number,episode_number,watch_date\nwatch,episode,81189,Breaking Bad,1,2,2024-01-01',
 ));
 assert.deepEqual(legacy.items[0].episodes, [{ seasonNumber: 1, episodeNumber: 2, watchedDate: '2024-01-01' }]);
+
+const contradictory = parseImportFile('tv-time', 'export.zip', Buffer.from(zipSync({
+  'user_tv_show_data.csv': strToU8('tv_show_id,tv_show_name,nb_episodes_seen\n10000000,Original series,2\n81189,Breaking Bad,62'),
+  'tracking-prod-records-v2.csv': strToU8([
+    'key,s_id,series_name,s_no,ep_no,ep_id',
+    'watch-episode-a,10000000,Nature Reserve Special Forces,1,32,10003263',
+    'watch-episode-b,400317,Nature Reserve Special Forces,2,20,10003263',
+    'watch-episode-c,81189,Breaking Bad,1,1,349232',
+    'watch-episode-d,400318,Unknown series,1,1,9999',
+  ].join('\n')),
+})));
+assert.equal(contradictory.items.find((item) => item.tvdbId === 81189)?.episodes?.length, 1);
+for (const id of [10000000, 400317, 400318]) {
+  const item = contradictory.items.find((entry) => entry.tvdbId === id)!;
+  assert.equal(item.episodes?.length ?? 0, 0, 'contradictory or uncorroborated rows must not create progress');
+  assert.ok(item.identityIssue, 'unsafe rows must be blocked and reported in the preview');
+}

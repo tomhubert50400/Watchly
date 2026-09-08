@@ -256,6 +256,9 @@ export class ImportsService {
   }
 
   private async prepareItem(item: ParsedImportItem): Promise<PreparedImportItem> {
+    if (item.identityIssue) {
+      return { ...item, issues: [...item.warnings], match: null, status: 'unsupported', suggestion: null };
+    }
     if (item.contentHint === 'episode') {
       return {
         ...item,
