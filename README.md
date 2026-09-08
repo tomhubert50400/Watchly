@@ -24,9 +24,18 @@ The repository is a pnpm monorepo containing the mobile application, the backend
 
 <table>
   <tr>
-    <td><img src="screenshots/redesign-implementation/01-home.png" alt="Watchly home screen" /></td>
-    <td><img src="screenshots/redesign-implementation/02-explore.png" alt="Watchly explore screen" /></td>
-    <td><img src="screenshots/redesign-implementation/03-detail.png" alt="Watchly media detail screen" /></td>
+    <td width="33%" align="center">
+      <img src="screenshots/readme/watchly-home.jpeg" alt="Watchly home screen" /><br />
+      <sub>Home</sub>
+    </td>
+    <td width="33%" align="center">
+      <img src="screenshots/readme/watchly-explore.jpeg" alt="Watchly explore screen" /><br />
+      <sub>Explore</sub>
+    </td>
+    <td width="33%" align="center">
+      <img src="screenshots/readme/watchly-rating-review.jpeg" alt="Watchly rating and review sheet" /><br />
+      <sub>Rating &amp; review</sub>
+    </td>
   </tr>
 </table>
 
@@ -83,8 +92,8 @@ Additional provider, storage, notification, and observability credentials are op
 ### 1. Install dependencies
 
 ```bash
-git clone https://github.com/tomhubert50400/tv-app.git
-cd tv-app
+git clone https://github.com/tomhubert50400/Watchly.git
+cd Watchly
 pnpm install --frozen-lockfile
 ```
 
