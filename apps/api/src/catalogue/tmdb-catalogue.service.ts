@@ -8,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service';
 import { isPrismaConnectionError } from '../database/prisma-retry';
+import type { DiscoverCollectionId, DiscoverMediaType, DiscoverTitle } from './discover-model';
 import {
   chooseWeeklySpotlight,
   getSpotlightExpiry,
@@ -452,6 +453,8 @@ export type StreamingProvider = {
 
 @Injectable()
 export class TmdbCatalogueService {
+  private readonly discoverCache = new Map<string, { expires: number; value: unknown }>();
+  private readonly discoverRequests = new Map<string, Promise<unknown>>();
   private readonly watchlyRatingThreshold = 100;
   private readonly imageBaseUrl = 'https://image.tmdb.org/t/p/w342';
   private readonly backdropBaseUrl = 'https://image.tmdb.org/t/p/w780';
@@ -465,6 +468,56 @@ export class TmdbCatalogueService {
 
   async findByImdbId(imdbId: string) {
     return this.findByExternalId(imdbId, 'imdb_id');
+  }
+
+  async discoverTitle(mediaType: DiscoverMediaType, tmdbId: number) {
+    const type = mediaType === 'movie' ? 'movie' : 'tv';
+    const payload = await this.fetchDiscover<TmdbSearchResult & { genres?: { id: number }[]; recommendations?: TmdbSearchResponse }>(
+      `${type}/${tmdbId}`, { append_to_response: 'recommendations' },
+    );
+    return {
+      item: this.toDiscoverTitle({ ...payload, genre_ids: payload.genres?.map(genre => genre.id) }, mediaType),
+      recommendations: (payload.recommendations?.results ?? []).map(item => this.toDiscoverTitle(item, mediaType)),
+    };
+  }
+
+  async discoverCandidates(mediaType: DiscoverMediaType, collection?: DiscoverCollectionId, page = 1) {
+    const type = mediaType === 'movie' ? 'movie' : 'tv';
+    const dates = collection === '2000s' ? ['2000-01-01', '2009-12-31'] : collection === '1990s' ? ['1990-01-01', '1999-12-31'] : null;
+    const dateField = mediaType === 'movie' ? 'primary_release_date' : 'first_air_date';
+    const payload = await this.fetchDiscover<TmdbSearchResponse>(`discover/${type}`, {
+      include_adult: 'false', sort_by: 'popularity.desc', 'vote_count.gte': '100', page: String(page),
+      [`${dateField}.lte`]: new Date().toISOString().slice(0, 10),
+      ...(dates ? { [`${dateField}.gte`]: dates[0], [`${dateField}.lte`]: dates[1] } : {}),
+      ...(collection === 'animation' ? { with_genres: '16' } : {}),
+    });
+    return (payload.results ?? []).map(item => this.toDiscoverTitle(item, mediaType));
+  }
+
+  private toDiscoverTitle(item: TmdbSearchResult, mediaType: DiscoverMediaType): DiscoverTitle {
+    return {
+      id: `${mediaType}:${item.id}`, tmdbId: item.id, mediaType,
+      title: item.title || item.name || 'Untitled', overview: item.overview ?? '',
+      posterUrl: item.poster_path ? `${this.imageBaseUrl}${item.poster_path}` : null,
+      backdropUrl: item.backdrop_path ? `${this.backdropBaseUrl}${item.backdrop_path}` : null,
+      releaseDate: item.release_date || item.first_air_date || null,
+      voteAverage: item.vote_average ?? null, genreIds: item.genre_ids ?? [],
+    };
+  }
+
+  private async fetchDiscover<T>(path: string, params: Record<string, string>): Promise<T> {
+    const endpoint = `${this.tmdbBaseUrl}/${path}?${new URLSearchParams({ language: TMDB_LANGUAGE, ...params })}`;
+    const cached = this.discoverCache.get(endpoint);
+    if (cached && cached.expires > Date.now()) return cached.value as T;
+    const pending = this.discoverRequests.get(endpoint);
+    if (pending) return pending as Promise<T>;
+    const request = this.fetchTmdb<T>(endpoint, this.getAccessToken(), 'discovery').then(value => {
+      if (this.discoverCache.size >= 500) this.discoverCache.delete(this.discoverCache.keys().next().value!);
+      this.discoverCache.set(endpoint, { expires: Date.now() + 60 * 60 * 1000, value });
+      return value;
+    }).finally(() => this.discoverRequests.delete(endpoint));
+    this.discoverRequests.set(endpoint, request);
+    return request;
   }
 
   async findByTvdbId(tvdbId: number) {
