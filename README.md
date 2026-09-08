@@ -20,7 +20,7 @@
 
 Watchly brings discovery, tracking, personal history, and conversation into one product. Users can find films and series, follow their progress down to individual episodes, keep personal or shared watchlists, publish ratings and reviews, and see activity from people they follow.
 
-The repository is a pnpm monorepo containing the mobile application, the backend API, a public web experience, and shared TypeScript packages.
+The repository is a pnpm monorepo containing the mobile application, the backend API, a public web experience, and a reserved shared-package workspace.
 
 <table>
   <tr>
@@ -54,7 +54,7 @@ apps/
 └── web/      Next.js landing site, legal pages, waitlist, and admin console
 
 packages/
-└── types/    Shared TypeScript contracts
+└── shared/   Reserved workspace for future shared code
 ```
 
 | Layer | Main technologies |
@@ -62,14 +62,14 @@ packages/
 | Mobile | Expo, React Native, React Navigation, TanStack Query, Reanimated |
 | API | NestJS, Prisma, PostgreSQL, Joi validation, rate limiting |
 | Web | Next.js, React, Firebase client SDK |
-| Authentication | Firebase plus Apple, Google, Microsoft, Facebook, and Discord provider flows |
+| Authentication | Firebase plus Apple, Google, Microsoft, and Discord provider flows |
 | Media data | TMDB catalogue integration |
 | Storage and delivery | Cloudflare R2-compatible object storage and Expo push notifications |
 | Observability | Sentry integrations and structured monitoring endpoints |
 
 ## Prerequisites
 
-- Node.js compatible with the versions pinned in the lockfile
+- Node.js 20.9 or later
 - pnpm `10.28.2`
 - PostgreSQL
 - A Firebase project
@@ -93,6 +93,7 @@ pnpm install --frozen-lockfile
 ```bash
 cp apps/api/.env.example apps/api/.env
 cp apps/mobile/.env.example apps/mobile/.env
+cp apps/web/.env.example apps/web/.env.local
 ```
 
 At minimum, configure `DATABASE_URL` and `FIREBASE_PROJECT_ID` for the API. The example files document the remaining variables and which integrations use them.
@@ -103,7 +104,7 @@ Never commit real credentials or service-account JSON.
 
 ```bash
 pnpm --filter api prisma:generate
-pnpm --filter api prisma:migrate:deploy
+pnpm --filter api db:migrate
 ```
 
 ### 4. Start the applications
