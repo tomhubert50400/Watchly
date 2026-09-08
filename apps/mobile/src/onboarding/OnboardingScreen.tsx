@@ -125,7 +125,8 @@ export function OnboardingScreen() {
   const isHandleClaim = Boolean(currentUser?.onboardingCompleted && !currentUser.handle);
   const [avatarUploadsEnabled, setAvatarUploadsEnabled] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(currentUser?.photoUrl ?? null);
-  const [avatarStatus, setAvatarStatus] = useState<'idle' | 'saving'>('idle');
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [avatarStatus, setAvatarStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [avatarMessage, setAvatarMessage] = useState<string | null>(null);
   const [completedImportIds, setCompletedImportIds] = useState<string[]>([]);
   const [displayName, setDisplayName] = useState(currentUser?.displayName ?? '');
@@ -355,23 +356,29 @@ export function OnboardingScreen() {
   async function changeAvatar() {
     if (!firebaseIdToken || !avatarUploadsEnabled || avatarStatus === 'saving') return;
 
+    const previousPreviewUrl = avatarPreviewUrl;
+    const previousStatus = avatarStatus;
     setAvatarStatus('saving');
     setAvatarMessage(null);
 
     try {
-      const profile = await chooseAndUploadProfileAvatar(firebaseIdToken);
-      if (!profile) return;
+      const profile = await chooseAndUploadProfileAvatar(firebaseIdToken, setAvatarPreviewUrl);
+      if (!profile) {
+        setAvatarStatus(previousStatus);
+        return;
+      }
 
       setAvatarUrl(profile.avatarUrl);
+      setAvatarStatus('saved');
       notifyUserDataChanged('profile', 'socialGraph');
       hapticSuccess();
     } catch (caughtError) {
+      setAvatarPreviewUrl(previousPreviewUrl);
+      setAvatarStatus('idle');
       setAvatarMessage(
         caughtError instanceof Error ? caughtError.message : 'Could not update your profile photo.',
       );
       hapticError();
-    } finally {
-      setAvatarStatus('idle');
     }
   }
 
@@ -664,7 +671,7 @@ export function OnboardingScreen() {
                     <ProfileStep
                       avatarStatus={avatarStatus}
                       avatarUploadsEnabled={avatarUploadsEnabled}
-                      avatarUrl={avatarUrl}
+                      avatarUrl={avatarPreviewUrl ?? avatarUrl}
                       displayName={displayName}
                       handle={handle}
                       handleError={handleTouched ? handleError : null}
@@ -891,7 +898,7 @@ function ProfileStep({
   onFieldBlur,
   onFieldFocus,
 }: {
-  avatarStatus: 'idle' | 'saving';
+  avatarStatus: 'idle' | 'saving' | 'saved';
   avatarUploadsEnabled: boolean;
   avatarUrl: string | null;
   displayName: string;
@@ -929,6 +936,7 @@ function ProfileStep({
               {avatarUploadsEnabled ? 'Change photo' : 'Photo changes unavailable'}
             </Text>
           </Pressable>
+          {avatarStatus === 'saved' ? <Text style={styles.photoActionText}>Photo saved</Text> : null}
         </View>
       </View>
 

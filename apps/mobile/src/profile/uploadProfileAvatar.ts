@@ -12,6 +12,7 @@ import {
 
 export async function chooseAndUploadProfileAvatar(
   firebaseIdToken: string,
+  onSelected?: (uri: string) => void,
 ): Promise<UserProfile | null> {
   let ImagePicker: typeof import('expo-image-picker');
   try {
@@ -36,6 +37,7 @@ export async function chooseAndUploadProfileAvatar(
 
   if (selection.canceled) return null;
 
+  onSelected?.(selection.assets[0].uri);
   return uploadProfileAvatarFromUri(firebaseIdToken, selection.assets[0].uri);
 }
 
