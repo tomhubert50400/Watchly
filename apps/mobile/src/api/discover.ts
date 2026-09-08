@@ -25,3 +25,23 @@ export function getDiscoverCollections() { return apiGet<DiscoverCollectionsResp
 export function getDiscoverCollection(id: string, page: number) {
   return apiGet<DiscoverCollectionResponse>(`/catalog/discover/collections/${encodeURIComponent(id)}?page=${page}`, { timeoutMs: 30_000 });
 }
+
+export const browseGenres = [ 'drama', 'comedy', 'crime', 'mystery', 'animation', 'documentary', 'family', 'sci-fi-fantasy', 'action-adventure' ] as const;
+export type BrowseFilters = { mood?: DiscoverMood; genre?: typeof browseGenres[number]; decade?: number; awards?: boolean };
+export function collectionFilters(id?: string): BrowseFilters {
+  return id === '2000s' ? { decade: 2000 } : id === '1990s' ? { decade: 1990 } : id === 'animation' ? { genre: 'animation' } : id === 'award-winners' ? { awards: true } : {};
+}
+export function browseQuery(filters: BrowseFilters) {
+  const query = new URLSearchParams();
+  if (filters.mood) query.set('mood', filters.mood);
+  if (filters.genre) query.set('genre', filters.genre);
+  if (filters.decade) query.set('decade', String(filters.decade));
+  if (filters.awards) query.set('awards', 'true');
+  return query.toString();
+}
+export const browseResourceKey = (filters: BrowseFilters) => `discover:browse:${browseQuery(filters)}:v1`;
+export function getDiscoverBrowse(token: string | null, filters: BrowseFilters, page = 1) {
+  return apiGet<DiscoverCollectionResponse>(`/catalog/discover/browse?${browseQuery(filters)}&page=${page}`, { ...(token ? { token } : {}), timeoutMs: 30_000 });
+}
+
+export const browseGenreLabel = (genre: string) => genre === 'sci-fi-fantasy' ? 'Sci-Fi & fantasy' : genre === 'action-adventure' ? 'Action & adventure' : genre[0].toUpperCase() + genre.slice(1);
