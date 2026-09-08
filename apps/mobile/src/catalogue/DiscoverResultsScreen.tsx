@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ChevronLeft } from 'lucide-react-native';
 import type { CatalogueSearchType } from '../api/catalogue';
 import { getDiscover, getDiscoverCollection, type DiscoverCollectionResponse, type DiscoverItem } from '../api/discover';
 import { useAuthSession } from '../auth/AuthSessionContext';
@@ -59,8 +60,9 @@ function DiscoverResults({ params }: { params: RootStackParamList['DiscoverResul
     finally { if (request === version.current) { busy.current = false; setLoadingMore(false); } }
   };
   const items = [...new Map([...(resource.data?.items ?? []), ...extra].map(item => [item.id, item])).values()].filter(item => type === 'all' || item.mediaType === type);
-  return <Screen title={params.title} background={<SpotlightAtmosphere imageUrl={items[0]?.posterUrl ?? null} />} refreshControl={<RefreshControl refreshing={resource.isRefreshing} onRefresh={resource.retry} tintColor={colors.accent} />}>
+  return <Screen title="" leading={<Pressable accessibilityRole="button" accessibilityLabel="Back to Discover" onPress={() => navigation.goBack()} style={styles.back}><ChevronLeft size={22} color={colors.text} /><Text style={styles.backText}>Discover</Text></Pressable>} background={<SpotlightAtmosphere imageUrl={items[0]?.posterUrl ?? null} />} refreshControl={<RefreshControl refreshing={resource.isRefreshing} onRefresh={resource.retry} tintColor={colors.accent} />}>
     <View style={styles.content}>
+      <Text accessibilityRole="header" style={styles.title}>{params.title}</Text>
       {params.description ? <Text style={styles.description}>{params.description}</Text> : null}
       <SegmentedControl options={discoverTypeOptions} value={type} onChange={setType} />
       {resource.isInitialLoading && !resource.data ? <InlineStatusBanner title="Loading titles" detail="Collecting movies and TV shows." tone="updating" /> : null}
@@ -73,4 +75,4 @@ function DiscoverResults({ params }: { params: RootStackParamList['DiscoverResul
     </View>
   </Screen>;
 }
-const styles = StyleSheet.create({ content: { gap: spacing.lg }, description: { ...typography.body, color: colors.muted }, grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md } });
+const styles = StyleSheet.create({ content: { gap: spacing.lg }, title: { ...typography.heading, color: colors.text }, back: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 44, paddingHorizontal: spacing.sm, borderRadius: 24, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.interactiveSurface }, backText: { ...typography.body, color: colors.text }, description: { ...typography.body, color: colors.muted }, grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md } });

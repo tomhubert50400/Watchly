@@ -241,7 +241,7 @@ function AppNavigator() {
           <>
             <Stack.Screen component={MainTabs} name="MainTabs" options={{ headerShown: false }} />
             <Stack.Screen component={CatalogueSearchScreen} name="CatalogueSearch" options={{ title: '', headerBackTitle: 'Discover' }} />
-            <Stack.Screen component={DiscoverResultsScreen} name="DiscoverResults" options={{ title: '', headerBackTitle: 'Discover' }} />
+            <Stack.Screen component={DiscoverResultsScreen} name="DiscoverResults" options={{ headerShown: false }} />
             <Stack.Screen
               component={ProfileConnectionsScreen}
               name="ProfileConnections"
