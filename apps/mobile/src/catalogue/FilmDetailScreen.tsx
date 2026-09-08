@@ -37,6 +37,7 @@ import { HeaderInfoItem, HeaderInfoPills } from './HeaderInfoPills';
 import { isReleasedDate } from './releaseDates';
 import { StreamingAvailabilityPanel } from './StreamingAvailabilityPanel';
 import { SynopsisPanel } from './SynopsisPanel';
+import { MovieWhatsNext } from './MovieWhatsNext';
 
 type FilmDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'FilmDetail'>;
 
@@ -45,7 +46,7 @@ export function FilmDetailScreen({ navigation, route }: FilmDetailScreenProps) {
   const { getCachedMovie, refreshMovie } = useCatalogueCache();
   const load = useCallback(() => refreshMovie(tmdbId), [refreshMovie, tmdbId]);
   const resource = useCachedResource<MovieDetails>({
-    key: `watchly:public:catalogue:movie:${tmdbId}:v3`,
+    key: `watchly:public:catalogue:movie:${tmdbId}:v4`,
     load,
   });
   const movie = resource.data ?? getCachedMovie(tmdbId);
@@ -155,6 +156,7 @@ function MovieDetailContent({
         <StreamingAvailabilityPanel contentType="movie" tmdbId={movie.tmdbId} />
         <CatalogueCastRail cast={movie.cast ?? []} />
         <CatalogueKeywordList keywords={movie.keywords ?? []} />
+        {movie.collection ? <MovieWhatsNext collectionId={movie.collection.id} tmdbId={movie.tmdbId} onOpen={onOpenRelated} /> : null}
         <CatalogueRelatedRail items={movie.recommendations ?? []} onOpen={onOpenRelated} />
       </View>
     </View>

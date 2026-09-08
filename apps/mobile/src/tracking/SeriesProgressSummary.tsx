@@ -1,8 +1,8 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { listSeriesProgress, SeriesProgress } from '../api/progress';
+import { listSeriesProgress } from '../api/progress';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey } from '../cache/persistedCache';
@@ -11,6 +11,8 @@ import { SeriesDetails } from '../api/catalogue';
 import { colors, radii, shadows, spacing } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { useUserDataRevision } from '../sync/userDataEvents';
+import { ensureSeasonDetails } from '../catalogue/cataloguePrefetch';
+import { findNextSeriesEpisode } from '../catalogue/whatsNextModel';
 
 type SeriesProgressSummaryProps = {
   seasons: SeriesDetails['seasons'];
@@ -32,26 +34,21 @@ export function SeriesProgressSummary({
   const { currentUser, firebaseIdToken } = useAuthSession();
   const episodeProgressRevision = useUserDataRevision('episodeProgress');
 
-  const loadProgress = useCallback(
-    (): Promise<SeriesProgress> => listSeriesProgress(firebaseIdToken!, seriesTmdbId),
-    [episodeProgressRevision, firebaseIdToken, seriesTmdbId],
-  );
+  const loadProgress = useCallback(async () => {
+    const progress = await listSeriesProgress(firebaseIdToken!, seriesTmdbId);
+    const episode = await findNextSeriesEpisode(seasons, progress.episodes,
+      async (seasonNumber) => (await ensureSeasonDetails(seriesTmdbId, seasonNumber)).item);
+    return { episode, watchedCount: progress.watchedEpisodeCount };
+  }, [episodeProgressRevision, firebaseIdToken, seasons, seriesTmdbId]);
   const resource = useCachedResource({
     enabled: Boolean(currentUser && firebaseIdToken),
-    key: getPrivateCacheKey(currentUser?.id ?? 'visitor', `series-progress:${seriesTmdbId}:v1`),
+    key: getPrivateCacheKey(currentUser?.id ?? 'visitor', `whats-next:series:${seriesTmdbId}:v1`),
     load: loadProgress,
   });
-  const progress = resource.data;
-
-  const resumeEpisode = useMemo(
-    () => getResumeEpisode(seasons, progress),
-    [progress, seasons],
-  );
-  const watchedCount = progress?.watchedEpisodeCount ?? 0;
-  const body = getBody({
-    resumeEpisode,
-    watchedCount,
-  });
+  const resumeEpisode = resource.data?.episode ?? null;
+  const body = !resource.data
+    ? resource.error ? 'Could not load your next episode.' : 'Finding your next episode…'
+    : getBody({ resumeEpisode, watchedCount: resource.data.watchedCount });
 
   function openResumeEpisode() {
     if (!resumeEpisode) {
@@ -80,10 +77,15 @@ export function SeriesProgressSummary({
     <View style={styles.panel}>
       <View style={styles.headerRow}>
         <View style={styles.copy}>
-          <Text style={styles.sectionTitle}>Continue watching</Text>
+          <Text style={styles.sectionTitle}>What's next</Text>
           <Text style={styles.body}>{body}</Text>
         </View>
-        {firebaseIdToken && resumeEpisode ? (
+        {!resource.data && resource.error ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Retry next episode" onPress={resource.retry}
+            style={styles.compactButton}>
+            <Text style={styles.compactButtonText}>Retry</Text>
+          </Pressable>
+        ) : firebaseIdToken && resumeEpisode ? (
           <Pressable
             accessibilityLabel="Open next episode"
             accessibilityRole="button"
@@ -98,51 +100,6 @@ export function SeriesProgressSummary({
   );
 }
 
-function getResumeEpisode(seasons: SeriesDetails['seasons'], progress: SeriesProgress | null): ResumeEpisode | null {
-  const orderedSeasons = seasons
-    .filter((season) => season.seasonNumber > 0 && (season.episodeCount ?? 0) > 0)
-    .sort((left, right) => left.seasonNumber - right.seasonNumber);
-
-  if (orderedSeasons.length === 0) {
-    return null;
-  }
-
-  if (!progress || progress.episodes.length === 0) {
-    return {
-      episodeNumber: 1,
-      seasonNumber: orderedSeasons[0].seasonNumber,
-    };
-  }
-
-  const latestWatched = [...progress.episodes].sort((left, right) => {
-    if (left.seasonNumber !== right.seasonNumber) {
-      return right.seasonNumber - left.seasonNumber;
-    }
-
-    return right.episodeNumber - left.episodeNumber;
-  })[0];
-  const currentSeason = orderedSeasons.find((season) => season.seasonNumber === latestWatched.seasonNumber);
-  const currentSeasonEpisodeCount = currentSeason?.episodeCount ?? 0;
-
-  if (currentSeason && latestWatched.episodeNumber < currentSeasonEpisodeCount) {
-    return {
-      episodeNumber: latestWatched.episodeNumber + 1,
-      seasonNumber: latestWatched.seasonNumber,
-    };
-  }
-
-  const nextSeason = orderedSeasons.find((season) => season.seasonNumber > latestWatched.seasonNumber);
-
-  if (!nextSeason) {
-    return null;
-  }
-
-  return {
-    episodeNumber: 1,
-    seasonNumber: nextSeason.seasonNumber,
-  };
-}
-
 function getBody({
   resumeEpisode,
   watchedCount,
@@ -155,7 +112,7 @@ function getBody({
   }
 
   if (resumeEpisode.seasonNumber === 1 && resumeEpisode.episodeNumber === 1) {
-    return 'Start to watch';
+    return 'Start at season 1, episode 1.';
   }
 
   const prefix = watchedCount === 0 ? 'Start at' : 'Continue at';
@@ -207,6 +164,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     marginBottom: spacing.md,
+    marginTop: spacing.xl,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },

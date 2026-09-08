@@ -28,7 +28,7 @@ export function CatalogueCacheProvider({ children }: PropsWithChildren) {
     }
 
     const request = loadCachedCatalogueResource(
-      `watchly:public:catalogue:movie:${tmdbId}:v3`,
+      `watchly:public:catalogue:movie:${tmdbId}:v4`,
       async () => (await getMovieDetails(tmdbId)).item,
     )
       .then((item) => {

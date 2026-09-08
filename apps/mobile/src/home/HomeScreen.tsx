@@ -349,7 +349,7 @@ export async function loadHomeCatalogue(): Promise<HomeCatalogueData> {
   try {
     details = (await getMovieDetails(featured.tmdbId)).item;
     setMemoryResource(
-      `watchly:public:catalogue:movie:${featured.tmdbId}:v3`,
+      `watchly:public:catalogue:movie:${featured.tmdbId}:v4`,
       details,
       new Date().toISOString(),
     );

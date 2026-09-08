@@ -84,6 +84,7 @@ export type CatalogueVideo = {
 };
 
 export type MovieDetails = {
+  collection?: { id: number; name: string } | null;
   backdropUrl: string | null;
   budget: number | null;
   cast: CatalogueCastMember[];
@@ -271,6 +272,12 @@ export function getCatalogueDiscovery(
 
 export function getMovieDetails(tmdbId: number) {
   return apiGet<MovieDetailsResponse>(`/catalog/movies/${tmdbId}`);
+}
+
+export function getMovieCollection(collectionId: number) {
+  return apiGet<{ items: CatalogueRelatedItem[]; name: string; provider: 'tmdb' }>(
+    `/catalog/collections/${collectionId}`,
+  );
 }
 
 export function getSeriesDetails(tmdbId: number) {

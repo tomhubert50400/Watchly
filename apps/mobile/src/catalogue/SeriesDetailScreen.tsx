@@ -166,7 +166,6 @@ function SeriesDetailContent({ onOpenRelated, series }: {
                 seriesTitle={series.title}
                 seriesTmdbId={series.tmdbId}
               />
-              <SeriesProgressSummary seasons={series.seasons} seriesTitle={series.title} seriesTmdbId={series.tmdbId} />
               <ViewingCountControl contentType="series" seriesTmdbId={series.tmdbId} />
             </View>
             <DetailFacts items={detailFacts} />
@@ -174,6 +173,7 @@ function SeriesDetailContent({ onOpenRelated, series }: {
             <StreamingAvailabilityPanel contentType="series" tmdbId={series.tmdbId} />
             <CatalogueCastRail cast={series.cast ?? []} />
             <CatalogueKeywordList keywords={series.keywords ?? []} />
+            <SeriesProgressSummary seasons={series.seasons} seriesTitle={series.title} seriesTmdbId={series.tmdbId} />
             <CatalogueRelatedRail items={series.recommendations ?? []} onOpen={onOpenRelated} />
           </>
         )}
