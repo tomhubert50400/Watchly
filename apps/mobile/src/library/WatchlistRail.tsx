@@ -74,7 +74,7 @@ export function WatchlistCard({
 const ARTWORK_HEIGHT = 156;
 const ARTWORK_WIDTH = 278;
 
-function BlendedArtwork({ blendId, urls }: { blendId: string; urls: Array<string | null> }) {
+export function BlendedArtwork({ blendId, urls }: { blendId: string; urls: Array<string | null> }) {
   const shown = urls.filter((url): url is string => Boolean(url)).slice(0, 4);
 
   if (shown.length === 0) return <View style={styles.placeholder} />;

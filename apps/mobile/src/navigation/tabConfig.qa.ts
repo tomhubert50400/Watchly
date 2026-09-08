@@ -17,7 +17,7 @@ assert(
   'Main tabs must remain Home, Explore, Community, Library, Profile in that order.',
 );
 assert(
-  JSON.stringify(labels) === JSON.stringify(['Home', 'Explore', 'Community', 'Library', 'Profile']),
+  JSON.stringify(labels) === JSON.stringify(['Home', 'Discover', 'Community', 'Library', 'Profile']),
   'Main tab labels must match the approved architecture.',
 );
 assert(!routeNames.includes('Feed'), 'Feed must not remain a primary tab route.');

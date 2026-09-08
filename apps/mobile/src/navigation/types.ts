@@ -4,6 +4,8 @@ import type { ImportReviewMatch, ImportSkippedTitle } from '../imports/importRev
 import type { LegalDocumentId } from '../legal/legalDocuments';
 import type { LibraryMediaItem } from '../library/useLibraryData';
 import type { ProfileMediaFilter } from '../profile/profileMediaModel';
+import type { DiscoverMood } from '../api/discover';
+import type { CatalogueSearchType } from '../api/catalogue';
 
 export type RootTabParamList = {
   Community: undefined;
@@ -14,6 +16,8 @@ export type RootTabParamList = {
 };
 
 export type RootStackParamList = {
+  CatalogueSearch: undefined;
+  DiscoverResults: { collectionId?: string; title: string; description?: string; mediaType: CatalogueSearchType; mood?: DiscoverMood | null };
   ReviewAccess: undefined;
   AllTimeStats: {
     profileBackdropUrl: string | null;

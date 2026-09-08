@@ -68,9 +68,14 @@ const SEARCH_TYPE_OPTIONS: {
 
 type ExploreScreenProps = {
   isActive?: boolean;
+  searchOnly?: boolean;
 };
 
-export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
+export function CatalogueSearchScreen() {
+  return <ExploreScreen searchOnly />;
+}
+
+export function ExploreScreen({ isActive = true, searchOnly = false }: ExploreScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { currentUser, firebaseIdToken } = useAuthSession();
   const { preloadCatalogueItems } = useCatalogueCache();
@@ -86,11 +91,12 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
   const [searchRevision, setSearchRevision] = useState(0);
   const trimmedQuery = query.trim();
   const isSearching = trimmedQuery.length >= 2;
-  const showSearchTypeFilters = isSearchFocused || isSearching;
+  const showSearchTypeFilters = searchOnly || isSearchFocused || isSearching;
   const sections = useCachedResource({
     key: PUBLIC_CATALOGUE_SECTIONS_KEY,
     load: loadCatalogueSections,
     staleTimeMs: 15 * 60 * 1000,
+    enabled: !searchOnly,
   });
   const sectionItems = useMemo(
     () => sections.data ? buildExploreSections(sections.data) : EMPTY_SECTIONS,
@@ -242,10 +248,11 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <Text accessibilityRole="header" style={styles.screenTitle}>Explore</Text>
+          <Text accessibilityRole="header" style={styles.screenTitle}>{searchOnly ? 'Search' : 'Explore'}</Text>
           <View style={styles.searchBox}>
             <Search color={colors.muted} size={20} strokeWidth={2.2} />
             <NativeTextInput
+              autoFocus={searchOnly}
               autoComplete="off"
               autoCapitalize="none"
               autoCorrect={false}
@@ -339,7 +346,7 @@ export function ExploreScreen({ isActive = true }: ExploreScreenProps) {
               searchType={searchType}
               viewState={viewState}
             />
-          ) : (
+          ) : searchOnly ? null : (
             <DiscoveryComposition
               activeSection={activeSection}
               error={sections.error}
