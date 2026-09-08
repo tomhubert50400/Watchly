@@ -1,3 +1,4 @@
+import { browseGenreIds, moodGenreIds, type BrowseFilters } from './discover-model';
 import { Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { TmdbCatalogueService } from './tmdb-catalogue.service';
@@ -53,6 +54,23 @@ export class DiscoverService {
     if (results.every(result => result.status === 'rejected')) throw new ServiceUnavailableException('This collection is temporarily unavailable.');
     const items = rankDiscoverTitles(results.flatMap(result => result.status === 'fulfilled' ? result.value : []), [], new Set(), null);
     return { items, hasMore: page < 50 && results.some(result => result.status === 'fulfilled' && result.value.length === 20), partial: results.some(result => result.status === 'rejected') };
+  }
+
+  async browse(firebaseUid: string | undefined, filters: BrowseFilters, page: number) {
+    const signals = await this.signals(firebaseUid);
+    const seedResults = await Promise.allSettled(signals.seeds.map(seed => this.catalogue.discoverTitle(seed.mediaType, seed.tmdbId)));
+    const seeds = seedResults.flatMap(result => result.status === 'fulfilled' ? [result.value] : []);
+    const response = filters.awards ? await this.collection('award-winners', page) : await (async () => {
+      const results = await Promise.allSettled((['movie', 'series'] as const).map(type => this.catalogue.discoverCandidates(type, undefined, page, filters)));
+      if (results.every(result => result.status === 'rejected')) throw new ServiceUnavailableException('Discovery is temporarily unavailable.');
+      return { items: results.flatMap(result => result.status === 'fulfilled' ? result.value : []), hasMore: page < 50 && results.some(result => result.status === 'fulfilled' && result.value.length === 20), partial: results.some(result => result.status === 'rejected') };
+    })();
+    const candidates = response.items.filter(item => item.posterUrl && item.releaseDate && item.releaseDate <= new Date().toISOString().slice(0, 10)
+      && (!filters.decade || Number(item.releaseDate.slice(0, 4)) >= filters.decade && Number(item.releaseDate.slice(0, 4)) <= filters.decade + 9)
+      && (!filters.genre || browseGenreIds(filters.genre, item.mediaType).some(id => item.genreIds.includes(id)))
+      && (!filters.mood || moodGenreIds[filters.mood][item.mediaType].some(id => item.genreIds.includes(id))));
+    // Taste orders exploration, without hiding titles the user already knows.
+    return { ...response, items: rankDiscoverTitles(candidates, seeds, new Set(), null), partial: response.partial || seedResults.some(result => result.status === 'rejected') };
   }
 
   private async signals(firebaseUid?: string) {

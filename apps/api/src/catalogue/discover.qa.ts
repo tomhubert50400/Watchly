@@ -52,6 +52,19 @@ async function main() {
   assert.throws(() => controller.collection('2000s', '0'));
   assert.throws(() => controller.collection('unknown'));
 
+  const invalidQueries: Record<string, string>[] = [{ genre: 'invalid' }, { decade: '2001' }, { page: '51' }, { page: '-1' }, { awards: 'false' }, { mood: 'invalid' }];
+  for (const query of invalidQueries) {
+    assert.throws(() => controller.browse({ headers: {} }, query));
+  }
+  const browsed = await service.browse('firebase-a', { genre: 'drama', decade: 2000, mood: 'emotional' }, 1);
+  assert(browsed.items.some(item => item.id === 'movie:1'), 'Explore must not hide known titles.');
+  assert.equal(browsed.items[0].tmdbId, 2, 'Taste should order matching results.');
+  assert(browsed.items.some(item => item.mediaType === 'series'));
+  assert.equal((await service.browse(undefined, { decade: 1990 }, 1)).items.length, 0, 'Never broaden a decade silently.');
+  assert.equal((await service.browse(undefined, { genre: 'comedy' }, 1)).items.length, 0, 'Respect the requested genre.');
+  assert.equal((await service.browse(undefined, { mood: 'funny' }, 1)).items.length, 0, 'Respect the mood genre selection.');
+  assert.equal((await service.browse(undefined, { awards: true }, 2)).hasMore, false);
+
   const originalFetch = globalThis.fetch;
   const urls: URL[] = [];
   try {
@@ -69,6 +82,12 @@ async function main() {
     await tmdb.discoverCandidates('series', '1990s', 2);
     assert.equal(urls[1].searchParams.get('first_air_date.gte'), '1990-01-01');
     assert.equal(urls[1].searchParams.get('page'), '2');
+    await tmdb.discoverCandidates('series', undefined, 3, { decade: 2010, genre: 'crime' });
+    assert.equal(urls[2].searchParams.get('first_air_date.gte'), '2010-01-01');
+    assert.equal(urls[2].searchParams.get('with_genres'), '80');
+    assert.equal(urls[2].searchParams.get('page'), '3');
+    await tmdb.discoverCandidates('movie', undefined, 1, { mood: 'adventure' });
+    assert.equal(urls[3].searchParams.get('with_genres'), '12|28');
   } finally { globalThis.fetch = originalFetch; }
   const failed = new DiscoverService(db, { discoverCandidates: async () => { throw new Error('offline'); } } as unknown as TmdbCatalogueService);
   await assert.rejects(() => failed.home(), /temporarily unavailable/);

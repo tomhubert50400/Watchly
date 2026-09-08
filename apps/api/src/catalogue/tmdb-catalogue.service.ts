@@ -1,3 +1,4 @@
+import { browseGenreIds, moodGenreIds, type BrowseFilters } from './discover-model';
 import {
   BadGatewayException,
   Inject,
@@ -481,15 +482,16 @@ export class TmdbCatalogueService {
     };
   }
 
-  async discoverCandidates(mediaType: DiscoverMediaType, collection?: DiscoverCollectionId, page = 1) {
+  async discoverCandidates(mediaType: DiscoverMediaType, collection?: DiscoverCollectionId, page = 1, filters: BrowseFilters = {}) {
     const type = mediaType === 'movie' ? 'movie' : 'tv';
-    const dates = collection === '2000s' ? ['2000-01-01', '2009-12-31'] : collection === '1990s' ? ['1990-01-01', '1999-12-31'] : null;
+    const dates = filters.decade ? [`${filters.decade}-01-01`, `${filters.decade + 9}-12-31`] : collection === '2000s' ? ['2000-01-01', '2009-12-31'] : collection === '1990s' ? ['1990-01-01', '1999-12-31'] : null;
     const dateField = mediaType === 'movie' ? 'primary_release_date' : 'first_air_date';
     const payload = await this.fetchDiscover<TmdbSearchResponse>(`discover/${type}`, {
       include_adult: 'false', sort_by: 'popularity.desc', 'vote_count.gte': '100', page: String(page),
       [`${dateField}.lte`]: new Date().toISOString().slice(0, 10),
       ...(dates ? { [`${dateField}.gte`]: dates[0], [`${dateField}.lte`]: dates[1] } : {}),
       ...(collection === 'animation' ? { with_genres: '16' } : {}),
+      ...(filters.genre ? { with_genres: browseGenreIds(filters.genre, mediaType).join('|') } : filters.mood ? { with_genres: moodGenreIds[filters.mood][mediaType].join('|') } : {}),
     });
     return (payload.results ?? []).map(item => this.toDiscoverTitle(item, mediaType));
   }

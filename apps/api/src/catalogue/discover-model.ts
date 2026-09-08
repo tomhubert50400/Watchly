@@ -58,3 +58,17 @@ export function rankDiscoverTitles(candidates: DiscoverTitle[], seeds: DiscoverS
     .flat().filter((item): item is typeof ranked[number] => Boolean(item))
     .map(({ score: _score, ...item }) => item);
 }
+
+export const browseGenres = { drama: 18, comedy: 35, crime: 80, mystery: 9648, animation: 16, documentary: 99, family: 10751, 'sci-fi-fantasy': 10765, 'action-adventure': 10759 } as const;
+export function browseGenreIds(genre: keyof typeof browseGenres, type: DiscoverMediaType): number[] {
+  if (type === 'movie' && genre === 'sci-fi-fantasy') return [878, 14];
+  if (type === 'movie' && genre === 'action-adventure') return [28, 12];
+  return [browseGenres[genre]];
+}
+export type BrowseFilters = { mood?: DiscoverMood; genre?: keyof typeof browseGenres; decade?: number; awards?: boolean };
+export const moodGenreIds: Record<DiscoverMood, Record<DiscoverMediaType, number[]>> = {
+  comfort: { movie: [35, 10751], series: [35, 10751] }, funny: { movie: [35], series: [35] },
+  suspense: { movie: [53, 9648], series: [80, 9648] }, 'mind-bending': { movie: [878, 9648], series: [10765, 9648] },
+  emotional: { movie: [18], series: [18] }, romantic: { movie: [10749], series: [18, 35] },
+  adventure: { movie: [12, 28], series: [10759] }, dark: { movie: [27, 80, 53], series: [80, 9648] },
+};
