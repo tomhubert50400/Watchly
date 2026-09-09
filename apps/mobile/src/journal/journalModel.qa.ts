@@ -21,22 +21,31 @@ const journal = buildJournal({
     { contentType: 'episode', episodeNumber: 2, id: 'p2', seasonNumber: 1, tmdbId: 20, watchedAt: '2026-07-08T12:00:00Z' },
   ],
 });
-assert.equal(journal.entries.length, 2, 'movie events are deduplicated and series episodes grouped');
-assert.deepEqual(journal.entries.map((entry) => entry.kind), ['movie', 'series']);
+assert.equal(journal.entries.length, 3, 'series episodes are grouped by viewing day');
+assert.deepEqual(journal.entries.map((entry) => entry.kind), ['movie', 'series', 'series']);
 assert.equal(journal.entries[0]?.reviewBody, 'Still precise.');
-assert.deepEqual(journal.entries[1]?.episodes.map(({ episodeNumber }) => episodeNumber), [1, 2]);
+assert.deepEqual(journal.entries[1]?.episodes.map(({ episodeNumber }) => episodeNumber), [1]);
 assert.equal(journal.reviewCount, 1);
 assert.equal(journal.averageRating, 4.25);
 assert.deepEqual(groupJournalEntriesByMonth(journal.entries).map((group) => group.key), ['2026-07']);
 assert.equal(filterJournalEntries(journal.entries, 'movies').length, 1);
-assert.equal(filterJournalEntries(journal.entries, 'series').length, 1);
+assert.equal(filterJournalEntries(journal.entries, 'series').length, 2);
 assert.equal(filterJournalEntries(journal.entries, 'reviews').length, 1);
 assert.deepEqual(getJournalMonthKeys(journal.entries), ['2026-07']);
 assert.equal(filterJournalEntriesByDate(journal.entries, '2026-07-10').length, 1);
 assert.equal(filterJournalEntriesByDate(journal.entries, '2026-07-09').length, 1);
-assert.equal(filterJournalEntriesByDate(journal.entries, '2026-07-08').length, 0);
-assert.equal(filterJournalEntriesByDate(journal.entries, null).length, 2);
+assert.equal(filterJournalEntriesByDate(journal.entries, '2026-07-08').length, 1);
+assert.equal(filterJournalEntriesByDate(journal.entries, null).length, 3);
 
 const tasteOnly = buildJournal({ movieRatings: [], opinions: [], viewings: [] });
 assert.equal(tasteOnly.entries.length, 0, 'Taste states without real viewing dates must stay out of Journal');
 console.log('Journal model QA passed.');
+
+const repeated = buildJournal({ movieRatings: [{ id: 'r', tmdbId: 10, score: 4, updatedAt: '2026-09-09T12:00:00Z' }], opinions: [], viewings: [
+  { id: 'first', contentType: 'movie', tmdbId: 10, watchedAt: '2026-09-01T12:00:00Z', seasonNumber: null, episodeNumber: null },
+  { id: 'second', contentType: 'movie', tmdbId: 10, watchedAt: '2026-09-01T12:00:00Z', seasonNumber: null, episodeNumber: null },
+] });
+assert.equal(repeated.entries.length, 2, 'retain separate rewatches on the same day');
+assert.equal(new Set(repeated.entries.map((entry) => entry.key)).size, 2);
+assert.equal(filterJournalEntriesByDate(repeated.entries, '2026-09-09').length, 0, 'rating edits must not move viewing dates');
+assert.equal(repeated.averageRating, 4);
