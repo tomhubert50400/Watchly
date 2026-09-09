@@ -4,10 +4,11 @@ import { CatalogueModule } from '../catalogue/catalogue.module';
 import { PrismaService } from '../database/prisma.service';
 import { ImportsController } from './imports.controller';
 import { ImportsService } from './imports.service';
+import { BackgroundImportsService } from './background-imports.service';
 
 @Module({
   controllers: [ImportsController],
   imports: [AuthModule, CatalogueModule],
-  providers: [ImportsService, PrismaService],
+  providers: [ImportsService, BackgroundImportsService, PrismaService],
 })
 export class ImportsModule {}

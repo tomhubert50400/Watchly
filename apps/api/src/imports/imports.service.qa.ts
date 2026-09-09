@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { Prisma } from '../generated/prisma/client';
 import { TrackedContentType, UserContentStatus } from '../generated/prisma/enums';
 import { applyImportSuggestion, commitPreparedItems, ImportsService, reconcileImportedEpisodes } from './imports.service';
+import { verifyBackgroundImports } from './background-imports.qa';
 
 async function main() {
 const createdRatings: unknown[] = [];
@@ -217,6 +218,7 @@ const renumbered = await service['prepareEpisodeProgress']({
 assert.deepEqual(renumbered.episodes?.map((episode) => episode.episodeNumber), [2, 1], 'numbering mismatches must resolve all episodes by external ID, including plausible but wrong pairs');
 assert.equal(renumbered.watched, true);
 await verifyLargeImport(transaction);
+await verifyBackgroundImports();
 console.log('Imports service QA passed.');
 }
 
@@ -291,7 +293,8 @@ async function verifyLargeImport(transaction: Prisma.TransactionClient) {
   assert.equal(searches, 0, 'upload must return before catalogue lookups');
   assert.equal(preview.preparation.total, 1001);
   await assert.rejects(service.confirm(identity, id, true), /Wait for all titles/);
-  await Promise.all([service.prepareBatch(identity, id), service.prepareBatch(identity, id)]);
+  const overlap = await Promise.allSettled([service.prepareBatch(identity, id), service.prepareBatch(identity, id)]);
+  assert.equal(overlap.filter((result) => result.status === 'fulfilled').length, 1);
   preview = await service.getPreview(identity, id);
   assert.equal(preview.preparation.processed, 25, 'overlapping preparation requests must not append twice');
   peak = 0;

@@ -18,11 +18,46 @@ import { AuthGuard } from '../auth/auth.guard';
 import { AuthenticatedRequest } from '../auth/auth.types';
 import { ImportSourceValue } from './import-file.parser';
 import { ImportUpload, ImportsService, MAX_IMPORT_FILE_BYTES } from './imports.service';
+import { BackgroundImportsService } from './background-imports.service';
 
 @Controller('imports')
 @UseGuards(AuthGuard)
 export class ImportsController {
-  constructor(@Inject(ImportsService) private readonly imports: ImportsService) {}
+  constructor(
+    @Inject(ImportsService) private readonly imports: ImportsService,
+    @Inject(BackgroundImportsService) private readonly background: BackgroundImportsService,
+  ) {}
+
+  @Post(':source/analyze')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMPORT_FILE_BYTES } }))
+  analyze(@Req() request: AuthenticatedRequest, @Param('source') source: string, @UploadedFile() file: ImportUpload) {
+    return this.background.analyze(getIdentity(request), parseSource(source), file);
+  }
+
+  @Get('background')
+  listBackground(@Req() request: AuthenticatedRequest) {
+    return this.background.list(getIdentity(request));
+  }
+
+  @Post(':importId/background')
+  startBackground(@Req() request: AuthenticatedRequest, @Param('importId') importId: string) {
+    return this.background.start(getIdentity(request), importId);
+  }
+
+  @Post(':importId/cancel')
+  cancel(@Req() request: AuthenticatedRequest, @Param('importId') importId: string) {
+    return this.background.cancel(getIdentity(request), importId);
+  }
+
+  @Post(':importId/dismiss')
+  dismiss(@Req() request: AuthenticatedRequest, @Param('importId') importId: string) {
+    return this.background.dismiss(getIdentity(request), importId);
+  }
+
+  @Post(':importId/review')
+  review(@Req() request: AuthenticatedRequest, @Param('importId') importId: string) {
+    return this.background.review(getIdentity(request), importId);
+  }
 
   @Post(':source/preview')
   @UseInterceptors(FileInterceptor('file', {

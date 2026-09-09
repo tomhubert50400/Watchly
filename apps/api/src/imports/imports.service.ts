@@ -62,7 +62,7 @@ type ImportResult = {
   viewingEventsCreated: number;
 };
 
-type StoredImportPreview = {
+export type StoredImportPreview = {
   pendingItems?: ParsedImportItem[];
   committedCount?: number;
   fileName: string;
@@ -108,6 +108,7 @@ export class ImportsService {
         where: {
           createdAt: { lt: new Date(Date.now() - IMPORT_PREVIEW_TTL_MS) },
           status: DataImportStatus.PREVIEWED,
+          background: false,
           userId: user.id,
         },
       }),
@@ -142,13 +143,18 @@ export class ImportsService {
   }
 
   async prepareBatch(identity: AuthenticatedIdentity, importId: string) {
-    assertUuid(importId);
     const user = await this.authService.getOrCreateUser(identity);
+    return this.prepareBatchForUser(user.id, importId);
+  }
+
+  async prepareBatchForUser(userId: string, importId: string) {
+    assertUuid(importId);
+    const user = { id: userId };
     const record = await this.prisma.withConnectionRetry(() => this.prisma.dataImport.findFirst({
       where: { id: importId, userId: user.id, status: DataImportStatus.PREVIEWED },
     }));
     if (!record) throw new NotFoundException('Import preview not found.');
-    if (record.createdAt.getTime() < Date.now() - IMPORT_PREVIEW_TTL_MS) {
+    if (!record.background && record.createdAt.getTime() < Date.now() - IMPORT_PREVIEW_TTL_MS) {
       throw new BadRequestException('This import preview expired. Choose the file again.');
     }
     const preview = readStoredPreview(record.preview);
@@ -165,7 +171,7 @@ export class ImportsService {
         preview: { equals: record.preview as Prisma.InputJsonValue } },
       data: { preview: next as unknown as Prisma.InputJsonValue },
     }));
-    if (updated.count !== 1) return this.getPreview(identity, importId);
+    if (updated.count !== 1) throw new ConflictException('This import is already being prepared.');
     return toPublicPreview(record.id, next);
   }
 
@@ -176,8 +182,13 @@ export class ImportsService {
   }
 
   private async confirmBatch(identity: AuthenticatedIdentity, importId: string) {
-    assertUuid(importId);
     const user = await this.authService.getOrCreateUser(identity);
+    return this.confirmBatchForUser(user.id, importId);
+  }
+
+  async confirmBatchForUser(userId: string, importId: string) {
+    assertUuid(importId);
+    const user = { id: userId };
     const record = await this.prisma.withConnectionRetry(() =>
       this.prisma.dataImport.findFirst({
         where: { id: importId, userId: user.id },
@@ -197,7 +208,7 @@ export class ImportsService {
       return { ...preview.result, alreadyCompleted: true, completed: true };
     }
 
-    if (record.createdAt.getTime() < Date.now() - IMPORT_PREVIEW_TTL_MS) {
+    if (!record.background && record.createdAt.getTime() < Date.now() - IMPORT_PREVIEW_TTL_MS) {
       throw new BadRequestException('This import preview expired. Choose the file again.');
     }
 
@@ -230,7 +241,9 @@ export class ImportsService {
           viewingEventsCreated: (preview.result?.viewingEventsCreated ?? 0) + batchResult.viewingEventsCreated,
         };
         const completedPreview: StoredImportPreview = {
-          ...preview, committedCount, items: completed ? [] : preview.items, result,
+          ...preview, committedCount,
+          items: completed ? (record.background ? preview.items.filter((item) => item.status !== 'ready') : []) : preview.items,
+          result,
         };
 
         await transaction.dataImport.update({
@@ -779,7 +792,7 @@ function toPublicPreview(importId: string, preview: StoredImportPreview) {
   };
 }
 
-function readStoredPreview(value: Prisma.JsonValue): StoredImportPreview {
+export function readStoredPreview(value: Prisma.JsonValue): StoredImportPreview {
   const preview = value as unknown as Partial<StoredImportPreview>;
 
   if (preview.version !== 3 || !Array.isArray(preview.items) || !preview.summary) {
