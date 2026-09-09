@@ -22,6 +22,7 @@ import { Screen } from '../components/Screen';
 import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
+import { setMemoryResource } from '../cache/memoryResourceCache';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
 import type { LibraryMediaItem } from '../library/useLibraryData';
@@ -429,7 +430,10 @@ export function ProfileScreen() {
           })}
           onOpenMediaItem={(item) => openProfileMediaItem(navigation, item)}
           onOpenOpinion={(item) => openOpinion(navigation, item)}
-          onOpenStats={() => navigation.navigate('AllTimeStats', { profileBackdropUrl: atmosphereUrl })}
+          onOpenStats={() => {
+            setMemoryResource(getPrivateCacheKey(userId!, 'profile:all-time:v2'), profile.viewingStats, new Date().toISOString());
+            navigation.navigate('AllTimeStats', { profileBackdropUrl: atmosphereUrl });
+          }}
           onViewAllMedia={(filter) => navigation.navigate('ProfileMedia', {
             filter,
             profileBackdropUrl: atmosphereUrl,
