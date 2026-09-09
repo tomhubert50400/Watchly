@@ -97,30 +97,34 @@ export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) 
         <Pressable accessibilityLabel="Back to viewing dates" accessibilityRole="button" onPress={() => setCalendarOpen(false)} style={styles.backButton}><ChevronLeft color={colors.accentText} size={20} /><Text style={styles.selectedText}>Viewing dates</Text></Pressable>
         <Text style={styles.label}>Viewing {selectedIndex + 1}</Text>
       </View>
+      <View style={styles.calendarCard}>
       <View style={styles.monthRow}>
-        <Pressable accessibilityLabel="Previous month" accessibilityRole="button" disabled={month <= '1900-01'} onPress={() => moveMonth(-1)} style={styles.iconButton}><ChevronLeft color={colors.textMuted} size={20} /></Pressable>
-        <Pressable accessibilityLabel="Choose month and year" accessibilityRole="button" onPress={() => { setMonthPickerOpen((open) => !open); setYearText(month.slice(0, 4)); }} style={styles.monthButton}><Text style={styles.label}>{formatDate(`${month}-01`, { month: 'long', year: 'numeric' })}</Text></Pressable>
-        <Pressable accessibilityLabel="Next month" accessibilityRole="button" disabled={month >= today.slice(0, 7)} onPress={() => moveMonth(1)} style={[styles.iconButton, month >= today.slice(0, 7) && styles.disabled]}><ChevronRight color={colors.textMuted} size={20} /></Pressable>
+        <Pressable accessibilityLabel="Previous month" accessibilityRole="button" disabled={month <= '1900-01'} onPress={() => moveMonth(-1)} style={[styles.iconButton, styles.monthArrow, month <= '1900-01' && styles.disabled]}><ChevronLeft color={colors.accentText} size={20} /></Pressable>
+        <Pressable accessibilityLabel="Choose month and year" accessibilityRole="button" accessibilityState={{ expanded: monthPickerOpen }} onPress={() => { setMonthPickerOpen((open) => !open); setYearText(month.slice(0, 4)); }} style={styles.monthButton}>
+          <Text style={styles.monthTitle}>{formatDate(`${month}-01`, { month: 'long' })}</Text>
+          <View style={styles.yearLink}><Text style={styles.selectedText}>{month.slice(0, 4)}</Text><View style={{ transform: [{ rotate: monthPickerOpen ? '-90deg' : '90deg' }] }}><ChevronRight color={colors.accentText} size={14} /></View></View>
+        </Pressable>
+        <Pressable accessibilityLabel="Next month" accessibilityRole="button" disabled={month >= today.slice(0, 7)} onPress={() => moveMonth(1)} style={[styles.iconButton, styles.monthArrow, month >= today.slice(0, 7) && styles.disabled]}><ChevronRight color={colors.accentText} size={20} /></Pressable>
       </View>
       {monthPickerOpen ? <View>
         <YearWheel year={Number(yearText)} maxYear={Number(today.slice(0, 4))} onChange={year => setYearText(String(year))} />
         <View style={styles.monthGrid}>{Array.from({ length: 12 }, (_, index) => {
           const key = `${yearText}-${String(index + 1).padStart(2, '0')}`;
           const disabled = !/^\d{4}$/.test(yearText) || key < '1900-01' || key > today.slice(0, 7);
-          return <Pressable accessibilityRole="button" disabled={disabled} key={index} onPress={() => { setMonth(key); setMonthPickerOpen(false); }} style={[styles.monthCell, disabled && styles.disabled]}><Text style={styles.label}>{formatDate(`2026-${String(index + 1).padStart(2, '0')}-01`, { month: 'short' })}</Text></Pressable>;
+          return <Pressable accessibilityRole="button" accessibilityState={{ selected: key === month }} disabled={disabled} key={index} onPress={() => { setMonth(key); setMonthPickerOpen(false); }} style={[styles.monthCell, disabled && styles.disabled]}><View style={[styles.monthChip, key === month && styles.selected]}><Text style={key === month ? styles.selectedText : styles.label}>{formatDate(`2026-${String(index + 1).padStart(2, '0')}-01`, { month: 'short' })}</Text></View></Pressable>;
         })}</View>
       </View> : <View>
-        <View style={styles.grid}>{['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, index) => <Text key={index} style={styles.weekday}>{day}</Text>)}</View>
+        <View style={[styles.grid, styles.weekdayRow]}>{['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((day, index) => <Text key={index} style={styles.weekday}>{day}</Text>)}</View>
         <View style={styles.grid}>{viewingCalendarDays(month).map((date, index) => {
           if (!date) return <View key={`blank:${index}`} style={styles.cell} />;
           const selected = (selectedEntry.watchedDate ?? today) === date;
           const disabled = date > today;
-          return <Pressable accessibilityLabel={formatDate(date)} accessibilityRole="button" accessibilityState={{ disabled, selected }} disabled={disabled} key={date} onPress={() => { setEntries(current => setViewingDate(current, selectedEntry.id, date)); setCalendarOpen(false); }} style={[styles.cell, selected && styles.selectedDay, disabled && styles.disabled]}>
-            <Text style={[styles.day, selected && styles.selectedDayText]}>{Number(date.slice(8))}</Text>
-            {date === today && !selected ? <View style={styles.todayDot} /> : null}
+          return <Pressable accessibilityLabel={formatDate(date)} accessibilityRole="button" accessibilityState={{ disabled, selected }} disabled={disabled} key={date} onPress={() => { setEntries(current => setViewingDate(current, selectedEntry.id, date)); setCalendarOpen(false); }} style={[styles.cell, disabled && styles.disabled]}>
+            <View style={[styles.dayDisc, date === today && styles.todayDisc, selected && styles.selectedDay]}><Text style={[styles.day, selected && styles.selectedDayText]}>{Number(date.slice(8))}</Text></View>
           </Pressable>;
         })}</View>
       </View>}
+      </View>
       </>}
     </BottomActionSheetScrollView>
   </BottomActionSheet>;
@@ -172,17 +176,23 @@ const styles = StyleSheet.create({
   count: { width: 58, padding: 0, textAlign: 'center', fontSize: 28, fontWeight: '800', color: colors.accentText, minHeight: 52 },
   iconButton: { width: touchTargets.min, minHeight: touchTargets.min, alignItems: 'center', justifyContent: 'center' },
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.md },
-  monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm, backgroundColor: colors.panelElevated, borderRadius: radii.lg, paddingVertical: spacing.xs },
+  calendarCard: { width: '100%', maxWidth: 380, alignSelf: 'center', backgroundColor: colors.panelElevated, borderWidth: 1, borderColor: colors.accentBorder, borderRadius: radii.xl, padding: spacing.sm },
+  monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.sm, marginBottom: spacing.sm },
+  monthArrow: { borderRadius: radii.md, backgroundColor: colors.accentSoft },
+  monthTitle: { color: colors.text, fontSize: 22, fontWeight: '800' },
+  yearLink: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: 4 },
   monthButton: { flex: 1, minHeight: touchTargets.min, alignItems: 'center', justifyContent: 'center' },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  weekdayRow: { borderBottomWidth: 1, borderBottomColor: colors.border, marginBottom: spacing.xs },
   weekday: { width: '14.285714%', textAlign: 'center', color: colors.textSubtle, fontSize: 11, paddingVertical: spacing.sm },
   cell: { width: '14.285714%', minHeight: touchTargets.min, alignItems: 'center', justifyContent: 'center', borderRadius: 24 },
   day: { color: colors.text, fontSize: 14 },
+  dayDisc: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'transparent' },
+  todayDisc: { borderColor: colors.accentBorder },
   selected: { backgroundColor: colors.accentSoft },
   selectedDay: { backgroundColor: colors.accent },
   selectedDayText: { color: '#FFFFFF', fontWeight: '800' },
   selectedText: { color: colors.accentText, fontWeight: '800' },
-  todayDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.accentText, position: 'absolute', bottom: 4 },
   disabled: { opacity: 0.3 },
   viewingCards: { gap: spacing.sm },
   backButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: touchTargets.min },
@@ -199,6 +209,7 @@ const styles = StyleSheet.create({
   yearRow: { height: 44, alignItems: 'center', justifyContent: 'center' },
   year: { color: colors.textMuted, fontSize: 20, textAlign: 'center' },
   monthGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  monthChip: { borderRadius: radii.sm, paddingVertical: spacing.sm, width: '90%', alignItems: 'center', backgroundColor: colors.panel },
   monthCell: { width: '33.333333%', minHeight: touchTargets.min, alignItems: 'center', justifyContent: 'center' },
   error: { color: colors.danger, fontSize: 13, marginTop: spacing.sm },
 });
