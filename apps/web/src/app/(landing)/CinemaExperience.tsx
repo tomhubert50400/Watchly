@@ -1,110 +1,146 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import sources from '../../../public/landing/cinema/sources.json';
 import episodes from '../../../public/landing/cinema/episodes.json';
 import styles from './page.module.css';
 
-const films = sources.map((film) => ({ ...film, year: film.year.slice(0, 4) }));
-const featured = [films[0], films[2], films[1]];
-const initialEntries = [{ id: 244786, rating: 4.5 }, { id: 329865, rating: 4 }, { id: 120467, rating: 5 }];
-const lists = [
-  { title: 'Wish I could watch these for the first time.', description: 'Some endings deserve a second beginning.', ids: [157336, 496243, 329865, 244786, 129] },
-  { title: 'A Sunday with absolutely no plans.', description: 'Phone away. Curtains closed. These on.', ids: [313369, 120467, 129, 693134, 157336] },
+const CinemaScene = dynamic(() => import('./CinemaScene'), { ssr: false });
+const programme = [
+  { id: 313369, title: 'La La Land', director: 'Damien Chazelle', year: '2016', runtime: '128 min', genre: 'Romance, music', line: 'Here’s to the ones who dream.' },
+  { id: 157336, title: 'Interstellar', director: 'Christopher Nolan', year: '2014', runtime: '169 min', genre: 'Science fiction, drama', line: 'Some distances can’t be measured.' },
+  { id: 693134, title: 'Dune: Part Two', director: 'Denis Villeneuve', year: '2024', runtime: '167 min', genre: 'Science fiction, adventure', line: 'A world worth getting lost in.' },
 ];
-
-function Stars({ value }: Readonly<{ value: number }>) {
-  return <span className={styles.staticStars} aria-label={`${value} out of 5 stars`}>{[1, 2, 3, 4, 5].map((star) => <span key={star} className={styles.starSlot}><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m12 2 3 6.3 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.2l7-.9Z" /></svg><svg aria-hidden="true" className={styles.starFill} style={{ clipPath: `inset(0 ${Math.max(0, Math.min(100, (star - value) * 100))}% 0 0)` }} viewBox="0 0 24 24"><path d="m12 2 3 6.3 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.2l7-.9Z" /></svg></span>)}</span>;
-}
+const collectionIds = [329865, 129, 157336, 120467, 693134];
+const collection = collectionIds.map((id) => sources.find((film) => film.id === id)!);
+const clamp = (n: number) => Math.max(0, Math.min(1, n));
 
 export function CinemaExperience() {
-  const [selected, setSelected] = useState(0);
-  const [entries, setEntries] = useState(initialEntries);
-  const [lastRated, setLastRated] = useState<number | null>(null);
-  const [hoverRating, setHoverRating] = useState<number | null>(null);
-  const [watchedEpisodes, setWatchedEpisodes] = useState(1);
-  const [activeList, setActiveList] = useState(0);
-  const container = useRef<HTMLDivElement>(null);
-  const film = featured[selected];
-  const rating = entries.find((entry) => entry.id === film.id)?.rating ?? 0;
-  const list = lists[activeList];
+  const experience = useRef<HTMLDivElement>(null);
+  const progress = useRef(0);
+  const [motionEnabled, setMotionEnabled] = useState(true);
+  const [systemReduced, setSystemReduced] = useState(false);
+  const [activeFilm, setActiveFilm] = useState(0);
+  const [ratings, setRatings] = useState<Record<number, number>>({});
+  const [savedIds, setSavedIds] = useState<number[]>([]);
+  const [watched, setWatched] = useState(1);
+  const film = programme[activeFilm];
+  const rating = ratings[film.id] || 0;
+  const motion = motionEnabled && !systemReduced;
+  const saved = savedIds.includes(film.id);
+  const journalEntries = [
+    ...programme.filter((movie) => ratings[movie.id]).map((movie) => ({ id: movie.id, title: movie.title, year: movie.year, score: ratings[movie.id], date: 'Just now' })),
+    { id: 244786, title: 'Whiplash', year: '2014', score: 5, date: '06 Sep' },
+    { id: 329865, title: 'Arrival', year: '2016', score: 4, date: '04 Sep' },
+    { id: 120467, title: 'The Grand Budapest Hotel', year: '2014', score: 5, date: '01 Sep' },
+  ];
 
-  useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const elements = container.current?.querySelectorAll<HTMLElement>('[data-reveal]');
-    const observer = new IntersectionObserver((changes) => {
-      changes.forEach((change) => { if (change.isIntersecting) { (change.target as HTMLElement).dataset.reveal = 'visible'; observer.unobserve(change.target); } });
-    }, { threshold: 0.12 });
-    elements?.forEach((element) => { if (element.getBoundingClientRect().top > window.innerHeight) { element.dataset.reveal = 'waiting'; observer.observe(element); } });
-    return () => observer.disconnect();
-  }, []);
-
-  function rate(value: number) {
-    setEntries((current) => [{ id: film.id, rating: value }, ...current.filter((entry) => entry.id !== film.id)]);
-    setLastRated(film.id);
+  function toggleSaved(id: number) {
+    setSavedIds((ids) => ids.includes(id) ? ids.filter((value) => value !== id) : [...ids, id]);
   }
 
+  function focusGallery(index: number, button: HTMLButtonElement) {
+    if (!motion || !button.matches(':focus-visible')) return;
+    const chapter = document.getElementById('lists')!;
+    const stage = chapter.firstElementChild as HTMLElement;
+    const top = chapter.getBoundingClientRect().top + window.scrollY;
+    window.scrollTo({ top: top + index / (collection.length - 1) * (chapter.offsetHeight - stage.offsetHeight), behavior: 'instant' });
+  }
+
+  useEffect(() => {
+    const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const change = () => setSystemReduced(preference.matches);
+    change();
+    preference.addEventListener('change', change);
+    return () => preference.removeEventListener('change', change);
+  }, []);
+
+  useEffect(() => {
+    const root = experience.current;
+    if (!root) return;
+    const chapters = root.querySelectorAll<HTMLElement>('[data-chapter]');
+    const reveals = root.querySelectorAll<HTMLElement>('[data-reveal]');
+    let frame = 0;
+    function update() {
+      frame = 0;
+      chapters.forEach((chapter) => {
+        const rect = chapter.getBoundingClientRect();
+        const stage = chapter.firstElementChild as HTMLElement;
+        const p = motion ? clamp(-rect.top / Math.max(1, rect.height - stage.offsetHeight)) : 0;
+        chapter.style.setProperty('--p', String(p));
+        if (chapter.id === 'screening-room') {
+          progress.current = p;
+          chapter.style.setProperty('--intro', String(1 - clamp(p / .19)));
+          chapter.style.setProperty('--inside', String(clamp((p - .26) / .08) * (1 - clamp((p - .48) / .08))));
+          chapter.style.setProperty('--image', String(clamp((p - .78) / .13)));
+          chapter.style.setProperty('--title', String(clamp((p - .87) / .09)));
+          chapter.dataset.entered = p > .8 ? 'true' : 'false';
+          chapter.querySelectorAll<HTMLElement>('[data-intro-control]').forEach((item) => { item.inert = p > .19; });
+          const title = chapter.querySelector<HTMLElement>('[data-film-title]');
+          if (title) title.inert = p < .88;
+        }
+      });
+      reveals.forEach((item) => {
+        const rect = item.getBoundingClientRect();
+        if (!motion || rect.top < window.innerHeight * .9) item.dataset.visible = 'true';
+      });
+    }
+    function schedule() { if (!frame) frame = requestAnimationFrame(update); }
+    update();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+    };
+  }, [motion]);
+
   return (
-    <div ref={container}>
-      <section className={styles.hero} aria-labelledby="hero-title">
-        <div className={styles.heroIntro}>
-          <h1 id="hero-title"><span>Watch it.</span><span>Make it yours.</span></h1>
-          <div className={styles.heroCopy}><p>The films you love.<br />The series you can’t put down.<br />A home for all of it.</p><a className={styles.primaryCta} href="#join">Get Watchly <span aria-hidden="true">↗</span></a><span className={styles.availability}>Coming to iOS &amp; Android</span></div>
-        </div>
-        <div className={styles.cinemaGallery} aria-label="Choose a film to try Watchly">
-          {featured.map((item, index) => (
-            <button key={item.id} type="button" className={styles.scene} data-active={selected === index} onClick={() => { setSelected(index); setHoverRating(null); }} aria-pressed={selected === index} aria-label={`Select ${item.title}`}>
-              <Image src={`/landing/cinema/${item.id}-backdrop.jpg`} alt="" fill priority sizes="(max-width: 767px) 65vw, 50vw" />
-              <span className={styles.sceneShade} /><span className={styles.sceneTop}>{item.year}<span aria-hidden="true">↗</span></span>
-              <span className={styles.sceneTitle}>{item.id === 693134 ? <><strong>DUNE</strong><small>PART TWO</small></> : <strong>{item.title}</strong>}</span>
-              <span className={styles.sceneHint}>{selected === index ? 'Your next favourite?' : 'Rate this film'}</span>
-            </button>
-          ))}
-        </div>
-        <div className={styles.heroBottom}>
-          <p>Films. Series. <span>And everything you thought of them.</span></p>
-          <div className={styles.ratingDock}>
-            <div className={styles.ratingLabel}><span>Your take</span><strong>{film.title}</strong></div>
-            <div className={styles.ratingButtons} role="group" aria-label={`Rate ${film.title}`} onPointerLeave={() => setHoverRating(null)}>
-              <Stars value={hoverRating ?? rating} />
-              <div className={styles.ratingHits}>{Array.from({ length: 10 }, (_, index) => (index + 1) / 2).map((value) => <button key={value} type="button" aria-label={`Rate ${value} out of 5`} aria-pressed={rating === value} onPointerEnter={() => setHoverRating(value)} onFocus={() => setHoverRating(value)} onBlur={() => setHoverRating(null)} onClick={() => rate(value)} />)}</div>
-            </div>
-            <span className={styles.ratingFeedback} aria-live="polite">{rating ? <a href="#journal"><span className={styles.savedCheck}>✓</span> In your journal <span aria-hidden="true">↓</span></a> : <>Try a rating <span aria-hidden="true">↑</span></>}</span>
+    <div className={styles.experience} ref={experience} data-motion={motion ? 'on' : 'off'}>
+      <button className={styles.motionSwitch} type="button" aria-pressed={motion} onClick={() => setMotionEnabled(!motionEnabled)} disabled={systemReduced} aria-label={systemReduced ? 'Reduced motion follows your device preference' : 'Toggle animations'}><span aria-hidden="true">{motion ? '◉' : '○'}</span> Motion {motion ? 'on' : 'off'}</button>
+
+      <section className={styles.screeningChapter} id="screening-room" data-chapter aria-labelledby="hero-title">
+        <div className={styles.screeningStage}>
+          <div className={styles.sceneFallback} aria-hidden="true"><Image src={'/landing/cinema/' + film.id + '-backdrop.jpg'} alt="" fill sizes="100vw" priority /></div>
+          <CinemaScene progress={progress} filmId={film.id} motion={motion} />
+          <div className={styles.sceneGrain} aria-hidden="true" />
+          <div className={styles.heroIntro} data-intro-control>
+            <p className={styles.eyebrow}><span className={styles.tinyStar} aria-hidden="true">✳</span> A life in cinema</p>
+            <h1 id="hero-title">A place for<br />the films<br />that <em>stay.</em></h1>
+            <p className={styles.heroCopy}>The ones you love. The ones you’re yet to find.<br />Your films, series and memories, all in Watchly.</p>
+            <a href="#after-credits" className={styles.enterLink}><span className={styles.roundArrow} aria-hidden="true">↓</span><span>Take your seat<small>Scroll to enter</small></span></a>
           </div>
+          <div className={styles.roomCaption} aria-hidden="true"><span className={styles.eyebrow}>The lights go down.</span><p>The rest of the world<br /><em>can wait.</em></p></div>
+          <div className={styles.heroFooter}><span><i aria-hidden="true" /> YOUR OWN LITTLE CINEMA</span><span>Built around what moves you.</span></div>
+          <div className={styles.programme} data-intro-control role="group" aria-label="Choose the film on screen"><span>NOW SHOWING</span>{programme.map((movie, index) => <button key={movie.id} type="button" aria-pressed={index === activeFilm} onClick={() => setActiveFilm(index)}><small>0{index + 1}</small>{movie.title}<span aria-hidden="true">↗</span></button>)}</div>
+          <div className={styles.fullFilm} aria-hidden="true" key={film.id}><Image src={'/landing/cinema/' + film.id + '-backdrop.jpg'} alt="" fill sizes="100vw" priority /><div className={styles.filmShade} /></div>
+          <div className={styles.filmTitle} data-film-title><p className={styles.eyebrow}>A film by {film.director}</p><h2>{film.title}</h2><div><span>{film.year} <i /> {film.runtime}</span><span>{film.line}</span></div><a href="#after-credits">Stay a little longer <span aria-hidden="true">↓</span></a></div>
+          <span className={styles.reelCounter} aria-hidden="true">WATCHLY PICTURE HOUSE <span>01 / 03</span></span>
         </div>
       </section>
-      <section className={styles.journalSection} id="journal" aria-labelledby="journal-title" data-reveal>
-        <div className={styles.journalCopy}><p className={styles.eyebrow}>The credits are just the beginning</p><h2 id="journal-title">You saw it.<br /><span>You felt it.</span><br />Keep it.</h2><p>That five-star feeling. The ending you’re still thinking about. The one you’ll never watch again.</p><p>Your ratings, reviews and rewatches,<br />all in your journal.</p><a className={styles.textLink} href="#hero-title">Give a film its first entry <span aria-hidden="true">↗</span></a></div>
-        <div className={styles.journalShell}>
-          <div className={styles.journalHeader}><span>Your journal<span className={styles.demoLabel}>PREVIEW</span></span><span className={styles.journalCount}>{entries.length} films</span></div>
-          <div className={styles.journalSummary}><div><strong>{entries.length}</strong><span>Films logged</span></div><div><strong>{(entries.reduce((sum, item) => sum + item.rating, 0) / entries.length).toFixed(1)}</strong><span>Average rating</span></div><div><strong>2026</strong><span>Your watching year</span></div></div>
-          <div className={styles.journalEntries} aria-live="polite" aria-relevant="additions text">
-            {entries.map((entry) => { const item = films.find((movie) => movie.id === entry.id)!; return <div key={entry.id} className={styles.journalEntry} data-new={lastRated === entry.id}><Image src={`/landing/cinema/${entry.id}-poster.jpg`} alt={`${item.title} poster`} width={48} height={72} /><div><span className={styles.entryMeta}>{lastRated === entry.id ? 'Just added' : 'Watched'} · {item.year}</span><h3>{item.title}</h3><Stars value={entry.rating} /></div><span className={styles.entryRating}>{entry.rating.toFixed(1)}</span></div>; })}
-          </div>
-          <p className={styles.journalNote}>{lastRated ? 'Your rating is here. That’s how a watching history begins.' : 'Rate a film above. Watch your journal grow.'}</p>
+
+      <section className={styles.afterCredits} id="after-credits" aria-labelledby="film-title">
+        <div className={styles.afterIntro} data-reveal><p className={styles.eyebrow}>01 / After the credits</p><h2 id="film-title">It’s over.<br /><em>It’s not gone.</em></h2><p>Give it a rating. Save it for a second viewing.<br />Keep a little of the feeling.</p></div>
+        <div className={styles.filmCard} data-reveal><Image className={styles.detailPoster} src={'/landing/cinema/' + film.id + '-poster.jpg'} alt={film.title + ' poster'} width={180} height={270} /><div><p className={styles.eyebrow}>{film.year} · {film.runtime}</p><h3>{film.title}</h3><p className={styles.filmCredit}>{film.director}<br />{film.genre}</p><fieldset className={styles.rating}><legend>Your rating</legend>{[1, 2, 3, 4, 5].map((value) => <button key={value} type="button" aria-label={'Rate ' + value + ' out of 5'} aria-pressed={rating === value} data-filled={value <= rating} onClick={() => setRatings((current) => ({ ...current, [film.id]: value }))}>★</button>)}</fieldset><p className={styles.ratingMessage} aria-live="polite">{rating ? rating + '/5. Added to your journal below.' : 'How did it leave you?'}</p><button className={styles.saveButton} type="button" aria-pressed={saved} onClick={() => toggleSaved(film.id)}><span aria-hidden="true">{saved ? '✓' : '+'}</span>{saved ? 'In your watchlist' : 'Add to watchlist'}</button></div><span className={styles.demoNote}>A small taste of Watchly. Your choices reset on reload.</span></div>
+      </section>
+
+      <section className={styles.journal} id="journal" aria-labelledby="journal-title">
+        <div className={styles.journalHeading} data-reveal><p className={styles.eyebrow}>02 / The things you keep</p><h2 id="journal-title">A life, <em>in frames.</em></h2><p>That late screening. That third rewatch.<br />A journal of everything you’ve seen.</p></div>
+        <div className={styles.journalSheet} data-reveal><div className={styles.journalTop}><span>Your film journal</span><span>SEPTEMBER 2026</span><span>{String(journalEntries.length).padStart(2, '0')} ENTRIES</span></div><div className={styles.journalRows}>{journalEntries.map((entry, index) => <div className={styles.journalRow} key={entry.id} style={{ '--order': index } as CSSProperties}><span className={styles.entryNumber}>{String(index + 1).padStart(2, '0')}</span><Image src={'/landing/cinema/' + entry.id + '-poster.jpg'} alt="" width={58} height={87} /><div><h3>{entry.title}</h3><p>{entry.year} <span>Watched</span></p></div><time>{entry.date}</time><span className={styles.entryRating} aria-label={entry.score + ' out of 5'}>{'★'.repeat(entry.score)}<span>{'★'.repeat(5 - entry.score)}</span></span></div>)}</div><div className={styles.journalBottom}><span>Some things are worth keeping track of.</span><span>WATCHLY / PERSONAL COLLECTION</span></div></div>
+      </section>
+
+      <section className={styles.collectionChapter} id="lists" data-chapter aria-labelledby="collection-title">
+        <div className={styles.collectionStage}>
+          <div className={styles.collectionHeading}><p className={styles.eyebrow}>And then there’s the next one.</p><h2 id="collection-title">Follow <em>the feeling.</em></h2><p>A watchlist for every “you have to see this”.</p></div>
+          <div className={styles.filmGallery}>{collection.map((movie, index) => <article className={styles.galleryFilm} key={movie.id} style={{ '--index': index } as CSSProperties}><div className={styles.galleryImage}><Image src={'/landing/cinema/' + movie.id + '-poster.jpg'} alt={movie.title + ' poster'} width={360} height={540} sizes="(max-width: 600px) 58vw, 25vw" /><button type="button" aria-label={(savedIds.includes(movie.id) ? 'Remove ' : 'Save ') + movie.title + (savedIds.includes(movie.id) ? ' from watchlist' : ' to watchlist')} aria-pressed={savedIds.includes(movie.id)} onFocus={(event) => focusGallery(index, event.currentTarget)} onClick={() => toggleSaved(movie.id)}>{savedIds.includes(movie.id) ? '✓' : '+'}</button></div><div className={styles.galleryCaption}><span>{movie.title}</span><small>{movie.year.slice(0, 4)}</small></div></article>)}</div>
+          <div className={styles.collectionFoot}><span>FIVE FILMS. FIVE DIFFERENT WORLDS.</span><span aria-live="polite">{savedIds.length ? savedIds.length + ' in your watchlist' : 'Tap + to keep one for later'}</span><span className={styles.galleryProgress} aria-hidden="true"><i /></span></div>
         </div>
       </section>
-      <section className={styles.seriesSection} id="series" aria-labelledby="series-title" data-reveal>
-        <div className={styles.seriesBackdrop}><Image src="/landing/cinema/breaking-bad-backdrop.jpg" alt="Breaking Bad" fill sizes="100vw" /></div>
-        <div className={styles.seriesInner}>
-          <div className={styles.seriesCopy}><p className={styles.eyebrow}>For your “one more episode” nights</p><h2 id="series-title">Still<br /><span>watching?</span></h2><p>Of course you are.<br />We’ll remember where you left off.</p></div>
-          <div className={styles.seriesPlayer}>
-            <div className={styles.seriesPlayerHeader}><span>Continue watching</span><span>YOUR PROGRESS</span></div>
-            <div className={styles.seriesIdentity}><Image src="/landing/cinema/breaking-bad-poster.jpg" alt="Breaking Bad poster" width={55} height={83} /><div><h3>Breaking Bad</h3><span>Season 5 · 16 episodes</span></div></div>
-            <div className={styles.seasonProgress} aria-label={`${watchedEpisodes} of 16 episodes watched`}>{episodes.map((episode, index) => <span key={episode.episode_number} data-watched={index < watchedEpisodes} title={`Episode ${episode.episode_number}: ${episode.name}`} />)}</div>
-            <div className={styles.nextEpisode} aria-live="polite"><span>{watchedEpisodes === 16 ? 'Season complete' : `UP NEXT · EPISODE ${watchedEpisodes + 1}`}</span><h4>{watchedEpisodes === 16 ? 'What a season.' : episodes[watchedEpisodes].name}</h4><span>{watchedEpisodes} / 16 watched</span></div>
-            <button className={styles.markEpisode} type="button" onClick={() => setWatchedEpisodes((count) => count === 16 ? 1 : count + 1)}>{watchedEpisodes === 16 ? 'Try the preview again' : 'Mark episode watched'}<span aria-hidden="true">✓</span></button>
-            <span className={styles.localHint}>{watchedEpisodes === 16 ? 'Season finished. Ready for your next series.' : 'Try it. Your next episode is ready.'}</span>
-          </div>
-        </div>
-      </section>
-      <section className={styles.listsSection} id="lists" aria-labelledby="lists-title" data-reveal>
-        <div className={styles.listsHeader}><div><p className={styles.eyebrow}>Good taste deserves a good list</p><h2 id="lists-title">Very specific lists.<br /><span>Very you.</span></h2></div><p>The comfort rewatches. The recommendations.<br />The films you keep telling your friends to see.</p></div>
-        <div className={styles.listTabs} role="group" aria-label="Preview a film list"><button type="button" aria-pressed={activeList === 0} onClick={() => setActiveList(0)}>Worth a rewatch</button><button type="button" aria-pressed={activeList === 1} onClick={() => setActiveList(1)}>A slow Sunday</button></div>
-        <div className={styles.posterShelf} key={activeList}>{list.ids.map((id, index) => { const item = films.find((movie) => movie.id === id)!; return <figure key={id} style={{ '--poster-index': index } as React.CSSProperties}><Image src={`/landing/cinema/${id}-poster.jpg`} alt={`${item.title} poster`} width={500} height={750} sizes="(max-width: 767px) 38vw, 20vw" /><figcaption>{item.title}<span>{item.year}</span></figcaption></figure>; })}</div>
-        <div className={styles.listCaption} aria-live="polite"><h3>{list.title}</h3><p>{list.description}</p></div>
-      </section>
+
+      <section className={styles.series} id="series" aria-labelledby="series-title"><div className={styles.seriesBackdrop}><Image src="/landing/cinema/breaking-bad-backdrop.jpg" alt="Walt and Jesse in the desert in Breaking Bad" fill sizes="100vw" /></div><div className={styles.seriesContent} data-reveal><p className={styles.eyebrow}>03 / To be continued</p><h2 id="series-title">Just one<br /><em>more episode.</em></h2><p>For the stories that take a little longer.<br />Pick up exactly where you left off.</p><div className={styles.episode}><div className={styles.episodeTop}><h3>Breaking Bad</h3><span>{watched}/16</span></div><progress value={watched} max={16} aria-label={watched + ' of 16 episodes watched'} /><div className={styles.episodeNext} aria-live="polite"><span>{watched === 16 ? 'Season complete' : 'S05 / E' + String(watched + 1).padStart(2, '0')}</span><h4>{watched === 16 ? 'That final frame.' : episodes[watched].name}</h4></div><button type="button" disabled={watched === 16} onClick={() => setWatched((value) => Math.min(value + 1, 16))}>{watched === 16 ? '✓ Season finished' : 'Mark episode watched'}<span aria-hidden="true">↗</span></button><small>Interactive preview</small></div></div><span className={styles.seriesCredit}>BREAKING BAD / VINCE GILLIGAN / 2008–2013</span></section>
     </div>
   );
 }
