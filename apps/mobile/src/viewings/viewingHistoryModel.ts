@@ -18,21 +18,13 @@ export function resolveHistoryDraft(entries: ViewingHistoryDate[], previous: Vie
 
 export function resizeHistoryDraft(entries: ViewingHistoryDate[], count: number, createId: () => string): ViewingHistoryDate[] | null {
   if (!Number.isInteger(count) || count < 1 || count > 1000) return null;
-  if (count < entries.filter((entry) => entry.watchedDate !== null).length) return null;
-  const next = [...entries];
-  while (next.length > count) next.splice(next.findLastIndex((entry) => entry.watchedDate === null), 1);
+  const next = entries.slice(0, count);
   while (next.length < count) next.push({ id: createId(), watchedDate: null });
   return next;
 }
 
-export function setHistoryDay(entries: ViewingHistoryDate[], date: string, amount: number): ViewingHistoryDate[] {
-  const assigned = entries.filter((entry) => entry.watchedDate === date).length;
-  let difference = amount - assigned;
-  return entries.map((entry) => {
-    if (difference > 0 && entry.watchedDate === null) { difference -= 1; return { ...entry, watchedDate: date }; }
-    if (difference < 0 && entry.watchedDate === date) { difference += 1; return { ...entry, watchedDate: null }; }
-    return entry;
-  });
+export function setViewingDate(entries: ViewingHistoryDate[], id: string, date: string): ViewingHistoryDate[] {
+  return entries.map((entry) => entry.id === id ? { ...entry, watchedDate: date } : entry);
 }
 
 export function viewingCalendarDays(monthKey: string) {

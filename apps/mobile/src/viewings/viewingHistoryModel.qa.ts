@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-expect-error QA executes under Node.
 import { readFileSync } from 'node:fs';
-import { localViewingDay, resizeHistoryDraft, resolveHistoryDraft, setHistoryDay, toHistoryDraft, viewingCalendarDays } from './viewingHistoryModel';
+import { localViewingDay, resizeHistoryDraft, resolveHistoryDraft, setViewingDate, toHistoryDraft, viewingCalendarDays } from './viewingHistoryModel';
 import { applyViewingHistoryUpdates, getViewingHistoryUpdates, reconcileViewingHistoryUpdates, setViewingHistoryUpdate } from './viewingHistoryUpdates';
 import { clearMemoryResourcesWithPrefix } from '../cache/memoryResourceCache';
 
@@ -18,14 +18,17 @@ assert.equal(saved.length, 5);
 assert.equal(saved[0]?.watchedAt, previous[0]?.watchedAt, 'retain the original timestamp when its day is unchanged');
 assert.equal(saved.filter((item) => item.watchedAt === '2026-09-09T12:00:00.000Z').length, 3);
 assert.equal(new Set(saved.map((item) => item.id)).size, 5);
-assert.equal(resizeHistoryDraft(five, 1, () => 'unused'), null, 'never discard a selected date when reducing a total');
+assert.deepEqual(resizeHistoryDraft(five, 1, () => 'unused'), five.slice(0, 1));
 assert.deepEqual(resizeHistoryDraft(five, 2, () => 'unused'), toHistoryDraft(previous));
 assert.equal(resizeHistoryDraft(five, 0, () => 'unused'), null);
 assert.equal(resizeHistoryDraft(five, 1.5, () => 'unused'), null);
 assert.equal(resizeHistoryDraft(five, 1001, () => 'unused'), null);
-const twice = setHistoryDay(five, '2026-09-03', 2);
-assert.equal(twice.filter((item) => item.watchedDate === '2026-09-03').length, 2);
-assert.equal(setHistoryDay(twice, '2026-09-03', 0).filter((item) => item.watchedDate !== null).length, 1);
+const allToday = five.map(entry => ({ ...entry, watchedDate: '2026-09-09' }));
+const edited = setViewingDate(allToday, allToday[1]!.id, '2026-09-05');
+assert.equal(edited.length, 5);
+assert.equal(edited[1]?.watchedDate, '2026-09-05');
+assert.deepEqual(edited.filter((_, index) => index !== 1), allToday.filter((_, index) => index !== 1));
+assert.deepEqual(setViewingDate(edited, edited[1]!.id, '2026-09-05'), edited);
 assert.equal(viewingCalendarDays('2024-02').filter(Boolean).length, 29);
 assert.equal(viewingCalendarDays('2026-09')[1], '2026-09-01');
 assert.equal(localViewingDay(new Date(2026, 8, 9, 0, 1)), '2026-09-09');
