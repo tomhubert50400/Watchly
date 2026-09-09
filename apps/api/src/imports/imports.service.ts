@@ -34,6 +34,11 @@ type ImportMatch = {
 };
 
 export type PreparedImportItem = ParsedImportItem & {
+  viewingMetadata?: {
+    runtimeMinutes: number | null;
+    genres: string[];
+    episodes?: { seasonNumber: number; episodeNumber: number; runtimeMinutes: number | null; title: string }[];
+  };
   issues: string[];
   match: ImportMatch | null;
   status: 'ambiguous' | 'ready' | 'unmatched' | 'unsupported';
@@ -216,7 +221,8 @@ export class ImportsService {
       throw new BadRequestException('Wait for all titles to be prepared before importing.');
     }
     const offset = preview.committedCount ?? 0;
-    const batch = preview.items.slice(offset, offset + IMPORT_BATCH_SIZE);
+    const batch = await mapWithConcurrency(preview.items.slice(offset, offset + IMPORT_BATCH_SIZE), MATCH_CONCURRENCY,
+      (item) => item.status === 'ready' && !item.viewingMetadata ? this.prepareEpisodeProgress(item) : Promise.resolve(item));
     const committedCount = offset + batch.length;
     const completed = committedCount === preview.items.length;
     return this.prisma.withConnectionRetry(() =>
@@ -358,6 +364,10 @@ export class ImportsService {
   }
 
   private async prepareEpisodeProgress(item: PreparedImportItem) {
+    if (item.match?.contentType === 'movie' && item.watched) {
+      const movie = (await this.catalogue.getMovie(item.match.tmdbId)).item;
+      return { ...item, viewingMetadata: { runtimeMinutes: movie.runtimeMinutes, genres: movie.genres } };
+    }
     if (item.match?.contentType !== 'series' || !item.episodes?.length) return item;
     const series = (await this.catalogue.getSeries(item.match.tmdbId)).item;
     const seasons = await mapWithConcurrency(series.seasons, 2, (season) =>
@@ -381,7 +391,13 @@ export class ImportsService {
         ? [...item.issues, `${skipped} watched episodes could not be matched by external ID and were skipped.`]
         : item.issues };
     }
-    return reconcileImportedEpisodes(item, catalogueEpisodes);
+    return {
+      ...reconcileImportedEpisodes(item, catalogueEpisodes),
+      viewingMetadata: { runtimeMinutes: null, genres: series.genres, episodes: catalogueEpisodes.map((episode) => ({
+        seasonNumber: episode.seasonNumber, episodeNumber: episode.episodeNumber,
+        runtimeMinutes: episode.runtimeMinutes, title: episode.title,
+      })) },
+    };
   }
 
   private async findMatch(item: ParsedImportItem): Promise<
@@ -695,6 +711,9 @@ export async function commitPreparedItems(
           contentType: ViewingContentType.EPISODE, tmdbId: item.match.tmdbId, userId,
           seasonNumber: episode.seasonNumber, episodeNumber: episode.episodeNumber,
           title: item.match.title, artworkUrl: item.match.posterUrl,
+          genres: item.viewingMetadata?.genres ?? [],
+          runtimeMinutes: item.viewingMetadata?.episodes?.find((entry) => entry.seasonNumber === episode.seasonNumber
+            && entry.episodeNumber === episode.episodeNumber)?.runtimeMinutes ?? null,
           watchedAt: episode.watchedDate ? toActivityDate(episode.watchedDate) : null,
         });
       }
@@ -715,6 +734,8 @@ export async function commitPreparedItems(
       existingViewingKeys.add(key);
       viewingRows.push({
         artworkUrl: item.match.posterUrl,
+        genres: item.viewingMetadata?.genres ?? [],
+        runtimeMinutes: item.viewingMetadata?.runtimeMinutes ?? null,
         contentType: ViewingContentType.MOVIE,
         title: item.match.title,
         tmdbId: item.match.tmdbId,

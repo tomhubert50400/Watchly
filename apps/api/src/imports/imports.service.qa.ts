@@ -90,6 +90,7 @@ const baseItem = {
   watching: false,
   watchlisted: false,
   warnings: [],
+  viewingMetadata: { runtimeMinutes: 120, genres: ['Drama'] },
 };
 const acceptedSuggestion = applyImportSuggestion({
   ...baseItem,
@@ -155,6 +156,8 @@ assert.equal((createdSeriesRatings[0] as { seriesTmdbId: number }).seriesTmdbId,
 assert.equal(createdReviews.length, 1);
 assert.equal(createdStates.length, 1);
 assert.equal(createdViewings.length, 1);
+assert.equal((createdViewings[0] as { runtimeMinutes: number }).runtimeMinutes, 120);
+assert.deepEqual((createdViewings[0] as { genres: string[] }).genres, ['Drama']);
 assert.deepEqual(updatedStates, [{ favorite: true, status: UserContentStatus.WATCHING }]);
 assert.match(
   readFileSync('src/imports/imports.service.ts', 'utf8'),
@@ -276,7 +279,11 @@ async function verifyLargeImport(transaction: Prisma.TransactionClient) {
   let active = 0;
   let peak = 0;
   let searches = 0;
-  const catalogue = { search: async (title: string) => {
+  let metadataCalls = 0;
+  const catalogue = { getMovie: async () => {
+    metadataCalls += 1;
+    return { item: { runtimeMinutes: 120, genres: ['Drama'] } };
+  }, search: async (title: string) => {
     searches += 1;
     active += 1;
     peak = Math.max(peak, active);
@@ -304,6 +311,7 @@ async function verifyLargeImport(transaction: Prisma.TransactionClient) {
   assert.ok(peak <= 5, 'each batch must bound catalogue concurrency');
   assert.equal(preview.items.length, 1001);
   assert.equal(preview.summary.ready, 1001);
+  const preparedMetadataCalls = metadataCalls;
   let result = await service.confirm(identity, id, true);
   assert.equal(result.completed, false);
   assert.equal(result.titlesProcessed, 25);
@@ -316,6 +324,7 @@ async function verifyLargeImport(transaction: Prisma.TransactionClient) {
   while (!result.completed) result = await resumed.confirm(identity, id, true);
   assert.equal(result.titlesProcessed, 1001);
   assert.equal(writtenIds.size, 1001);
+  assert.equal(metadataCalls, preparedMetadataCalls, 'confirmation must reuse metadata prepared in the import batches');
   assert.equal((await resumed.confirm(identity, id, true)).alreadyCompleted, true);
   const foreignAuth = { getOrCreateUser: async () => ({ id: 'other-user' }) } as unknown as typeof auth;
   await assert.rejects(new ImportsService(foreignAuth, catalogue, prisma).confirm(identity, id, true), /not found/);
