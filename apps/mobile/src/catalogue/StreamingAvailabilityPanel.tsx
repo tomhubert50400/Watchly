@@ -19,6 +19,8 @@ import {
   StreamingProvider,
 } from '../api/catalogue';
 import { colors, radii, spacing, typography } from '../design/tokens';
+import { useWatchRegion } from './useWatchRegion';
+import { WatchRegionPicker } from './WatchRegionPicker';
 
 type StreamingAvailabilityPanelProps = {
   contentType: 'movie' | 'series';
@@ -41,7 +43,9 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 export function StreamingAvailabilityPanel({ contentType, tmdbId }: StreamingAvailabilityPanelProps) {
-  const requestScope = `${contentType}:${tmdbId}`;
+  const region = useWatchRegion();
+  const { country } = region;
+  const requestScope = `${contentType}:${tmdbId}:${country}`;
   const requestScopeRef = useRef(requestScope);
   requestScopeRef.current = requestScope;
   const [availabilityState, setAvailabilityState] = useState<{
@@ -52,11 +56,12 @@ export function StreamingAvailabilityPanel({ contentType, tmdbId }: StreamingAva
     useState<Record<ProviderGroupKey, boolean>>(defaultExpandedGroups);
 
   const loadAvailability = useCallback(async () => {
+    if (!country) return;
     try {
       const response =
         contentType === 'movie'
-          ? await getMovieStreamingAvailability(tmdbId)
-          : await getSeriesStreamingAvailability(tmdbId);
+          ? await getMovieStreamingAvailability(tmdbId, country)
+          : await getSeriesStreamingAvailability(tmdbId, country);
 
       if (requestScopeRef.current === requestScope) {
         setAvailabilityState({ scope: requestScope, value: response.availability });
@@ -66,7 +71,7 @@ export function StreamingAvailabilityPanel({ contentType, tmdbId }: StreamingAva
         setAvailabilityState({ scope: requestScope, value: null });
       }
     }
-  }, [contentType, requestScope, tmdbId]);
+  }, [contentType, country, requestScope, tmdbId]);
 
   useEffect(() => {
     void loadAvailability();
@@ -78,16 +83,19 @@ export function StreamingAvailabilityPanel({ contentType, tmdbId }: StreamingAva
   const providerGroups = availability ? getProviderGroups(availability) : [];
   const hasProviders = providerGroups.length > 0;
 
-  if (!availability) {
-    return null;
-  }
-
   return (
     <View style={styles.panel}>
-      <View>
+      <View style={styles.header}>
         <Text style={styles.sectionTitle}>Where to watch</Text>
+        <WatchRegionPicker region={region} />
       </View>
-      {hasProviders ? (
+      {!country ? (
+        region.ready ? <Text style={styles.emptyText}>Choose a region to see where to watch.</Text> : null
+      ) : !availability ? (
+        availabilityState?.scope === requestScope
+          ? <Text style={styles.emptyText}>Provider data is unavailable. Try again or choose another region.</Text>
+          : null
+      ) : hasProviders ? (
         <View style={styles.availabilityGroups}>
           {providerGroups.map((group) => {
             const isStreamingGroup = group.key === 'streaming';
@@ -114,8 +122,13 @@ export function StreamingAvailabilityPanel({ contentType, tmdbId }: StreamingAva
           })}
         </View>
       ) : (
-        <Text style={styles.emptyText}>No provider data is available for this title yet.</Text>
+        <Text style={styles.emptyText}>No provider data is available for this title in {country}.</Text>
       )}
+      {country && availabilityState?.scope === requestScope && !availability ? (
+        <Pressable accessibilityRole="button" onPress={() => void loadAvailability()} style={styles.groupButton}>
+          <Text style={styles.groupLabel}>Try again</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -245,6 +258,12 @@ function getLogoProviders(providers: StreamingProvider[]): LogoProvider[] {
 }
 
 const styles = StyleSheet.create({
+  header: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
   emptyText: {
     ...typography.body,
     color: colors.textMuted,
@@ -321,5 +340,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     ...typography.title,
     color: colors.text,
+    flexShrink: 1,
   },
 });
