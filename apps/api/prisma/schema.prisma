@@ -423,6 +423,13 @@ model ViewingEvent {
 }
 
 model DataImport {
+  background Boolean @default(false)
+  estimatedSeconds Int?
+  workerLease String? @db.Uuid
+  workerLeaseUntil DateTime?
+  workerAttempts Int @default(0)
+  workerNextAttemptAt DateTime @default(now())
+  dismissedAt DateTime?
   id          String           @id @default(uuid()) @db.Uuid
   userId      String           @db.Uuid
   source      DataImportSource
@@ -434,6 +441,7 @@ model DataImport {
   user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@index([background, status, workerNextAttemptAt])
   @@map("data_imports")
 }
 
