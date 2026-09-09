@@ -33,6 +33,7 @@ import {
 import { resolveBottomSheetKeyboardInset } from './bottomActionSheetKeyboard';
 
 type BottomActionSheetProps = PropsWithChildren<{
+  dragFromHandleOnly?: boolean;
   footer?: ReactNode;
   onClose: () => void;
   title: string;
@@ -45,6 +46,7 @@ export function BottomActionSheetScrollView({
   automaticallyAdjustKeyboardInsets = false,
   children,
   contentContainerStyle,
+  disableScrollViewPanResponder = true,
   keyboardDismissMode = Platform.OS === 'ios' ? 'interactive' : 'on-drag',
   keyboardShouldPersistTaps = 'handled',
   ...scrollViewProps
@@ -55,14 +57,14 @@ export function BottomActionSheetScrollView({
       automaticallyAdjustKeyboardInsets={automaticallyAdjustKeyboardInsets}
       bounces={false}
       contentContainerStyle={styles.scrollContent}
-      disableScrollViewPanResponder
+      disableScrollViewPanResponder={disableScrollViewPanResponder}
       keyboardDismissMode={keyboardDismissMode}
       keyboardShouldPersistTaps={keyboardShouldPersistTaps}
       showsVerticalScrollIndicator={false}
     >
       <View
         onResponderTerminationRequest={() => true}
-        onStartShouldSetResponder={() => true}
+        onStartShouldSetResponder={() => disableScrollViewPanResponder}
         style={[styles.scrollGestureSurface, contentContainerStyle]}
       >
         {children}
@@ -71,7 +73,7 @@ export function BottomActionSheetScrollView({
   );
 }
 
-export function BottomActionSheet({ children, footer, onClose, title, visible }: BottomActionSheetProps) {
+export function BottomActionSheet({ children, dragFromHandleOnly = false, footer, onClose, title, visible }: BottomActionSheetProps) {
   const progress = useRef(new Animated.Value(0)).current;
   const dragY = useRef(new Animated.Value(0)).current;
   const isClosing = useRef(false);
@@ -189,7 +191,7 @@ export function BottomActionSheet({ children, footer, onClose, title, visible }:
           <Pressable accessibilityLabel="Close sheet" accessibilityRole="button" onPress={requestClose} style={StyleSheet.absoluteFill} />
         </Animated.View>
         <Animated.View
-          {...panResponder.panHandlers}
+          {...(dragFromHandleOnly ? {} : panResponder.panHandlers)}
           accessibilityViewIsModal
           style={[
             styles.sheet,
@@ -202,7 +204,7 @@ export function BottomActionSheet({ children, footer, onClose, title, visible }:
         >
           <View style={[styles.keyboardFrame, { bottom: keyboardInset }]}>
             <SafeAreaView edges={keyboardInset > 0 ? [] : ['bottom']} style={styles.safeContent}>
-              <View>
+              <View {...(dragFromHandleOnly ? panResponder.panHandlers : {})}>
                 <View style={styles.handle} />
                 <View style={styles.header}>
                   <Text accessibilityRole="header" style={styles.title}>{title}</Text>

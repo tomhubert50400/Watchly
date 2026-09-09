@@ -27,13 +27,13 @@ assert.equal(shouldDismissBottomSheet(24, 1), true, 'a quick downward flick must
 assert.equal(shouldDismissBottomSheet(72, 0.4), false, 'a short slow drag must snap back');
 assert.match(
   sheetSource,
-  /<Animated\.View\s+\{\.\.\.panResponder\.panHandlers\}\s+accessibilityViewIsModal/,
-  'the entire sheet must own the drag responder',
+  /<Animated\.View\s+\{\.\.\.\(dragFromHandleOnly \? \{\} : panResponder\.panHandlers\)\}/,
+  'the body must yield gestures when dragging is restricted to the header',
 );
-assert.doesNotMatch(
+assert.match(
   sheetSource,
-  /<View \{\.\.\.panResponder\.panHandlers\}>/,
-  'drag handling must not be limited to the header content',
+  /<View \{\.\.\.\(dragFromHandleOnly \? panResponder\.panHandlers : \{\}\)\}>/,
+  'the header must retain dismissal when body gestures are reserved for controls',
 );
 assert.match(
   sheetSource,
@@ -47,9 +47,13 @@ assert.match(
 );
 assert.match(
   sheetSource,
-  /onResponderTerminationRequest=\{\(\) => true\}[\s\S]*onStartShouldSetResponder=\{\(\) => true\}/,
-  'passive sheet content must let the parent capture swipe-down gestures',
+  /onResponderTerminationRequest=\{\(\) => true\}[\s\S]*onStartShouldSetResponder=\{\(\) => disableScrollViewPanResponder\}/,
+  'native scrolling must be able to opt out of the passive gesture surface',
 );
+assert.match(sheetSource, /dragFromHandleOnly = false/, 'other sheets retain full-surface dragging by default');
+const historySource = readFileSync(new URL('../viewings/ViewingHistorySheet.tsx', import.meta.url), 'utf8');
+assert.match(historySource, /<BottomActionSheet dragFromHandleOnly/, 'the year wheel must not drag the sheet');
+assert.match(historySource, /scrollEnabled=\{!monthPickerOpen\}/, 'the outer content must not scroll while the wheel is open');
 
 for (const file of scrollableSheetFiles) {
   const source = readFileSync(new URL(file, import.meta.url), 'utf8');

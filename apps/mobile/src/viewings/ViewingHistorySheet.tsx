@@ -64,10 +64,10 @@ export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) 
     setCalendarOpen(true);
   }
 
-  return <BottomActionSheet onClose={onClose} title="My viewings" visible footer={
+  return <BottomActionSheet dragFromHandleOnly onClose={onClose} title="My viewings" visible footer={
     calendarOpen ? undefined : <Button disabled={!countText || Boolean(error) || Number(countText) !== entries.length} label={`Save ${entries.length} ${entries.length === 1 ? 'viewing' : 'viewings'}`} onPress={() => onSave(entries)} />
   }>
-    <BottomActionSheetScrollView contentContainerStyle={styles.content}>
+    <BottomActionSheetScrollView disableScrollViewPanResponder={false} scrollEnabled={!monthPickerOpen} contentContainerStyle={styles.content}>
       {title ? <Text style={styles.title}>{title}</Text> : null}
       {!calendarOpen ? <>
       <View style={styles.totalRow}>
@@ -153,7 +153,7 @@ function YearWheel({ year, maxYear, onChange }: { year: number; maxYear: number;
     accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
     onAccessibilityAction={event => selectYear(year + (event.nativeEvent.actionName === 'increment' ? 1 : -1))}>
     <View pointerEvents="none" style={styles.yearSelection} />
-    <ScrollView ref={scrollRef} nestedScrollEnabled showsVerticalScrollIndicator={false}
+    <ScrollView ref={scrollRef} nestedScrollEnabled bounces={false} showsVerticalScrollIndicator={false}
       snapToInterval={rowHeight} decelerationRate="fast" scrollEventThrottle={16}
       contentContainerStyle={{ paddingVertical: rowHeight }}
       onLayout={() => scrollRef.current?.scrollTo({ y: (initialYear.current - 1900) * rowHeight, animated: false })}
