@@ -19,6 +19,7 @@ assert.match(discoverSource, /<TextInput[\s\S]*?onChangeText=\{setQuery\}/, 'Dis
 assert.match(discoverSource, /isSearching \? <DiscoverSearchResults/, 'Discover must display search results inline');
 assert.doesNotMatch(discoverSource, /navigate\('CatalogueSearch'/, 'search must not push a separate screen');
 assert.doesNotMatch(appSource, /name="CatalogueSearch"/, 'the obsolete Search route must not remain registered');
+assert.match(discoverSource, /refreshControl=\{<RefreshControl/, 'the native scroll content must stay mounted when search starts, preserving input focus');
 const episodeDetailSource = readFileSync(new URL('EpisodeDetailScreen.tsx', import.meta.url), 'utf8');
 const catalogueDetailSectionsSource = readFileSync(new URL('CatalogueDetailSections.tsx', import.meta.url), 'utf8');
 const detailFactsSource = readFileSync(new URL('DetailFacts.tsx', import.meta.url), 'utf8');

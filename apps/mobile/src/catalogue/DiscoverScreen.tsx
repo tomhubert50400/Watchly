@@ -87,7 +87,7 @@ export function DiscoverScreen({ isActive = true }: { isActive?: boolean }) {
   const moodLabel = discoverMoods.find(item => item.id === mood)?.label;
   return <>
     <Screen title="Discover" tabBarPadding nativeKeyboardInsetsOnly background={<SpotlightAtmosphere imageUrl={items[0]?.posterUrl ?? null} />}
-      refreshControl={isSearching ? undefined : <RefreshControl refreshing={resource.isRefreshing || collections.isRefreshing} onRefresh={refresh} tintColor={colors.accent} />}
+      refreshControl={<RefreshControl refreshing={!isSearching && (resource.isRefreshing || collections.isRefreshing)} onRefresh={isSearching ? undefined : refresh} tintColor={colors.accent} />}
       trailing={<Pressable accessibilityLabel={moodLabel ? `Mood: ${moodLabel}. Change mood` : 'Choose a mood'} accessibilityRole="button" onPress={() => setShowMood(true)} style={[styles.moodButton, mood && styles.moodSelected]}><SlidersHorizontal size={17} color={mood ? colors.accentText : colors.textMuted} /><Text style={styles.moodText}>Mood</Text>{mood ? <View style={styles.moodDot} /> : null}</Pressable>}
     >
       <View style={styles.content}>
