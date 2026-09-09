@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react-native';
+import { CalendarDays, ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react-native';
 import { randomUUID } from 'expo-crypto';
 import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { ViewingHistoryDate, ViewingHistoryItem } from '../api/viewings';
@@ -84,7 +84,7 @@ export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) 
           <Text style={styles.selectedText}>{showAll ? 'Show less' : `Show all ${entries.length}`}</Text>
         </Pressable> : null}
       </View>
-      <ScrollView ref={viewingListRef} nestedScrollEnabled style={styles.viewingList} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={viewingListRef} nestedScrollEnabled showsVerticalScrollIndicator={showAll} style={styles.viewingList} contentContainerStyle={styles.viewingCards} keyboardShouldPersistTaps="handled">
         {visibleEntries.map((entry, visibleIndex) => {
           const index = firstVisibleIndex + visibleIndex;
           const selected = entry.id === selectedEntry.id;
@@ -92,9 +92,12 @@ export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) 
           const label = date === today ? 'Today' : formatDate(date);
           return <Pressable key={entry.id} accessibilityRole="button" accessibilityLabel={`Edit viewing ${index + 1}, ${label}`} accessibilityState={{ selected }}
             onPress={() => selectViewing(entry)}
-            style={[styles.dateRow, selected && styles.selected]}>
-            <Text style={styles.dateLabel}>Viewing {index + 1}</Text>
-            <Text style={selected ? styles.selectedText : styles.muted}>{label}</Text>
+            style={({ pressed }) => [styles.dateRow, selected && styles.dateRowSelected, pressed && styles.selected]}>
+            <View style={styles.numberBadge}><Text style={styles.numberText}>{index + 1}</Text></View>
+            <View style={styles.dateCopy}>
+              <Text style={styles.dateLabel}>Viewing {index + 1}</Text>
+              <View style={styles.dateValueRow}><CalendarDays color={colors.accentText} size={14} /><Text style={styles.dateValue}>{label}</Text></View>
+            </View>
             <ChevronRight color={selected ? colors.accentText : colors.textMuted} size={16} />
           </Pressable>;
         })}
@@ -123,9 +126,9 @@ export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) 
           if (!date) return <View key={`blank:${index}`} style={styles.cell} />;
           const selected = (selectedEntry.watchedDate ?? today) === date;
           const disabled = date > today;
-          return <Pressable accessibilityLabel={formatDate(date)} accessibilityRole="button" accessibilityState={{ disabled, selected }} disabled={disabled} key={date} onPress={() => { setEntries(current => setViewingDate(current, selectedEntry.id, date)); setCalendarOpen(false); }} style={[styles.cell, selected && styles.selected, disabled && styles.disabled]}>
-            <Text style={[styles.day, selected && styles.selectedText]}>{Number(date.slice(8))}</Text>
-            {date === today ? <View style={styles.todayDot} /> : null}
+          return <Pressable accessibilityLabel={formatDate(date)} accessibilityRole="button" accessibilityState={{ disabled, selected }} disabled={disabled} key={date} onPress={() => { setEntries(current => setViewingDate(current, selectedEntry.id, date)); setCalendarOpen(false); }} style={[styles.cell, selected && styles.selectedDay, disabled && styles.disabled]}>
+            <Text style={[styles.day, selected && styles.selectedDayText]}>{Number(date.slice(8))}</Text>
+            {date === today && !selected ? <View style={styles.todayDot} /> : null}
           </Pressable>;
         })}</View>
       </View>}
@@ -173,28 +176,37 @@ function formatDate(date: string, options: Intl.DateTimeFormatOptions = { day: '
 const styles = StyleSheet.create({
   content: { paddingBottom: spacing.md },
   title: { color: colors.textSubtle, fontSize: 12, fontWeight: '700', marginBottom: spacing.lg, textTransform: 'uppercase' },
-  totalRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: colors.border, paddingBottom: spacing.lg, gap: spacing.sm },
+  totalRow: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', borderWidth: 1, borderColor: colors.accentBorder, backgroundColor: colors.accentSoft, borderRadius: radii.lg, padding: spacing.md, gap: spacing.sm },
   label: { color: colors.text, fontSize: 14, fontWeight: '600' },
   muted: { color: colors.textMuted, fontSize: 14 },
   stepper: { flexDirection: 'row', alignItems: 'center', borderRadius: radii.md, backgroundColor: colors.panelElevated },
-  count: { width: 42, padding: 0, textAlign: 'center', fontSize: 21, fontWeight: '700', color: colors.text, minHeight: touchTargets.min },
+  count: { width: 58, padding: 0, textAlign: 'center', fontSize: 28, fontWeight: '800', color: colors.accentText, minHeight: 52 },
   iconButton: { width: touchTargets.min, minHeight: touchTargets.min, alignItems: 'center', justifyContent: 'center' },
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: spacing.md },
-  monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
+  monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm, backgroundColor: colors.panelElevated, borderRadius: radii.lg, paddingVertical: spacing.xs },
   monthButton: { flex: 1, minHeight: touchTargets.min, alignItems: 'center', justifyContent: 'center' },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   weekday: { width: '14.285714%', textAlign: 'center', color: colors.textSubtle, fontSize: 11, paddingVertical: spacing.sm },
   cell: { width: '14.285714%', minHeight: touchTargets.min, alignItems: 'center', justifyContent: 'center', borderRadius: 24 },
   day: { color: colors.text, fontSize: 14 },
   selected: { backgroundColor: colors.accentSoft },
+  selectedDay: { backgroundColor: colors.accent },
+  selectedDayText: { color: '#FFFFFF', fontWeight: '800' },
   selectedText: { color: colors.accentText, fontWeight: '800' },
   todayDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.accentText, position: 'absolute', bottom: 4 },
   disabled: { opacity: 0.3 },
-  viewingList: { maxHeight: 168 },
+  viewingList: { maxHeight: 252 },
+  viewingCards: { gap: spacing.sm },
   showAllButton: { minHeight: touchTargets.min, justifyContent: 'center', paddingHorizontal: spacing.sm },
   backButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: touchTargets.min },
-  dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: colors.border, minHeight: touchTargets.min, paddingHorizontal: spacing.sm, gap: spacing.sm, borderRadius: radii.sm },
-  dateLabel: { flex: 1, color: colors.text, fontSize: 13 },
+  dateRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panelElevated, minHeight: 72, padding: spacing.sm, gap: spacing.md, borderRadius: radii.lg },
+  dateRowSelected: { borderColor: colors.accentBorder },
+  numberBadge: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' },
+  numberText: { color: colors.accentText, fontSize: 14, fontWeight: '800' },
+  dateCopy: { flex: 1, minWidth: 0, gap: 5 },
+  dateLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '600' },
+  dateValueRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  dateValue: { color: colors.text, fontSize: 15, fontWeight: '700', flexShrink: 1 },
   yearWheel: { height: 132, width: 140, alignSelf: 'center', overflow: 'hidden' },
   yearSelection: { position: 'absolute', top: 44, left: 0, right: 0, height: 44, borderRadius: radii.sm, backgroundColor: colors.accentSoft },
   yearRow: { height: 44, alignItems: 'center', justifyContent: 'center' },
