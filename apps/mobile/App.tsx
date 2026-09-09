@@ -137,6 +137,7 @@ function NativeMainTabs() {
             type: 'sfSymbol',
           }),
           tabBarLabel: config?.label ?? route.name,
+          tabBarLabelStyle: { fontSize: 10 },
         };
       }}
     >
@@ -164,7 +165,7 @@ function FallbackMainTabs() {
           tabBarActiveTintColor: colors.accent,
           tabBarBackground: () => <FallbackTabBarBackground />,
           tabBarHideOnKeyboard: true,
-          tabBarIcon: ({ color, size }) => <Icon color={color} size={size} strokeWidth={2} />,
+          tabBarIcon: ({ color, size }) => <Icon color={color} size={size - 2} strokeWidth={2} />,
           tabBarInactiveTintColor: colors.muted,
           tabBarItemStyle: styles.tabBarItem,
           tabBarLabel: config?.label ?? route.name,
@@ -356,7 +357,7 @@ const styles = StyleSheet.create({
     minHeight: 58,
   },
   tabBarLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
     letterSpacing: 0,
     lineHeight: 12,
