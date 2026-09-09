@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { History, RotateCcw } from 'lucide-react-native';
-import { randomUUID } from 'expo-crypto';
+import { CalendarDays, History, RotateCcw } from 'lucide-react-native';
 import {
   EpisodeViewingSummary,
   getEpisodeViewingSummary,
@@ -25,7 +24,7 @@ import { hapticError } from '../feedback/haptics';
 import { useToast } from '../notifications/ToastContext';
 import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
 import { ViewingHistorySheet } from './ViewingHistorySheet';
-import { localViewingDay, resolveHistoryDraft, toHistoryDraft } from './viewingHistoryModel';
+import { localViewingDay, resolveHistoryDraft } from './viewingHistoryModel';
 import { getViewingHistoryUpdates, setViewingHistoryUpdate, viewingTargetKey } from './viewingHistoryUpdates';
 
 type Props = {
@@ -55,6 +54,7 @@ export function ViewingCountControl(props: Props) {
   const { showToast } = useToast();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [editorHistory, setEditorHistory] = useState<ViewingHistoryItem[] | null>(null);
+  const [addViewing, setAddViewing] = useState(false);
   const [summaryScope, setSummaryScope] = useState('');
   const lastConfirmedSummaryRef = useRef<Summary | null>(null);
   const mutationQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -113,8 +113,9 @@ export function ViewingCountControl(props: Props) {
 
   useEffect(() => { setEditorHistory(null); }, [requestScope]);
 
-  async function openHistory() {
+  async function openHistory(appendViewing = false) {
     if (props.contentType === 'series') return;
+    setAddViewing(appendViewing);
     const current = summaryRef.current;
     if (summaryScope === requestScope && current && 'history' in current && current.history) {
       setEditorHistory(current.history);
@@ -180,12 +181,6 @@ export function ViewingCountControl(props: Props) {
     mutationQueueRef.current = queuedMutation.catch(() => undefined);
   }
 
-  async function logAnotherWatch() {
-    const currentSummary = summaryRef.current;
-    if (!currentSummary || !('history' in currentSummary) || !currentSummary.history) { await openHistory(); return; }
-    saveHistory([...toHistoryDraft(currentSummary.history), { id: randomUUID(), watchedDate: localViewingDay() }], currentSummary.history);
-  }
-
   if (!firebaseIdToken) {
     return null;
   }
@@ -193,7 +188,7 @@ export function ViewingCountControl(props: Props) {
   const viewCount = summaryScope === requestScope && summary && 'viewCount' in summary ? summary.viewCount : 0;
   const canLogAgain = props.contentType !== 'series' && viewCount > 0 && viewCount < 1000;
   const editorTitle = props.contentType === 'episode' ? `${props.title ?? ''} · S${props.seasonNumber} E${props.episodeNumber}` : props.title;
-  const editor = editorHistory !== null ? <ViewingHistorySheet history={editorHistory} onClose={() => { setEditorHistory(null); props.onEditorClose?.(); }} onSave={saveHistory} title={editorTitle} /> : null;
+  const editor = editorHistory !== null ? <ViewingHistorySheet addViewing={addViewing} history={editorHistory} onClose={() => { setEditorHistory(null); props.onEditorClose?.(); }} onSave={saveHistory} title={editorTitle} /> : null;
 
   if (props.variant === 'editor') return editor;
 
@@ -225,12 +220,13 @@ export function ViewingCountControl(props: Props) {
         <Text accessibilityLiveRegion="polite" style={styles.value}>
           {formatSummary(props, summaryScope === requestScope ? summary : null)}
         </Text>
+        {props.contentType !== 'series' ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}><CalendarDays color={colors.accentText} size={14} /><Text style={styles.rewatchLabel}>Edit dates</Text></View> : null}
       </Pressable>
       {canLogAgain ? (
         <Pressable
           accessibilityLabel="Log another watch"
           accessibilityRole="button"
-          onPress={() => void logAnotherWatch()}
+          onPress={() => void openHistory(true)}
           style={({ pressed }) => [
             styles.rewatchButton,
             pressed ? styles.rewatchButtonPressed : null,

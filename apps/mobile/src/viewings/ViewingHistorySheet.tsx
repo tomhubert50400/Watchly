@@ -9,16 +9,20 @@ import { colors, radii, spacing, touchTargets } from '../design/tokens';
 import { localViewingDay, resizeHistoryDraft, setHistoryDay, toHistoryDraft, viewingCalendarDays } from './viewingHistoryModel';
 
 type Props = {
+  addViewing?: boolean;
   history: ViewingHistoryItem[];
   title?: string;
   onClose: () => void;
   onSave: (entries: ViewingHistoryDate[]) => void;
 };
 
-export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) {
+export function ViewingHistorySheet({ addViewing = false, history, title, onClose, onSave }: Props) {
   const today = localViewingDay();
-  const [entries, setEntries] = useState(() => history.length ? toHistoryDraft(history) : [{ id: randomUUID(), watchedDate: null }]);
-  const [countText, setCountText] = useState(String(Math.max(1, history.length)));
+  const [entries, setEntries] = useState(() => {
+    const existing = toHistoryDraft(history);
+    return addViewing || !existing.length ? [...existing, { id: randomUUID(), watchedDate: null }] : existing;
+  });
+  const [countText, setCountText] = useState(String(entries.length));
   const [month, setMonth] = useState(today.slice(0, 7));
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [yearText, setYearText] = useState(today.slice(0, 4));
