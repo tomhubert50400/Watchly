@@ -20,6 +20,11 @@ async function run() {
   const transactionClient = {
     dataImport: {
       findMany: async () => [],
+      findFirst: async ({ where }: { where: { userId: string; background: boolean } }): Promise<{ id: string } | null> => {
+        assert.equal(where.userId, 'viewer-id');
+        assert.equal(where.background, true);
+        return null;
+      },
     },
     user: {
       findUniqueOrThrow: async () => ({
@@ -73,9 +78,13 @@ async function run() {
       })),
     }),
     (error: unknown) => error instanceof BadRequestException
-      && error.message === 'Choose up to 5 movies and 5 TV shows, or complete an import.',
+      && error.message === 'Choose up to 5 movies and 5 TV shows, or start an import.',
     'onboarding must reject more than five selections from one media type',
   );
+
+  await assert.rejects(service.completeOnboarding(identity, {
+    displayName: 'Handle tester', handle: '@Cinema_Fan', tasteItems: [],
+  }), /or start an import/, 'an analysis alone must not bypass taste selection');
 
   assert.deepEqual(await service.completeOnboarding(identity, {
     displayName: 'Handle tester',
@@ -88,6 +97,14 @@ async function run() {
     onboardingCompleted: true,
   });
   assert.equal(storedUser.handle, 'cinema_fan', 'handles must be stored without @ and lowercase');
+  storedUser.onboardingCompleted = false;
+  transactionClient.dataImport.findFirst = async ({ where }) => {
+    assert.equal(where.userId, 'viewer-id');
+    assert.equal(where.background, true);
+    return { id: 'authorized-background-import' };
+  };
+  await service.completeOnboarding(identity, { displayName: 'Handle tester', handle: 'cinema_fan', tasteItems: [] });
+  assert.equal(storedUser.onboardingCompleted, true, 'a started background import must let onboarding finish without manual picks');
   assert.deepEqual(await service.getHandleAvailability(identity, '@Cinema_Fan'), {
     available: true,
     handle: 'cinema_fan',

@@ -777,12 +777,16 @@ export class ProfileService {
             const importAddedTitles = completedImports.some((item) =>
               getCompletedImportTitleCount(item.preview) > 0
             );
+            const backgroundImport = !importAddedTitles && tasteItems.length === 0
+              ? await tx.dataImport.findFirst({ where: { userId, background: true }, select: { id: true } })
+              : null;
 
             const tasteMovieCount = tasteItems.filter((item) => item.contentType === 'movie').length;
             const tasteSeriesCount = tasteItems.length - tasteMovieCount;
 
             if (
               !importAddedTitles
+              && !backgroundImport
               && (
                 tasteItems.length < 1
                 || tasteItems.length > 10
@@ -791,7 +795,7 @@ export class ProfileService {
               )
             ) {
               throw new BadRequestException(
-                'Choose up to 5 movies and 5 TV shows, or complete an import.',
+                'Choose up to 5 movies and 5 TV shows, or start an import.',
               );
             }
 
