@@ -71,14 +71,34 @@ export function BackgroundImportCards({ refreshKey = 0, onReview }: {
 
   if (!currentUser || jobs?.userId !== currentUser.id) return null;
   return <>
-    {jobs?.items.map((job) => <View key={job.importId} style={styles.card}>
+    {jobs?.items.map((job) => {
+      const percent = job.status === 'completed' ? 100 : job.total > 0
+        ? Math.min(100, Math.max(0, Math.floor(job.processed / job.total * 100))) : 0;
+      const step = job.phase === 'matching' ? 'Step 1 of 2 · Matching titles' : 'Step 2 of 2 · Importing titles';
+      return <View key={job.importId} style={styles.card}>
       <Text accessibilityRole="header" style={styles.title}>
         {job.status === 'completed' ? 'Import complete' : job.status === 'failed' ? 'Import paused' : 'Import in progress'}
       </Text>
       <Text numberOfLines={1} style={styles.body}>{job.fileName}</Text>
+      <View style={styles.progressHeading}>
+        <Text style={styles.progressLabel}>{job.status === 'completed' ? 'Completed' : step}</Text>
+        <Text style={styles.progressPercent}>{percent}%</Text>
+      </View>
+      <View
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel={job.status === 'completed' ? 'Import complete' : `${step}${job.status === 'failed' ? ', paused' : ''}`}
+        accessibilityValue={{ min: 0, max: 100, now: percent, text: `${job.processed} of ${job.total} titles` }}
+        style={styles.progressTrack}
+      >
+        <View style={[styles.progressFill, { width: `${percent}%`,
+          backgroundColor: job.status === 'completed' ? colors.success : job.status === 'failed' ? colors.danger : colors.accent,
+        }]} />
+      </View>
+      <Text style={styles.progressCount}>{job.processed} / {job.total} titles</Text>
       <Text accessibilityLiveRegion="polite" style={styles.body}>
         {job.status === 'processing'
-          ? `${job.phase === 'matching' ? 'Matching' : 'Importing'} titles: ${job.processed} / ${job.total}. You can keep using Watchly or close the app.`
+          ? 'You can keep using Watchly or close the app.'
           : job.status === 'failed'
             ? 'Your progress is saved. Retry to continue the import.'
             : `${job.result?.titlesProcessed ?? 0} titles imported.${job.needsAttention ? ` ${job.needsAttention} titles need review.` : ''}`}
@@ -86,7 +106,8 @@ export function BackgroundImportCards({ refreshKey = 0, onReview }: {
       {job.status === 'failed' ? <Button label="Retry import" loading={busyId === job.importId} onPress={() => void action(job, 'retry')} /> : null}
       {job.status === 'completed' && job.needsAttention > 0 ? <Button label="Review titles" disabled={busyId !== null} onPress={() => void action(job, 'review')} /> : null}
       {job.status === 'completed' ? <Button label="Dismiss" variant="secondary" disabled={busyId !== null} onPress={() => void action(job, 'dismiss')} /> : null}
-    </View>)}
+    </View>;
+    })}
     {error ? <Text style={styles.error}>{error}</Text> : null}
   </>;
 }
@@ -95,5 +116,11 @@ const styles = StyleSheet.create({
   card: { padding: spacing.lg, gap: spacing.sm, borderRadius: radii.lg, backgroundColor: colors.panel },
   title: { ...typography.title, color: colors.text },
   body: { ...typography.body, color: colors.textMuted },
+  progressHeading: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  progressLabel: { ...typography.meta, color: colors.textMuted, flex: 1 },
+  progressPercent: { ...typography.meta, color: colors.text, fontVariant: ['tabular-nums'] },
+  progressTrack: { height: 6, borderRadius: radii.xs, overflow: 'hidden', backgroundColor: colors.border },
+  progressFill: { height: '100%', borderRadius: radii.xs },
+  progressCount: { ...typography.meta, color: colors.textMuted, fontVariant: ['tabular-nums'] },
   error: { ...typography.body, color: colors.danger },
 });

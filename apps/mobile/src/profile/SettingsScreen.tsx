@@ -60,6 +60,7 @@ import { TextInput } from '../components/TextInput';
 import { UserAvatar } from '../components/UserAvatar';
 import { colors, radii, shadows, spacing, touchTargets, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
+import { BackgroundImportCards } from '../imports/BackgroundImportCards';
 import type { LegalDocumentId } from '../legal/legalDocuments';
 import type { RootStackParamList } from '../navigation/types';
 import { clearOnboardingDraft } from '../onboarding/onboardingDraft';
@@ -834,6 +835,7 @@ export function SettingsScreen() {
             subtitle="Bring your history in, take a copy with you, or remove your account."
             title="Your data"
           >
+            <BackgroundImportCards />
             <View style={styles.group}>
               <SettingsActionRow
                 body="Bring ratings, reviews, and viewing history from other services."
