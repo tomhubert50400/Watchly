@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react-native';
 import { randomUUID } from 'expo-crypto';
 import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -25,14 +25,7 @@ export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) 
   const [selectedId, setSelectedId] = useState(entries[0]!.id);
   const selectedEntry = entries.find(entry => entry.id === selectedId) ?? entries[0]!;
   const selectedIndex = entries.indexOf(selectedEntry);
-  const [showAll, setShowAll] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const firstVisibleIndex = showAll ? 0 : Math.max(0, Math.min(selectedIndex - 1, entries.length - 3));
-  const visibleEntries = showAll ? entries : entries.slice(firstVisibleIndex, firstVisibleIndex + 3);
-  const viewingListRef = useRef<ScrollView>(null);
-  useEffect(() => {
-    if (!showAll) viewingListRef.current?.scrollTo({ y: 0, animated: false });
-  }, [showAll, firstVisibleIndex]);
   const [month, setMonth] = useState((selectedEntry.watchedDate ?? today).slice(0, 7));
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [yearText, setYearText] = useState(today.slice(0, 4));
@@ -80,13 +73,9 @@ export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) 
       </View>
       <View style={styles.sectionRow}>
         <Text style={styles.label}>Viewing dates</Text>
-        {entries.length > 3 ? <Pressable accessibilityRole="button" accessibilityState={{ expanded: showAll }} onPress={() => setShowAll(value => !value)} style={styles.showAllButton}>
-          <Text style={styles.selectedText}>{showAll ? 'Show less' : `Show all ${entries.length}`}</Text>
-        </Pressable> : null}
       </View>
-      <ScrollView ref={viewingListRef} nestedScrollEnabled showsVerticalScrollIndicator={showAll} style={styles.viewingList} contentContainerStyle={styles.viewingCards} keyboardShouldPersistTaps="handled">
-        {visibleEntries.map((entry, visibleIndex) => {
-          const index = firstVisibleIndex + visibleIndex;
+      <View style={styles.viewingCards}>
+        {entries.map((entry, index) => {
           const selected = entry.id === selectedEntry.id;
           const date = entry.watchedDate ?? today;
           const label = date === today ? 'Today' : formatDate(date);
@@ -101,7 +90,7 @@ export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) 
             <ChevronRight color={selected ? colors.accentText : colors.textMuted} size={16} />
           </Pressable>;
         })}
-      </ScrollView>
+      </View>
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
       </> : <>
       <View style={styles.sectionRow}>
@@ -195,9 +184,7 @@ const styles = StyleSheet.create({
   selectedText: { color: colors.accentText, fontWeight: '800' },
   todayDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.accentText, position: 'absolute', bottom: 4 },
   disabled: { opacity: 0.3 },
-  viewingList: { maxHeight: 252 },
   viewingCards: { gap: spacing.sm },
-  showAllButton: { minHeight: touchTargets.min, justifyContent: 'center', paddingHorizontal: spacing.sm },
   backButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: touchTargets.min },
   dateRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panelElevated, minHeight: 72, padding: spacing.sm, gap: spacing.md, borderRadius: radii.lg },
   dateRowSelected: { borderColor: colors.accentBorder },
