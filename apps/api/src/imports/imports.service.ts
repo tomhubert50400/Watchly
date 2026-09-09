@@ -63,6 +63,8 @@ type ImportResult = {
 };
 
 type StoredImportPreview = {
+  pendingItems?: ParsedImportItem[];
+  committedCount?: number;
   fileName: string;
   ignoredFileCount: number;
   items: PreparedImportItem[];
@@ -90,13 +92,14 @@ export class ImportsService {
     identity: AuthenticatedIdentity,
     source: ImportSourceValue,
     file: ImportUpload,
+    batched = false,
   ) {
     if (!file) {
       throw new BadRequestException('Choose an export file to continue.');
     }
 
     if (file.size > MAX_IMPORT_FILE_BYTES) {
-      throw new BadRequestException('The import file must be 5 MB or smaller.');
+      throw new BadRequestException('The import file must be 25 MB or smaller.');
     }
 
     const user = await this.authService.getOrCreateUser(identity);
@@ -111,11 +114,12 @@ export class ImportsService {
     );
     const parsed = parseImportFile(source, file.originalname, file.buffer);
     const items = await mapWithConcurrency(
-      parsed.items,
+      batched ? [] : parsed.items,
       MATCH_CONCURRENCY,
       (item) => this.prepareItem(item),
     );
     const preview: StoredImportPreview = {
+      ...(batched ? { pendingItems: parsed.items } : {}),
       fileName: basename(file.originalname).slice(0, 255),
       ignoredFileCount: parsed.ignoredFileCount,
       items,
@@ -137,7 +141,41 @@ export class ImportsService {
     return toPublicPreview(record.id, preview);
   }
 
-  async confirm(identity: AuthenticatedIdentity, importId: string) {
+  async prepareBatch(identity: AuthenticatedIdentity, importId: string) {
+    assertUuid(importId);
+    const user = await this.authService.getOrCreateUser(identity);
+    const record = await this.prisma.withConnectionRetry(() => this.prisma.dataImport.findFirst({
+      where: { id: importId, userId: user.id, status: DataImportStatus.PREVIEWED },
+    }));
+    if (!record) throw new NotFoundException('Import preview not found.');
+    if (record.createdAt.getTime() < Date.now() - IMPORT_PREVIEW_TTL_MS) {
+      throw new BadRequestException('This import preview expired. Choose the file again.');
+    }
+    const preview = readStoredPreview(record.preview);
+    const pending = preview.pendingItems ?? [];
+    if (pending.length === 0) return toPublicPreview(record.id, preview);
+    const prepared = await mapWithConcurrency(pending.slice(0, IMPORT_BATCH_SIZE), MATCH_CONCURRENCY,
+      (item) => this.prepareItem(item));
+    const items = [...preview.items, ...prepared];
+    const next: StoredImportPreview = {
+      ...preview, items, pendingItems: pending.slice(prepared.length), summary: buildImportSummary(items),
+    };
+    const updated = await this.prisma.withConnectionRetry(() => this.prisma.dataImport.updateMany({
+      where: { id: record.id, userId: user.id, status: DataImportStatus.PREVIEWED,
+        preview: { equals: record.preview as Prisma.InputJsonValue } },
+      data: { preview: next as unknown as Prisma.InputJsonValue },
+    }));
+    if (updated.count !== 1) return this.getPreview(identity, importId);
+    return toPublicPreview(record.id, next);
+  }
+
+  async confirm(identity: AuthenticatedIdentity, importId: string, batched = false) {
+    let result = await this.confirmBatch(identity, importId);
+    while (!batched && !result.completed) result = await this.confirmBatch(identity, importId);
+    return result;
+  }
+
+  private async confirmBatch(identity: AuthenticatedIdentity, importId: string) {
     assertUuid(importId);
     const user = await this.authService.getOrCreateUser(identity);
     const record = await this.prisma.withConnectionRetry(() =>
@@ -156,33 +194,52 @@ export class ImportsService {
         throw new ConflictException('This import was already completed.');
       }
 
-      return { ...preview.result, alreadyCompleted: true };
+      return { ...preview.result, alreadyCompleted: true, completed: true };
     }
 
     if (record.createdAt.getTime() < Date.now() - IMPORT_PREVIEW_TTL_MS) {
       throw new BadRequestException('This import preview expired. Choose the file again.');
     }
 
+    if (preview.pendingItems?.length) {
+      throw new BadRequestException('Wait for all titles to be prepared before importing.');
+    }
+    const offset = preview.committedCount ?? 0;
+    const batch = preview.items.slice(offset, offset + IMPORT_BATCH_SIZE);
+    const committedCount = offset + batch.length;
+    const completed = committedCount === preview.items.length;
     return this.prisma.withConnectionRetry(() =>
       this.prisma.$transaction(async (transaction) => {
         const claim = await transaction.dataImport.updateMany({
-          data: { completedAt: new Date(), status: DataImportStatus.COMPLETED },
-          where: { id: record.id, status: DataImportStatus.PREVIEWED, userId: user.id },
+          data: { status: DataImportStatus.PREVIEWED },
+          where: { id: record.id, status: DataImportStatus.PREVIEWED, userId: user.id,
+            preview: { equals: record.preview as Prisma.InputJsonValue } },
         });
 
         if (claim.count !== 1) {
           throw new ConflictException('This import is already being completed.');
         }
 
-        const result = await commitPreparedItems(transaction, user.id, preview.items);
-        const completedPreview: StoredImportPreview = { ...preview, items: [], result };
+        const batchResult = await commitPreparedItems(transaction, user.id, batch);
+        const result: ImportResult = {
+          preservedExisting: (preview.result?.preservedExisting ?? 0) + batchResult.preservedExisting,
+          ratingsCreated: (preview.result?.ratingsCreated ?? 0) + batchResult.ratingsCreated,
+          reviewsCreated: (preview.result?.reviewsCreated ?? 0) + batchResult.reviewsCreated,
+          statesChanged: (preview.result?.statesChanged ?? 0) + batchResult.statesChanged,
+          titlesProcessed: (preview.result?.titlesProcessed ?? 0) + batchResult.titlesProcessed,
+          viewingEventsCreated: (preview.result?.viewingEventsCreated ?? 0) + batchResult.viewingEventsCreated,
+        };
+        const completedPreview: StoredImportPreview = {
+          ...preview, committedCount, items: completed ? [] : preview.items, result,
+        };
 
         await transaction.dataImport.update({
-          data: { preview: completedPreview as unknown as Prisma.InputJsonValue },
+          data: { preview: completedPreview as unknown as Prisma.InputJsonValue,
+            ...(completed ? { completedAt: new Date(), status: DataImportStatus.COMPLETED } : {}) },
           where: { id: record.id },
         });
 
-        return result;
+        return { ...result, completed };
       }, { timeout: 45_000 }),
     );
   }
@@ -226,6 +283,9 @@ export class ImportsService {
 
     const preview = readStoredPreview(record.preview);
     const item = preview.items[itemIndex];
+    if (preview.committedCount || preview.pendingItems?.length) {
+      throw new ConflictException('Titles cannot be changed while this import is processing.');
+    }
     if (!item) {
       throw new NotFoundException('Skipped import title not found.');
     }
@@ -244,7 +304,8 @@ export class ImportsService {
     const update = await this.prisma.withConnectionRetry(() =>
       this.prisma.dataImport.updateMany({
         data: { preview: updatedPreview as unknown as Prisma.InputJsonValue },
-        where: { id: record.id, status: DataImportStatus.PREVIEWED, userId: user.id },
+        where: { id: record.id, status: DataImportStatus.PREVIEWED, userId: user.id,
+          preview: { equals: record.preview as Prisma.InputJsonValue } },
       }),
     );
 
@@ -687,10 +748,11 @@ function buildImportSummary(items: PreparedImportItem[]): ImportSummary {
 
 function toPublicPreview(importId: string, preview: StoredImportPreview) {
   return {
+    preparation: { processed: preview.items.length, total: preview.items.length + (preview.pendingItems?.length ?? 0) },
     fileName: preview.fileName,
     ignoredFileCount: preview.ignoredFileCount,
     importId,
-    items: preview.items.map((item, itemIndex) => ({
+    items: (preview.pendingItems?.length ? [] : preview.items).map((item, itemIndex) => ({
       actions: {
         hasReview: item.review !== null && item.match?.contentType === 'movie',
         rating: item.rating,
@@ -814,6 +876,7 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-export const MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024;
+export const MAX_IMPORT_FILE_BYTES = 25 * 1024 * 1024;
 const MATCH_CONCURRENCY = 5;
+const IMPORT_BATCH_SIZE = 25;
 const IMPORT_PREVIEW_TTL_MS = 24 * 60 * 60 * 1000;

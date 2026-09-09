@@ -216,7 +216,106 @@ const renumbered = await service['prepareEpisodeProgress']({
 });
 assert.deepEqual(renumbered.episodes?.map((episode) => episode.episodeNumber), [2, 1], 'numbering mismatches must resolve all episodes by external ID, including plausible but wrong pairs');
 assert.equal(renumbered.watched, true);
+await verifyLargeImport(transaction);
 console.log('Imports service QA passed.');
+}
+
+async function verifyLargeImport(transaction: Prisma.TransactionClient) {
+  const id = 'b85d2207-6bd8-4ba1-8e9f-f727c86ad979';
+  type RecordValue = { id: string; userId: string; status: string; createdAt: Date; preview: Prisma.JsonValue };
+  let record: RecordValue;
+  let failCommit = false;
+  const dataImport = {
+    deleteMany: async () => ({ count: 0 }),
+    create: async ({ data }: { data: Omit<RecordValue, 'id' | 'createdAt' | 'status'> }) => {
+      record = { ...data, id, createdAt: new Date(), status: 'PREVIEWED' };
+      return structuredClone(record);
+    },
+    findFirst: async ({ where }: { where: { id: string; userId: string; status?: string } }) =>
+      where.id === record.id && where.userId === record.userId && (!where.status || where.status === record.status)
+        ? structuredClone(record) : null,
+    updateMany: async ({ where, data }: { where: { preview: { equals: unknown }; status: string }; data: Partial<RecordValue> }) => {
+      if (where.status !== record.status || JSON.stringify(where.preview.equals) !== JSON.stringify(record.preview)) return { count: 0 };
+      record = { ...record, ...structuredClone(data) };
+      return { count: 1 };
+    },
+    update: async ({ data }: { data: Partial<RecordValue> }) => {
+      if (failCommit) throw new Error('Simulated failed commit');
+      record = { ...record, ...structuredClone(data) };
+      return structuredClone(record);
+    },
+  };
+  const writtenIds = new Set<number>();
+  const batchTransaction = {
+    ...transaction, dataImport,
+    userContentState: {
+      findMany: async () => [],
+      create: async ({ data }: { data: { tmdbId: number } }) => {
+        assert.ok(!writtenIds.has(data.tmdbId), 'committed titles must never be replayed');
+        writtenIds.add(data.tmdbId);
+        return { ...data, id: String(data.tmdbId) };
+      },
+    },
+  };
+  const prisma = {
+    dataImport,
+    withConnectionRetry: async <T>(operation: () => Promise<T>) => operation(),
+    $transaction: async <T>(operation: (tx: typeof batchTransaction) => Promise<T>) => {
+      const before = structuredClone(record);
+      const beforeIds = [...writtenIds];
+      try { return await operation(batchTransaction); } catch (error) {
+        record = before;
+        writtenIds.clear();
+        beforeIds.forEach((value) => writtenIds.add(value));
+        throw error;
+      }
+    },
+  } as unknown as ConstructorParameters<typeof ImportsService>[2];
+  let active = 0;
+  let peak = 0;
+  let searches = 0;
+  const catalogue = { search: async (title: string) => {
+    searches += 1;
+    active += 1;
+    peak = Math.max(peak, active);
+    await new Promise((resolve) => setImmediate(resolve));
+    active -= 1;
+    return { items: [{ title, tmdbId: Number(title.split(' ')[1]), mediaType: 'movie', releaseDate: '2000-01-01', posterUrl: null }] };
+  } } as unknown as ConstructorParameters<typeof ImportsService>[1];
+  const auth = { getOrCreateUser: async () => ({ id: 'owner' }) } as unknown as ConstructorParameters<typeof ImportsService>[0];
+  const identity = {} as Parameters<ImportsService['preview']>[0];
+  const service = new ImportsService(auth, catalogue, prisma);
+  const csv = Buffer.from('Name,Year,Letterboxd URI\n' + Array.from({ length: 1001 }, (_, index) =>
+    `Movie ${index + 100},2000,https://boxd.it/test${index}`).join('\n'));
+  let preview = await service.preview(identity, 'letterboxd', { buffer: csv, originalname: 'watched.csv', size: csv.length }, true);
+  assert.equal(searches, 0, 'upload must return before catalogue lookups');
+  assert.equal(preview.preparation.total, 1001);
+  await assert.rejects(service.confirm(identity, id, true), /Wait for all titles/);
+  await Promise.all([service.prepareBatch(identity, id), service.prepareBatch(identity, id)]);
+  preview = await service.getPreview(identity, id);
+  assert.equal(preview.preparation.processed, 25, 'overlapping preparation requests must not append twice');
+  peak = 0;
+  while (preview.preparation.processed < preview.preparation.total) {
+    preview = await service.prepareBatch(identity, id);
+  }
+  assert.ok(peak <= 5, 'each batch must bound catalogue concurrency');
+  assert.equal(preview.items.length, 1001);
+  assert.equal(preview.summary.ready, 1001);
+  let result = await service.confirm(identity, id, true);
+  assert.equal(result.completed, false);
+  assert.equal(result.titlesProcessed, 25);
+  await assert.rejects(service.retry(identity, id, 0), /cannot be changed/);
+  failCommit = true;
+  await assert.rejects(service.confirm(identity, id, true), /Simulated failed commit/);
+  assert.equal(writtenIds.size, 25, 'failed batches must roll back');
+  failCommit = false;
+  const resumed = new ImportsService(auth, catalogue, prisma);
+  while (!result.completed) result = await resumed.confirm(identity, id, true);
+  assert.equal(result.titlesProcessed, 1001);
+  assert.equal(writtenIds.size, 1001);
+  assert.equal((await resumed.confirm(identity, id, true)).alreadyCompleted, true);
+  const foreignAuth = { getOrCreateUser: async () => ({ id: 'other-user' }) } as unknown as typeof auth;
+  await assert.rejects(new ImportsService(foreignAuth, catalogue, prisma).confirm(identity, id, true), /not found/);
 }
 
 void main();

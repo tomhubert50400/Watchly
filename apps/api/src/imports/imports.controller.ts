@@ -6,6 +6,7 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Query,
   Req,
   UnauthorizedException,
   UploadedFile,
@@ -31,8 +32,14 @@ export class ImportsController {
     @Req() request: AuthenticatedRequest,
     @Param('source') source: string,
     @UploadedFile() file: ImportUpload,
+    @Query('batch') batch?: string,
   ) {
-    return this.imports.preview(getIdentity(request), parseSource(source), file);
+    return this.imports.preview(getIdentity(request), parseSource(source), file, batch === 'true');
+  }
+
+  @Post(':importId/prepare')
+  prepare(@Req() request: AuthenticatedRequest, @Param('importId') importId: string) {
+    return this.imports.prepareBatch(getIdentity(request), importId);
   }
 
   @Get(':importId/preview')
@@ -56,8 +63,9 @@ export class ImportsController {
   confirm(
     @Req() request: AuthenticatedRequest,
     @Param('importId') importId: string,
+    @Query('batch') batch?: string,
   ) {
-    return this.imports.confirm(getIdentity(request), importId);
+    return this.imports.confirm(getIdentity(request), importId, batch === 'true');
   }
 }
 

@@ -128,3 +128,12 @@ for (const id of [10000000, 400317, 400318]) {
   assert.equal(item.episodes?.length ?? 0, 0, 'contradictory or uncorroborated rows must not create progress');
   assert.ok(item.identityIssue, 'unsafe rows must be blocked and reported in the preview');
 }
+const largeLibrary = Array.from({ length: 10_000 }, (_, index) =>
+  `2025-01-01,Movie ${index},2000,https://boxd.it/test${index}`);
+const largeCsv = `Date,Name,Year,Letterboxd URI\n${largeLibrary.join('\n')}`;
+const largeExport = parseImportFile('letterboxd', 'export.zip', Buffer.from(zipSync({
+  'watched.csv': strToU8(largeCsv),
+  'watchlist.csv': strToU8(largeCsv),
+})));
+assert.equal(largeExport.items.length, 10_000, 'large libraries must be retained and deduplicated across files');
+assert.ok(largeExport.items.every((item) => item.watched && !item.watchlisted), 'watched state must still take precedence over watchlist');

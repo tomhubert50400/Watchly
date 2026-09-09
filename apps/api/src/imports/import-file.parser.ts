@@ -54,12 +54,6 @@ export function parseImportFile(
     throw new BadRequestException(`No supported ${getSourceLabel(source)} rows were found.`);
   }
 
-  if (items.length > MAX_IMPORT_ITEMS) {
-    throw new BadRequestException(
-      `This file contains ${items.length} titles. Split it into files of ${MAX_IMPORT_ITEMS} titles or fewer.`,
-    );
-  }
-
   return { ignoredFileCount, items };
 }
 
@@ -652,11 +646,10 @@ function getSourceLabel(source: ImportSourceValue) {
   return source === 'imdb' ? 'IMDb' : 'Letterboxd';
 }
 const MAX_CSV_FILES = 20;
-const MAX_EXTRACTED_BYTES = 15 * 1024 * 1024;
+const MAX_EXTRACTED_BYTES = 100 * 1024 * 1024;
 const ZIP_CENTRAL_HEADER_BYTES = 46;
 const ZIP_CENTRAL_SIGNATURE = 0x02014b50;
 const ZIP_END_HEADER_BYTES = 22;
 const ZIP_END_SIGNATURE = 0x06054b50;
 const ZIP_MAX_END_SEARCH_BYTES = ZIP_END_HEADER_BYTES + 0xffff;
-export const MAX_IMPORT_ITEMS = 500;
 export const MAX_IMPORTED_REVIEW_LENGTH = 50_000;
