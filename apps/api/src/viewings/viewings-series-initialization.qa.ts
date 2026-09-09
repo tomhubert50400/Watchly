@@ -82,7 +82,59 @@ async function run() {
   assert.equal(viewingRows[0]?.watchedAt, null, 'onboarding episodes must not invent Journal dates');
   assert.deepEqual(initializedStateIds, ['series-state']);
 
+  await verifyImportedStatsLoading();
   console.log('Watched series initialization QA passed.');
+}
+
+async function verifyImportedStatsLoading() {
+  const rows = Array.from({ length: 25 }, (_, index) => ({
+    id: String(index), tmdbId: index + 1, contentType: 'MOVIE', seasonNumber: null, episodeNumber: null,
+    title: 'Imported movie', artworkUrl: null, runtimeMinutes: null as number | null, genres: [] as string[],
+    watchedAt: new Date('2024-01-01'), createdAt: new Date('2024-01-01'),
+  }));
+  let active = 0;
+  let peak = 0;
+  let calls = 0;
+  let unavailable = false;
+  const prisma = {
+    withConnectionRetry: async <T>(operation: () => Promise<T>) => operation(),
+    userContentState: { findMany: async () => [] },
+    userMovieRating: { findMany: async () => [] },
+    userEpisodeRating: { findMany: async () => [] },
+    userSeriesRating: { findMany: async () => [] },
+    viewingEvent: {
+      findMany: async ({ where }: { where: { OR?: unknown } }) => {
+        if (unavailable) throw new Error('Database unavailable');
+        return where.OR ? rows.filter((row) => row.runtimeMinutes === null) : rows;
+      },
+      updateMany: async ({ where, data }: { where: { tmdbId: number }; data: { runtimeMinutes: number; genres: string[] } }) => {
+        Object.assign(rows.find((row) => row.tmdbId === where.tmdbId)!, data);
+      },
+    },
+  };
+  const catalogue = { getMovie: async () => {
+    calls += 1;
+    active += 1;
+    peak = Math.max(peak, active);
+    await new Promise((resolve) => setTimeout(resolve, 1));
+    active -= 1;
+    return { item: { runtimeMinutes: 100, genres: ['Drama'], title: 'Imported movie', posterUrl: null, backdropUrl: null } };
+  } };
+  const service = new ViewingsService({} as never, prisma as never, catalogue as never);
+  const profile = service.getStatsForUser('owner');
+  const allTime = service.getStatsForUser('owner');
+  assert.equal(profile, allTime, 'concurrent profile and all-time requests must share the same calculation');
+  const stats = await profile;
+  assert.equal(stats.summary.movieCount, 25);
+  assert.equal(stats.summary.watchMinutes, 2500);
+  assert.equal(calls, 25);
+  assert.ok(peak <= 5, 'old imports must not flood the catalogue while filling missing runtimes');
+  await service.getStatsForUser('owner');
+  assert.equal(calls, 25, 'stored metadata must not need another catalogue lookup');
+  unavailable = true;
+  await assert.rejects(service.getStatsForUser('owner'), /Database unavailable/);
+  unavailable = false;
+  assert.equal((await service.getStatsForUser('owner')).summary.movieCount, 25, 'failed calculations must be retryable');
 }
 
 void run().catch((error: unknown) => {

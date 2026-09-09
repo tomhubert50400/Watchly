@@ -10,6 +10,7 @@ import { historyMatches, resolveViewingHistory } from './viewing-history';
 @Injectable()
 export class ViewingsService {
   private readonly logger = new Logger(ViewingsService.name);
+  private readonly statsRequests = new Map<string, Promise<ReturnType<typeof buildViewingStats>>>();
 
   constructor(
     @Inject(AuthService) private readonly authService: AuthService,
@@ -52,7 +53,15 @@ export class ViewingsService {
     };
   }
 
-  async getStatsForUser(userId: string) {
+  getStatsForUser(userId: string) {
+    const existing = this.statsRequests.get(userId);
+    if (existing) return existing;
+    const request = this.buildStatsForUser(userId).finally(() => this.statsRequests.delete(userId));
+    this.statsRequests.set(userId, request);
+    return request;
+  }
+
+  private async buildStatsForUser(userId: string) {
     await this.initializeWatchedSeriesEpisodes(userId);
     await this.enrichMissingMetadata(userId);
 
@@ -481,7 +490,7 @@ export class ViewingsService {
     );
 
     await Promise.all([
-      ...movieIds.map(async (tmdbId) => {
+      mapWithConcurrency(movieIds, 5, async (tmdbId) => {
         const metadata = await this.getMovieMetadata(tmdbId);
 
         if (!metadata) {
@@ -495,7 +504,7 @@ export class ViewingsService {
           }),
         );
       }),
-      ...seasonKeys.map(async (key) => {
+      mapWithConcurrency(seasonKeys, 3, async (key) => {
         const [tmdbId, seasonNumber] = key.split(':').map(Number);
         const metadata = await this.getSeasonMetadata(tmdbId, seasonNumber);
 
