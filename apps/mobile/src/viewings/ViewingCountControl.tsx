@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CalendarDays } from 'lucide-react-native';
+import { randomUUID } from 'expo-crypto';
 import {
   EpisodeViewingSummary,
   getEpisodeViewingSummary,
@@ -24,7 +25,7 @@ import { hapticError } from '../feedback/haptics';
 import { useToast } from '../notifications/ToastContext';
 import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
 import { ViewingHistorySheet } from './ViewingHistorySheet';
-import { localViewingDay, resolveHistoryDraft } from './viewingHistoryModel';
+import { localViewingDay, resolveHistoryDraft, toHistoryDraft } from './viewingHistoryModel';
 import { getViewingHistoryUpdates, setViewingHistoryUpdate, viewingTargetKey } from './viewingHistoryUpdates';
 
 type Props = {
@@ -179,6 +180,12 @@ export function ViewingCountControl(props: Props) {
     mutationQueueRef.current = queuedMutation.catch(() => undefined);
   }
 
+  function addQuickViewing() {
+    const current = summaryRef.current;
+    if (summaryScope !== requestScope || !current || !('history' in current) || !current.history || current.history.length >= 1000) return;
+    saveHistory([...toHistoryDraft(current.history), { id: randomUUID(), watchedDate: localViewingDay() }], current.history);
+  }
+
   if (!firebaseIdToken) {
     return null;
   }
@@ -189,10 +196,16 @@ export function ViewingCountControl(props: Props) {
   const editor = editorHistory !== null ? <ViewingHistorySheet history={editorHistory} onClose={() => { setEditorHistory(null); props.onEditorClose?.(); }} onSave={saveHistory} title={editorTitle} /> : null;
 
   if (props.variant === 'editor') return editor;
+  const quickAdd = canEditDates ? <Pressable
+    accessibilityLabel="Add one viewing today" accessibilityRole="button"
+    disabled={viewCount >= 1000 || !summary || !('history' in summary) || !summary.history}
+    onPress={addQuickViewing}
+    style={({ pressed }) => [styles.rewatchButton, styles.quickAdd, pressed && styles.rewatchButtonPressed, viewCount >= 1000 && { opacity: 0.4 }]}
+  ><Text style={styles.rewatchLabel}>+1</Text></Pressable> : null;
 
   if (props.variant === 'activity') {
     return (
-      <><Pressable
+      <><View style={styles.activityActions}><Pressable
         accessibilityHint="Edit viewing dates and total"
         accessibilityLabel={`Viewing dates, ${formatActivityViewingCount(viewCount)}`}
         accessibilityRole="button"
@@ -204,13 +217,13 @@ export function ViewingCountControl(props: Props) {
         ]}
       >
         <CalendarDays color={colors.accentText} size={23} strokeWidth={2.1} />
-        <View>
+        <View style={{ flexShrink: 1 }}>
         <Text style={styles.rewatchLabel}>Viewing dates</Text>
         <Text accessibilityLiveRegion="polite" style={styles.activityValue}>
           {formatActivityViewingCount(viewCount)}
         </Text>
         </View>
-      </Pressable>{editor}</>
+      </Pressable>{quickAdd}</View>{editor}</>
     );
   }
 
@@ -223,6 +236,7 @@ export function ViewingCountControl(props: Props) {
         </Text>
       </View>
       {canEditDates ? (
+        <View style={styles.dateActions}>
         <Pressable
           accessibilityLabel="Viewing dates"
           accessibilityRole="button"
@@ -235,6 +249,8 @@ export function ViewingCountControl(props: Props) {
           <CalendarDays color={colors.accentText} size={15} strokeWidth={2.3} />
           <Text style={styles.rewatchLabel}>Viewing dates</Text>
         </Pressable>
+        {quickAdd}
+        </View>
       ) : null}
     </View>{editor}</>
   );
@@ -295,6 +311,9 @@ function formatActivityViewingCount(viewCount: number) {
 }
 
 const styles = StyleSheet.create({
+  activityActions: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  dateActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  quickAdd: { minWidth: touchTargets.min },
   activityContainer: {
     alignItems: 'center',
     flex: 1,
