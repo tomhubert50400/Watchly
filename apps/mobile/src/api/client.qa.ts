@@ -2,6 +2,7 @@
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import { readFileSync } from 'node:fs';
 import { ApiError, apiGet, apiPostFormData } from './client';
+import { confirmDataImport, previewDataImport } from './imports';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -177,11 +178,54 @@ async function main() {
       throttledError.message === 'Watchly is catching up. Try again in a moment.',
       'Rate limits must never expose the server exception name.',
     );
+    await verifyImportBatches();
   } finally {
     globalThis.fetch = originalFetch;
   }
 
   console.log('Mobile API client QA passed.');
+}
+
+async function verifyImportBatches() {
+  let uploads = 0;
+  let prepared = 0;
+  let committed = 0;
+  let lostResponse = false;
+  const progress: number[] = [];
+  globalThis.fetch = async (input) => {
+    const path = String(input);
+    let payload: unknown;
+    if (path.endsWith('/preview?batch=true')) {
+      uploads += 1;
+      payload = { importId: 'test-import', items: [], preparation: { processed: 0, total: 1001 } };
+    } else if (path.endsWith('/prepare')) {
+      prepared = Math.min(1001, prepared + 25);
+      payload = { importId: 'test-import', items: [], preparation: { processed: prepared, total: 1001 } };
+    } else {
+      assert(path.endsWith('/confirm?batch=true'), 'Confirmation must use bounded requests.');
+      committed = Math.min(1001, committed + 25);
+      if (!lostResponse) {
+        lostResponse = true;
+        throw new TypeError('Simulated lost response after commit');
+      }
+      payload = { titlesProcessed: committed, completed: committed === 1001 };
+    }
+    return new Response(JSON.stringify(payload), { status: 200 });
+  };
+  await previewDataImport('token', 'letterboxd', {
+    uri: 'file:///export.zip', name: 'export.zip', file: new File(['export'], 'export.zip'),
+  }, (processed) => progress.push(processed));
+  assert(uploads === 1 && prepared === 1001, 'One upload must prepare the entire library.');
+  assert(progress[0] === 0 && progress.at(-1) === 1001, 'Preparation must expose progress through completion.');
+  const result = await confirmDataImport('token', 'test-import');
+  assert(result.titlesProcessed === 1001, 'Confirmation must use cumulative results after a lost response.');
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ message: 'Not authorized' }), { status: 401 });
+  };
+  const error = await confirmDataImport('token', 'test-import').catch((caught: unknown) => caught);
+  assert(error instanceof ApiError && calls === 1, 'Authorization errors must stop immediately.');
 }
 
 function delay(milliseconds: number) {

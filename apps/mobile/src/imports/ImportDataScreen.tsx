@@ -177,6 +177,7 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
   const [error, setError] = useState<string | null>(null);
   const [previews, setPreviews] = useState<ImportPreview[]>([]);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [progress, setProgress] = useState<string | null>(null);
   const [selectedSource, setSelectedSource] = useState<ImportSource | null>(null);
   const [status, setStatus] = useState<'confirming' | 'idle' | 'picking' | 'previewing'>('idle');
   const visibleSources = workingSourcesOnly
@@ -242,14 +243,17 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
 
       if (selection.canceled) return;
 
+      setSelectedSource(null);
       setActiveSource(source.brand);
       setError(null);
       setResult(null);
       setStatus('previewing');
+      setProgress('Reading your export…');
       const nextPreview = await previewDataImport(
         firebaseIdToken,
         source.importSource,
         selection.assets[0],
+        (processed, total) => setProgress(`Matching titles: ${processed} / ${total}`),
       );
       setPreviews((current) => current.some((preview) => preview.importId === nextPreview.importId)
         ? current
@@ -266,6 +270,7 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
     } finally {
       setStatus('idle');
       setActiveSource(null);
+      setProgress(null);
     }
   };
 
@@ -279,7 +284,8 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
     const importResults: ImportResult[] = [];
     try {
       for (const preview of previews) {
-        const importResult = await confirmDataImport(firebaseIdToken, preview.importId);
+        const importResult = await confirmDataImport(firebaseIdToken, preview.importId,
+          (processed) => setProgress(`Importing titles: ${processed} / ${preview.summary.ready}`));
         completedImportIds.push(preview.importId);
         importResults.push(importResult);
         onImportCompleted?.({ importId: preview.importId, result: importResult });
@@ -294,6 +300,7 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
       hapticSuccess();
       completedBatch = true;
     } catch (importError) {
+      notifyUserDataChanged('episodeProgress', 'opinions', 'profile', 'tracking', 'viewings');
       if (completedImportIds.length > 0) {
         setPreviews((current) => current.filter((preview) => !completedImportIds.includes(preview.importId)));
         setResult(combineImportResults(importResults));
@@ -303,6 +310,7 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
       hapticError();
     } finally {
       setStatus('idle');
+      setProgress(null);
     }
 
     if (completedBatch) onImportBatchCompleted?.();
@@ -359,6 +367,8 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
             />
           ))}
         </View>
+
+        {progress ? <Text accessibilityLiveRegion="polite" style={styles.body}>{progress}</Text> : null}
 
         {error ? (
           <View accessibilityLiveRegion="polite" style={styles.errorPanel}>

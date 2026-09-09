@@ -71,15 +71,15 @@ assert(
 );
 const documentPickerCall = importScreenSource.indexOf('await DocumentPicker.getDocumentAsync');
 const previewUploadCall = importScreenSource.indexOf('await previewDataImport', documentPickerCall);
-const sheetCloseAfterPreview = importScreenSource.indexOf('setSelectedSource(null);', previewUploadCall);
+const sheetCloseAfterPicker = importScreenSource.indexOf('setSelectedSource(null);', documentPickerCall);
 assert(
   importScreenSource.includes("setStatus('picking')") &&
     importScreenSource.includes("choosingFile={status === 'picking'}") &&
     !/onChooseFile=\{\(source\) => \{\s*setSelectedSource\(null\);\s*void chooseFile\(source\)/.test(importScreenSource) &&
     documentPickerCall >= 0 &&
     previewUploadCall > documentPickerCall &&
-    sheetCloseAfterPreview > previewUploadCall,
-  'The native picker must open above the guide before the guide sheet is dismissed.',
+    sheetCloseAfterPicker > documentPickerCall && sheetCloseAfterPicker < previewUploadCall,
+  'The guide must close after file selection so import progress remains visible.',
 );
 assert(
   importApiSource.includes('/preview') && importApiSource.includes('/confirm'),

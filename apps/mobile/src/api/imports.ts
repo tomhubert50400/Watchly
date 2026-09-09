@@ -1,5 +1,5 @@
 import type { DocumentPickerAsset } from 'expo-document-picker';
-import { apiGet, apiPost, apiPostFormData } from './client';
+import { ApiError, apiGet, apiPost, apiPostFormData } from './client';
 
 export type SupportedImportSource = 'imdb' | 'letterboxd' | 'tv-time';
 
@@ -33,6 +33,7 @@ export type ImportPreviewItem = {
 };
 
 export type ImportPreview = {
+  preparation?: { processed: number; total: number };
   fileName: string;
   ignoredFileCount: number;
   importId: string;
@@ -61,10 +62,11 @@ export type ImportResult = {
   viewingEventsCreated: number;
 };
 
-export function previewDataImport(
+export async function previewDataImport(
   token: string,
   source: SupportedImportSource,
   asset: DocumentPickerAsset,
+  onProgress?: (processed: number, total: number) => void,
 ) {
   const formData = new FormData();
 
@@ -78,18 +80,42 @@ export function previewDataImport(
     } as unknown as Blob);
   }
 
-  return apiPostFormData<ImportPreview>(`/imports/${source}/preview`, formData, {
+  let preview = await apiPostFormData<ImportPreview>(`/imports/${source}/preview?batch=true`, formData, {
     timeoutMs: 5 * 60_000,
     token,
   });
+  onProgress?.(preview.preparation?.processed ?? preview.items.length, preview.preparation?.total ?? preview.items.length);
+  while (preview.preparation && preview.preparation.processed < preview.preparation.total) {
+    preview = await postImportBatch<ImportPreview>(`/imports/${encodeURIComponent(preview.importId)}/prepare`, {
+      timeoutMs: 5 * 60_000, token,
+    });
+    onProgress?.(preview.preparation?.processed ?? preview.items.length, preview.preparation?.total ?? preview.items.length);
+  }
+  return preview;
 }
 
-export function confirmDataImport(token: string, importId: string) {
-  return apiPost<ImportResult>(
-    `/imports/${encodeURIComponent(importId)}/confirm`,
-    {},
-    { timeoutMs: 60_000, token },
-  );
+export async function confirmDataImport(token: string, importId: string, onProgress?: (processed: number) => void) {
+  let result: ImportResult & { completed?: boolean };
+  do {
+    result = await postImportBatch<ImportResult & { completed?: boolean }>(
+      `/imports/${encodeURIComponent(importId)}/confirm?batch=true`,
+      { timeoutMs: 60_000, token },
+    );
+    onProgress?.(result.titlesProcessed);
+  } while (result.completed === false);
+  return result;
+}
+
+async function postImportBatch<T>(path: string, options: { token: string; timeoutMs: number }): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await apiPost<T>(path, {}, options);
+    } catch (error) {
+      if (attempt >= 3 || !(error instanceof ApiError)
+        || (error.status !== undefined && error.status !== 409 && error.status !== 429 && error.status < 500)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, error.status === 429 ? 60_000 : 1_000 * (attempt + 1)));
+    }
+  }
 }
 
 export function getImportPreview(token: string, importId: string) {
