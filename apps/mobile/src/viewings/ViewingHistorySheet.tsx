@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react-native';
 import { randomUUID } from 'expo-crypto';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { ViewingHistoryDate, ViewingHistoryItem } from '../api/viewings';
 import { BottomActionSheet, BottomActionSheetScrollView } from '../components/BottomActionSheet';
 import { Button } from '../components/Button';
@@ -26,6 +26,7 @@ export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) 
   const selectedEntry = entries.find(entry => entry.id === selectedId) ?? entries[0]!;
   const selectedIndex = entries.indexOf(selectedEntry);
   const [showAll, setShowAll] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const firstVisibleIndex = showAll ? 0 : Math.max(0, Math.min(selectedIndex - 1, entries.length - 3));
   const visibleEntries = showAll ? entries : entries.slice(firstVisibleIndex, firstVisibleIndex + 3);
   const viewingListRef = useRef<ScrollView>(null);
@@ -56,16 +57,19 @@ export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) 
   }
 
   function selectViewing(entry: ViewingHistoryDate) {
+    Keyboard.dismiss();
     setSelectedId(entry.id);
     setMonth((entry.watchedDate ?? today).slice(0, 7));
     setMonthPickerOpen(false);
+    setCalendarOpen(true);
   }
 
   return <BottomActionSheet onClose={onClose} title="My viewings" visible footer={
-    <Button disabled={!countText || Boolean(error) || Number(countText) !== entries.length} label={`Save ${entries.length} ${entries.length === 1 ? 'viewing' : 'viewings'}`} onPress={() => onSave(entries)} />
+    calendarOpen ? undefined : <Button disabled={!countText || Boolean(error) || Number(countText) !== entries.length} label={`Save ${entries.length} ${entries.length === 1 ? 'viewing' : 'viewings'}`} onPress={() => onSave(entries)} />
   }>
     <BottomActionSheetScrollView contentContainerStyle={styles.content}>
       {title ? <Text style={styles.title}>{title}</Text> : null}
+      {!calendarOpen ? <>
       <View style={styles.totalRow}>
         <Text style={styles.label}>Times watched</Text>
         <View style={styles.stepper}>
@@ -95,10 +99,11 @@ export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) 
           </Pressable>;
         })}
       </ScrollView>
+      {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+      </> : <>
       <View style={styles.sectionRow}>
-        <Pressable accessibilityLabel="Previous viewing" accessibilityRole="button" disabled={selectedIndex === 0} onPress={() => selectViewing(entries[selectedIndex - 1]!)} style={[styles.iconButton, selectedIndex === 0 && styles.disabled]}><ChevronLeft color={colors.textMuted} size={20} /></Pressable>
-        <Text accessibilityLiveRegion="polite" style={styles.label}>Viewing {selectedIndex + 1} of {entries.length}</Text>
-        <Pressable accessibilityLabel="Next viewing" accessibilityRole="button" disabled={selectedIndex === entries.length - 1} onPress={() => selectViewing(entries[selectedIndex + 1]!)} style={[styles.iconButton, selectedIndex === entries.length - 1 && styles.disabled]}><ChevronRight color={colors.textMuted} size={20} /></Pressable>
+        <Pressable accessibilityLabel="Back to viewing dates" accessibilityRole="button" onPress={() => setCalendarOpen(false)} style={styles.backButton}><ChevronLeft color={colors.accentText} size={20} /><Text style={styles.selectedText}>Viewing dates</Text></Pressable>
+        <Text style={styles.label}>Viewing {selectedIndex + 1}</Text>
       </View>
       <View style={styles.monthRow}>
         <Pressable accessibilityLabel="Previous month" accessibilityRole="button" disabled={month <= '1900-01'} onPress={() => moveMonth(-1)} style={styles.iconButton}><ChevronLeft color={colors.textMuted} size={20} /></Pressable>
@@ -118,13 +123,13 @@ export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) 
           if (!date) return <View key={`blank:${index}`} style={styles.cell} />;
           const selected = (selectedEntry.watchedDate ?? today) === date;
           const disabled = date > today;
-          return <Pressable accessibilityLabel={formatDate(date)} accessibilityRole="button" accessibilityState={{ disabled, selected }} disabled={disabled} key={date} onPress={() => setEntries(current => setViewingDate(current, selectedEntry.id, date))} style={[styles.cell, selected && styles.selected, disabled && styles.disabled]}>
+          return <Pressable accessibilityLabel={formatDate(date)} accessibilityRole="button" accessibilityState={{ disabled, selected }} disabled={disabled} key={date} onPress={() => { setEntries(current => setViewingDate(current, selectedEntry.id, date)); setCalendarOpen(false); }} style={[styles.cell, selected && styles.selected, disabled && styles.disabled]}>
             <Text style={[styles.day, selected && styles.selectedText]}>{Number(date.slice(8))}</Text>
             {date === today ? <View style={styles.todayDot} /> : null}
           </Pressable>;
         })}</View>
       </View>}
-      {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+      </>}
     </BottomActionSheetScrollView>
   </BottomActionSheet>;
 }
@@ -187,6 +192,7 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.3 },
   viewingList: { maxHeight: 168 },
   showAllButton: { minHeight: touchTargets.min, justifyContent: 'center', paddingHorizontal: spacing.sm },
+  backButton: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: touchTargets.min },
   dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: colors.border, minHeight: touchTargets.min, paddingHorizontal: spacing.sm, gap: spacing.sm, borderRadius: radii.sm },
   dateLabel: { flex: 1, color: colors.text, fontSize: 13 },
   yearWheel: { height: 132, width: 140, alignSelf: 'center', overflow: 'hidden' },
