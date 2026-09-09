@@ -2,7 +2,7 @@
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import { readFileSync } from 'node:fs';
 import { ApiError, apiGet, apiPostFormData } from './client';
-import { confirmDataImport, previewDataImport } from './imports';
+import { analyzeDataImport, cancelDataImport, confirmDataImport, previewDataImport, startBackgroundImport } from './imports';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -179,6 +179,7 @@ async function main() {
       'Rate limits must never expose the server exception name.',
     );
     await verifyImportBatches();
+    await verifyImportAnalysis();
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -226,6 +227,24 @@ async function verifyImportBatches() {
   };
   const error = await confirmDataImport('token', 'test-import').catch((caught: unknown) => caught);
   assert(error instanceof ApiError && calls === 1, 'Authorization errors must stop immediately.');
+}
+
+async function verifyImportAnalysis() {
+  const requests: string[] = [];
+  globalThis.fetch = async (input) => {
+    requests.push(String(input));
+    return new Response(JSON.stringify({ importId: 'analysis', estimatedSeconds: 121,
+      preparation: { processed: 25, total: 2001 }, items: [] }), { status: 200 });
+  };
+  const analysis = await analyzeDataImport('token', 'letterboxd', {
+    uri: 'file:///export.zip', name: 'export.zip', file: new File(['export'], 'export.zip'),
+  });
+  assert(analysis.estimatedSeconds === 121, 'Analysis must expose the server estimate.');
+  assert(requests.length === 1 && requests[0].endsWith('/analyze'), 'Analysis must not start preparation loops or library writes.');
+  await cancelDataImport('token', analysis.importId);
+  assert(requests.at(-1)?.endsWith('/cancel'), 'Cancel must discard the pending analysis.');
+  await startBackgroundImport('token', analysis.importId);
+  assert(requests.at(-1)?.endsWith('/background'), 'Background work must require an explicit start request.');
 }
 
 function delay(milliseconds: number) {

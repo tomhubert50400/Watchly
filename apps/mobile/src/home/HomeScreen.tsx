@@ -45,6 +45,7 @@ import {
 } from './homeData';
 import { SocialActivityList } from './SocialActivityList';
 import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
+import { BackgroundImportCards } from '../imports/BackgroundImportCards';
 
 type HomeNavigation = CompositeNavigationProp<
   BottomTabNavigationProp<RootTabParamList, 'Home'>,
@@ -201,6 +202,7 @@ export function HomeScreen() {
       }
     >
       <View style={styles.composition}>
+        {isSignedIn ? <BackgroundImportCards /> : null}
         {sections.map((section) => {
           if (section.kind === 'hero') {
             return (

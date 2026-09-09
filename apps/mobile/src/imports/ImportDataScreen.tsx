@@ -12,7 +12,10 @@ import {
   getImportPreview,
   ImportPreview,
   ImportResult,
-  previewDataImport,
+  analyzeDataImport,
+  prepareDataImport,
+  cancelDataImport,
+  startBackgroundImport,
   SupportedImportSource,
 } from '../api/imports';
 import { useAuthSession } from '../auth/AuthSessionContext';
@@ -32,6 +35,7 @@ import {
   getImportSkippedTitles,
 } from './importReviewModel';
 import type { CombinedImportPreview } from './importReviewModel';
+import { BackgroundImportCards } from './BackgroundImportCards';
 
 declare const require: (moduleName: 'expo-document-picker') => typeof ExpoDocumentPicker;
 
@@ -58,6 +62,7 @@ export type ImportDataScreenHandle = {
 };
 
 type ImportDataScreenProps = {
+  onBackgroundImportStarted?: () => void;
   embedded?: boolean;
   onImportBatchCompleted?: () => void;
   onImportCompleted?: (completion: { importId: string; result: ImportResult }) => void;
@@ -164,6 +169,7 @@ const importSources: readonly ImportSource[] = [
 
 export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScreenProps>(function ImportDataScreen({
   embedded = false,
+  onBackgroundImportStarted,
   onImportBatchCompleted,
   onImportCompleted,
   onPendingImportChange,
@@ -178,6 +184,7 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
   const [previews, setPreviews] = useState<ImportPreview[]>([]);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
+  const [backgroundRevision, setBackgroundRevision] = useState(0);
   const [selectedSource, setSelectedSource] = useState<ImportSource | null>(null);
   const [status, setStatus] = useState<'confirming' | 'idle' | 'picking' | 'previewing'>('idle');
   const visibleSources = workingSourcesOnly
@@ -248,11 +255,35 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
       setError(null);
       setResult(null);
       setStatus('previewing');
-      setProgress('Reading your export…');
-      const nextPreview = await previewDataImport(
+      setProgress('Analyzing your export and estimating the time…');
+      const analysis = await analyzeDataImport(
         firebaseIdToken,
         source.importSource,
         selection.assets[0],
+      );
+      if (analysis.estimatedSeconds > 60) {
+        const accepted = await new Promise<boolean>((resolve) => Alert.alert(
+          'Large import',
+          `Your import contains ${analysis.preparation?.total ?? analysis.summary.total} titles and will take approximately ${Math.ceil(analysis.estimatedSeconds / 60)} minutes. You can keep using Watchly or close the app. Confident matches will be imported; other titles can be reviewed afterward. Existing ratings and reviews will be kept.`,
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Import in background', onPress: () => resolve(true) },
+          ],
+          { cancelable: false },
+        ));
+        if (!accepted) {
+          await cancelDataImport(firebaseIdToken, analysis.importId);
+          return;
+        }
+        await startBackgroundImport(firebaseIdToken, analysis.importId);
+        setBackgroundRevision((value) => value + 1);
+        onBackgroundImportStarted?.();
+        hapticSuccess();
+        return;
+      }
+      const nextPreview = await prepareDataImport(
+        firebaseIdToken,
+        analysis,
         (processed, total) => setProgress(`Matching titles: ${processed} / ${total}`),
       );
       setPreviews((current) => current.some((preview) => preview.importId === nextPreview.importId)
@@ -369,6 +400,10 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
         </View>
 
         {progress ? <Text accessibilityLiveRegion="polite" style={styles.body}>{progress}</Text> : null}
+
+        <BackgroundImportCards refreshKey={backgroundRevision} onReview={(preview) => {
+          setPreviews((current) => [...current, preview]);
+        }} />
 
         {error ? (
           <View accessibilityLiveRegion="polite" style={styles.errorPanel}>

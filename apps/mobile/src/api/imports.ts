@@ -68,6 +68,48 @@ export async function previewDataImport(
   asset: DocumentPickerAsset,
   onProgress?: (processed: number, total: number) => void,
 ) {
+  const preview = await uploadImportFile(token, source, asset, 'preview?batch=true');
+  return prepareDataImport(token, preview, onProgress);
+}
+
+export type ImportAnalysis = ImportPreview & { estimatedSeconds: number };
+
+export type BackgroundImport = {
+  importId: string;
+  fileName: string;
+  status: 'processing' | 'failed' | 'completed';
+  phase: 'matching' | 'importing';
+  processed: number;
+  total: number;
+  needsAttention: number;
+  result: ImportResult | null;
+};
+
+export function analyzeDataImport(token: string, source: SupportedImportSource, asset: DocumentPickerAsset) {
+  return uploadImportFile<ImportAnalysis>(token, source, asset, 'analyze');
+}
+
+export function startBackgroundImport(token: string, importId: string) {
+  return apiPost<BackgroundImport>(`/imports/${encodeURIComponent(importId)}/background`, {}, { token });
+}
+
+export function cancelDataImport(token: string, importId: string) {
+  return apiPost(`/imports/${encodeURIComponent(importId)}/cancel`, {}, { token });
+}
+
+export function listBackgroundImports(token: string) {
+  return apiGet<{ imports: BackgroundImport[] }>('/imports/background', { token });
+}
+
+export function dismissBackgroundImport(token: string, importId: string) {
+  return apiPost(`/imports/${encodeURIComponent(importId)}/dismiss`, {}, { token });
+}
+
+export function reviewBackgroundImport(token: string, importId: string) {
+  return apiPost<ImportPreview>(`/imports/${encodeURIComponent(importId)}/review`, {}, { token });
+}
+
+function uploadImportFile<T = ImportPreview>(token: string, source: SupportedImportSource, asset: DocumentPickerAsset, operation: string) {
   const formData = new FormData();
 
   if (asset.file) {
@@ -80,10 +122,14 @@ export async function previewDataImport(
     } as unknown as Blob);
   }
 
-  let preview = await apiPostFormData<ImportPreview>(`/imports/${source}/preview?batch=true`, formData, {
+  return apiPostFormData<T>(`/imports/${source}/${operation}`, formData, {
     timeoutMs: 5 * 60_000,
     token,
   });
+}
+
+export async function prepareDataImport(token: string, initial: ImportPreview, onProgress?: (processed: number, total: number) => void) {
+  let preview = initial;
   onProgress?.(preview.preparation?.processed ?? preview.items.length, preview.preparation?.total ?? preview.items.length);
   while (preview.preparation && preview.preparation.processed < preview.preparation.total) {
     preview = await postImportBatch<ImportPreview>(`/imports/${encodeURIComponent(preview.importId)}/prepare`, {

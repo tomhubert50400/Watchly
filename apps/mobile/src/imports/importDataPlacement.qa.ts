@@ -70,7 +70,21 @@ assert(
   'Letterboxd, IMDb, and TV Time must guard the native picker and identify which client needs updating.',
 );
 const documentPickerCall = importScreenSource.indexOf('await DocumentPicker.getDocumentAsync');
-const previewUploadCall = importScreenSource.indexOf('await previewDataImport', documentPickerCall);
+assert(
+  importScreenSource.includes('analysis.estimatedSeconds > 60') &&
+    importScreenSource.includes('Math.ceil(analysis.estimatedSeconds / 60)') &&
+    importScreenSource.includes("text: 'Cancel'") &&
+    importScreenSource.includes("text: 'Import in background'") &&
+    importScreenSource.includes('await cancelDataImport') &&
+    importScreenSource.includes('await startBackgroundImport'),
+  'Imports estimated above one minute must offer cancel or explicit background consent.',
+);
+assert(
+  onboardingSource.includes('onBackgroundImportStarted=') &&
+    onboardingSource.includes('setImportSatisfied(true)'),
+  'A started background import must allow onboarding to continue without manual taste selection.',
+);
+const previewUploadCall = importScreenSource.indexOf('await analyzeDataImport', documentPickerCall);
 const sheetCloseAfterPicker = importScreenSource.indexOf('setSelectedSource(null);', documentPickerCall);
 assert(
   importScreenSource.includes("setStatus('picking')") &&
