@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react-native';
 import { randomUUID } from 'expo-crypto';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -25,6 +25,13 @@ export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) 
   const [selectedId, setSelectedId] = useState(entries[0]!.id);
   const selectedEntry = entries.find(entry => entry.id === selectedId) ?? entries[0]!;
   const selectedIndex = entries.indexOf(selectedEntry);
+  const [showAll, setShowAll] = useState(false);
+  const firstVisibleIndex = showAll ? 0 : Math.max(0, Math.min(selectedIndex - 1, entries.length - 3));
+  const visibleEntries = showAll ? entries : entries.slice(firstVisibleIndex, firstVisibleIndex + 3);
+  const viewingListRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    if (!showAll) viewingListRef.current?.scrollTo({ y: 0, animated: false });
+  }, [showAll, firstVisibleIndex]);
   const [month, setMonth] = useState((selectedEntry.watchedDate ?? today).slice(0, 7));
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [yearText, setYearText] = useState(today.slice(0, 4));
@@ -48,6 +55,12 @@ export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) 
     setMonth(date.toISOString().slice(0, 7));
   }
 
+  function selectViewing(entry: ViewingHistoryDate) {
+    setSelectedId(entry.id);
+    setMonth((entry.watchedDate ?? today).slice(0, 7));
+    setMonthPickerOpen(false);
+  }
+
   return <BottomActionSheet onClose={onClose} title="My viewings" visible footer={
     <Button disabled={!countText || Boolean(error) || Number(countText) !== entries.length} label={`Save ${entries.length} ${entries.length === 1 ? 'viewing' : 'viewings'}`} onPress={() => onSave(entries)} />
   }>
@@ -61,14 +74,20 @@ export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) 
           <StepButton label="One more viewing" plus disabled={entries.length >= 1000} onPress={() => changeCount(String(entries.length + 1))} />
         </View>
       </View>
-      <View style={styles.sectionRow}><Text style={styles.label}>Viewing dates</Text></View>
-      <ScrollView nestedScrollEnabled style={styles.viewingList} keyboardShouldPersistTaps="handled">
-        {entries.map((entry, index) => {
+      <View style={styles.sectionRow}>
+        <Text style={styles.label}>Viewing dates</Text>
+        {entries.length > 3 ? <Pressable accessibilityRole="button" accessibilityState={{ expanded: showAll }} onPress={() => setShowAll(value => !value)} style={styles.showAllButton}>
+          <Text style={styles.selectedText}>{showAll ? 'Show less' : `Show all ${entries.length}`}</Text>
+        </Pressable> : null}
+      </View>
+      <ScrollView ref={viewingListRef} nestedScrollEnabled style={styles.viewingList} keyboardShouldPersistTaps="handled">
+        {visibleEntries.map((entry, visibleIndex) => {
+          const index = firstVisibleIndex + visibleIndex;
           const selected = entry.id === selectedEntry.id;
           const date = entry.watchedDate ?? today;
           const label = date === today ? 'Today' : formatDate(date);
           return <Pressable key={entry.id} accessibilityRole="button" accessibilityLabel={`Edit viewing ${index + 1}, ${label}`} accessibilityState={{ selected }}
-            onPress={() => { setSelectedId(entry.id); setMonth(date.slice(0, 7)); setMonthPickerOpen(false); }}
+            onPress={() => selectViewing(entry)}
             style={[styles.dateRow, selected && styles.selected]}>
             <Text style={styles.dateLabel}>Viewing {index + 1}</Text>
             <Text style={selected ? styles.selectedText : styles.muted}>{label}</Text>
@@ -76,14 +95,18 @@ export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) 
           </Pressable>;
         })}
       </ScrollView>
-      <View style={styles.sectionRow}><Text accessibilityLiveRegion="polite" style={styles.label}>Date for viewing {selectedIndex + 1}</Text></View>
+      <View style={styles.sectionRow}>
+        <Pressable accessibilityLabel="Previous viewing" accessibilityRole="button" disabled={selectedIndex === 0} onPress={() => selectViewing(entries[selectedIndex - 1]!)} style={[styles.iconButton, selectedIndex === 0 && styles.disabled]}><ChevronLeft color={colors.textMuted} size={20} /></Pressable>
+        <Text accessibilityLiveRegion="polite" style={styles.label}>Viewing {selectedIndex + 1} of {entries.length}</Text>
+        <Pressable accessibilityLabel="Next viewing" accessibilityRole="button" disabled={selectedIndex === entries.length - 1} onPress={() => selectViewing(entries[selectedIndex + 1]!)} style={[styles.iconButton, selectedIndex === entries.length - 1 && styles.disabled]}><ChevronRight color={colors.textMuted} size={20} /></Pressable>
+      </View>
       <View style={styles.monthRow}>
         <Pressable accessibilityLabel="Previous month" accessibilityRole="button" disabled={month <= '1900-01'} onPress={() => moveMonth(-1)} style={styles.iconButton}><ChevronLeft color={colors.textMuted} size={20} /></Pressable>
         <Pressable accessibilityLabel="Choose month and year" accessibilityRole="button" onPress={() => { setMonthPickerOpen((open) => !open); setYearText(month.slice(0, 4)); }} style={styles.monthButton}><Text style={styles.label}>{formatDate(`${month}-01`, { month: 'long', year: 'numeric' })}</Text></Pressable>
         <Pressable accessibilityLabel="Next month" accessibilityRole="button" disabled={month >= today.slice(0, 7)} onPress={() => moveMonth(1)} style={[styles.iconButton, month >= today.slice(0, 7) && styles.disabled]}><ChevronRight color={colors.textMuted} size={20} /></Pressable>
       </View>
       {monthPickerOpen ? <View>
-        <TextInput accessibilityLabel="Year" keyboardType="number-pad" maxLength={4} onChangeText={setYearText} selectTextOnFocus style={styles.year} value={yearText} />
+        <YearWheel year={Number(yearText)} maxYear={Number(today.slice(0, 4))} onChange={year => setYearText(String(year))} />
         <View style={styles.monthGrid}>{Array.from({ length: 12 }, (_, index) => {
           const key = `${yearText}-${String(index + 1).padStart(2, '0')}`;
           const disabled = !/^\d{4}$/.test(yearText) || key < '1900-01' || key > today.slice(0, 7);
@@ -111,6 +134,33 @@ function StepButton({ label, onPress, disabled, plus }: { label: string; onPress
   return <Pressable accessibilityLabel={label} accessibilityRole="button" disabled={disabled} onPress={onPress} style={[styles.iconButton, disabled && styles.disabled]}><Icon color={colors.textMuted} size={18} /></Pressable>;
 }
 
+function YearWheel({ year, maxYear, onChange }: { year: number; maxYear: number; onChange: (year: number) => void }) {
+  const rowHeight = 44;
+  const scrollRef = useRef<ScrollView>(null);
+  const initialYear = useRef(year);
+  const selectYear = (next: number) => {
+    const bounded = Math.max(1900, Math.min(maxYear, next));
+    onChange(bounded);
+    scrollRef.current?.scrollTo({ y: (bounded - 1900) * rowHeight, animated: true });
+  };
+  return <View style={styles.yearWheel} accessibilityRole="adjustable" accessibilityLabel="Year"
+    accessibilityValue={{ min: 1900, max: maxYear, now: year }}
+    accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+    onAccessibilityAction={event => selectYear(year + (event.nativeEvent.actionName === 'increment' ? 1 : -1))}>
+    <View pointerEvents="none" style={styles.yearSelection} />
+    <ScrollView ref={scrollRef} nestedScrollEnabled showsVerticalScrollIndicator={false}
+      snapToInterval={rowHeight} decelerationRate="fast" scrollEventThrottle={16}
+      contentContainerStyle={{ paddingVertical: rowHeight }}
+      onLayout={() => scrollRef.current?.scrollTo({ y: (initialYear.current - 1900) * rowHeight, animated: false })}
+      onScroll={event => onChange(Math.max(1900, Math.min(maxYear, 1900 + Math.round(event.nativeEvent.contentOffset.y / rowHeight))))}>
+      {Array.from({ length: maxYear - 1900 + 1 }, (_, index) => index + 1900).map(value =>
+        <Pressable key={value} accessibilityRole="button" accessibilityLabel={String(value)} accessibilityState={{ selected: value === year }} onPress={() => selectYear(value)} style={styles.yearRow}>
+          <Text style={[styles.year, value === year && styles.selectedText]}>{value}</Text>
+        </Pressable>)}
+    </ScrollView>
+  </View>;
+}
+
 function formatDate(date: string, options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'long', year: 'numeric' }) {
   return new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { ...options, timeZone: 'UTC' });
 }
@@ -136,9 +186,13 @@ const styles = StyleSheet.create({
   todayDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.accentText, position: 'absolute', bottom: 4 },
   disabled: { opacity: 0.3 },
   viewingList: { maxHeight: 168 },
+  showAllButton: { minHeight: touchTargets.min, justifyContent: 'center', paddingHorizontal: spacing.sm },
   dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: colors.border, minHeight: touchTargets.min, paddingHorizontal: spacing.sm, gap: spacing.sm, borderRadius: radii.sm },
   dateLabel: { flex: 1, color: colors.text, fontSize: 13 },
-  year: { color: colors.text, fontSize: 20, textAlign: 'center', minHeight: touchTargets.min },
+  yearWheel: { height: 132, width: 140, alignSelf: 'center', overflow: 'hidden' },
+  yearSelection: { position: 'absolute', top: 44, left: 0, right: 0, height: 44, borderRadius: radii.sm, backgroundColor: colors.accentSoft },
+  yearRow: { height: 44, alignItems: 'center', justifyContent: 'center' },
+  year: { color: colors.textMuted, fontSize: 20, textAlign: 'center' },
   monthGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   monthCell: { width: '33.333333%', minHeight: touchTargets.min, alignItems: 'center', justifyContent: 'center' },
   error: { color: colors.danger, fontSize: 13, marginTop: spacing.sm },
