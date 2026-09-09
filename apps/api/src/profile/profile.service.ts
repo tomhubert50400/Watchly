@@ -349,6 +349,18 @@ export class ProfileService {
     return this.listProfileConnections(identity, targetUserId, 'followers');
   }
 
+  async listProfileReviews(identity: AuthenticatedIdentity, targetUserId: string) {
+    assertUuid(targetUserId);
+    const viewerId = await this.getUserId(identity);
+    const profile = await this.getPublicProfileByUserId(
+      targetUserId, viewerId === targetUserId, viewerId, true,
+    );
+    if (!profile.canViewContent) {
+      throw new ForbiddenException('This profile\'s reviews are private or unavailable.');
+    }
+    return { items: profile.opinions };
+  }
+
   async listProfileFollowing(identity: AuthenticatedIdentity, targetUserId: string) {
     return this.listProfileConnections(identity, targetUserId, 'following');
   }
@@ -1058,6 +1070,7 @@ export class ProfileService {
     userId: string,
     allowOwnerPrivateView: boolean,
     viewerId?: string,
+    reviewsOnly = false,
   ) {
     const user = await this.prisma.withConnectionRetry(
       () =>
@@ -1119,9 +1132,9 @@ export class ProfileService {
       && (!profileIsPrivate || allowOwnerPrivateView || Boolean(acceptedFollow));
     const profileContent = canViewContent
       ? await Promise.all([
-          this.listOpinionsForUser(user.id),
-          this.getPublicProfileMedia(user.id),
-          this.viewings?.getStatsForUser(user.id) ?? Promise.resolve(EMPTY_VIEWING_STATS),
+          this.listOpinionsForUser(user.id, reviewsOnly),
+          reviewsOnly ? Promise.resolve(null) : this.getPublicProfileMedia(user.id),
+          reviewsOnly ? Promise.resolve(null) : this.viewings?.getStatsForUser(user.id) ?? Promise.resolve(EMPTY_VIEWING_STATS),
         ] as const)
       : null;
     const [opinions, media, viewingStats] = profileContent ?? [];
@@ -1170,33 +1183,33 @@ export class ProfileService {
     };
   }
 
-  private async listOpinionsForUser(userId: string) {
+  private async listOpinionsForUser(userId: string, reviewsOnly = false) {
     const [[movieRatings, seriesRatings, episodeRatings, movieReviews, episodeReviews], stats] =
       await Promise.all([
         this.prisma.withConnectionRetry(() => Promise.all([
           this.prisma.userMovieRating.findMany({
             orderBy: { updatedAt: 'desc' },
-            take: PROFILE_OPINION_LIMIT,
+            take: reviewsOnly ? undefined : PROFILE_OPINION_LIMIT,
             where: { userId },
           }),
           this.prisma.userSeriesRating.findMany({
             orderBy: { updatedAt: 'desc' },
-            take: PROFILE_OPINION_LIMIT,
+            take: reviewsOnly ? 0 : PROFILE_OPINION_LIMIT,
             where: { userId },
           }),
           this.prisma.userEpisodeRating.findMany({
             orderBy: { updatedAt: 'desc' },
-            take: PROFILE_OPINION_LIMIT,
+            take: reviewsOnly ? undefined : PROFILE_OPINION_LIMIT,
             where: { userId },
           }),
           this.prisma.userMovieReview.findMany({
             orderBy: { updatedAt: 'desc' },
-            take: PROFILE_OPINION_LIMIT,
+            take: reviewsOnly ? undefined : PROFILE_OPINION_LIMIT,
             where: { moderationHiddenAt: null, userId },
           }),
           this.prisma.userEpisodeReview.findMany({
             orderBy: { updatedAt: 'desc' },
-            take: PROFILE_OPINION_LIMIT,
+            take: reviewsOnly ? undefined : PROFILE_OPINION_LIMIT,
             where: { moderationHiddenAt: null, userId },
           }),
         ] as const)),
@@ -1225,8 +1238,9 @@ export class ProfileService {
         toEpisodeReviewOpinion(review, episodeRatingByKey.get(getEpisodeOpinionKey(review)) ?? null),
       ),
     ]
+      .filter((item) => !reviewsOnly || 'body' in item)
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
-      .slice(0, PROFILE_OPINION_LIMIT);
+      .slice(0, reviewsOnly ? undefined : PROFILE_OPINION_LIMIT);
 
     return { items, stats };
   }

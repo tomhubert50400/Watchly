@@ -6,12 +6,12 @@ const source = readFileSync(join(__dirname, 'profile.service.ts'), 'utf8');
 
 assert.match(
   source,
-  /this\.listOpinionsForUser\(user\.id\)[\s\S]*this\.getPublicProfileMedia\(user\.id\)[\s\S]*getStatsForUser\(user\.id\)/,
+  /this\.listOpinionsForUser\(user\.id, reviewsOnly\)[\s\S]*this\.getPublicProfileMedia\(user\.id\)[\s\S]*getStatsForUser\(user\.id\)/,
   'public profiles must load the same opinion, media, and viewing-stat families as owner profiles',
 );
 assert.match(
   source,
-  /const profileContent = canViewContent[\s\S]*\? await Promise\.all\(\[[\s\S]*this\.listOpinionsForUser\(user\.id\)[\s\S]*this\.getPublicProfileMedia\(user\.id\)[\s\S]*getStatsForUser\(user\.id\)/,
+  /const profileContent = canViewContent[\s\S]*\? await Promise\.all\(\[[\s\S]*this\.listOpinionsForUser\(user\.id, reviewsOnly\)[\s\S]*this\.getPublicProfileMedia\(user\.id\)[\s\S]*getStatsForUser\(user\.id\)/,
   'independent public profile content families must load in parallel',
 );
 assert.match(

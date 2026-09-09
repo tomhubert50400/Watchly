@@ -314,6 +314,7 @@ export type CatalogueVideo = {
 };
 
 export type MovieDetails = {
+  castNames?: string[];
   collection?: { id: number; name: string } | null;
   backdropUrl: string | null;
   budget: number | null;
@@ -344,6 +345,7 @@ export type MovieDetails = {
 };
 
 export type SeriesDetails = {
+  castNames?: string[];
   backdropUrl: string | null;
   cast: CatalogueCastMember[];
   createdBy: string[];
@@ -1195,6 +1197,7 @@ export class TmdbCatalogueService {
       budget: toPositiveNumber(item.budget),
       collection: item.belongs_to_collection ?? null,
       cast: buildCatalogueCast(item.credits?.cast, this.imageBaseUrl),
+      castNames: (item.credits?.cast ?? []).flatMap((person) => person.name ? [person.name] : []),
       directors: buildCrewNames(item.credits?.crew, ['Director']),
       displayRating,
       genres: item.genres?.map((genre) => genre.name).filter(Boolean) ?? [],
@@ -1228,6 +1231,7 @@ export class TmdbCatalogueService {
     return {
       backdropUrl: item.backdrop_path ? `${this.backdropBaseUrl}${item.backdrop_path}` : null,
       cast: buildCatalogueCast(item.credits?.cast, this.imageBaseUrl),
+      castNames: (item.credits?.cast ?? []).flatMap((person) => person.name ? [person.name] : []),
       createdBy: uniqueNames(item.created_by),
       firstAirDate: item.first_air_date ?? null,
       genres: item.genres?.map((genre) => genre.name).filter(Boolean) ?? [],

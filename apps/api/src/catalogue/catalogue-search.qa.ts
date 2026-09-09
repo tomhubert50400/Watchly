@@ -244,6 +244,7 @@ async function main() {
         credits: {
           cast: [
             { character: 'Neo', id: 1, name: 'Keanu Reeves', order: 0, profile_path: '/neo.jpg' },
+            ...Array.from({ length: 12 }, (_, index) => ({ id: index + 10, name: `Supporting actor ${index}`, order: index + 1 })),
           ],
           crew: [
             { department: 'Directing', id: 2, job: 'Director', name: 'Lana Wachowski' },
@@ -449,6 +450,9 @@ async function main() {
     assert.deepEqual(movieDetails.item.directors, ['Lana Wachowski']);
     assert.deepEqual(movieDetails.item.writers, ['Lilly Wachowski']);
     assert.equal(movieDetails.item.cast[0]?.character, 'Neo');
+    assert.equal(movieDetails.item.cast.length, 12);
+    assert.equal(movieDetails.item.castNames?.length, 13, 'review search includes actors beyond the visual cast preview');
+    assert.ok(movieDetails.item.castNames?.includes('Supporting actor 11'));
     assert.equal(movieDetails.item.videos[0]?.key, 'vKQi3bBA1y8');
     assert.equal(movieDetails.item.recommendations[0]?.title, 'The Matrix Reloaded');
     assert.equal(movieDetails.item.recommendations.length, 1);
@@ -531,6 +535,7 @@ async function main() {
     assert.equal(seriesDetails.item.logoAspectRatio, 3);
     assert.deepEqual(seriesDetails.item.createdBy, ['Vince Gilligan']);
     assert.equal(seriesDetails.item.cast[0]?.name, 'Bryan Cranston');
+    assert.deepEqual(seriesDetails.item.castNames, ['Bryan Cranston']);
     assert.equal(seriesDetails.item.videos[0]?.type, 'Trailer');
     assert.equal(seriesDetails.item.recommendations[0]?.title, 'Better Call Saul');
     assert.equal(seriesDetails.item.recommendations.length, 1);

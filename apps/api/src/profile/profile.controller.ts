@@ -110,6 +110,14 @@ export class ProfileController {
     return this.profile.getPublicProfile(getIdentity(request), userId);
   }
 
+  @Get('users/:userId/reviews')
+  async reviews(
+    @Req() request: AuthenticatedRequest,
+    @Param('userId') userId: string,
+  ) {
+    return this.profile.listProfileReviews(getIdentity(request), userId);
+  }
+
   @Get('users/:userId/followers')
   async followers(
     @Req() request: AuthenticatedRequest,
