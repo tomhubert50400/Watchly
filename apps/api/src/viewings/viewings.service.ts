@@ -1,9 +1,11 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, Logger } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { TmdbCatalogueService } from '../catalogue/tmdb-catalogue.service';
 import { PrismaService } from '../database/prisma.service';
 import { buildViewingStats } from './viewing-stats';
+import { SaveViewingHistoryDto } from './viewing-history.dto';
+import { historyMatches, resolveViewingHistory } from './viewing-history';
 
 @Injectable()
 export class ViewingsService {
@@ -141,6 +143,71 @@ export class ViewingsService {
 
   async getMovieSummary(identity: AuthenticatedIdentity, tmdbId: number) {
     return this.getMovieSummaryForUser(await this.getUserId(identity), tmdbId);
+  }
+
+  async saveHistory(identity: AuthenticatedIdentity, input: SaveViewingHistoryDto) {
+    const entries = resolveViewingHistory(input);
+    const userId = await this.getUserId(identity);
+    const where = {
+      userId, tmdbId: input.tmdbId,
+      contentType: input.contentType === 'movie' ? 'MOVIE' as const : 'EPISODE' as const,
+      seasonNumber: input.contentType === 'episode' ? input.seasonNumber! : null,
+      episodeNumber: input.contentType === 'episode' ? input.episodeNumber! : null,
+    };
+    const existing = await this.prisma.viewingEvent.findFirst({ where });
+    const metadata = existing ?? (input.contentType === 'movie'
+      ? await this.getMovieMetadata(input.tmdbId)
+      : await this.getSeasonMetadata(input.tmdbId, input.seasonNumber!));
+    const episode = metadata && 'episodes' in metadata
+      ? metadata.episodes.find((item) => item.episodeNumber === input.episodeNumber) : null;
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const current = await tx.viewingEvent.findMany({ where });
+        if (!historyMatches(current, entries.map((entry) => ({ ...entry, watchedAt: entry.watchedAt.toISOString() })))) {
+          if (!historyMatches(current, input.previous)) {
+            throw new ConflictException('Your viewing history changed. Reopen it before saving.');
+          }
+          const currentIds = new Set(current.map((item) => item.id));
+          const newEntries = entries.filter((entry) => !currentIds.has(entry.id));
+          await tx.viewingEvent.deleteMany({ where: { ...where, id: { notIn: entries.map((entry) => entry.id) } } });
+          for (const entry of entries.filter((item) => currentIds.has(item.id))) {
+            if (current.find((item) => item.id === entry.id)?.watchedAt?.getTime() !== entry.watchedAt.getTime()) {
+              await tx.viewingEvent.updateMany({ where: { ...where, id: entry.id }, data: { watchedAt: entry.watchedAt } });
+            }
+          }
+          if (newEntries.length) await tx.viewingEvent.createMany({
+            data: newEntries.map((entry) => ({
+              ...where, ...entry, title: metadata?.title ?? null,
+              artworkUrl: metadata?.artworkUrl ?? null, genres: metadata?.genres ?? [],
+              runtimeMinutes: episode?.runtimeMinutes ?? (metadata && 'runtimeMinutes' in metadata ? metadata.runtimeMinutes : null),
+              subtitle: episode?.title ?? (existing?.subtitle ?? null),
+            })),
+          });
+          if (!current.length && input.contentType === 'movie') {
+            await tx.userContentState.upsert({
+              where: { userId_contentType_tmdbId: { userId, contentType: 'MOVIE', tmdbId: input.tmdbId } },
+              create: { userId, contentType: 'MOVIE', tmdbId: input.tmdbId, status: 'WATCHED' },
+              update: { status: 'WATCHED' },
+            });
+          }
+          if (input.contentType === 'episode') {
+            const watchedAt = entries.reduce((latest, entry) => entry.watchedAt > latest ? entry.watchedAt : latest, entries[0]!.watchedAt);
+            const progressKey = { userId, seriesTmdbId: input.tmdbId, seasonNumber: input.seasonNumber!, episodeNumber: input.episodeNumber! };
+            await tx.userEpisodeProgress.upsert({
+              where: { userId_seriesTmdbId_seasonNumber_episodeNumber: progressKey },
+              create: { ...progressKey, watchedAt }, update: { watchedAt },
+            });
+          }
+        }
+        const saved = await tx.viewingEvent.findMany({ where, orderBy: [{ watchedAt: 'desc' }, { id: 'asc' }] });
+        return { items: saved.map((item) => ({ id: item.id, watchedAt: item.watchedAt?.toISOString() ?? null })) };
+      }, { isolationLevel: 'Serializable' });
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && (error.code === 'P2034' || error.code === 'P2002')) {
+        throw new ConflictException('Your viewing history changed. Reopen it before saving.');
+      }
+      throw error;
+    }
   }
 
   async logMovieViewing(identity: AuthenticatedIdentity, tmdbId: number) {
@@ -516,13 +583,15 @@ export class ViewingsService {
   }
 
   private async getMovieSummaryForUser(userId: string, tmdbId: number) {
-    const viewCount = await this.prisma.withConnectionRetry(() =>
-      this.prisma.viewingEvent.count({
+    const history = await this.prisma.withConnectionRetry(() =>
+      this.prisma.viewingEvent.findMany({
+        select: { id: true, watchedAt: true },
+        orderBy: [{ watchedAt: 'desc' }, { id: 'asc' }],
         where: { contentType: 'MOVIE', tmdbId, userId },
       }),
     );
 
-    return { tmdbId, viewCount };
+    return { tmdbId, viewCount: history.length, history: history.map((item) => ({ ...item, watchedAt: item.watchedAt?.toISOString() ?? null })) };
   }
 
   private async getEpisodeSummaryForUser(
@@ -531,8 +600,10 @@ export class ViewingsService {
     seasonNumber: number,
     episodeNumber: number,
   ) {
-    const viewCount = await this.prisma.withConnectionRetry(() =>
-      this.prisma.viewingEvent.count({
+    const history = await this.prisma.withConnectionRetry(() =>
+      this.prisma.viewingEvent.findMany({
+        select: { id: true, watchedAt: true },
+        orderBy: [{ watchedAt: 'desc' }, { id: 'asc' }],
         where: {
           contentType: 'EPISODE',
           episodeNumber,
@@ -543,7 +614,7 @@ export class ViewingsService {
       }),
     );
 
-    return { episodeNumber, seasonNumber, seriesTmdbId, viewCount };
+    return { episodeNumber, seasonNumber, seriesTmdbId, viewCount: history.length, history: history.map((item) => ({ ...item, watchedAt: item.watchedAt?.toISOString() ?? null })) };
   }
 
   private async getUserId(identity: AuthenticatedIdentity) {

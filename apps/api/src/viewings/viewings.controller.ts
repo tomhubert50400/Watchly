@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   Get,
   Inject,
   Param,
   Post,
+  Put,
   Req,
   UnauthorizedException,
   UseGuards,
@@ -12,11 +14,17 @@ import {
 import { AuthGuard } from '../auth/auth.guard';
 import { AuthenticatedRequest } from '../auth/auth.types';
 import { ViewingsService } from './viewings.service';
+import { SaveViewingHistoryDto } from './viewing-history.dto';
 
 @Controller('viewings')
 @UseGuards(AuthGuard)
 export class ViewingsController {
   constructor(@Inject(ViewingsService) private readonly viewings: ViewingsService) {}
+
+  @Put('history')
+  saveHistory(@Req() request: AuthenticatedRequest, @Body() input: SaveViewingHistoryDto) {
+    return this.viewings.saveHistory(getIdentity(request), input);
+  }
 
   @Get('stats')
   getStats(@Req() request: AuthenticatedRequest) {
