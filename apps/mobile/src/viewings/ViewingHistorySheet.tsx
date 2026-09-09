@@ -9,18 +9,17 @@ import { colors, radii, spacing, touchTargets } from '../design/tokens';
 import { localViewingDay, resizeHistoryDraft, setHistoryDay, toHistoryDraft, viewingCalendarDays } from './viewingHistoryModel';
 
 type Props = {
-  addViewing?: boolean;
   history: ViewingHistoryItem[];
   title?: string;
   onClose: () => void;
   onSave: (entries: ViewingHistoryDate[]) => void;
 };
 
-export function ViewingHistorySheet({ addViewing = false, history, title, onClose, onSave }: Props) {
+export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) {
   const today = localViewingDay();
   const [entries, setEntries] = useState(() => {
     const existing = toHistoryDraft(history);
-    return addViewing || !existing.length ? [...existing, { id: randomUUID(), watchedDate: null }] : existing;
+    return !existing.length ? [{ id: randomUUID(), watchedDate: null }] : existing;
   });
   const [countText, setCountText] = useState(String(entries.length));
   const [month, setMonth] = useState(today.slice(0, 7));

@@ -8,8 +8,9 @@ import { clearMemoryResourcesWithPrefix } from '../cache/memoryResourceCache';
 
 const previous = [{ id: 'first', watchedAt: '2026-09-03T21:34:00.000Z' }, { id: 'second', watchedAt: '2026-09-06T12:00:00.000Z' }];
 const controlSource = readFileSync(new URL('ViewingCountControl.tsx', import.meta.url), 'utf8');
-assert.match(controlSource, /accessibilityLabel="Log another watch"[\s\S]*?onPress=\{\(\) => void openHistory\(true\)\}/, 'logging another watch must open the calendar before saving');
-assert.match(controlSource, />Edit dates<\/Text>/, 'viewing dates need a visible editing affordance');
+assert.match(controlSource, /accessibilityLabel="Viewing dates"[\s\S]*?onPress=\{\(\) => void openHistory\(\)\}/, 'viewing dates must open the existing history without adding a watch');
+assert.match(controlSource, /const canEditDates = [^;]*viewCount > 0;/, 'dates must be available from the first watch');
+assert.doesNotMatch(controlSource, /Log another watch|openHistory\(true\)/, 'the calendar replaces the rewatch action');
 let nextId = 0;
 const five = resizeHistoryDraft(toHistoryDraft(previous), 5, () => `new-${nextId++}`)!;
 const saved = resolveHistoryDraft(five, previous, '2026-09-09');

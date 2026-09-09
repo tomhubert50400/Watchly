@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { CalendarDays, History, RotateCcw } from 'lucide-react-native';
+import { CalendarDays } from 'lucide-react-native';
 import {
   EpisodeViewingSummary,
   getEpisodeViewingSummary,
@@ -54,7 +54,6 @@ export function ViewingCountControl(props: Props) {
   const { showToast } = useToast();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [editorHistory, setEditorHistory] = useState<ViewingHistoryItem[] | null>(null);
-  const [addViewing, setAddViewing] = useState(false);
   const [summaryScope, setSummaryScope] = useState('');
   const lastConfirmedSummaryRef = useRef<Summary | null>(null);
   const mutationQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -113,9 +112,8 @@ export function ViewingCountControl(props: Props) {
 
   useEffect(() => { setEditorHistory(null); }, [requestScope]);
 
-  async function openHistory(appendViewing = false) {
+  async function openHistory() {
     if (props.contentType === 'series') return;
-    setAddViewing(appendViewing);
     const current = summaryRef.current;
     if (summaryScope === requestScope && current && 'history' in current && current.history) {
       setEditorHistory(current.history);
@@ -186,9 +184,9 @@ export function ViewingCountControl(props: Props) {
   }
 
   const viewCount = summaryScope === requestScope && summary && 'viewCount' in summary ? summary.viewCount : 0;
-  const canLogAgain = props.contentType !== 'series' && viewCount > 0 && viewCount < 1000;
+  const canEditDates = props.contentType !== 'series' && viewCount > 0;
   const editorTitle = props.contentType === 'episode' ? `${props.title ?? ''} · S${props.seasonNumber} E${props.episodeNumber}` : props.title;
-  const editor = editorHistory !== null ? <ViewingHistorySheet addViewing={addViewing} history={editorHistory} onClose={() => { setEditorHistory(null); props.onEditorClose?.(); }} onSave={saveHistory} title={editorTitle} /> : null;
+  const editor = editorHistory !== null ? <ViewingHistorySheet history={editorHistory} onClose={() => { setEditorHistory(null); props.onEditorClose?.(); }} onSave={saveHistory} title={editorTitle} /> : null;
 
   if (props.variant === 'editor') return editor;
 
@@ -196,7 +194,7 @@ export function ViewingCountControl(props: Props) {
     return (
       <><Pressable
         accessibilityHint="Edit viewing dates and total"
-        accessibilityLabel={formatActivityViewingCount(viewCount)}
+        accessibilityLabel={`Viewing dates, ${formatActivityViewingCount(viewCount)}`}
         accessibilityRole="button"
         disabled={props.contentType === 'series'}
         onPress={() => void openHistory()}
@@ -205,35 +203,37 @@ export function ViewingCountControl(props: Props) {
           pressed && styles.activityContainerPressed,
         ]}
       >
-        <History color={colors.textMuted} size={23} strokeWidth={2.1} />
+        <CalendarDays color={colors.accentText} size={23} strokeWidth={2.1} />
+        <View>
+        <Text style={styles.rewatchLabel}>Viewing dates</Text>
         <Text accessibilityLiveRegion="polite" style={styles.activityValue}>
           {formatActivityViewingCount(viewCount)}
         </Text>
+        </View>
       </Pressable>{editor}</>
     );
   }
 
   return (
     <><View style={styles.container}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Edit viewing history" disabled={props.contentType === 'series'} onPress={() => void openHistory()} style={styles.copy}>
+      <View style={styles.copy}>
         <Text style={styles.label}>VIEWING HISTORY</Text>
         <Text accessibilityLiveRegion="polite" style={styles.value}>
           {formatSummary(props, summaryScope === requestScope ? summary : null)}
         </Text>
-        {props.contentType !== 'series' ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}><CalendarDays color={colors.accentText} size={14} /><Text style={styles.rewatchLabel}>Edit dates</Text></View> : null}
-      </Pressable>
-      {canLogAgain ? (
+      </View>
+      {canEditDates ? (
         <Pressable
-          accessibilityLabel="Log another watch"
+          accessibilityLabel="Viewing dates"
           accessibilityRole="button"
-          onPress={() => void openHistory(true)}
+          onPress={() => void openHistory()}
           style={({ pressed }) => [
             styles.rewatchButton,
             pressed ? styles.rewatchButtonPressed : null,
           ]}
         >
-          <RotateCcw color={colors.accentText} size={15} strokeWidth={2.3} />
-          <Text style={styles.rewatchLabel}>Log another watch</Text>
+          <CalendarDays color={colors.accentText} size={15} strokeWidth={2.3} />
+          <Text style={styles.rewatchLabel}>Viewing dates</Text>
         </Pressable>
       ) : null}
     </View>{editor}</>
