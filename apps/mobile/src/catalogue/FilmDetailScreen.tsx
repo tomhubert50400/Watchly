@@ -46,7 +46,7 @@ export function FilmDetailScreen({ navigation, route }: FilmDetailScreenProps) {
   const { getCachedMovie, refreshMovie } = useCatalogueCache();
   const load = useCallback(() => refreshMovie(tmdbId), [refreshMovie, tmdbId]);
   const resource = useCachedResource<MovieDetails>({
-    key: `watchly:public:catalogue:movie:${tmdbId}:v4`,
+    key: `watchly:public:catalogue:movie:${tmdbId}:v5`,
     load,
   });
   const movie = resource.data ?? getCachedMovie(tmdbId);

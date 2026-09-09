@@ -430,6 +430,8 @@ export function ProfileScreen() {
           })}
           onOpenMediaItem={(item) => openProfileMediaItem(navigation, item)}
           onOpenOpinion={(item) => openOpinion(navigation, item)}
+          onViewAllReviews={() => navigation.navigate('ProfileReviews', { userId: profile.userId })}
+          reviewsCount={profile.stats.reviewsCount}
           onOpenStats={() => {
             setMemoryResource(getPrivateCacheKey(userId!, 'profile:all-time:v2'), profile.viewingStats, new Date().toISOString());
             navigation.navigate('AllTimeStats', { profileBackdropUrl: atmosphereUrl });

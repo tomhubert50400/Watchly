@@ -65,6 +65,9 @@ export type RootStackParamList = {
     kind: 'followers' | 'following';
     userId: string;
   };
+  ProfileReviews: {
+    userId: string;
+  };
   PublicProfile: {
     profilePreview?: {
       avatarUrl: string | null;

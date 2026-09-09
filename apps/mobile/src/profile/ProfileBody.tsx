@@ -42,7 +42,9 @@ export function ProfileBody({
   onOpenOpinion,
   onOpenStats,
   onViewAllMedia,
+  onViewAllReviews,
   opinions,
+  reviewsCount,
   showMediaRails = true,
   stats,
   statsAccessibilityHint,
@@ -72,7 +74,9 @@ export function ProfileBody({
   onOpenOpinion: (item: HydratedProfileOpinion) => void;
   onOpenStats: () => void;
   onViewAllMedia: (filter: ProfileMediaFilter) => void;
+  onViewAllReviews: () => void;
   opinions: readonly HydratedProfileOpinion[];
+  reviewsCount: number;
   showMediaRails?: boolean;
   stats: ViewingStats;
   statsAccessibilityHint?: string;
@@ -94,7 +98,7 @@ export function ProfileBody({
           onAvatarPress={onAvatarPress}
           onFollowersPress={onFollowersPress}
           onFollowingPress={onFollowingPress}
-          reviewsCount={profileReviews.length}
+          reviewsCount={reviewsCount}
         />
         {identityAction}
         <View pointerEvents="none" style={styles.statsDivider} />
@@ -132,7 +136,7 @@ export function ProfileBody({
           />
         </>
       ) : null}
-      {opinions.length === 0 ? (
+      {opinions.length === 0 && reviewsCount === 0 ? (
         <View style={styles.emptyActivity}>
           <Text style={styles.emptyActivityTitle}>{emptyActivityTitle}</Text>
           <Text style={styles.emptyActivityBody}>{emptyActivityBody}</Text>
@@ -156,9 +160,14 @@ export function ProfileBody({
               ))}
             </ScrollView>
           </View>
-          {profileReviews.length > 0 ? (
+          {reviewsCount > 0 ? (
             <View style={styles.opinionsSection}>
-              <Text accessibilityRole="header" style={styles.sectionTitle}>LATEST REVIEWS</Text>
+              <View style={styles.reviewsHeader}>
+                <Text accessibilityRole="header" style={styles.sectionTitle}>LATEST REVIEWS</Text>
+                <Pressable accessibilityLabel="View all reviews" accessibilityRole="button" onPress={onViewAllReviews} style={styles.viewAll}>
+                  <Text style={styles.viewAllLabel}>View all</Text>
+                </Pressable>
+              </View>
               <View style={styles.opinionList}>
                 {profileReviews.map((item) => (
                   <ProfileReviewCard
@@ -201,7 +210,7 @@ const ProfileRecentPoster = memo(function ProfileRecentPoster({
   );
 });
 
-const ProfileReviewCard = memo(function ProfileReviewCard({
+export const ProfileReviewCard = memo(function ProfileReviewCard({
   item,
   onOpenContent,
 }: {
@@ -279,6 +288,20 @@ function formatDate(value: string) {
 }
 
 const styles = StyleSheet.create({
+  reviewsHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  viewAll: {
+    justifyContent: 'center',
+    minHeight: 44,
+    paddingLeft: spacing.md,
+  },
+  viewAllLabel: {
+    ...typography.meta,
+    color: colors.accentText,
+  },
   cardPressed: {
     opacity: 0.78,
     transform: [{ scale: 0.98 }],

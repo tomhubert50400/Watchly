@@ -84,6 +84,7 @@ export type CatalogueVideo = {
 };
 
 export type MovieDetails = {
+  castNames?: string[];
   collection?: { id: number; name: string } | null;
   backdropUrl: string | null;
   budget: number | null;
@@ -119,6 +120,7 @@ export type MovieDetailsResponse = {
 };
 
 export type SeriesDetails = {
+  castNames?: string[];
   backdropUrl: string | null;
   cast: CatalogueCastMember[];
   createdBy: string[];

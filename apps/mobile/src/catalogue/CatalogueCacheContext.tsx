@@ -28,7 +28,7 @@ export function CatalogueCacheProvider({ children }: PropsWithChildren) {
     }
 
     const request = loadCachedCatalogueResource(
-      `watchly:public:catalogue:movie:${tmdbId}:v4`,
+      `watchly:public:catalogue:movie:${tmdbId}:v5`,
       async () => (await getMovieDetails(tmdbId)).item,
     )
       .then((item) => {
@@ -53,7 +53,7 @@ export function CatalogueCacheProvider({ children }: PropsWithChildren) {
     }
 
     const request = loadCachedCatalogueResource(
-      `watchly:public:catalogue:series:${tmdbId}:v3`,
+      `watchly:public:catalogue:series:${tmdbId}:v4`,
       async () => (await getSeriesDetails(tmdbId)).item,
     )
       .then((item) => {

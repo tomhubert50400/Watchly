@@ -655,6 +655,8 @@ export function PublicProfileScreen() {
               })}
               onOpenMediaItem={(item) => openProfileMediaItem(navigation, item)}
               onOpenOpinion={(item) => openOpinion(navigation, item)}
+              onViewAllReviews={() => navigation.navigate('ProfileReviews', { userId: profile.id })}
+              reviewsCount={profile.stats.reviewsCount}
               onOpenStats={() => navigation.navigate('AllTimeStats', {
                 profileBackdropUrl: atmosphereUrl,
                 stats: profile.viewingStats ?? undefined,

@@ -46,7 +46,7 @@ export function SeriesDetailScreen({ navigation, route }: Props) {
   const { getCachedSeries, refreshSeries } = useCatalogueCache();
   const load = useCallback(() => refreshSeries(tmdbId), [refreshSeries, tmdbId]);
   const resource = useCachedResource<SeriesDetails>({
-    key: `watchly:public:catalogue:series:${tmdbId}:v3`,
+    key: `watchly:public:catalogue:series:${tmdbId}:v4`,
     load,
   });
   const series = resource.data ?? getCachedSeries(tmdbId);

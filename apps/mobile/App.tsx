@@ -41,6 +41,7 @@ import { ReleaseCalendarScreen } from './src/notifications/ReleaseCalendarScreen
 import { ToastProvider } from './src/notifications/ToastContext';
 import { OnboardingScreen } from './src/onboarding/OnboardingScreen';
 import { ProfileConnectionsScreen } from './src/profile/ProfileConnectionsScreen';
+import { ProfileReviewsScreen } from './src/profile/ProfileReviewsScreen';
 import { ProfileScreen } from './src/profile/ProfileScreen';
 import { PublicProfileScreen } from './src/profile/PublicProfileScreen';
 import { AllTimeStatsScreen } from './src/profile/AllTimeStatsScreen';
@@ -246,6 +247,7 @@ function AppNavigator() {
         ) : (
           <>
             <Stack.Screen component={MainTabs} name="MainTabs" options={{ headerShown: false }} />
+            <Stack.Screen component={ProfileReviewsScreen} name="ProfileReviews" options={{ headerShown: false }} />
             <Stack.Screen component={DiscoverResultsScreen} name="DiscoverResults" options={{ headerShown: false }} />
             <Stack.Screen
               component={ProfileConnectionsScreen}

@@ -222,6 +222,13 @@ export function getPublicProfile(
   });
 }
 
+export function getProfileReviews(firebaseIdToken: string, userId: string) {
+  return apiGet<{ items: Extract<ProfileOpinion, { body: string }>[] }>(
+    `/profile/users/${encodeURIComponent(userId)}/reviews`,
+    { token: firebaseIdToken },
+  );
+}
+
 export function getProfileConnections(
   firebaseIdToken: string,
   userId: string,
