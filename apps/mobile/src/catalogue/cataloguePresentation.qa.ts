@@ -13,6 +13,12 @@ const ratingSource = readFileSync(new URL('CatalogueRating.tsx', import.meta.url
 const exploreCardSource = readFileSync(new URL('ExploreMediaCard.tsx', import.meta.url), 'utf8');
 const exploreDiscoverySource = readFileSync(new URL('ExploreDiscoveryScreen.tsx', import.meta.url), 'utf8');
 const exploreSource = readFileSync(new URL('ExploreScreen.tsx', import.meta.url), 'utf8');
+const discoverSource = readFileSync(new URL('DiscoverScreen.tsx', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('../../App.tsx', import.meta.url), 'utf8');
+assert.match(discoverSource, /<TextInput[\s\S]*?onChangeText=\{setQuery\}/, 'Discover must accept search text directly');
+assert.match(discoverSource, /isSearching \? <DiscoverSearchResults/, 'Discover must display search results inline');
+assert.doesNotMatch(discoverSource, /navigate\('CatalogueSearch'/, 'search must not push a separate screen');
+assert.doesNotMatch(appSource, /name="CatalogueSearch"/, 'the obsolete Search route must not remain registered');
 const episodeDetailSource = readFileSync(new URL('EpisodeDetailScreen.tsx', import.meta.url), 'utf8');
 const catalogueDetailSectionsSource = readFileSync(new URL('CatalogueDetailSections.tsx', import.meta.url), 'utf8');
 const detailFactsSource = readFileSync(new URL('DetailFacts.tsx', import.meta.url), 'utf8');

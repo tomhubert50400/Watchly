@@ -16,7 +16,6 @@ export type RootTabParamList = {
 };
 
 export type RootStackParamList = {
-  CatalogueSearch: undefined;
   DiscoverResults: { collectionId?: string; title: string; description?: string; mediaType: CatalogueSearchType; mood?: DiscoverMood | null };
   ReviewAccess: undefined;
   AllTimeStats: {

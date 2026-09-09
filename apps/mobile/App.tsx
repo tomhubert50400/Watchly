@@ -12,7 +12,6 @@ import { AuthSessionProvider, useAuthSession } from './src/auth/AuthSessionConte
 import { CatalogueCacheProvider } from './src/catalogue/CatalogueCacheContext';
 import { EpisodeDetailScreen } from './src/catalogue/EpisodeDetailScreen';
 import { ExploreDiscoveryScreen, getDiscoveryLabel } from './src/catalogue/ExploreDiscoveryScreen';
-import { CatalogueSearchScreen } from './src/catalogue/ExploreScreen';
 import { DiscoverScreen } from './src/catalogue/DiscoverScreen';
 import { DiscoverResultsScreen } from './src/catalogue/DiscoverResultsScreen';
 import { FilmDetailScreen } from './src/catalogue/FilmDetailScreen';
@@ -247,7 +246,6 @@ function AppNavigator() {
         ) : (
           <>
             <Stack.Screen component={MainTabs} name="MainTabs" options={{ headerShown: false }} />
-            <Stack.Screen component={CatalogueSearchScreen} name="CatalogueSearch" options={{ title: '', headerBackTitle: 'Discover' }} />
             <Stack.Screen component={DiscoverResultsScreen} name="DiscoverResults" options={{ headerShown: false }} />
             <Stack.Screen
               component={ProfileConnectionsScreen}

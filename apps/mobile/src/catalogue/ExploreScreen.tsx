@@ -71,10 +71,6 @@ type ExploreScreenProps = {
   searchOnly?: boolean;
 };
 
-export function CatalogueSearchScreen() {
-  return <ExploreScreen searchOnly />;
-}
-
 export function ExploreScreen({ isActive = true, searchOnly = false }: ExploreScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { currentUser, firebaseIdToken } = useAuthSession();
@@ -501,7 +497,7 @@ function DiscoveryRail({
   );
 }
 
-function SearchComposition({
+export function SearchComposition({
   error,
   isLoading,
   items,

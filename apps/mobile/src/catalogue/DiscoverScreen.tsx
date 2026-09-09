@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Search, SlidersHorizontal } from 'lucide-react-native';
-import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Search, SlidersHorizontal, X } from 'lucide-react-native';
+import { Image, Keyboard, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { type CatalogueSearchType } from '../api/catalogue';
 import { browseResourceKey, collectionFilters, discoverMoods, getDiscover, getDiscoverBrowse, getDiscoverCollections, type DiscoverItem, type DiscoverMood } from '../api/discover';
 import { useAuthSession } from '../auth/AuthSessionContext';
@@ -22,6 +22,7 @@ import { useUserDataRevision } from '../sync/userDataEvents';
 import { useCatalogueCache } from './CatalogueCacheContext';
 import { DiscoverCarousel } from './DiscoverCarousel';
 import { DiscoverMoodSheet } from './DiscoverMoodSheet';
+import { DiscoverSearchResults } from './DiscoverSearchResults';
 import { ExploreMediaCard } from './ExploreMediaCard';
 
 export const discoverTypeOptions: { label: string; value: CatalogueSearchType }[] = [
@@ -35,6 +36,10 @@ export function DiscoverScreen({ isActive = true }: { isActive?: boolean }) {
   const [mediaType, setMediaType] = useState<CatalogueSearchType>('all');
   const [mood, setMood] = useState<DiscoverMood | null>(null);
   const [showMood, setShowMood] = useState(false);
+  const [query, setQuery] = useState('');
+  const trimmedQuery = query.trim();
+  const isSearching = trimmedQuery.length >= 2;
+  useEffect(() => { if (!isActive) Keyboard.dismiss(); }, [isActive]);
   const load = useCallback(() => getDiscover(firebaseIdToken, mood), [firebaseIdToken, mood]);
   const resourceKey = `discover:${mood ?? 'all'}:v1`;
   const resource = useCachedResource({
@@ -81,15 +86,24 @@ export function DiscoverScreen({ isActive = true }: { isActive?: boolean }) {
   const refresh = () => { resource.retry(); collections.retry(); };
   const moodLabel = discoverMoods.find(item => item.id === mood)?.label;
   return <>
-    <Screen title="Discover" tabBarPadding background={<SpotlightAtmosphere imageUrl={items[0]?.posterUrl ?? null} />}
-      refreshControl={<RefreshControl refreshing={resource.isRefreshing || collections.isRefreshing} onRefresh={refresh} tintColor={colors.accent} />}
+    <Screen title="Discover" tabBarPadding nativeKeyboardInsetsOnly background={<SpotlightAtmosphere imageUrl={items[0]?.posterUrl ?? null} />}
+      refreshControl={isSearching ? undefined : <RefreshControl refreshing={resource.isRefreshing || collections.isRefreshing} onRefresh={refresh} tintColor={colors.accent} />}
       trailing={<Pressable accessibilityLabel={moodLabel ? `Mood: ${moodLabel}. Change mood` : 'Choose a mood'} accessibilityRole="button" onPress={() => setShowMood(true)} style={[styles.moodButton, mood && styles.moodSelected]}><SlidersHorizontal size={17} color={mood ? colors.accentText : colors.textMuted} /><Text style={styles.moodText}>Mood</Text>{mood ? <View style={styles.moodDot} /> : null}</Pressable>}
     >
       <View style={styles.content}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Search for movies, TV shows or people" onPress={() => navigation.navigate('CatalogueSearch')} style={styles.search}>
-          <Search color={colors.muted} size={20} /><Text style={styles.searchText}>Search for Movies, TV Shows or People</Text>
-        </Pressable>
+        <View style={styles.search}>
+          <Search color={colors.muted} size={20} />
+          <TextInput
+            accessibilityLabel="Search for movies, TV shows or people"
+            autoComplete="off" autoCapitalize="none" autoCorrect={false} spellCheck={false}
+            inputMode="search" keyboardAppearance="dark" returnKeyType="search"
+            placeholder="Search for Movies, TV Shows or People" placeholderTextColor={colors.muted}
+            onChangeText={setQuery} onSubmitEditing={Keyboard.dismiss} value={query} style={styles.searchText}
+          />
+          {query.length > 0 ? <Pressable accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={12} onPress={() => setQuery('')}><X color={colors.muted} size={18} /></Pressable> : null}
+        </View>
         <SegmentedControl options={discoverTypeOptions} value={mediaType} onChange={setMediaType} />
+        {isSearching ? <DiscoverSearchResults query={trimmedQuery} searchType={mediaType} /> : <>
         {moodLabel ? <Text style={styles.reason}>Mood: {moodLabel}</Text> : null}
         {resource.isInitialLoading && !resource.data ? <InlineStatusBanner title="Finding your next watch" detail="Collecting movies and TV shows." tone="updating" /> : null}
         {resource.error ? <EmptyState title={resource.data ? 'Could not refresh your picks' : 'Discovery is unavailable'} body={resource.error}><Button label="Retry" onPress={resource.retry} /></EmptyState> : null}
@@ -113,6 +127,7 @@ export function DiscoverScreen({ isActive = true }: { isActive?: boolean }) {
             {items.slice(featured.length, featured.length + 10).map(item => <ExploreMediaCard key={item.id} item={item} onPress={() => openItem(item)} />)}
           </ScrollView>
         </View> : null}
+        </>}
       </View>
     </Screen>
     <DiscoverMoodSheet visible={showMood} value={mood} onClose={() => setShowMood(false)} onApply={value => { setMood(value); setShowMood(false); }} />
@@ -120,7 +135,7 @@ export function DiscoverScreen({ isActive = true }: { isActive?: boolean }) {
 }
 const styles = StyleSheet.create({
   content: { gap: spacing.lg }, search: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, backgroundColor: colors.panel, borderRadius: radii.lg, borderColor: colors.border, borderWidth: 1 },
-  searchText: { fontSize: 14, color: colors.muted, flex: 1 }, moodButton: { flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 44, paddingHorizontal: spacing.md, borderRadius: 24, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.interactiveSurface },
+  searchText: { fontSize: 14, color: colors.text, flex: 1, minWidth: 0, padding: 0 }, moodButton: { flexDirection: 'row', alignItems: 'center', gap: 7, minHeight: 44, paddingHorizontal: spacing.md, borderRadius: 24, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.interactiveSurface },
   moodSelected: { borderColor: colors.accentBorder, backgroundColor: colors.accentSoft }, moodText: { fontSize: 13, fontWeight: '700', color: colors.text }, moodDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent },
   reason: { fontSize: 12, color: colors.accentText }, collectionRail: { gap: spacing.sm, paddingTop: spacing.sm, paddingBottom: spacing.xs }, collection: { width: 278 },
   collectionArtwork: { height: 156, borderRadius: radii.lg, overflow: 'hidden', borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panelElevated },
