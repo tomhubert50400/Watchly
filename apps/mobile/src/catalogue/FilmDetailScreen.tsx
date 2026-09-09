@@ -146,7 +146,7 @@ function MovieDetailContent({
         <View style={styles.personalSection}>
           <Text style={styles.personalEyebrow}>Your activity</Text>
           <TrackingControls contentType="movie" tmdbId={movie.tmdbId} />
-          <ViewingCountControl contentType="movie" tmdbId={movie.tmdbId} />
+          <ViewingCountControl contentType="movie" title={movie.title} tmdbId={movie.tmdbId} />
           {isReleased ? (
             <MovieReviewEditor mediaTitle={movie.title} posterUrl={movie.posterUrl} tmdbId={movie.tmdbId} />
           ) : null}

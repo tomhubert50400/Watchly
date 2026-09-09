@@ -1,0 +1,44 @@
+// @ts-expect-error QA executes under Node.
+import assert from 'node:assert/strict';
+import { localViewingDay, resizeHistoryDraft, resolveHistoryDraft, setHistoryDay, toHistoryDraft, viewingCalendarDays } from './viewingHistoryModel';
+import { applyViewingHistoryUpdates, getViewingHistoryUpdates, reconcileViewingHistoryUpdates, setViewingHistoryUpdate } from './viewingHistoryUpdates';
+import { clearMemoryResourcesWithPrefix } from '../cache/memoryResourceCache';
+
+const previous = [{ id: 'first', watchedAt: '2026-09-03T21:34:00.000Z' }, { id: 'second', watchedAt: '2026-09-06T12:00:00.000Z' }];
+let nextId = 0;
+const five = resizeHistoryDraft(toHistoryDraft(previous), 5, () => `new-${nextId++}`)!;
+const saved = resolveHistoryDraft(five, previous, '2026-09-09');
+assert.equal(saved.length, 5);
+assert.equal(saved[0]?.watchedAt, previous[0]?.watchedAt, 'retain the original timestamp when its day is unchanged');
+assert.equal(saved.filter((item) => item.watchedAt === '2026-09-09T12:00:00.000Z').length, 3);
+assert.equal(new Set(saved.map((item) => item.id)).size, 5);
+assert.equal(resizeHistoryDraft(five, 1, () => 'unused'), null, 'never discard a selected date when reducing a total');
+assert.deepEqual(resizeHistoryDraft(five, 2, () => 'unused'), toHistoryDraft(previous));
+assert.equal(resizeHistoryDraft(five, 0, () => 'unused'), null);
+assert.equal(resizeHistoryDraft(five, 1.5, () => 'unused'), null);
+assert.equal(resizeHistoryDraft(five, 1001, () => 'unused'), null);
+const twice = setHistoryDay(five, '2026-09-03', 2);
+assert.equal(twice.filter((item) => item.watchedDate === '2026-09-03').length, 2);
+assert.equal(setHistoryDay(twice, '2026-09-03', 0).filter((item) => item.watchedDate !== null).length, 1);
+assert.equal(viewingCalendarDays('2024-02').filter(Boolean).length, 29);
+assert.equal(viewingCalendarDays('2026-09')[1], '2026-09-01');
+assert.equal(localViewingDay(new Date(2026, 8, 9, 0, 1)), '2026-09-09');
+
+const target = { contentType: 'movie' as const, tmdbId: 51876 };
+const other = { contentType: 'movie' as const, id: 'other', tmdbId: 99, watchedAt: '2026-09-01T12:00:00.000Z', seasonNumber: null, episodeNumber: null };
+setViewingHistoryUpdate('owner', target, { target, history: saved, pending: true });
+const visible = applyViewingHistoryUpdates([other], getViewingHistoryUpdates('owner'));
+assert.equal(visible.length, 6);
+assert.deepEqual(visible[0], other, 'local changes preserve unrelated films');
+assert.equal(getViewingHistoryUpdates('another-owner').length, 0);
+reconcileViewingHistoryUpdates('owner', visible);
+assert.equal(getViewingHistoryUpdates('owner').length, 1, 'pending writes cannot be cleared by background reads');
+setViewingHistoryUpdate('owner', target, { target, history: saved, pending: false });
+reconcileViewingHistoryUpdates('owner', [other]);
+assert.equal(getViewingHistoryUpdates('owner').length, 1, 'stale reads cannot replace confirmed local history');
+reconcileViewingHistoryUpdates('owner', visible);
+assert.equal(getViewingHistoryUpdates('owner').length, 0);
+setViewingHistoryUpdate('owner', target, { target, history: saved, pending: true });
+clearMemoryResourcesWithPrefix('watchly:user:owner:');
+assert.equal(getViewingHistoryUpdates('owner').length, 0, 'sign-out removes private optimistic history');
+console.log('Viewing history model QA passed.');

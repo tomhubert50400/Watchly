@@ -200,6 +200,7 @@ function EpisodeDetailContent({
                 <View style={styles.activityVerticalDivider} />
                 <ViewingCountControl
                   contentType="episode"
+                  title={seriesTitle}
                   episodeNumber={episode.episodeNumber}
                   seasonNumber={episode.seasonNumber}
                   seriesTmdbId={episode.seriesTmdbId}

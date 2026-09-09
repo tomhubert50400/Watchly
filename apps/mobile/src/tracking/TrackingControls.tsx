@@ -20,7 +20,7 @@ import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { colors, spacing } from '../design/tokens';
 import { hapticError } from '../feedback/haptics';
 import { useToast } from '../notifications/ToastContext';
-import { notifyUserDataChanged } from '../sync/userDataEvents';
+import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
 import { buildTrackingMutation } from './trackingControlState';
 import { createTrackingStateMemoryCache } from './trackingStateMemoryCache';
 
@@ -50,6 +50,7 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
   const statusLayout = resolveTrackingStatusLayout(fontScale);
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
   const { showToast } = useToast();
+  const trackingRevision = useUserDataRevision('tracking');
   const ownerId = currentUser?.id ?? null;
   const trackingStateCacheKey = ownerId
     ? getTrackingStateCacheKey(ownerId, contentType, tmdbId)
@@ -124,7 +125,7 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
       if (isCurrent()) setLoadError(true);
       return;
     }
-  }, [contentType, firebaseIdToken, getFirebaseIdToken, ownerId, persistedCacheKey, requestScope, tmdbId, trackingStateCacheKey]);
+  }, [contentType, firebaseIdToken, getFirebaseIdToken, ownerId, persistedCacheKey, requestScope, tmdbId, trackingStateCacheKey, trackingRevision]);
 
   useEffect(() => {
     if (previousOwnerRef.current && previousOwnerRef.current !== ownerId) {

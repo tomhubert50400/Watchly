@@ -1,4 +1,16 @@
-import { apiGet, apiPost } from './client';
+import { apiGet, apiPost, apiPut } from './client';
+
+export type ViewingHistoryItem = { id: string; watchedAt: string | null };
+export type ViewingHistoryDate = { id: string; watchedDate: string | null };
+export type ViewingTarget = { contentType: 'movie'; tmdbId: number } | {
+  contentType: 'episode'; tmdbId: number; seasonNumber: number; episodeNumber: number;
+};
+
+export function saveViewingHistory(token: string, target: ViewingTarget, previous: ViewingHistoryItem[], entries: ViewingHistoryDate[]) {
+  return apiPut<{ items: ViewingHistoryItem[] }>('/viewings/history', {
+    ...target, previous, entries, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }, { token });
+}
 
 export type ViewingStats = {
   highlights: Array<{
@@ -31,11 +43,13 @@ export type ViewingStats = {
 };
 
 export type MovieViewingSummary = {
+  history?: ViewingHistoryItem[];
   tmdbId: number;
   viewCount: number;
 };
 
 export type EpisodeViewingSummary = {
+  history?: ViewingHistoryItem[];
   episodeNumber: number;
   seasonNumber: number;
   seriesTmdbId: number;

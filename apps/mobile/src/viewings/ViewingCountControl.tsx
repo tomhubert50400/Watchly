@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { History, RotateCcw } from 'lucide-react-native';
+import { randomUUID } from 'expo-crypto';
 import {
   EpisodeViewingSummary,
   getEpisodeViewingSummary,
   getMovieViewingSummary,
   getSeriesViewingSummary,
-  logEpisodeViewing,
-  logMovieViewing,
   MovieViewingSummary,
   SeriesViewingSummary,
+  saveViewingHistory,
+  ViewingHistoryDate,
+  ViewingHistoryItem,
+  ViewingTarget,
 } from '../api/viewings';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import {
@@ -21,9 +24,14 @@ import { colors, radii, spacing, touchTargets } from '../design/tokens';
 import { hapticError } from '../feedback/haptics';
 import { useToast } from '../notifications/ToastContext';
 import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
+import { ViewingHistorySheet } from './ViewingHistorySheet';
+import { localViewingDay, resolveHistoryDraft, toHistoryDraft } from './viewingHistoryModel';
+import { getViewingHistoryUpdates, setViewingHistoryUpdate, viewingTargetKey } from './viewingHistoryUpdates';
 
 type Props = {
-  variant?: 'activity' | 'default';
+  title?: string;
+  onEditorClose?: () => void;
+  variant?: 'activity' | 'default' | 'editor';
 } & (
   | { contentType: 'movie'; tmdbId: number }
   | { contentType: 'series'; seriesTmdbId: number }
@@ -46,9 +54,12 @@ export function ViewingCountControl(props: Props) {
   const viewingRevision = useUserDataRevision('episodeProgress', 'viewings');
   const { showToast } = useToast();
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [editorHistory, setEditorHistory] = useState<ViewingHistoryItem[] | null>(null);
+  const [summaryScope, setSummaryScope] = useState('');
   const lastConfirmedSummaryRef = useRef<Summary | null>(null);
   const mutationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const pendingMutationCountRef = useRef(0);
+  const historyMutationVersionRef = useRef(0);
   const summaryRef = useRef(summary);
   const resourceKey = getResourceKey(props);
   const cacheKey = currentUser
@@ -76,7 +87,7 @@ export function ViewingCountControl(props: Props) {
     try {
       if (cacheKey) {
         const cached = await readPersistedCache<Summary>(cacheKey).catch(() => null);
-        if (cached && isCurrent()) setSummary(cached.data);
+        if (cached && isCurrent() && !summaryRef.current) { setSummary(cached.data); setSummaryScope(scope); }
       }
       const token = await getFirebaseIdToken();
 
@@ -85,11 +96,14 @@ export function ViewingCountControl(props: Props) {
       }
 
       const loadedSummary = await getSummary(token, props);
-      if (!isCurrent()) return;
+      if (!isCurrent() || pendingMutationCountRef.current) return;
       setSummary(loadedSummary);
+      setSummaryScope(scope);
+      if (props.variant === 'editor' && 'history' in loadedSummary && loadedSummary.history) setEditorHistory((current) => current ?? loadedSummary.history!);
       if (cacheKey) void writePersistedCache(cacheKey, loadedSummary).catch(() => undefined);
     } catch {
       // Existing local data stays mounted while the backend refreshes silently.
+      if (props.variant === 'editor') { showToast('Could not open viewing history. Try again.'); props.onEditorClose?.(); }
     }
   }, [cacheKey, firebaseIdToken, getFirebaseIdToken, requestScope, viewingRevision]);
 
@@ -97,79 +111,100 @@ export function ViewingCountControl(props: Props) {
     void loadSummary();
   }, [loadSummary]);
 
-  async function logAnotherWatch() {
-    if (!firebaseIdToken || props.contentType === 'series') {
+  useEffect(() => { setEditorHistory(null); }, [requestScope]);
+
+  async function openHistory() {
+    if (props.contentType === 'series') return;
+    const current = summaryRef.current;
+    if (summaryScope === requestScope && current && 'history' in current && current.history) {
+      setEditorHistory(current.history);
       return;
     }
     const scope = requestScope;
+    try {
+      const token = await getFirebaseIdToken();
+      if (!token) return;
+      const loaded = await getSummary(token, props);
+      if (requestRef.current.scope !== scope) return;
+      if ('history' in loaded && loaded.history) {
+        setSummary(loaded); setSummaryScope(scope); setEditorHistory(loaded.history);
+      } else showToast('Viewing history is unavailable. Try again.');
+    } catch { showToast('Could not open viewing history. Try again.'); }
+  }
+
+  function saveHistory(entries: ViewingHistoryDate[], previous = editorHistory) {
+    if (!currentUser || props.contentType === 'series' || !previous) return;
+    const ownerId = currentUser.id;
+    const scope = requestScope;
+    const target: ViewingTarget = props.contentType === 'movie' ? { contentType: 'movie', tmdbId: props.tmdbId } : {
+      contentType: 'episode', tmdbId: props.seriesTmdbId, seasonNumber: props.seasonNumber, episodeNumber: props.episodeNumber,
+    };
+    const previousSummary = summaryRef.current;
+    const history = resolveHistoryDraft(entries, previous, localViewingDay());
+    const optimisticSummary = { ...previousSummary, ...target, viewCount: history.length, history } as Summary;
+    const mutationVersion = ++historyMutationVersionRef.current;
+    if (!pendingMutationCountRef.current) lastConfirmedSummaryRef.current = previousSummary;
+    setEditorHistory(null);
+    props.onEditorClose?.();
     requestRef.current = { scope, version: requestRef.current.version + 1 };
-    const currentSummary = summaryRef.current;
-    if (!currentSummary || !('viewCount' in currentSummary)) return;
-
-    const optimisticSummary = { ...currentSummary, viewCount: currentSummary.viewCount + 1 };
-    setSummary(optimisticSummary);
-    summaryRef.current = optimisticSummary;
+    setSummary(optimisticSummary); summaryRef.current = optimisticSummary;
     if (cacheKey) void writePersistedCache(cacheKey, optimisticSummary).catch(() => undefined);
+    setViewingHistoryUpdate(ownerId, target, { target, history, title: props.title, pending: true });
     pendingMutationCountRef.current += 1;
-
     const commitMutation = async () => {
       try {
         const token = await getFirebaseIdToken();
-        if (!token) throw new Error('Sign in again to log another watch.');
-
-        lastConfirmedSummaryRef.current = props.contentType === 'movie'
-          ? await logMovieViewing(token, props.tmdbId)
-          : await logEpisodeViewing(
-              token,
-              props.seriesTmdbId,
-              props.seasonNumber,
-              props.episodeNumber,
-            );
+        if (!token || requestRef.current.scope !== scope) throw new Error('Sign in again to save your viewing history.');
+        const result = await saveViewingHistory(token, target, previous, entries);
+        if (requestRef.current.scope !== scope || !getViewingHistoryUpdates(ownerId).some((item) => viewingTargetKey(item.target) === viewingTargetKey(target))) return;
+        const confirmed = { ...optimisticSummary, history: result.items, viewCount: result.items.length };
+        lastConfirmedSummaryRef.current = confirmed;
+        if (mutationVersion !== historyMutationVersionRef.current) return;
+        setSummary(confirmed); summaryRef.current = confirmed;
+        if (cacheKey) void writePersistedCache(cacheKey, confirmed).catch(() => undefined);
+        setViewingHistoryUpdate(ownerId, target, { target, history: result.items, title: props.title, pending: false });
+        notifyUserDataChanged('viewings', ...(target.contentType === 'episode' ? ['episodeProgress' as const] : previous.length ? [] : ['tracking' as const]));
       } catch (error) {
-        const rolledBack = summaryRef.current && 'viewCount' in summaryRef.current
-          ? { ...summaryRef.current, viewCount: Math.max(0, summaryRef.current.viewCount - 1) }
-          : summaryRef.current;
-        setSummary(rolledBack);
-        summaryRef.current = rolledBack;
-        if (cacheKey && rolledBack) {
-          void writePersistedCache(cacheKey, rolledBack).catch(() => undefined);
-        }
-        hapticError();
-        showToast(error instanceof Error ? error.message : 'Could not log another watch.');
+        if (requestRef.current.scope !== scope || mutationVersion !== historyMutationVersionRef.current || !getViewingHistoryUpdates(ownerId).some((item) => viewingTargetKey(item.target) === viewingTargetKey(target))) return;
+        const rollback = lastConfirmedSummaryRef.current;
+        setViewingHistoryUpdate(ownerId, target, null);
+        setSummary(rollback); summaryRef.current = rollback;
+        if (cacheKey && rollback) void writePersistedCache(cacheKey, rollback).catch(() => undefined);
+        hapticError(); showToast(error instanceof Error ? error.message : 'Could not save viewing history.');
+        notifyUserDataChanged('viewings');
       } finally {
         pendingMutationCountRef.current -= 1;
-        if (pendingMutationCountRef.current === 0 && requestRef.current.scope === scope) {
-          const confirmed = lastConfirmedSummaryRef.current;
-          if (confirmed) {
-            setSummary(confirmed);
-            summaryRef.current = confirmed;
-            if (cacheKey) void writePersistedCache(cacheKey, confirmed).catch(() => undefined);
-          }
-          lastConfirmedSummaryRef.current = null;
-          notifyUserDataChanged('viewings');
-        }
       }
     };
     const queuedMutation = mutationQueueRef.current.then(commitMutation, commitMutation);
     mutationQueueRef.current = queuedMutation.catch(() => undefined);
-    await queuedMutation;
+  }
+
+  async function logAnotherWatch() {
+    const currentSummary = summaryRef.current;
+    if (!currentSummary || !('history' in currentSummary) || !currentSummary.history) { await openHistory(); return; }
+    saveHistory([...toHistoryDraft(currentSummary.history), { id: randomUUID(), watchedDate: localViewingDay() }], currentSummary.history);
   }
 
   if (!firebaseIdToken) {
     return null;
   }
 
-  const viewCount = summary && 'viewCount' in summary ? summary.viewCount : 0;
-  const canLogAgain = props.contentType !== 'series' && viewCount > 0;
+  const viewCount = summaryScope === requestScope && summary && 'viewCount' in summary ? summary.viewCount : 0;
+  const canLogAgain = props.contentType !== 'series' && viewCount > 0 && viewCount < 1000;
+  const editorTitle = props.contentType === 'episode' ? `${props.title ?? ''} · S${props.seasonNumber} E${props.episodeNumber}` : props.title;
+  const editor = editorHistory !== null ? <ViewingHistorySheet history={editorHistory} onClose={() => { setEditorHistory(null); props.onEditorClose?.(); }} onSave={saveHistory} title={editorTitle} /> : null;
+
+  if (props.variant === 'editor') return editor;
 
   if (props.variant === 'activity') {
     return (
-      <Pressable
-        accessibilityHint={canLogAgain ? 'Logs another viewing' : undefined}
+      <><Pressable
+        accessibilityHint="Edit viewing dates and total"
         accessibilityLabel={formatActivityViewingCount(viewCount)}
-        accessibilityRole={canLogAgain ? 'button' : 'text'}
-        disabled={!canLogAgain}
-        onPress={canLogAgain ? () => void logAnotherWatch() : undefined}
+        accessibilityRole="button"
+        disabled={props.contentType === 'series'}
+        onPress={() => void openHistory()}
         style={({ pressed }) => [
           styles.activityContainer,
           pressed && styles.activityContainerPressed,
@@ -179,18 +214,18 @@ export function ViewingCountControl(props: Props) {
         <Text accessibilityLiveRegion="polite" style={styles.activityValue}>
           {formatActivityViewingCount(viewCount)}
         </Text>
-      </Pressable>
+      </Pressable>{editor}</>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.copy}>
+    <><View style={styles.container}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Edit viewing history" disabled={props.contentType === 'series'} onPress={() => void openHistory()} style={styles.copy}>
         <Text style={styles.label}>VIEWING HISTORY</Text>
         <Text accessibilityLiveRegion="polite" style={styles.value}>
-          {formatSummary(props, summary)}
+          {formatSummary(props, summaryScope === requestScope ? summary : null)}
         </Text>
-      </View>
+      </Pressable>
       {canLogAgain ? (
         <Pressable
           accessibilityLabel="Log another watch"
@@ -205,7 +240,7 @@ export function ViewingCountControl(props: Props) {
           <Text style={styles.rewatchLabel}>Log another watch</Text>
         </Pressable>
       ) : null}
-    </View>
+    </View>{editor}</>
   );
 }
 
