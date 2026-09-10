@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { CompositeNavigationProp, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Bell, UserCircle } from 'lucide-react-native';
+import { CalendarDays, UserCircle } from 'lucide-react-native';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   CatalogueSearchItem,
@@ -182,10 +182,10 @@ export function HomeScreen() {
             <View>
               <IconButton
                 accessibilityLabel={unreadNotificationCount === 0
-                  ? 'Open Alerts, no unread alerts'
-                  : `Open Alerts, ${unreadNotificationCount} unread ${unreadNotificationCount === 1 ? 'alert' : 'alerts'}`}
-                icon={<Bell color={colors.textMuted} size={22} strokeWidth={2} />}
-                onPress={() => navigation.navigate('Notifications')}
+                  ? 'Open release calendar, no unread alerts'
+                  : `Open release calendar, ${unreadNotificationCount} unread ${unreadNotificationCount === 1 ? 'alert' : 'alerts'}`}
+                icon={<CalendarDays color={colors.textMuted} size={22} strokeWidth={2} />}
+                onPress={() => navigation.navigate('ReleaseCalendar')}
               />
               {unreadNotificationCount > 0 ? (
                 <View pointerEvents="none" style={styles.notificationBadge}>

@@ -28,7 +28,7 @@ import {
   type ReleaseCalendarItem,
 } from './releaseCalendarModel';
 
-type ReleaseCalendarScreenProps = NativeStackScreenProps<RootStackParamList, 'ReleaseCalendar'>;
+type ReleaseCalendarScreenProps = Pick<NativeStackScreenProps<RootStackParamList, 'ReleaseCalendar' | 'Notifications'>, 'navigation'>;
 
 const filters: Array<{ label: string; value: ReleaseCalendarFilter }> = [
   { label: 'All', value: 'all' },
@@ -42,7 +42,7 @@ export function ReleaseCalendarScreen({ navigation }: ReleaseCalendarScreenProps
     firebaseIdToken,
     getFirebaseIdToken,
   } = useAuthSession();
-  const releaseAlertRevision = useUserDataRevision('releaseAlerts');
+  const releaseAlertRevision = useUserDataRevision('releaseAlerts', 'tracking', 'watchlists', 'episodeProgress');
   const ownerId = currentUser?.id ?? null;
   const [filter, setFilter] = useState<ReleaseCalendarFilter>('all');
   const [monthKey, setMonthKey] = useState<string | null>(null);
@@ -59,7 +59,7 @@ export function ReleaseCalendarScreen({ navigation }: ReleaseCalendarScreenProps
   }, [getFirebaseIdToken, ownerId, releaseAlertRevision]);
   const resource = useCachedResource<ReleaseCalendarItem[]>({
     enabled: Boolean(ownerId && firebaseIdToken),
-    key: getPrivateCacheKey(ownerId ?? 'visitor', 'release-calendar:v1'),
+    key: getPrivateCacheKey(ownerId ?? 'visitor', 'release-calendar:v2'),
     load,
   });
   const items = resource.data ?? [];
@@ -86,7 +86,7 @@ export function ReleaseCalendarScreen({ navigation }: ReleaseCalendarScreenProps
     return (
       <Screen contentReady={!resource.isInitialLoading || items.length > 0} title="">
         <SignInRequiredCard
-          body="You need to be signed in to see upcoming releases tied to your active alerts."
+          body="Sign in to see upcoming releases from your watchlist and the series you follow."
           title="Sign in to view your calendar"
         />
       </Screen>
@@ -127,15 +127,15 @@ export function ReleaseCalendarScreen({ navigation }: ReleaseCalendarScreenProps
       <View style={styles.content}>
         <ScreenReveal delay={50} style={styles.intro}>
           <Text style={styles.introTitle}>Your upcoming releases</Text>
-          <Text style={styles.introBody}>Built only from active release alerts. Open a title to manage its alert.</Text>
+          <Text style={styles.introBody}>Movies on your watchlist and new seasons and episodes from the series you follow.</Text>
         </ScreenReveal>
         <SegmentedControl onChange={setFilter} options={filters} value={filter} />
         {filteredItems.length === 0 ? (
           <EmptyState
             body={items.length === 0
-              ? 'Turn on the bell for a coming movie or series to add it here.'
+              ? 'Add a movie to your watchlist or follow a series. Its upcoming releases will appear here, no alerts needed.'
               : 'No releases match this filter.'}
-            title={items.length === 0 ? 'No active release alerts' : 'No matching releases'}
+            title={items.length === 0 ? 'No upcoming releases yet' : 'No matching releases'}
           >
             {items.length === 0 ? (
               <Button
