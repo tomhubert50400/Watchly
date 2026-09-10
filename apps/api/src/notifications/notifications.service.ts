@@ -2,6 +2,7 @@ import {
   Inject,
   Injectable,
   Logger,
+  NotFoundException,
   OnApplicationBootstrap,
   OnModuleDestroy,
 } from '@nestjs/common';
@@ -22,6 +23,7 @@ import {
   ReleaseEventsService,
 } from '../release-events/release-events.service';
 import { PushService } from '../push/push.service';
+import { CHARACTER_CATALOGUE, characterReleaseTitles } from './character-catalogue';
 
 const SCHEDULE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const SYNC_BATCH_SIZE = 12;
@@ -95,7 +97,10 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
   async sync(identity: AuthenticatedIdentity) {
     const userId = await this.getUserId(identity);
     const alertSubscriptions = await this.listAlertSubscriptions(userId);
-    const followedTitles = await this.releaseEvents.expandFollowedTitles(alertSubscriptions);
+    const followedTitles = mergeReleaseTitles([
+      ...(await this.releaseEvents.expandFollowedTitles(alertSubscriptions)).map((item) => ({ ...item, userId })),
+      ...characterReleaseTitles(await this.listCharacterSubscriptions(userId)),
+    ]);
     let createdCount = 0;
 
     for (let offset = 0; offset < followedTitles.length; offset += SYNC_BATCH_SIZE) {
@@ -113,8 +118,45 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
     return {
       ...list,
       createdCount,
-      syncedContentCount: alertSubscriptions.length,
+      syncedContentCount: followedTitles.length,
     };
+  }
+
+  async listCharacters(identity: AuthenticatedIdentity, contentType?: ReleaseAlertContentType, tmdbId?: number) {
+    const userId = await this.getUserId(identity);
+    const subscriptions = await this.listCharacterSubscriptions(userId);
+    const followed = new Set(subscriptions.map((item) => item.characterKey));
+    return {
+      items: CHARACTER_CATALOGUE.filter((character) => !contentType || character.appearances.some((appearance) =>
+        appearance.contentType === toTrackedContentType(contentType) && appearance.tmdbId === tmdbId,
+      )).map(({ key, name, continuity }) => ({ key, name, continuity, enabled: followed.has(key) })),
+    };
+  }
+
+  async setCharacterAlert(identity: AuthenticatedIdentity, characterKey: string, enabled: boolean) {
+    if (!CHARACTER_CATALOGUE.some((item) => item.key === characterKey)) {
+      throw new NotFoundException('Character is not in the verified catalogue.');
+    }
+    const userId = await this.getUserId(identity);
+    await this.prisma.withConnectionRetry(async () => {
+      if (enabled) {
+        await this.prisma.characterAlertSubscription.upsert({
+          create: { userId, characterKey },
+          update: {},
+          where: { userId_characterKey: { userId, characterKey } },
+        });
+      } else {
+        await this.prisma.characterAlertSubscription.deleteMany({ where: { userId, characterKey } });
+      }
+    });
+    return { enabled };
+  }
+
+  private async listCharacterSubscriptions(userId?: string) {
+    return this.prisma.withConnectionRetry(() => this.prisma.characterAlertSubscription.findMany({
+      where: userId ? { userId } : {},
+      select: { characterKey: true, userId: true },
+    }));
   }
 
   async listReleaseAlerts(identity: AuthenticatedIdentity) {
@@ -367,7 +409,11 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
           },
         }),
       );
-      const groups = groupSubscriptionsByContent(await this.releaseEvents.expandFollowedTitles(subscriptions));
+      const characterSubscriptions = await this.listCharacterSubscriptions();
+      const groups = groupSubscriptionsByContent(mergeReleaseTitles([
+        ...await this.releaseEvents.expandFollowedTitles(subscriptions),
+        ...characterReleaseTitles(characterSubscriptions),
+      ]));
       let createdCount = 0;
       let failedContentCount = 0;
 
@@ -391,7 +437,7 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
         createdCount,
         event: 'release_notifications.scheduled_sync.completed',
         failedContentCount,
-        subscriberCount: subscriptions.length,
+        subscriberCount: subscriptions.length + characterSubscriptions.length,
       }));
     } catch (error) {
       this.logger.error(error instanceof Error ? error.message : String(error));
@@ -486,7 +532,8 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
       .filter((item) => !droppedSeries.has(item.seriesTmdbId))
       .map((item) => ({ contentType: TrackedContentType.SERIES, tmdbId: item.seriesTmdbId }));
     const followedAlerts = await this.releaseEvents.expandFollowedTitles(alerts);
-    return [...new Map([...followedAlerts, ...tracked, ...watchlistItems, ...watching].map((item) =>
+    const characterTitles = characterReleaseTitles(await this.listCharacterSubscriptions(userId));
+    return [...new Map([...followedAlerts, ...characterTitles, ...tracked, ...watchlistItems, ...watching].map((item) =>
       [`${item.contentType}:${item.tmdbId}`, { contentType: item.contentType, tmdbId: item.tmdbId }],
     )).values()];
   }
@@ -580,6 +627,10 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
     return created.count;
   }
 
+}
+
+function mergeReleaseTitles<T extends { contentType: TrackedContentType; tmdbId: number; userId?: string }>(titles: T[]): T[] {
+  return [...new Map(titles.map((item) => [`${item.userId ?? ''}:${item.contentType}:${item.tmdbId}`, item])).values()];
 }
 
 type SubscriptionGroup = {

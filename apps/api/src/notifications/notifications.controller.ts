@@ -30,6 +30,30 @@ export class NotificationsController {
     return this.notifications.sync(getIdentity(request));
   }
 
+  @Get('characters')
+  async listCharacters(@Req() request: AuthenticatedRequest) {
+    return this.notifications.listCharacters(getIdentity(request));
+  }
+
+  @Get('characters/:contentType/:tmdbId')
+  async listCharactersForTitle(
+    @Req() request: AuthenticatedRequest,
+    @Param('contentType') contentType: string,
+    @Param('tmdbId') tmdbId: string,
+  ) {
+    return this.notifications.listCharacters(getIdentity(request), parseContentType(contentType), parseTmdbId(tmdbId));
+  }
+
+  @Put('characters/:characterKey')
+  async followCharacter(@Req() request: AuthenticatedRequest, @Param('characterKey') key: string) {
+    return this.notifications.setCharacterAlert(getIdentity(request), key, true);
+  }
+
+  @Delete('characters/:characterKey')
+  async unfollowCharacter(@Req() request: AuthenticatedRequest, @Param('characterKey') key: string) {
+    return this.notifications.setCharacterAlert(getIdentity(request), key, false);
+  }
+
   @Get('release-alerts')
   async listReleaseAlerts(@Req() request: AuthenticatedRequest) {
     return this.notifications.listReleaseAlerts(getIdentity(request));

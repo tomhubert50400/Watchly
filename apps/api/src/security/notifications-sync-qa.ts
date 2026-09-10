@@ -60,6 +60,7 @@ async function run() {
   let updatedCandidateCount = 0;
   const dedupeKeys = new Set<string>();
   const prisma = {
+    characterAlertSubscription: { findMany: async () => [] },
     notification: {
       createMany: async ({ data, skipDuplicates }: { data: Array<{ dedupeKey: string }>; skipDuplicates?: boolean }) => {
         assert.equal(skipDuplicates, true, 'notification persistence must tolerate concurrent duplicate candidates');
@@ -155,6 +156,7 @@ async function run() {
     getCollection: async () => ({ items: [{ tmdbId: 603, releaseDate: '2099-01-01' }] }),
   } as never, {} as never);
   const scheduledPrisma = {
+    characterAlertSubscription: { findMany: async () => [] },
     notification: {
       createMany: async ({ data }: { data: Array<{ userId: string }> }) => {
         projectedUsers.push(...data.map((item) => item.userId));

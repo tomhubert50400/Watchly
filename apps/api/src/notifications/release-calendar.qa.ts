@@ -20,6 +20,7 @@ async function run() {
   let calendarSubscriptionTake: number | undefined;
   const releaseEventQueries: Array<Record<string, unknown>> = [];
   const prisma = {
+    characterAlertSubscription: { findMany: async () => [] },
     notification: {
       createMany: async () => assert.fail('Reading the calendar must not create notifications'),
       deleteMany: async () => assert.fail('Reading the calendar must not delete notifications'),

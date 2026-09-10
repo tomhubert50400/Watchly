@@ -177,6 +177,7 @@ model User {
   reportsSubmitted           ContentReport[]            @relation("ReportReporter")
   suspensions                UserSuspension[]
   releaseAlertSubscriptions  ReleaseAlertSubscription[]
+  characterAlertSubscriptions CharacterAlertSubscription[]
   notifications              Notification[]             @relation("NotificationRecipient")
   actedNotifications         Notification[]             @relation("NotificationActor")
   notificationPreference     NotificationPreference?
@@ -728,6 +729,16 @@ model ReleaseAlertSubscription {
   @@unique([userId, contentType, tmdbId])
   @@index([contentType, tmdbId])
   @@map("release_alert_subscriptions")
+}
+
+model CharacterAlertSubscription {
+  userId       String   @db.Uuid
+  characterKey String   @db.VarChar(100)
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, characterKey])
+  @@map("character_alert_subscriptions")
 }
 
 model NotificationPreference {

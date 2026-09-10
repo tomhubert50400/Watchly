@@ -51,7 +51,7 @@ A film bell also follows future films in that film's TMDB collection. Each notif
 
 The original bell remains the saved subscription. Removing it stops its inherited follows, unless another active bell still covers them. Expansion is deduplicated per user and film before projecting notifications, so overlapping bells cannot produce duplicate sequel reminders. The release calendar includes the same inherited titles. A collection lookup failure preserves the original title and logs the failed lookup for retry at the next sync.
 
-The movie-detail bell explains that future films in the named collection are included. Character following is not enabled.
+The movie-detail bell explains that future films in the named collection are included. Separate opt-in character follows use verified appearances within a named continuity; see [character-alerts.md](character-alerts.md). They share the same J-7 reminders and deduplication without expanding character appearances to unrelated saga films.
 
 ## Personal release calendar
 
