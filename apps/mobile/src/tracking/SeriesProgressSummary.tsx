@@ -3,6 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { listSeriesProgress } from '../api/progress';
+import { getSeriesViewingSummary } from '../api/viewings';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey } from '../cache/persistedCache';
@@ -12,7 +13,7 @@ import { colors, radii, shadows, spacing } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { useUserDataRevision } from '../sync/userDataEvents';
 import { ensureSeasonDetails } from '../catalogue/cataloguePrefetch';
-import { findNextSeriesEpisode } from '../catalogue/whatsNextModel';
+import { findNextSeriesEpisode, getSeriesRewatchAnchor } from '../catalogue/whatsNextModel';
 
 type SeriesProgressSummaryProps = {
   seasons: SeriesDetails['seasons'];
@@ -32,17 +33,23 @@ export function SeriesProgressSummary({
 }: SeriesProgressSummaryProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { currentUser, firebaseIdToken } = useAuthSession();
-  const episodeProgressRevision = useUserDataRevision('episodeProgress');
+  const episodeProgressRevision = useUserDataRevision('episodeProgress', 'viewings');
 
   const loadProgress = useCallback(async () => {
-    const progress = await listSeriesProgress(firebaseIdToken!, seriesTmdbId);
-    const episode = await findNextSeriesEpisode(seasons, progress.episodes,
-      async (seasonNumber) => (await ensureSeasonDetails(seriesTmdbId, seasonNumber)).item);
+    const [progress, viewings] = await Promise.all([
+      listSeriesProgress(firebaseIdToken!, seriesTmdbId),
+      getSeriesViewingSummary(firebaseIdToken!, seriesTmdbId),
+    ]);
+    const anchor = getSeriesRewatchAnchor(viewings.episodes ?? []);
+    const watched = anchor ? (viewings.episodes ?? []).filter((item) => item.latestLoggedAt >= anchor.latestLoggedAt) : progress.episodes;
+    const episode = await findNextSeriesEpisode(seasons, watched,
+      async (seasonNumber) => (await ensureSeasonDetails(seriesTmdbId, seasonNumber)).item,
+      undefined, anchor);
     return { episode, watchedCount: progress.watchedEpisodeCount };
   }, [episodeProgressRevision, firebaseIdToken, seasons, seriesTmdbId]);
   const resource = useCachedResource({
     enabled: Boolean(currentUser && firebaseIdToken),
-    key: getPrivateCacheKey(currentUser?.id ?? 'visitor', `whats-next:series:${seriesTmdbId}:v1`),
+    key: getPrivateCacheKey(currentUser?.id ?? 'visitor', `whats-next:series:${seriesTmdbId}:v2`),
     load: loadProgress,
   });
   const resumeEpisode = resource.data?.episode ?? null;
@@ -163,7 +170,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radii.md,
     borderWidth: 1,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
     marginTop: spacing.xl,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,

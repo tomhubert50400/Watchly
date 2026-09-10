@@ -26,6 +26,7 @@ import { createTrackingStateMemoryCache } from './trackingStateMemoryCache';
 
 type TrackingControlsProps = {
   contentType: TrackedContentType;
+  onWatchedChange?: (watched: boolean) => void;
   tmdbId: number;
 };
 
@@ -45,7 +46,7 @@ function getTrackingStateCacheKey(userId: string, contentType: TrackedContentTyp
   return JSON.stringify([userId, contentType, tmdbId]);
 }
 
-export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps) {
+export function TrackingControls({ contentType, onWatchedChange, tmdbId }: TrackingControlsProps) {
   const { fontScale } = useWindowDimensions();
   const statusLayout = resolveTrackingStatusLayout(fontScale);
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
@@ -80,6 +81,10 @@ export function TrackingControls({ contentType, tmdbId }: TrackingControlsProps)
 
   const visibleState = stateScope === requestScope ? state : null;
   const visibleStateKnown = stateScope === requestScope && isStateKnown;
+
+  useEffect(() => {
+    onWatchedChange?.(Boolean(currentUser && visibleState?.status === 'watched'));
+  }, [currentUser, onWatchedChange, visibleState?.status]);
 
   const loadState = useCallback(async () => {
     const scope = requestScope;

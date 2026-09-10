@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CatalogueRelatedItem, SeriesDetails } from '../api/catalogue';
 import { useCachedResource } from '../cache/useCachedResource';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
@@ -81,7 +82,7 @@ export function SeriesDetailScreen({ navigation, route }: Props) {
       {atmosphereUrl ? <SpotlightAtmosphere blurRadius={28} imageUrl={atmosphereUrl} /> : null}
       <ScrollView contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="never" showsVerticalScrollIndicator={false}>
         {renderMode === 'loading' ? (
-          <View style={styles.stateFrame}><LoadingState label="Loading series details" /></View>
+          <View style={styles.stateFrame}><LoadingState variant="detail" label="Loading series details" /></View>
         ) : renderMode === 'fullError' ? (
           <View style={styles.stateFrame}>
             <EmptyState body={resource.error ?? 'Series details failed.'} title="Series detail failed">
@@ -104,6 +105,7 @@ function SeriesDetailContent({ onOpenRelated, series }: {
   series: SeriesDetails;
 }) {
   const [activeView, setActiveView] = useState<'details' | 'episodes'>('details');
+  const [isWatched, setIsWatched] = useState(false);
   const isReleased = isReleasedDate(series.firstAirDate);
   const infoItems = [
     'Series',
@@ -126,7 +128,7 @@ function SeriesDetailContent({ onOpenRelated, series }: {
 
   return (
     <View>
-      <MediaHero
+      <ScreenReveal delay={50}><MediaHero
         actionAccessory={<ReleaseAlertControl contentType="series" tmdbId={series.tmdbId} />}
         actions={<AddToWatchlistControl contentType="series" tmdbId={series.tmdbId} />}
         backdropUrl={series.backdropUrl}
@@ -137,8 +139,8 @@ function SeriesDetailContent({ onOpenRelated, series }: {
       >
         {series.genres.length > 0 ? <Text numberOfLines={1} style={styles.genres}>{series.genres.join(' · ')}</Text> : null}
         <HeaderInfoPills items={infoItems} />
-      </MediaHero>
-      <View style={styles.bodyStack}>
+      </MediaHero></ScreenReveal>
+      <ScreenReveal delay={100} style={styles.bodyStack}>
         <SegmentedControl
           containerStyle={styles.viewSwitchControl}
           onChange={setActiveView}
@@ -160,24 +162,25 @@ function SeriesDetailContent({ onOpenRelated, series }: {
             <SynopsisPanel overview={series.overview} />
             <View style={styles.personalSection}>
               <Text style={styles.personalEyebrow}>Your activity</Text>
-              <TrackingControls contentType="series" tmdbId={series.tmdbId} />
+              <TrackingControls contentType="series" onWatchedChange={setIsWatched} tmdbId={series.tmdbId} />
               <SeriesRatingControl
                 posterUrl={series.posterUrl}
                 seriesTitle={series.title}
                 seriesTmdbId={series.tmdbId}
               />
               <ViewingCountControl contentType="series" seriesTmdbId={series.tmdbId} />
+              {isWatched ? <SeriesProgressSummary seasons={series.seasons} seriesTitle={series.title} seriesTmdbId={series.tmdbId} /> : null}
             </View>
             <DetailFacts items={detailFacts} />
             <CatalogueVideoRail videos={series.videos ?? []} />
             <StreamingAvailabilityPanel contentType="series" tmdbId={series.tmdbId} />
             <CatalogueCastRail cast={series.cast ?? []} />
             <CatalogueKeywordList keywords={series.keywords ?? []} />
-            <SeriesProgressSummary seasons={series.seasons} seriesTitle={series.title} seriesTmdbId={series.tmdbId} />
+            {!isWatched ? <SeriesProgressSummary seasons={series.seasons} seriesTitle={series.title} seriesTmdbId={series.tmdbId} /> : null}
             <CatalogueRelatedRail items={series.recommendations ?? []} onOpen={onOpenRelated} />
           </>
         )}
-      </View>
+      </ScreenReveal>
     </View>
   );
 }

@@ -1,9 +1,10 @@
-import { useCallback, useLayoutEffect } from 'react';
+import { useCallback, useLayoutEffect, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CatalogueRelatedItem, DisplayRating, MovieDetails } from '../api/catalogue';
 import { useCachedResource } from '../cache/useCachedResource';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { resolveDetailMetadataLayout } from '../components/dynamicTypeLayout';
 import { EmptyState } from '../components/EmptyState';
@@ -76,7 +77,7 @@ export function FilmDetailScreen({ navigation, route }: FilmDetailScreenProps) {
       >
         {renderMode === 'loading' ? (
           <View style={styles.stateFrame}>
-            <LoadingState label="Loading film details" />
+            <LoadingState variant="detail" label="Loading film details" />
           </View>
         ) : renderMode === 'fullError' ? (
           <View style={styles.stateFrame}>
@@ -102,6 +103,7 @@ function MovieDetailContent({
   movie: MovieDetails;
   onOpenRelated: (item: CatalogueRelatedItem) => void;
 }) {
+  const [isWatched, setIsWatched] = useState(false);
   const { fontScale } = useWindowDimensions();
   const metadataLayout = resolveDetailMetadataLayout(fontScale);
   const isReleased = isReleasedDate(movie.releaseDate);
@@ -124,7 +126,7 @@ function MovieDetailContent({
 
   return (
     <View>
-      <MediaHero
+      <ScreenReveal delay={50}><MediaHero
         actionAccessory={<ReleaseAlertControl contentType="movie" tmdbId={movie.tmdbId} />}
         actions={<AddToWatchlistControl contentType="movie" tmdbId={movie.tmdbId} />}
         backdropUrl={movie.backdropUrl}
@@ -139,14 +141,15 @@ function MovieDetailContent({
           </Text>
         ) : null}
         <HeaderInfoPills items={infoItems} />
-      </MediaHero>
-      <View style={styles.bodyStack}>
+      </MediaHero></ScreenReveal>
+      <ScreenReveal delay={100} style={styles.bodyStack}>
         {movie.tagline ? <Text style={styles.tagline}>{movie.tagline}</Text> : null}
         <SynopsisPanel overview={movie.overview} />
         <View style={styles.personalSection}>
           <Text style={styles.personalEyebrow}>Your activity</Text>
-          <TrackingControls contentType="movie" tmdbId={movie.tmdbId} />
+          <TrackingControls contentType="movie" onWatchedChange={setIsWatched} tmdbId={movie.tmdbId} />
           <ViewingCountControl contentType="movie" title={movie.title} tmdbId={movie.tmdbId} />
+          {isWatched && movie.collection ? <MovieWhatsNext collectionId={movie.collection.id} tmdbId={movie.tmdbId} onOpen={onOpenRelated} /> : null}
           {isReleased ? (
             <MovieReviewEditor mediaTitle={movie.title} posterUrl={movie.posterUrl} tmdbId={movie.tmdbId} />
           ) : null}
@@ -156,9 +159,9 @@ function MovieDetailContent({
         <StreamingAvailabilityPanel contentType="movie" tmdbId={movie.tmdbId} />
         <CatalogueCastRail cast={movie.cast ?? []} />
         <CatalogueKeywordList keywords={movie.keywords ?? []} />
-        {movie.collection ? <MovieWhatsNext collectionId={movie.collection.id} tmdbId={movie.tmdbId} onOpen={onOpenRelated} /> : null}
+        {!isWatched && movie.collection ? <MovieWhatsNext collectionId={movie.collection.id} tmdbId={movie.tmdbId} onOpen={onOpenRelated} /> : null}
         <CatalogueRelatedRail items={movie.recommendations ?? []} onOpen={onOpenRelated} />
-      </View>
+      </ScreenReveal>
     </View>
   );
 }
