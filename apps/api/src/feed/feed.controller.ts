@@ -6,6 +6,7 @@ import {
   Param,
   ParseUUIDPipe,
   Put,
+  Query,
   Req,
   UnauthorizedException,
   UseGuards,
@@ -22,6 +23,11 @@ export class FeedController {
   @Get()
   async list(@Req() request: AuthenticatedRequest) {
     return this.feed.listFeed(getIdentity(request));
+  }
+
+  @Get('community')
+  async community(@Req() request: AuthenticatedRequest, @Query('cursor') cursor?: string) {
+    return this.feed.listCommunity(getIdentity(request), cursor);
   }
 
   @Put('movie-reviews/:reviewId/like')

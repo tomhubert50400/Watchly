@@ -5,6 +5,7 @@ import { PrismaService } from '../database/prisma.service';
 import { FollowStatus, PrivacyVisibility } from '../generated/prisma/enums';
 import { AvatarStorageService } from '../media/avatar-storage.service';
 import { isAccountSuspended } from '../moderation/account-suspension';
+import { communityFeed } from './community-feed';
 
 type FeedAuthor = {
   avatarObjectKey: string | null;
@@ -74,6 +75,11 @@ export class FeedService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(AvatarStorageService) private readonly avatarStorage: AvatarStorageService,
   ) {}
+
+  async listCommunity(identity: AuthenticatedIdentity, cursor?: string) {
+    const viewer = await this.authService.getOrCreateUser(identity);
+    return this.prisma.withConnectionRetry(() => communityFeed(this.prisma, this.avatarStorage, viewer.id, cursor));
+  }
 
   async listFeed(identity: AuthenticatedIdentity) {
     const viewer = await this.authService.getOrCreateUser(identity);
