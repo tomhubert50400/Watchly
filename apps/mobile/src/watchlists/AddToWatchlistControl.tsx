@@ -376,7 +376,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   const personalOptions = options.filter((option) => option.kind === 'personal');
   const sharedOptions = options.filter((option) => option.kind === 'shared');
 
-  const footer = (
+  const createForm = (
     <View style={styles.footer}>
       {isCreateFormOpen ? (
         <View style={styles.createPanel}>
@@ -441,66 +441,69 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
         <Text style={styles.triggerLabel}>Add to watchlist</Text>
       </Pressable>
 
-      <BottomActionSheet footer={footer} onClose={dismissSheet} title="Add to a list" visible={isOpen}>
-        <Text style={styles.sheetSubtitle}>Select one or more lists.</Text>
+      <BottomActionSheet dragFromHandleOnly onClose={dismissSheet} title="Add to a list" visible={isOpen}>
+        <BottomActionSheetScrollView disableScrollViewPanResponder={false} contentContainerStyle={styles.optionSections}>
+          <Text style={styles.sheetSubtitle}>Select one or more lists.</Text>
 
-        {(!hasCurrentOptions || (isLoading && options.length === 0)) ? (
-          <View style={styles.centerState}>
-            <ActivityIndicator color={colors.accent} />
-            <Text style={styles.stateText}>Loading your lists…</Text>
-          </View>
-        ) : options.length === 0 ? (
-          <View style={styles.centerState}>
-            <Text style={styles.emptyTitle}>No lists yet</Text>
-            <Text style={styles.stateText}>Create your first personal or shared list below.</Text>
-          </View>
-        ) : (
-          <BottomActionSheetScrollView contentContainerStyle={styles.optionSections}>
-            {personalOptions.length > 0 ? (
-              <View style={styles.optionSection}>
-                <Text accessibilityRole="header" style={styles.optionSectionTitle}>Personal lists</Text>
-                <BottomActionSheetScrollView
-                  contentContainerStyle={styles.optionRail}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.optionScroller}
-                >
-                  {personalOptions.map((option) => (
-                    <WatchlistOptionRow
-                      isSelected={selectedKeys.has(option.key)}
-                      key={option.key}
-                      onPress={() => toggleOption(option.key)}
-                      option={option}
-                    />
-                  ))}
-                </BottomActionSheetScrollView>
-              </View>
-            ) : null}
-            {sharedOptions.length > 0 ? (
-              <View style={[
-                styles.optionSection,
-                personalOptions.length > 0 ? styles.optionSectionSeparated : null,
-              ]}>
-                <Text accessibilityRole="header" style={styles.optionSectionTitle}>Shared lists</Text>
-                <BottomActionSheetScrollView
-                  contentContainerStyle={styles.optionRail}
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.optionScroller}
-                >
-                  {sharedOptions.map((option) => (
-                    <WatchlistOptionRow
-                      isSelected={selectedKeys.has(option.key)}
-                      key={option.key}
-                      onPress={() => toggleOption(option.key)}
-                      option={option}
-                    />
-                  ))}
-                </BottomActionSheetScrollView>
-              </View>
-            ) : null}
-          </BottomActionSheetScrollView>
-        )}
+          {(!hasCurrentOptions || (isLoading && options.length === 0)) ? (
+            <View style={styles.centerState}>
+              <ActivityIndicator color={colors.accent} />
+              <Text style={styles.stateText}>Loading your lists…</Text>
+            </View>
+          ) : options.length === 0 ? (
+            <View style={styles.centerState}>
+              <Text style={styles.emptyTitle}>No lists yet</Text>
+              <Text style={styles.stateText}>Create your first personal or shared list below.</Text>
+            </View>
+          ) : (
+            <View style={styles.optionSections}>
+              {personalOptions.length > 0 ? (
+                <View style={styles.optionSection}>
+                  <Text accessibilityRole="header" style={styles.optionSectionTitle}>Personal lists</Text>
+                  <BottomActionSheetScrollView
+                    contentContainerStyle={styles.optionRail}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.optionScroller}
+                  >
+                    {personalOptions.map((option) => (
+                      <WatchlistOptionRow
+                        isSelected={selectedKeys.has(option.key)}
+                        key={option.key}
+                        onPress={() => toggleOption(option.key)}
+                        option={option}
+                      />
+                    ))}
+                  </BottomActionSheetScrollView>
+                </View>
+              ) : null}
+              {sharedOptions.length > 0 ? (
+                <View style={[
+                  styles.optionSection,
+                  personalOptions.length > 0 ? styles.optionSectionSeparated : null,
+                ]}>
+                  <Text accessibilityRole="header" style={styles.optionSectionTitle}>Shared lists</Text>
+                  <BottomActionSheetScrollView
+                    contentContainerStyle={styles.optionRail}
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.optionScroller}
+                  >
+                    {sharedOptions.map((option) => (
+                      <WatchlistOptionRow
+                        isSelected={selectedKeys.has(option.key)}
+                        key={option.key}
+                        onPress={() => toggleOption(option.key)}
+                        option={option}
+                      />
+                    ))}
+                  </BottomActionSheetScrollView>
+                </View>
+              ) : null}
+            </View>
+          )}
+          {createForm}
+        </BottomActionSheetScrollView>
       </BottomActionSheet>
       <SignInSheet
         body="You need to be signed in to add titles to a watchlist. Sign in here to continue."

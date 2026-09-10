@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusedFieldVisibility } from '../components/useFocusedFieldVisibility';
 import { Button } from '../components/Button';
 import { colors, radii, spacing } from '../design/tokens';
 import type { RootStackParamList } from '../navigation/types';
@@ -14,6 +15,8 @@ export function ReviewAccessScreen({ navigation }: NativeStackScreenProps<RootSt
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const busy = useRef(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const visibility = useFocusedFieldVisibility(scrollRef);
   const passwordInput = useRef<TextInput>(null);
 
   const close = () => navigation.reset({
@@ -43,7 +46,7 @@ export function ReviewAccessScreen({ navigation }: NativeStackScreenProps<RootSt
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.root}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} {...visibility} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Explore Watchly</Text>
         {currentUser ? (
           <View style={styles.form}>

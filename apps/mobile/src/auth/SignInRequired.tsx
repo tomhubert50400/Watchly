@@ -23,8 +23,9 @@ export function SignInSheet({ body, onClose, title, visible }: SignInSheetProps)
   if (!visible) return null;
 
   return (
-    <BottomActionSheet onClose={onClose} title="Sign in to Watchly" visible>
+    <BottomActionSheet dragFromHandleOnly onClose={onClose} title="Sign in to Watchly" visible>
       <BottomActionSheetScrollView
+        disableScrollViewPanResponder={false}
         contentContainerStyle={styles.sheetContent}
       >
         <ProfileAuthCard body={body} embedded title={title} />

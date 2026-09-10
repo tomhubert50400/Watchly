@@ -359,7 +359,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
       </WatchlistPage>
 
       <BottomActionSheet
-        footer={memberForm}
+        dragFromHandleOnly
         onClose={() => {
           setIsMembersSheetOpen(false);
           setMemberError(null);
@@ -369,6 +369,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
         visible={isMembersSheetOpen}
       >
         <BottomActionSheetScrollView
+          disableScrollViewPanResponder={false}
           contentContainerStyle={styles.membersSheetContent}
           keyboardShouldPersistTaps="handled"
         >
@@ -388,6 +389,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
               </View>
             ))}
           </View>
+          {memberForm}
         </BottomActionSheetScrollView>
       </BottomActionSheet>
     </>

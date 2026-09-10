@@ -9,6 +9,9 @@ function source(path: string) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
 }
 
+const visibility = source('./useFocusedFieldVisibility.ts');
+const report = source('../reports/ReportSheet.tsx');
+const reviewAccess = source('../auth/ReviewAccessScreen.tsx');
 const bottomSheet = source('./BottomActionSheet.tsx');
 const textInput = source('./TextInput.tsx');
 const screen = source('./Screen.tsx');
@@ -36,14 +39,28 @@ assert.equal(resolveFocusedFieldScrollOffset({ ...reviewFrame, scrollOffset: 148
   'hiding the keyboard must not unnecessarily jump the content');
 assert.equal(resolveFocusedFieldScrollOffset({ ...reviewFrame, viewportHeight: 0 }), 0,
   'layout measurements before mounting must not trigger scrolling');
-assert.match(bottomSheet, /onFocus=\{[\s\S]*currentlyFocusedInput\(\)[\s\S]*revealFocusedInput\(\)/,
-  'focus must reveal the input even when the keyboard is already open');
-assert.match(bottomSheet, /onLayout=\{[\s\S]*revealFocusedInput\(\)/,
-  'resizing around the keyboard and footer must reveal the active field');
-assert.match(bottomSheet, /Keyboard\.addListener\('keyboardDidShow', revealFocusedInput\)/,
+assert.match(visibility, /onFocus:[\s\S]*currentlyFocusedInput\(\)[\s\S]*revealFocusedInput\(\)/,
+  'focus must reveal the field when the keyboard is already open');
+assert.match(visibility, /onLayout: revealFocusedInput/, 'footer resizing must reveal the active field');
+assert.match(visibility, /onContentSizeChange: revealFocusedInput/, 'form errors must not push the field out of view');
+assert.match(visibility, /Keyboard\.addListener\('keyboardDidShow', revealFocusedInput\)/,
   'a final measurement must run after the keyboard finishes opening');
-assert.match(bottomSheet, /getNativeScrollRef\(\)\?\.measureInWindow/,
-  'field visibility must use the actual scroll viewport, not only the keyboard position');
+assert.match(visibility, /Keyboard\.addListener\('keyboardDidChangeFrame', revealFocusedInput\)/,
+  'keyboard size changes must trigger a fresh measurement');
+assert.match(visibility, /getNativeScrollRef\(\)\?\.measureInWindow/,
+  'visibility must use the real viewport');
+for (const layout of [screen, watchlistPage, reviewAccess, bottomSheet]) {
+  assert.match(layout, /useFocusedFieldVisibility\(/, 'every form container must reveal its focused input');
+}
+assert.equal(resolveFocusedFieldScrollOffset({ ...reviewFrame, viewportHeight: 500, keyboardTop: 460 }), 148,
+  'native insets must clip the visible viewport at the keyboard');
+assert.match(report, /multiline\s+scrollEnabled/, 'long reports must scroll inside the editor');
+assert.match(report, /height: 120/, 'report text must not grow beyond the available viewport');
+assert.match(report, /<BottomActionSheet\s+dragFromHandleOnly/, 'report selection must not dismiss the sheet');
+assert.match(screen, /useNativeKeyboardInsets = nativeKeyboardInsetsOnly && !footer/,
+  'screens with fixed actions must resize their entire frame');
+assert.match(watchlistPage, /automaticallyAdjustKeyboardInsets=\{false\}/,
+  'watchlist screens must not apply keyboard space twice');
 assert.match(bottomSheet, /keyboardInset > 0 && \{ top: safeAreaInsets\.top \+ spacing\.sm \}/,
   'editing must expand the sheet into the available safe area');
 assert.match(opinionSheet, /<BottomActionSheet\s+dragFromHandleOnly/,
@@ -157,8 +174,8 @@ assert.match(
 );
 assert.match(
   sharedWatchlist,
-  /<BottomActionSheet\s+footer=\{memberForm\}[\s\S]*title="Members"/,
-  'member controls must use the keyboard-synchronized sheet footer',
+  /<BottomActionSheetScrollView[\s\S]*\{memberForm\}[\s\S]*<\/BottomActionSheetScrollView>/,
+  'member controls must be inside the scrollable body',
 );
 assert.match(
   sharedWatchlist,
@@ -166,7 +183,7 @@ assert.match(
   'vote creation must stay above the keyboard',
 );
 assert.match(opinionSheet, /footer=\{sheetFooter\}/, 'opinion save actions must use the sheet footer');
-assert.match(addToWatchlist, /<BottomActionSheet footer=\{footer\}/, 'watchlist actions must use the sheet footer');
+assert.match(addToWatchlist, /<BottomActionSheetScrollView[^>]*>[\s\S]*\{createForm\}/, 'watchlist creation must be inside the scrollable body');
 assert.match(library, /footer=\{createListFooter\}/, 'list creation must use the screen footer');
 assert.match(
   settings,
@@ -185,7 +202,7 @@ assert.match(
 );
 assert.match(
   screen,
-  /behavior=\{!nativeKeyboardInsetsOnly && Platform\.OS === 'ios' \? 'padding' : undefined\}/,
+  /behavior=\{!useNativeKeyboardInsets && Platform\.OS === 'ios' \? 'padding' : undefined\}/,
   'native keyboard inset screens must not stack KeyboardAvoidingView padding',
 );
 assert.match(

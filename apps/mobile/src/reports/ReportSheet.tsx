@@ -87,12 +87,13 @@ export function ReportSheet({ onClose, target }: ReportSheetProps) {
 
   return (
     <BottomActionSheet
+      dragFromHandleOnly
       footer={footer}
       onClose={close}
       title="Report"
       visible={target !== null}
     >
-      <BottomActionSheetScrollView contentContainerStyle={styles.content}>
+      <BottomActionSheetScrollView disableScrollViewPanResponder={false} contentContainerStyle={styles.content}>
         <View style={styles.intro}>
           <Text numberOfLines={2} style={styles.targetLabel}>{target?.label}</Text>
           <Text style={styles.help}>
@@ -142,6 +143,7 @@ export function ReportSheet({ onClose, target }: ReportSheetProps) {
           editable={!isSubmitting}
           maxLength={MAX_REPORT_DETAILS_LENGTH}
           multiline
+          scrollEnabled
           onChangeText={(value) => {
             setDetails(value);
             setError(null);
@@ -180,7 +182,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     color: colors.text,
-    minHeight: 104,
+    height: 120,
     padding: spacing.md,
   },
   detailsLabel: {

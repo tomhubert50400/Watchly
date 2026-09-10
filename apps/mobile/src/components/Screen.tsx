@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing } from '../design/tokens';
+import { useFocusedFieldVisibility } from './useFocusedFieldVisibility';
 import { AppHeader } from './AppHeader';
 
 type ScreenProps = PropsWithChildren<{
@@ -49,6 +50,7 @@ export function Screen({
 }: ScreenProps) {
   const fallbackScrollViewRef = useRef<ScrollView>(null);
   const scrollViewRef = providedScrollViewRef ?? fallbackScrollViewRef;
+  const visibility = useFocusedFieldVisibility(scrollViewRef);
   const insets = useSafeAreaInsets();
   const sidePadding = typeof horizontalPadding === 'number'
     ? horizontalPadding
@@ -66,6 +68,7 @@ export function Screen({
     : tabBarPadding
       ? 72
       : spacing.md;
+  const useNativeKeyboardInsets = nativeKeyboardInsetsOnly && !footer;
   const hasHeader = Boolean(title || eyebrow || leading || trailing);
   useScrollToTop(scrollViewRef);
 
@@ -73,11 +76,12 @@ export function Screen({
     <SafeAreaView edges={['top']} style={styles.safeArea} {...gestureHandlers}>
       {background ? <View pointerEvents="none" style={styles.background}>{background}</View> : null}
       <KeyboardAvoidingView
-        behavior={!nativeKeyboardInsetsOnly && Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={!useNativeKeyboardInsets && Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardAvoider}
       >
         <ScrollView
-          automaticallyAdjustKeyboardInsets
+          {...visibility}
+          automaticallyAdjustKeyboardInsets={useNativeKeyboardInsets}
           contentContainerStyle={[
             styles.content,
             { paddingBottom: footer ? spacing.lg : navigationPadding + insets.bottom },

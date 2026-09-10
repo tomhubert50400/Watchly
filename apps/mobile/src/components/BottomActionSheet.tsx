@@ -21,7 +21,6 @@ import {
   ScrollViewProps,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,7 +30,8 @@ import {
   shouldCaptureBottomSheetDrag,
   shouldDismissBottomSheet,
 } from './bottomActionSheetGesture';
-import { resolveBottomSheetKeyboardInset, resolveFocusedFieldScrollOffset } from './bottomActionSheetKeyboard';
+import { resolveBottomSheetKeyboardInset } from './bottomActionSheetKeyboard';
+import { useFocusedFieldVisibility } from './useFocusedFieldVisibility';
 
 type BottomActionSheetProps = PropsWithChildren<{
   dragFromHandleOnly?: boolean;
@@ -54,40 +54,12 @@ export function BottomActionSheetScrollView({
   onBlur,
   onLayout,
   onScroll,
+  onContentSizeChange,
   scrollEventThrottle = 16,
   ...scrollViewProps
 }: BottomActionSheetScrollViewProps) {
   const scrollRef = useRef<ScrollView>(null);
-  const focusedInput = useRef<ReturnType<typeof TextInput.State.currentlyFocusedInput> | null>(null);
-  const scrollOffset = useRef(0);
-  const scheduledFrame = useRef<number | null>(null);
-  const measurementVersion = useRef(0);
-  const revealFocusedInput = useCallback(() => {
-    const version = ++measurementVersion.current;
-    if (scheduledFrame.current !== null) cancelAnimationFrame(scheduledFrame.current);
-    scheduledFrame.current = requestAnimationFrame(() => {
-      scheduledFrame.current = null;
-      const input = focusedInput.current;
-      const scroll = scrollRef.current;
-      if (!input || !scroll || TextInput.State.currentlyFocusedInput() !== input) return;
-      scroll.getNativeScrollRef()?.measureInWindow((_x, viewportTop, _width, viewportHeight) => {
-        input.measureInWindow((_inputX, fieldTop, _inputWidth, fieldHeight) => {
-          if (version !== measurementVersion.current || focusedInput.current !== input || TextInput.State.currentlyFocusedInput() !== input) return;
-          const y = resolveFocusedFieldScrollOffset({ scrollOffset: scrollOffset.current, viewportTop, viewportHeight, fieldTop, fieldHeight });
-          if (Math.abs(y - scrollOffset.current) > 1) scroll.scrollTo({ y, animated: false });
-        });
-      });
-    });
-  }, []);
-
-  useEffect(() => {
-    const shown = Keyboard.addListener('keyboardDidShow', revealFocusedInput);
-    return () => {
-      shown.remove();
-      focusedInput.current = null;
-      if (scheduledFrame.current !== null) cancelAnimationFrame(scheduledFrame.current);
-    };
-  }, [revealFocusedInput]);
+  const visibility = useFocusedFieldVisibility(scrollRef);
 
   return (
     <ScrollView
@@ -100,21 +72,24 @@ export function BottomActionSheetScrollView({
       keyboardDismissMode={keyboardDismissMode}
       keyboardShouldPersistTaps={keyboardShouldPersistTaps}
       onFocus={(event) => {
-        focusedInput.current = TextInput.State.currentlyFocusedInput();
-        revealFocusedInput();
+        visibility.onFocus();
         onFocus?.(event);
       }}
       onBlur={(event) => {
-        focusedInput.current = null;
+        visibility.onBlur();
         onBlur?.(event);
       }}
       onLayout={(event) => {
-        revealFocusedInput();
+        visibility.onLayout();
         onLayout?.(event);
       }}
       onScroll={(event) => {
-        scrollOffset.current = event.nativeEvent.contentOffset.y;
+        visibility.onScroll(event);
         onScroll?.(event);
+      }}
+      onContentSizeChange={(width, height) => {
+        visibility.onContentSizeChange();
+        onContentSizeChange?.(width, height);
       }}
       scrollEventThrottle={scrollEventThrottle}
       showsVerticalScrollIndicator={false}

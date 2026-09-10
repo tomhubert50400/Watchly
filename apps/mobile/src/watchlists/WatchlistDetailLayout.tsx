@@ -1,4 +1,4 @@
-import { PropsWithChildren, ReactNode } from 'react';
+import { PropsWithChildren, ReactNode, useRef } from 'react';
 import {
   KeyboardAvoidingView,
   Pressable,
@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusedFieldVisibility } from '../components/useFocusedFieldVisibility';
 import { MediaPoster } from '../components/MediaPoster';
 import { colors, radii, spacing, typography } from '../design/tokens';
 
@@ -41,13 +42,17 @@ export function WatchlistPage({
   isRefreshing = false,
   onRefresh,
 }: WatchlistPageProps) {
+  const scrollRef = useRef<ScrollView>(null);
+  const visibility = useFocusedFieldVisibility(scrollRef);
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.keyboardAvoider}
     >
       <ScrollView
-        automaticallyAdjustKeyboardInsets
+        ref={scrollRef}
+        {...visibility}
+        automaticallyAdjustKeyboardInsets={false}
         contentContainerStyle={styles.page}
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         keyboardShouldPersistTaps="handled"
