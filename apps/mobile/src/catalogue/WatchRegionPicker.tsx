@@ -46,19 +46,16 @@ export function WatchRegionPicker({ region }: { region: ReturnType<typeof useWat
           value={query}
         />
         <BottomActionSheetScrollView>
-          {region.storefront ? (
-            <Pressable accessibilityRole="radio" accessibilityState={{ checked: !region.override }} onPress={() => void select(null)} style={styles.row}>
-              <Text style={styles.name}>App Store region ({region.storefront})</Text>
-              {!region.override ? <Check color={colors.text} size={18} /> : null}
-            </Pressable>
-          ) : (
-            <Text style={styles.hint}>Choose where you watch. Your App Store region is unavailable.</Text>
-          )}
+          <Text style={styles.hint}>Manual selections last 2 hours, then your region is detected automatically.</Text>
+          <Pressable accessibilityRole="radio" accessibilityState={{ checked: !region.override }} onPress={() => void select(null)} style={styles.row}>
+            <Text style={styles.name}>{region.ipCountry ? `Automatic region (${region.ipCountry})` : 'Automatic region (unavailable). Tap to retry.'}</Text>
+            {!region.override ? <Check color={colors.text} size={18} /> : null}
+          </Pressable>
           {matches.length === 0 ? <Text style={styles.hint}>No regions found.</Text> : null}
           {matches.map((item) => (
-            <Pressable accessibilityRole="radio" accessibilityState={{ checked: region.override === item.code }} key={item.code} onPress={() => void select(item.code)} style={styles.row}>
+            <Pressable accessibilityRole="radio" accessibilityState={{ checked: region.override?.country === item.code }} key={item.code} onPress={() => void select(item.code)} style={styles.row}>
               <Text style={styles.name}>{item.name}</Text>
-              {region.override === item.code ? <Check color={colors.text} size={18} /> : null}
+              {region.override?.country === item.code ? <Check color={colors.text} size={18} /> : null}
             </Pressable>
           ))}
         </BottomActionSheetScrollView>

@@ -1,63 +1,105 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { requireOptionalNativeModule } from 'expo';
-import { useEffect, useSyncExternalStore } from 'react';
+import { useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
-import { normalizeWatchRegion, resolveWatchRegion } from './watchRegionModel';
+import {
+  activeWatchRegionOverride, normalizeWatchRegion, readWatchRegionOverride,
+  resolveWatchRegion, watchRegionOverrideDuration, type WatchRegionOverride,
+} from './watchRegionModel';
+import { fetchWatchRegionCountry } from './watchRegionIp';
 
 const storageKey = 'watchly.watch-region';
-const nativeModule = requireOptionalNativeModule<{
-  getCountryCode(): Promise<string | null>;
-}>('WatchlyStorefront');
-let state = { ready: false, override: null as string | null, storefront: null as string | null };
+let state = { ready: false, override: null as WatchRegionOverride | null, ipCountry: null as string | null };
 let initialization: Promise<void> | undefined;
+let ipRequest: Promise<void> | undefined;
 let persistence = Promise.resolve();
+let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+let appSubscription: ReturnType<typeof AppState.addEventListener> | undefined;
 const listeners = new Set<() => void>();
+
+function scheduleExpiry() {
+  clearTimeout(expiryTimer);
+  if (listeners.size && state.override) {
+    expiryTimer = setTimeout(expireOverride, Math.max(0, state.override.expiresAt - Date.now()));
+  }
+}
 
 function publish(next: typeof state) {
   state = next;
+  scheduleExpiry();
   listeners.forEach((listener) => listener());
 }
 
-async function refreshStorefront() {
-  const storefront = normalizeWatchRegion(await nativeModule?.getCountryCode().catch(() => null));
-  if (storefront !== state.storefront) publish({ ...state, storefront });
+function persistOverride() {
+  const override = state.override;
+  persistence = persistence.catch(() => undefined).then(() => override
+    ? AsyncStorage.setItem(storageKey, JSON.stringify(override))
+    : AsyncStorage.removeItem(storageKey));
+  return persistence;
+}
+
+function refreshIpCountry() {
+  ipRequest ??= fetchWatchRegionCountry().then((ipCountry) => {
+    publish({ ...state, ipCountry });
+  }).finally(() => { ipRequest = undefined; });
+  return ipRequest;
+}
+
+function expireOverride() {
+  if (state.override && !activeWatchRegionOverride(state.override)) {
+    publish({ ...state, override: null, ipCountry: null });
+    void persistOverride().catch(() => undefined);
+    void refreshIpCountry();
+  }
 }
 
 function initialize() {
-  initialization ??= Promise.all([
-    AsyncStorage.getItem(storageKey).catch(() => null),
-    nativeModule?.getCountryCode().catch(() => null),
-  ]).then(([override, storefront]) => {
-    publish({ ready: true, override: normalizeWatchRegion(override), storefront: normalizeWatchRegion(storefront) });
+  initialization ??= AsyncStorage.getItem(storageKey).catch(() => null).then((stored) => {
+    const override = readWatchRegionOverride(stored);
+    publish({ ...state, ready: true, override: activeWatchRegionOverride(override) ? override : null });
+    if (stored && !state.override) void persistOverride().catch(() => undefined);
+    void refreshIpCountry();
   });
   return initialization;
 }
 
 function subscribe(listener: () => void) {
+  const refreshOnMount = state.ready && !listeners.size;
   listeners.add(listener);
-  const subscription = AppState.addEventListener('change', (status) => {
-    if (status === 'active') void initialize().then(refreshStorefront);
+  if (!appSubscription) {
+    appSubscription = AppState.addEventListener('change', (status) => {
+      if (status === 'active') void initialize().then(() => {
+        expireOverride();
+        void refreshIpCountry();
+      });
+    });
+  }
+  void initialize().then(() => {
+    expireOverride();
+    scheduleExpiry();
+    if (refreshOnMount) void refreshIpCountry();
   });
   return () => {
     listeners.delete(listener);
-    subscription.remove();
+    if (!listeners.size) {
+      appSubscription?.remove();
+      appSubscription = undefined;
+      clearTimeout(expiryTimer);
+    }
   };
 }
 
 export function useWatchRegion() {
   const snapshot = useSyncExternalStore(subscribe, () => state, () => state);
-  useEffect(() => { void initialize(); }, []);
   return {
     ...snapshot,
-    country: resolveWatchRegion(snapshot.override, snapshot.storefront),
+    country: resolveWatchRegion(snapshot.override, snapshot.ipCountry),
     async setCountry(country: string | null) {
       await initialize();
-      const override = normalizeWatchRegion(country);
+      const normalized = normalizeWatchRegion(country);
+      const override = normalized ? { country: normalized, expiresAt: Date.now() + watchRegionOverrideDuration } : null;
       publish({ ...state, override });
-      persistence = persistence.catch(() => undefined).then(() => override
-        ? AsyncStorage.setItem(storageKey, override)
-        : AsyncStorage.removeItem(storageKey));
-      return persistence;
+      if (!override) void refreshIpCountry();
+      return persistOverride();
     },
   };
 }
