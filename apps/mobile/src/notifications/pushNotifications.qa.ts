@@ -63,3 +63,7 @@ assert.match(
 );
 
 console.log('Push notification mobile QA passed.');
+
+for (const flag of ['shouldPlaySound', 'shouldSetBadge', 'shouldShowBanner', 'shouldShowList']) {
+  assert.ok(nativeSource.includes(flag + ': false'), 'Foreground notifications must be silent: ' + flag);
+}
