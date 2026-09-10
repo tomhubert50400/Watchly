@@ -3,15 +3,15 @@ import type { PrismaService } from '../database/prisma.service';
 import type { Prisma } from '../generated/prisma/client';
 import { activeAccountWhere } from '../moderation/account-suspension';
 import type { AvatarStorageService } from '../media/avatar-storage.service';
-import { contentKey, rankCommunity, type CommunityContent, type CommunityItem } from './community-ranking';
+import { contentKey, rankCommunity, type CommunityMode, type CommunityContent, type CommunityItem } from './community-ranking';
 
 const authorSelect = {
   id: true, displayName: true, avatarObjectKey: true,
   privacySettings: { select: { ratingsVisibility: true } },
 } as const;
 
-export async function communityFeed(prisma: PrismaService, avatar: AvatarStorageService, viewerId: string, cursor?: string) {
-  const { now, offset } = readCommunityCursor(cursor);
+export async function communityFeed(prisma: PrismaService, avatar: AvatarStorageService, viewerId: string, cursor?: string, mode: CommunityMode = 'for-you') {
+  const { now, offset } = readCommunityCursor(cursor, mode);
   const since = new Date(now.getTime() - 90 * 86400000);
   const [follows, blocks, states, watchlist, alerts, history, progress] = await Promise.all([
     prisma.userFollow.findMany({ where: { followerId: viewerId, status: 'ACCEPTED' }, select: { followedUserId: true } }),
@@ -53,11 +53,11 @@ export async function communityFeed(prisma: PrismaService, avatar: AvatarStorage
   });
   const reviewInclude = { user: { select: authorSelect }, _count: { select: { likes: true } }, likes: { where: { userId: viewerId }, select: { id: true } } } as const;
   // Separate candidate sources prevent global activity from crowding out personal interests or follows.
-  const batches = await Promise.all(['followed', 'interests', 'discovery'].map(async (source) => {
+  const batches = await Promise.all((mode === 'following' ? ['followed'] : ['followed', 'interests', 'discovery']).map(async (source) => {
     const userId = source === 'followed' ? { in: followedIds } : { notIn: [...excluded, ...followedIds] };
     const movieFilter = source === 'interests' ? { tmdbId: { in: interestedMovies } } : {};
     const seriesFilter = source === 'interests' ? { seriesTmdbId: { in: interestedSeries } } : {};
-    const base = { userId, createdAt: source === 'discovery' ? { lte: now } : { gte: since, lte: now } };
+    const base = { userId, createdAt: source === 'interests' ? { gte: since, lte: now } : { lte: now } };
     const options = { orderBy: [{ createdAt: 'desc' as const }, { id: 'asc' as const }], take: 80 };
     const [movies, episodes, movieRatings, seriesRatings, episodeRatings] = await Promise.all([
       prisma.userMovieReview.findMany({ ...options, include: reviewInclude, where: { ...base, ...movieFilter, moderationHiddenAt: null, user: userWhere('reviewsVisibility') } }),
@@ -122,16 +122,17 @@ export async function communityFeed(prisma: PrismaService, avatar: AvatarStorage
     activityKeys.add(key);
     candidates.push(make({ ...event, createdAt: event.watchedAt }, content, 'viewing', null));
   }
-  const ranked = rankCommunity([...new Map(candidates.map((item) => [item.id, item])).values()], now);
+  const ranked = rankCommunity([...new Map(candidates.map((item) => [item.id, item])).values()], now, 150, mode);
   const items = ranked.slice(offset, offset + 30).map(({ affinity: _affinity, ...item }) => item);
-  return { items, nextCursor: offset + 30 < ranked.length ? Buffer.from(JSON.stringify({ at: now.toISOString(), offset: offset + 30 })).toString('base64url') : null };
+  return { items, nextCursor: offset + 30 < ranked.length ? Buffer.from(JSON.stringify({ at: now.toISOString(), offset: offset + 30, mode })).toString('base64url') : null };
 }
 
-export function readCommunityCursor(cursor?: string) {
+export function readCommunityCursor(cursor?: string, mode: CommunityMode = 'for-you') {
   if (!cursor) return { now: new Date(), offset: 0 };
   try {
     if (cursor.length > 200) throw new Error();
     const value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    if ((value.mode ?? 'for-you') !== mode) throw new Error();
     const now = new Date(value.at);
     if (!Number.isFinite(now.getTime()) || now.getTime() > Date.now() + 60000 || !Number.isInteger(value.offset) || value.offset < 0 || value.offset > 150) throw new Error();
     return { now, offset: value.offset as number };

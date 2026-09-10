@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Delete,
   Get,
@@ -26,8 +27,9 @@ export class FeedController {
   }
 
   @Get('community')
-  async community(@Req() request: AuthenticatedRequest, @Query('cursor') cursor?: string) {
-    return this.feed.listCommunity(getIdentity(request), cursor);
+  async community(@Req() request: AuthenticatedRequest, @Query('cursor') cursor?: string, @Query('mode') mode = 'for-you') {
+    if (mode !== 'for-you' && mode !== 'following') throw new BadRequestException('Invalid community mode.');
+    return this.feed.listCommunity(getIdentity(request), cursor, mode);
   }
 
   @Put('movie-reviews/:reviewId/like')

@@ -103,6 +103,21 @@ async function run() {
   records.userMovieReview.splice(0, records.userMovieReview.length, { ...review('older-public-review', 777), createdAt: new Date('2025-01-01') });
   const quietCommunity = await communityFeed(prisma as never, avatar as never, 'viewer', cursor());
   assert.ok(quietCommunity.items.some((item) => item.id === 'older-public-review'), 'Discovery can use older public posts when recent activity is sparse');
+  const noFollowing = await communityFeed(prisma as never, avatar as never, 'viewer', undefined, 'following');
+  assert.equal(noFollowing.items.length, 0, 'Following must remain empty without followed authors');
+  records.userFollow.push({ followerId: 'viewer', followedUserId: 'only-follow', status: 'ACCEPTED' });
+  const oldFollowed = Array.from({ length: 60 }, (_, i) => ({ ...review(`old-followed-${i}`, 800 + i, author('only-follow')), createdAt: new Date('2025-01-01') }));
+  records.userMovieReview.push(...oldFollowed);
+  const sparseOldFeed = await communityFeed(prisma as never, avatar as never, 'viewer');
+  assert.ok(sparseOldFeed.items.some((item) => item.author.id === 'only-follow'), 'Old followed opinions remain available when discovery is sparse');
+  const followedPage = await communityFeed(prisma as never, avatar as never, 'viewer', undefined, 'following');
+  assert.equal(followedPage.items.length, 30, 'Following includes older opinions even from a single author');
+  assert.ok(followedPage.items.every((item) => item.author.id === 'only-follow'));
+  assert.ok(followedPage.nextCursor);
+  const followedNext = await communityFeed(prisma as never, avatar as never, 'viewer', followedPage.nextCursor!, 'following');
+  assert.equal(followedNext.items.length, 30);
+  assert.equal(new Set([...followedPage.items, ...followedNext.items].map((item) => item.id)).size, 60);
+  await assert.rejects(() => communityFeed(prisma as never, avatar as never, 'viewer', followedPage.nextCursor!), /Invalid community cursor/);
   console.log('Community service QA passed: discovery, interests, privacy, blocks, ratings, progress and pagination.');
 }
 void run();
