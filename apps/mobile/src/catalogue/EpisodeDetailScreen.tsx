@@ -242,6 +242,7 @@ function EpisodeDetailContent({
             subtitle: actor.character,
           }))}
           title="Cast"
+          onOpen={(person) => navigation.navigate('ActorDetail', { name: person.name, tmdbId: person.id })}
         />
 
         <EpisodeCreditRail
@@ -311,9 +312,11 @@ type EpisodeCreditRailItem = {
 
 function EpisodeCreditRail({
   items,
+  onOpen,
   title,
 }: {
   items: EpisodeCreditRailItem[];
+  onOpen?: (person: EpisodeCreditRailItem) => void;
   title: string;
 }) {
   if (items.length === 0) {
@@ -329,13 +332,17 @@ function EpisodeCreditRail({
         showsHorizontalScrollIndicator={false}
       >
         {items.map((person) => (
-          <View
+          <Pressable
             accessibilityLabel={person.subtitle
               ? `${person.name}, ${person.subtitle}`
               : person.name}
             accessible
+            accessibilityRole={onOpen ? 'button' : undefined}
+            accessibilityHint={onOpen ? "Opens this actor's biography and filmography." : undefined}
+            disabled={!onOpen}
             key={person.id}
-            style={styles.creditCard}
+            onPress={() => onOpen?.(person)}
+            style={({ pressed }) => [styles.creditCard, pressed && styles.creditCardPressed]}
           >
             {person.profileUrl ? (
               <Image
@@ -353,7 +360,7 @@ function EpisodeCreditRail({
             {person.subtitle ? (
               <Text numberOfLines={2} style={styles.creditSubtitle}>{person.subtitle}</Text>
             ) : null}
-          </View>
+          </Pressable>
         ))}
       </ScrollView>
     </View>
@@ -383,6 +390,9 @@ const styles = StyleSheet.create({
   },
   creditCard: {
     width: 92,
+  },
+  creditCardPressed: {
+    opacity: 0.76,
   },
   creditInitial: {
     ...typography.title,
