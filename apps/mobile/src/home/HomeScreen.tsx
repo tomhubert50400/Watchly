@@ -37,6 +37,7 @@ import { ensureCatalogueSections } from '../catalogue/catalogueSectionsResource'
 import { CatalogueRating } from '../catalogue/CatalogueRating';
 import {
   buildHomeSections,
+  selectHomeProgress,
   HomeCatalogueData,
   HomeFeedItem,
   HomeProgressItem,
@@ -55,7 +56,7 @@ type HomeNavigation = CompositeNavigationProp<
 export const PUBLIC_HOME_KEY = getPublicCacheKey('home:catalogue:v3');
 
 export function getHomeProgressKey(userId: string) {
-  return getPrivateCacheKey(userId, 'home:progress:v2');
+  return getPrivateCacheKey(userId, 'home:progress:v3');
 }
 
 export function getHomeFeedKey(userId: string) {
@@ -376,17 +377,8 @@ export async function loadHomeCatalogue(): Promise<HomeCatalogueData> {
 }
 
 export async function loadHomeProgress(token: string): Promise<HomeProgressItem[]> {
-  const summaries = (await listSeriesProgressSummaries(token)).items.slice(0, 8);
-  const hydrated = await Promise.allSettled(summaries.map(hydrateProgressItem));
-  const fulfilled = hydrated.filter(
-    (result): result is PromiseFulfilledResult<HomeProgressItem | null> => result.status === 'fulfilled',
-  );
-
-  if (summaries.length > 0 && fulfilled.length === 0) {
-    throw new Error('Could not update continue watching.');
-  }
-
-  return fulfilled.flatMap((result) => result.value ? [result.value] : []);
+  const summaries = (await listSeriesProgressSummaries(token)).items;
+  return selectHomeProgress(summaries, hydrateProgressItem);
 }
 
 async function hydrateProgressItem(summary: SeriesProgressSummary): Promise<HomeProgressItem | null> {

@@ -1,7 +1,7 @@
 // Node types are intentionally not part of the Expo runtime TypeScript configuration.
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import assert from 'node:assert/strict';
-import { buildHomeSections, type HomeCompositionInput } from './homeData';
+import { buildHomeSections, selectHomeProgress, type HomeCompositionInput } from './homeData';
 
 const catalogue = {
   hero: {
@@ -110,4 +110,40 @@ function input(overrides: Partial<HomeCompositionInput> = {}): HomeCompositionIn
   assert.equal(sections.some((section) => section.kind === 'trending'), true);
 }
 
-console.log('Home data QA passed.');
+async function checkProgressSelection() {
+  const summaries = Array.from({ length: 62 }, (_, index) => ({
+    latestEpisodeNumber: 1,
+    latestSeasonNumber: 1,
+    seriesTmdbId: index + 1,
+    updatedAt: '2026-09-08T09:07:02.396Z',
+    watchedEpisodeCount: 1,
+  }));
+  const item = (seriesTmdbId: number) => ({ ...progress[0]!, seriesTmdbId });
+  const visited: number[] = [];
+  const selected = await selectHomeProgress(summaries, async (summary) => {
+    const id = summary.seriesTmdbId;
+    visited.push(id);
+    return id === 2 || id === 7 || id > 8 ? item(id) : null;
+  });
+  assert.deepEqual(selected.map((entry) => entry.seriesTmdbId), [2, 7, 9, 10, 11, 12, 13, 14]);
+  assert.equal(visited.length, 14, 'Stop loading once eight cards are available.');
+
+  assert.deepEqual(await selectHomeProgress([], async () => { throw new Error('Unexpected call'); }), []);
+  assert.deepEqual(await selectHomeProgress(summaries, async () => null), []);
+  const lastOnly = await selectHomeProgress(summaries, async (summary) =>
+    summary.seriesTmdbId === 62 ? item(62) : null);
+  assert.deepEqual(lastOnly.map((entry) => entry.seriesTmdbId), [62]);
+
+  const afterFailures = await selectHomeProgress(summaries, async (summary) => {
+    if (summary.seriesTmdbId <= 8) throw new Error('Catalogue unavailable');
+    return item(summary.seriesTmdbId);
+  });
+  assert.deepEqual(afterFailures.map((entry) => entry.seriesTmdbId), [9, 10, 11, 12, 13, 14, 15, 16]);
+  await assert.rejects(
+    selectHomeProgress(summaries, async () => { throw new Error('Catalogue unavailable'); }),
+    /Could not update continue watching/,
+  );
+  console.log('Home data QA passed.');
+}
+
+void checkProgressSelection().catch((error) => { throw error; });

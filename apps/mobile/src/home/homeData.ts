@@ -1,3 +1,29 @@
+import type { SeriesProgressSummary } from '../api/progress';
+
+export async function selectHomeProgress(
+  summaries: SeriesProgressSummary[],
+  hydrate: (summary: SeriesProgressSummary) => Promise<HomeProgressItem | null>,
+): Promise<HomeProgressItem[]> {
+  const items: HomeProgressItem[] = [];
+  let fulfilledCount = 0;
+  let offset = 0;
+  while (offset < summaries.length && items.length < 8) {
+    const batch = summaries.slice(offset, offset + 8 - items.length);
+    offset += batch.length;
+    const hydrated = await Promise.allSettled(batch.map(hydrate));
+    for (const result of hydrated) {
+      if (result.status === 'fulfilled') {
+        fulfilledCount += 1;
+        if (result.value) items.push(result.value);
+      }
+    }
+  }
+  if (summaries.length > 0 && fulfilledCount === 0) {
+    throw new Error('Could not update continue watching.');
+  }
+  return items;
+}
+
 export type HomeHeroItem = {
   backdropUrl: string | null;
   genres: string[];
