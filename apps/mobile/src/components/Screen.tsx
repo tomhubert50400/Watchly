@@ -113,6 +113,7 @@ export function Screen({
           <View
             style={[
               styles.footer,
+              background ? styles.transparentFooter : null,
               {
                 paddingBottom: footerBottomPadding + insets.bottom,
                 paddingHorizontal: chromePadding,
@@ -166,6 +167,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingBottom: spacing.sm,
     paddingTop: spacing.sm,
+  },
+  transparentFooter: {
+    backgroundColor: 'transparent',
+    borderTopWidth: 0,
   },
   transparentHeader: {
     backgroundColor: 'transparent',
