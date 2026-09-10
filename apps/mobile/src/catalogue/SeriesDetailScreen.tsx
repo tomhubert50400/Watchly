@@ -14,6 +14,7 @@ import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { SeasonEpisodeList } from '../episodes/SeasonEpisodeList';
 import { RootStackParamList } from '../navigation/types';
+import { CharacterAlertsPanel } from '../notifications/CharacterAlertsPanel';
 import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 import { SeriesProgressSummary } from '../tracking/SeriesProgressSummary';
 import { SeriesRatingControl } from '../tracking/SeriesRatingControl';
@@ -175,6 +176,7 @@ function SeriesDetailContent({ onOpenRelated, series }: {
             <CatalogueVideoRail videos={series.videos ?? []} />
             <StreamingAvailabilityPanel contentType="series" tmdbId={series.tmdbId} />
             <CatalogueCastRail cast={series.cast ?? []} />
+            <CharacterAlertsPanel contentType="series" tmdbId={series.tmdbId} />
             <CatalogueKeywordList keywords={series.keywords ?? []} />
             {!isWatched ? <SeriesProgressSummary seasons={series.seasons} seriesTitle={series.title} seriesTmdbId={series.tmdbId} /> : null}
             <CatalogueRelatedRail items={series.recommendations ?? []} onOpen={onOpenRelated} />

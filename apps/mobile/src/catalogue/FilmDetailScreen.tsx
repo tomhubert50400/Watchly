@@ -13,6 +13,7 @@ import { MediaHero } from '../components/MediaHero';
 import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { colors, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
+import { CharacterAlertsPanel } from '../notifications/CharacterAlertsPanel';
 import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 import { MovieReviewEditor } from '../reviews/MovieReviewEditor';
 import { TrackingControls } from '../tracking/TrackingControls';
@@ -158,6 +159,7 @@ function MovieDetailContent({
         <CatalogueVideoRail videos={movie.videos ?? []} />
         <StreamingAvailabilityPanel contentType="movie" tmdbId={movie.tmdbId} />
         <CatalogueCastRail cast={movie.cast ?? []} />
+        <CharacterAlertsPanel contentType="movie" tmdbId={movie.tmdbId} />
         <CatalogueKeywordList keywords={movie.keywords ?? []} />
         {!isWatched && movie.collection ? <MovieWhatsNext collectionId={movie.collection.id} tmdbId={movie.tmdbId} onOpen={onOpenRelated} /> : null}
         <CatalogueRelatedRail items={movie.recommendations ?? []} onOpen={onOpenRelated} />

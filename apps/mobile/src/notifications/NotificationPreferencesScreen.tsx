@@ -16,6 +16,7 @@ import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { LoadingState } from '../components/LoadingState';
 import { Screen } from '../components/Screen';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
+import { CharacterAlertsPanel } from './CharacterAlertsPanel';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
 import {
   disablePushFromSettings,
@@ -212,7 +213,7 @@ export function NotificationPreferencesScreen() {
             value={globalEnabled}
           />
           <PreferenceRow
-            body="Announcements, one-week reminders, and release-day alerts for active bells."
+            body="One-week reminders for followed titles, sagas, and characters."
             disabled={!globalEnabled}
             icon={<BellRing color={globalEnabled ? colors.accentText : colors.textSubtle} size={20} strokeWidth={2} />}
             label="Followed releases"
@@ -221,6 +222,8 @@ export function NotificationPreferencesScreen() {
             value={Boolean(globalEnabled && preferences?.releasePushEnabled)}
           />
         </ScreenReveal>
+
+        <CharacterAlertsPanel />
 
         {permission === 'denied' ? (
           <Button label="Open device settings" onPress={() => void Linking.openSettings()} variant="secondary" />
