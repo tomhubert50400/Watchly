@@ -12,6 +12,7 @@ import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
 import {
   PushDeliveryStatus,
+  ReleaseNotificationType,
   PushPlatform,
   TrackedContentType,
 } from '../generated/prisma/enums';
@@ -282,7 +283,14 @@ export class PushService implements OnApplicationBootstrap, OnModuleDestroy {
     );
     const eligible = ownedDeliveries.filter((delivery) => {
       const preferences = delivery.pushDevice.user.notificationPreference;
-      return preferences?.pushEnabled && preferences.releasePushEnabled;
+      const dateKey = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const expectedKey = delivery.notification.contentType === TrackedContentType.MOVIE
+        ? `movie:${delivery.notification.tmdbId}:one-week`
+        : `series:${delivery.notification.tmdbId}:date:${dateKey}:one-week`;
+      return preferences?.pushEnabled && preferences.releasePushEnabled &&
+        delivery.notification.dedupeKey === expectedKey &&
+        delivery.notification.releaseType !== ReleaseNotificationType.SEASON_RELEASE &&
+        delivery.notification.releasedAt?.toISOString().slice(0, 10) === dateKey;
     });
     const ineligible = ownedDeliveries.filter((delivery) => !eligible.includes(delivery));
 
@@ -291,7 +299,7 @@ export class PushService implements OnApplicationBootstrap, OnModuleDestroy {
         this.prisma.pushDelivery.updateMany({
           data: {
             completedAt: now,
-            errorCode: 'PreferenceDisabled',
+            errorCode: 'PreferenceDisabledOrReleaseIneligible',
             status: PushDeliveryStatus.FAILED,
           },
           where: { id: { in: ineligible.map((delivery) => delivery.id) } },

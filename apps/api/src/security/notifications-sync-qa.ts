@@ -1,7 +1,7 @@
 // Deterministic service-level QA without a database or external network.
 import assert from 'node:assert/strict';
 import { TrackedContentType } from '../generated/prisma/enums';
-import { NotificationsService } from '../notifications/notifications.service';
+import { buildReleaseReminderCandidates, NotificationsService } from '../notifications/notifications.service';
 
 const subscriptionCount = 60;
 const subscriptions = Array.from({ length: subscriptionCount }, (_, index) => ({
@@ -11,6 +11,47 @@ const subscriptions = Array.from({ length: subscriptionCount }, (_, index) => ({
 }));
 
 async function run() {
+  const now = new Date('2026-09-10T23:59:59.000Z');
+  const event = {
+    contentType: 'SERIES', episodeNumber: 1, id: 'episode-1',
+    lastSyncedAt: now, precision: 'DATE', regionCode: null,
+    releaseDate: new Date('2026-09-17T00:00:00.000Z'), seasonNumber: 1,
+    source: 'TMDB', sourceKey: 'episode-1', status: 'ACTIVE', timeZone: null,
+    title: 'Test series', tmdbId: 1, type: 'EPISODE_RELEASE',
+  } as Parameters<typeof buildReleaseReminderCandidates>[0][number];
+  const candidates = (overrides = {}) => buildReleaseReminderCandidates([{ ...event, ...overrides }], now);
+  assert.equal(candidates().length, 1, 'J-7 must use calendar days even at 23:59');
+  for (const date of ['2026-09-18', '2026-09-16', '2026-09-10', '2026-09-09']) {
+    assert.equal(candidates({ releaseDate: new Date(date) }).length, 0, 'Only J-7 creates a reminder');
+  }
+  assert.equal(candidates({ releaseDate: null }).length, 0);
+  assert.equal(candidates({ status: 'WITHDRAWN' }).length, 0);
+  assert.equal(candidates({ type: 'SEASON_RELEASE' }).length, 0, 'No season/episode double alert');
+  const batch = Array.from({ length: 6 }, (_, index) => ({ ...event, id: 'episode-' + index, episodeNumber: index + 1 }));
+  const grouped = buildReleaseReminderCandidates(batch, now);
+  assert.equal(grouped.length, 1, 'Six episodes released together must send one reminder');
+  assert.match(grouped[0].body, /6 new episodes/);
+  assert.equal(grouped[0].episodeNumber, undefined);
+  assert.equal(buildReleaseReminderCandidates([...batch].reverse(), now)[0].generatedKey, grouped[0].generatedKey);
+  assert.equal(candidates({ contentType: 'MOVIE', type: 'MOVIE_RELEASE' }).length, 1);
+
+  let enabled = false;
+  const activation = new NotificationsService(
+    { getOrCreateUser: async () => ({ id: 'user-a' }) } as never,
+    {
+      withConnectionRetry: async (operation: () => Promise<unknown>) => operation(),
+      releaseAlertSubscription: {
+        upsert: async () => { enabled = true; },
+        findUnique: async () => enabled ? {} : null,
+      },
+      notification: { findMany: async () => [] },
+    } as never,
+    { syncContent: async () => assert.fail('Enabling a bell must not generate a backlog') } as never,
+    { enqueueReleaseNotifications: async () => assert.fail('Enabling a bell must not push') } as never,
+    {} as never,
+  );
+  assert.equal((await activation.enableReleaseAlert({} as never, 'series', 1)).enabled, true);
+
   let releaseEventCalls = 0;
   let inFlight = 0;
   let maximumInFlight = 0;
@@ -67,7 +108,7 @@ async function run() {
           lastSyncedAt: new Date(),
           precision: 'DATE',
           regionCode: null,
-          releaseDate: new Date('2099-01-01T00:00:00.000Z'),
+          releaseDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
           seasonNumber: null,
           source: 'TMDB',
           sourceKey: `tmdb:movie:${tmdbId}:release`,
@@ -139,7 +180,7 @@ async function run() {
           lastSyncedAt: new Date(),
           precision: 'DATE',
           regionCode: null,
-          releaseDate: new Date('2099-01-01T00:00:00.000Z'),
+          releaseDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
           seasonNumber: null,
           source: 'TMDB',
           sourceKey: 'tmdb:movie:603:release',

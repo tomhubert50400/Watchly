@@ -87,6 +87,9 @@ async function verifyReleaseDispatch() {
     id: 'delivery-a',
     notification: {
       body: 'Film releases soon.',
+      dedupeKey: 'movie:100:one-week',
+      releaseType: ReleaseNotificationType.MOVIE_RELEASE,
+      releasedAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       contentType: TrackedContentType.MOVIE,
       id: 'notification-a',
       title: 'A Film & More',
@@ -127,6 +130,17 @@ async function verifyReleaseDispatch() {
   assert.equal(sentMessages[0]?.data.url, 'tvapp://film/100?title=A%20Film%20%26%20More');
   assert.equal(sentMessages[0]?.channelId, 'release-alerts');
   assert.ok(updates.some((update) => update.status === PushDeliveryStatus.TICKETED));
+  for (const key of ['movie:100:announcement', 'movie:100:release-day', 'series:100:season:1:episode:1:one-week']) {
+    pendingDelivery.notification.dedupeKey = key;
+    sentMessages = [];
+    await service.runWorker();
+    assert.equal(sentMessages.length, 0, 'Legacy pending milestones must never dispatch');
+  }
+  pendingDelivery.notification.dedupeKey = 'movie:100:one-week';
+  pendingDelivery.notification.releasedAt = new Date();
+  sentMessages = [];
+  await service.runWorker();
+  assert.equal(sentMessages.length, 0, 'Expired reminders must never dispatch');
 }
 
 async function verifyNotificationProjectionDedupe() {

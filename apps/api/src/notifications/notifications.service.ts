@@ -23,7 +23,6 @@ import {
 } from '../release-events/release-events.service';
 import { PushService } from '../push/push.service';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const SCHEDULE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const SYNC_BATCH_SIZE = 12;
 const MAX_SYNC_SUBSCRIPTIONS = 48;
@@ -211,8 +210,6 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
       }),
     );
 
-    await this.syncSubscription(userId, trackedContentType, tmdbId);
-
     return this.getReleaseAlertForUser(userId, trackedContentType, tmdbId);
   }
 
@@ -340,7 +337,7 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
       return 0;
     }
 
-    await this.pruneInvalidFutureNotifications(userId, contentType, tmdbId, candidates);
+    await this.pruneInvalidFutureNotifications(userId, contentType, tmdbId);
     return this.createNotifications(userId, candidates);
   }
 
@@ -411,7 +408,6 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
         userId,
         group.contentType,
         group.tmdbId,
-        candidates,
       );
       return this.createNotifications(userId, candidates);
     }));
@@ -422,7 +418,7 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
   private async buildCandidates(contentType: TrackedContentType, tmdbId: number) {
     try {
       const result = await this.releaseEvents.syncContent(contentType, tmdbId);
-      return result.events.flatMap(buildMilestoneCandidates);
+      return buildReleaseReminderCandidates(result.events);
     } catch {
       this.logger.warn(JSON.stringify({
         contentType: contentType.toLowerCase(),
@@ -437,15 +433,16 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
     userId: string,
     contentType: TrackedContentType,
     tmdbId: number,
-    candidates: NotificationCandidate[],
   ) {
-    const generatedKeys = candidates.map((candidate) => candidate.generatedKey);
-
     await this.prisma.withConnectionRetry(() =>
       this.prisma.notification.deleteMany({
         where: {
           contentType,
-          dedupeKey: generatedKeys.length > 0 ? { notIn: generatedKeys } : undefined,
+          OR: [
+            { dedupeKey: { endsWith: ':announcement' } },
+            { dedupeKey: { endsWith: ':release-day' } },
+            { releaseType: ReleaseNotificationType.SEASON_RELEASE },
+          ],
           kind: NotificationKind.RELEASE,
           readAt: null,
           releasedAt: { gt: new Date() },
@@ -616,97 +613,49 @@ function groupSubscriptionsByContent(
   return [...groups.values()];
 }
 
-function buildMilestoneCandidates(event: CanonicalReleaseEvent): NotificationCandidate[] {
-  if (!event.releaseDate) {
-    return [];
+export function buildReleaseReminderCandidates(
+  events: CanonicalReleaseEvent[],
+  now = new Date(),
+): NotificationCandidate[] {
+  const reminderDate = new Date(now);
+  reminderDate.setUTCDate(reminderDate.getUTCDate() + 7);
+  const dateKey = reminderDate.toISOString().slice(0, 10);
+  const groups = new Map<string, CanonicalReleaseEvent[]>();
+
+  for (const event of events) {
+    if (event.status !== ReleaseEventStatus.ACTIVE ||
+        event.precision !== ReleaseDatePrecision.DATE ||
+        event.releaseDate?.toISOString().slice(0, 10) !== dateKey ||
+        event.type === ReleaseNotificationType.SEASON_RELEASE) continue;
+    const key = event.contentType === TrackedContentType.MOVIE
+      ? `movie:${event.tmdbId}:one-week`
+      : `series:${event.tmdbId}:date:${dateKey}:one-week`;
+    const group = groups.get(key) ?? [];
+    if (!group.some((item) => item.id === event.id)) group.push(event);
+    groups.set(key, group);
   }
 
-  const releaseDate = event.releaseDate;
-  const milestones: Array<'announcement' | 'one-week' | 'release-day'> = [];
-
-  if (isFutureDate(releaseDate)) {
-    milestones.push('announcement');
-  }
-
-  if (isWithinOneWeekBeforeRelease(releaseDate)) {
-    milestones.push('one-week');
-  }
-
-  if (isSameUtcDate(releaseDate, new Date())) {
-    milestones.push('release-day');
-  }
-
-  return milestones.map((milestone) => ({
-    body: buildReleaseBody(event.title, releaseDate, getReleaseLabel(event.type), milestone),
-    contentType: event.contentType,
-    episodeNumber: event.episodeNumber ?? undefined,
-    generatedKey: buildGeneratedKey(event, milestone),
-    releaseEventId: event.id,
-    releasedAt: releaseDate,
-    seasonNumber: event.seasonNumber ?? undefined,
-    title: event.title,
-    tmdbId: event.tmdbId,
-    type: event.type,
-  }));
-}
-
-function isFutureDate(date: Date) {
-  return date.getTime() > new Date().getTime();
-}
-
-function isWithinOneWeekBeforeRelease(date: Date) {
-  const diff = date.getTime() - new Date().getTime();
-
-  return diff > 0 && diff <= 7 * DAY_MS;
-}
-
-function isSameUtcDate(left: Date, right: Date) {
-  return toDateKey(left) === toDateKey(right);
-}
-
-function buildReleaseBody(
-  title: string,
-  releaseDate: Date,
-  label: 'episode' | 'film' | 'season',
-  milestone: 'announcement' | 'one-week' | 'release-day',
-) {
-  const dateLabel = releaseDate.toISOString().slice(0, 10);
-
-  if (milestone === 'announcement') {
-    return `${title} has a new ${label} release announced for ${dateLabel}.`;
-  }
-
-  if (milestone === 'one-week') {
-    return `${title} releases in one week on ${dateLabel}.`;
-  }
-
-  return `${title} releases today.`;
-}
-
-function buildGeneratedKey(
-  event: CanonicalReleaseEvent,
-  milestone: 'announcement' | 'one-week' | 'release-day',
-) {
-  const contentKey =
-    event.type === ReleaseNotificationType.MOVIE_RELEASE
-      ? `movie:${event.tmdbId}`
-      : event.type === ReleaseNotificationType.SEASON_RELEASE
-        ? `series:${event.tmdbId}:season:${event.seasonNumber}`
-        : `series:${event.tmdbId}:season:${event.seasonNumber}:episode:${event.episodeNumber}`;
-
-  return `${contentKey}:${milestone}`;
-}
-
-function getReleaseLabel(type: ReleaseNotificationType): 'episode' | 'film' | 'season' {
-  if (type === ReleaseNotificationType.MOVIE_RELEASE) {
-    return 'film';
-  }
-
-  return type === ReleaseNotificationType.SEASON_RELEASE ? 'season' : 'episode';
-}
-
-function toDateKey(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return [...groups].map(([generatedKey, group]) => {
+    group.sort((left, right) => (left.seasonNumber ?? 0) - (right.seasonNumber ?? 0) ||
+      (left.episodeNumber ?? 0) - (right.episodeNumber ?? 0));
+    const event = group[0];
+    const title = group.length > 1 ? event.title.replace(/: S\d+E\d+.*$/, '') : event.title;
+    return {
+      body: event.contentType === TrackedContentType.SERIES
+        ? `${title} has ${group.length === 1 ? 'a new episode' : `${group.length} new episodes`} releasing in one week on ${dateKey}.`
+        : `${event.title} releases in one week on ${dateKey}.`,
+      contentType: event.contentType,
+      episodeNumber: group.length === 1 ? event.episodeNumber ?? undefined : undefined,
+      generatedKey,
+      releaseEventId: event.id,
+      releasedAt: event.releaseDate,
+      seasonNumber: group.every((item) => item.seasonNumber === event.seasonNumber)
+        ? event.seasonNumber ?? undefined : undefined,
+      title,
+      tmdbId: event.tmdbId,
+      type: event.type,
+    };
+  });
 }
 
 function fromTrackedContentType(contentType: TrackedContentType | null) {

@@ -43,9 +43,11 @@ The current Railway contract runs one API instance. The database upserts are saf
 
 ## Internal notification projection
 
-Notification dedupe keys are stable per content identity and milestone, for example `movie:603:announcement`. They no longer contain the release date.
+Release reminders are created only on the UTC calendar day seven days before a dated, active movie or episode release. There is no announcement backfill, release-day alert, or separate season alert. Enabling a bell only saves the subscription. Undated events stay in the calendar without creating reminders.
 
-When a date moves, the notification row updates its `releaseEventId`, copy, and `releasedAt` value. An unread future milestone that is no longer valid is removed. Read or past notification history is preserved.
+Episodes of the same series released on the same date share one reminder. Movie dedupe keys remain stable per movie (movie:603:one-week); series keys identify a release date (series:1399:date:2026-09-17:one-week). Repeated synchronization cannot create another reminder for the same key. Legacy unread future announcements and season/release-day alerts are removed during synchronization; J-7 reminders remain in the inbox after the reminder day.
+
+Film subscriptions still target individual films. Automatic following of other films in a collection is not implemented by this policy.
 
 ## Personal release calendar
 
@@ -61,7 +63,7 @@ System push is private and disabled by default. The mobile app asks for native p
 
 Each Expo push token is scoped to the authenticated user and `APP_ENV`. Signing out, disabling system notifications, an operating-system permission revocation, or an Expo `DeviceNotRegistered` receipt deactivates the registration. A token reassigned to another user cannot receive queued notifications owned by the previous account.
 
-Only newly created canonical release notifications are queued. Database uniqueness on the internal notification and on each notification/device delivery pair prevents duplicate push across retries or overlapping projections. The API records Expo tickets, checks receipts after 15 minutes, retries transient send failures up to five attempts, and expires missing receipts after 24 hours. Push taps open the matching movie or series detail through a `tvapp://` deep link.
+Foreground notification handling suppresses banners, notification-list entries, sounds, and badges on the receiving device. In-app inbox records remain available. Only newly created canonical release notifications are queued. The worker rejects legacy milestone keys and reminders outside their J-7 day before dispatch. Database uniqueness on the internal notification and on each notification/device delivery pair prevents duplicate push across retries or overlapping projections. The API records Expo tickets, checks receipts after 15 minutes, retries transient send failures up to five attempts, and expires missing receipts after 24 hours. Push taps open the matching movie or series detail through a `tvapp://` deep link.
 
 This milestone covers followed-release push only. Social and community push categories remain outside P0.2.
 

@@ -28,7 +28,7 @@ async function main() {
       catalogueRequests.add(tmdbId);
       return {
         item: {
-          releaseDate: '2099-01-01',
+          releaseDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
           title: `Notification sync movie ${tmdbId}`,
           tmdbId,
         },
