@@ -318,7 +318,7 @@ function AppNavigator() {
               })}
             />
             <Stack.Screen component={FilmDetailScreen} name="FilmDetail" options={{ title: '' }} />
-            <Stack.Screen component={ActorDetailScreen} name="ActorDetail" options={{ title: '' }} />
+            <Stack.Screen component={ActorDetailScreen} name="ActorDetail" getId={({ params }) => String(params.tmdbId)} options={{ title: '' }} />
             <Stack.Screen
               component={PersonalWatchlistScreen}
               name="PersonalWatchlist"

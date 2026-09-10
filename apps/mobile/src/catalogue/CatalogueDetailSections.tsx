@@ -1,4 +1,6 @@
 import { ReactNode } from 'react';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Play } from 'lucide-react-native';
 import {
   Image,
@@ -18,6 +20,7 @@ import {
 import { MediaPoster } from '../components/MediaPoster';
 import { SectionHeader } from '../components/SectionHeader';
 import { colors, radii, spacing, typography } from '../design/tokens';
+import type { RootStackParamList } from '../navigation/types';
 import { formatDetailDate } from './detailModel';
 
 export function CatalogueVideoRail({ videos }: { videos: CatalogueVideo[] }) {
@@ -66,6 +69,7 @@ export function CatalogueVideoRail({ videos }: { videos: CatalogueVideo[] }) {
 }
 
 export function CatalogueCastRail({ cast }: { cast: CatalogueCastMember[] }) {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   if (cast.length === 0) {
     return null;
   }
@@ -74,11 +78,13 @@ export function CatalogueCastRail({ cast }: { cast: CatalogueCastMember[] }) {
     <CatalogueSection title="Cast">
       <ScrollView contentContainerStyle={styles.bleedRail} horizontal showsHorizontalScrollIndicator={false}>
         {cast.map((person) => (
-          <View
+          <Pressable
             accessibilityLabel={person.character ? `${person.name}, ${person.character}` : person.name}
-            accessible
+            accessibilityRole="button"
+            accessibilityHint="Opens this actor's biography and filmography."
             key={person.id}
-            style={styles.personCard}
+            onPress={() => navigation.navigate('ActorDetail', { name: person.name, tmdbId: person.id })}
+            style={({ pressed }) => [styles.personCard, pressed ? styles.pressed : null]}
           >
             {person.profileUrl ? (
               <Image
@@ -94,7 +100,7 @@ export function CatalogueCastRail({ cast }: { cast: CatalogueCastMember[] }) {
             )}
             <Text numberOfLines={2} style={styles.personName}>{person.name}</Text>
             {person.character ? <Text numberOfLines={2} style={styles.personRole}>{person.character}</Text> : null}
-          </View>
+          </Pressable>
         ))}
       </ScrollView>
     </CatalogueSection>
