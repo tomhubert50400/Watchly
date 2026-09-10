@@ -936,6 +936,55 @@ export class TmdbCatalogueService {
     return `${this.tmdbBaseUrl}/search/${endpointType}?${params.toString()}`;
   }
 
+  async searchActors(query: string) {
+    const params = new URLSearchParams({ query, language: TMDB_LANGUAGE, include_adult: 'false' });
+    const payload = await this.fetchTmdb<{ results?: { id: number; name: string; profile_path?: string | null; known_for_department?: string }[] }>(
+      `${this.tmdbBaseUrl}/search/person?${params.toString()}`, this.getAccessToken(), 'actor search',
+    );
+    return {
+      items: (payload.results ?? [])
+        .filter(person => person.known_for_department === 'Acting' && person.name)
+        .map(person => ({
+          tmdbId: person.id,
+          name: person.name,
+          profileUrl: person.profile_path ? `${this.imageBaseUrl}${person.profile_path}` : null,
+        })),
+      provider: 'tmdb' as const,
+    };
+  }
+
+  async getActor(tmdbId: number) {
+    const params = new URLSearchParams({ language: TMDB_LANGUAGE, append_to_response: 'combined_credits' });
+    const payload = await this.fetchTmdb<{
+      id: number; name: string; profile_path?: string | null; biography?: string;
+      combined_credits?: { cast?: (TmdbSearchResult & { adult?: boolean })[] };
+    }>(`${this.tmdbBaseUrl}/person/${tmdbId}?${params.toString()}`, this.getAccessToken(), 'actor details');
+    const credits = (payload.combined_credits?.cast ?? [])
+      .filter(item => !item.adult && (item.media_type === 'movie' || item.media_type === 'tv'))
+      .sort((left, right) => (right.popularity ?? 0) - (left.popularity ?? 0))
+      .filter(item => item.title || item.name)
+      .map(item => ({
+        id: `${item.media_type === 'movie' ? 'movie' : 'series'}:${item.id}`,
+        mediaType: item.media_type === 'movie' ? 'movie' as const : 'series' as const,
+        tmdbId: item.id,
+        title: item.title || item.name!,
+        overview: item.overview ?? '',
+        posterUrl: item.poster_path ? `${this.imageBaseUrl}${item.poster_path}` : null,
+        releaseDate: item.release_date || item.first_air_date || null,
+        voteAverage: item.vote_average || null,
+      }));
+    return {
+      item: {
+        tmdbId: payload.id,
+        name: payload.name,
+        profileUrl: payload.profile_path ? `${this.imageBaseUrl}${payload.profile_path}` : null,
+        biography: payload.biography ?? '',
+        credits: [...new Map(credits.map(item => [item.id, item])).values()],
+      },
+      provider: 'tmdb' as const,
+    };
+  }
+
   async getCollection(collectionId: number) {
     const params = new URLSearchParams({ language: TMDB_LANGUAGE });
     const payload = await this.fetchTmdb<{ name: string; parts?: TmdbSearchResult[] }>(

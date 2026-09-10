@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../database/prisma.service';
 import { CatalogueController } from './catalogue.controller';
+import { testActorSearch } from './catalogue-actors.qa';
 import {
   chooseWeeklySpotlight,
   getSpotlightExpiry,
@@ -20,6 +21,7 @@ import {
 } from './tmdb-catalogue.service';
 
 async function main() {
+  await testActorSearch();
   testCatalogueDetailRateLimits();
   testAnnouncedSelection();
   testDiscoveryEndpoints();

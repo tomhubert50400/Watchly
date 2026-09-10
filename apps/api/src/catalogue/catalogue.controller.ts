@@ -34,6 +34,21 @@ export class CatalogueController {
     return this.catalogue.trending();
   }
 
+  @Get('actors/search')
+  async searchActors(@Query('query') query?: string) {
+    const trimmedQuery = query?.trim() ?? '';
+    if (trimmedQuery.length < 2) {
+      throw new BadRequestException('Search query must contain at least 2 characters.');
+    }
+    return this.catalogue.searchActors(trimmedQuery);
+  }
+
+  @Get('actors/:tmdbId')
+  async actorDetails(@Param('tmdbId', ParseIntPipe) tmdbId: number) {
+    if (tmdbId <= 0) throw new BadRequestException('Actor ID must be positive.');
+    return this.catalogue.getActor(tmdbId);
+  }
+
   @Get('movie-sections')
   async movieSections() {
     return this.catalogue.movieSections();
