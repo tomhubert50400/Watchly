@@ -15,6 +15,7 @@ import {
   ReleaseEventStatus,
   ReleaseNotificationType,
   TrackedContentType,
+  UserContentStatus,
 } from '../generated/prisma/enums';
 import {
   CanonicalReleaseEvent,
@@ -131,17 +132,16 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
 
   async listReleaseCalendar(identity: AuthenticatedIdentity, now = new Date()) {
     const userId = await this.getUserId(identity);
-    const alertSubscriptions = await this.listCalendarSubscriptions(userId);
+    const titles = await this.listCalendarTitles(userId);
 
-    if (alertSubscriptions.length === 0) {
+    if (titles.length === 0) {
       return { items: [] };
     }
 
-    const subscriptionsToRefresh = alertSubscriptions.slice(0, MAX_SYNC_SUBSCRIPTIONS);
-    for (let offset = 0; offset < subscriptionsToRefresh.length; offset += SYNC_BATCH_SIZE) {
-      const batch = subscriptionsToRefresh.slice(offset, offset + SYNC_BATCH_SIZE);
-      await Promise.all(batch.map((subscription) =>
-        this.syncSubscription(userId, subscription.contentType, subscription.tmdbId),
+    for (let offset = 0; offset < titles.length; offset += SYNC_BATCH_SIZE) {
+      const batch = titles.slice(offset, offset + SYNC_BATCH_SIZE);
+      await Promise.all(batch.map((title) =>
+        this.buildCandidates(title.contentType, title.tmdbId),
       ));
     }
 
@@ -151,9 +151,9 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
         where: {
           AND: [
             {
-              OR: alertSubscriptions.map((subscription) => ({
-                contentType: subscription.contentType,
-                tmdbId: subscription.tmdbId,
+              OR: titles.map((title) => ({
+                contentType: title.contentType,
+                tmdbId: title.tmdbId,
               })),
             },
             {
@@ -456,22 +456,40 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
     );
   }
 
-  private async listCalendarSubscriptions(userId: string) {
-    return this.prisma.withConnectionRetry(() =>
-      this.prisma.releaseAlertSubscription.findMany({
-        orderBy: {
-          updatedAt: 'desc',
-        },
-        select: {
-          contentType: true,
-          tmdbId: true,
-          updatedAt: true,
-        },
-        where: {
-          userId,
-        },
-      }),
+  private async listCalendarTitles(userId: string) {
+    const [alerts, states, watchlistItems, progress] = await Promise.all([
+      this.prisma.withConnectionRetry(() => this.prisma.releaseAlertSubscription.findMany({
+        where: { userId },
+        select: { contentType: true, tmdbId: true },
+      })),
+      this.prisma.withConnectionRetry(() => this.prisma.userContentState.findMany({
+        where: { userId },
+        select: { contentType: true, tmdbId: true, status: true },
+      })),
+      this.prisma.withConnectionRetry(() => this.prisma.personalWatchlistItem.findMany({
+        where: { watchlist: { userId } },
+        select: { contentType: true, tmdbId: true },
+      })),
+      this.prisma.withConnectionRetry(() => this.prisma.userEpisodeProgress.findMany({
+        where: { userId },
+        distinct: ['seriesTmdbId'],
+        select: { seriesTmdbId: true },
+      })),
+    ]);
+    const tracked = states.filter((state) =>
+      state.status === UserContentStatus.WATCHLISTED ||
+      (state.contentType === TrackedContentType.SERIES &&
+        (state.status === UserContentStatus.WATCHING || state.status === UserContentStatus.WATCHED)),
     );
+    const droppedSeries = new Set(states.filter((state) =>
+      state.contentType === TrackedContentType.SERIES && state.status === UserContentStatus.DROPPED,
+    ).map((state) => state.tmdbId));
+    const watching = progress
+      .filter((item) => !droppedSeries.has(item.seriesTmdbId))
+      .map((item) => ({ contentType: TrackedContentType.SERIES, tmdbId: item.seriesTmdbId }));
+    return [...new Map([...alerts, ...tracked, ...watchlistItems, ...watching].map((item) =>
+      [`${item.contentType}:${item.tmdbId}`, { contentType: item.contentType, tmdbId: item.tmdbId }],
+    )).values()];
   }
 
   private async createNotifications(userId: string, candidates: NotificationCandidate[]) {

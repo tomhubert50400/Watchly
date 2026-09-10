@@ -4,6 +4,7 @@ import {
   ReleaseEventStatus,
   ReleaseNotificationType,
   TrackedContentType,
+  UserContentStatus,
 } from '../generated/prisma/enums';
 import { NotificationsService } from './notifications.service';
 
@@ -13,16 +14,38 @@ async function run() {
     { contentType: TrackedContentType.SERIES, tmdbId: 1399, updatedAt: new Date() },
   ];
   const syncCalls: string[] = [];
+  let states: Array<{ contentType: TrackedContentType; tmdbId: number; status: UserContentStatus | null }> = [];
+  let watchlistItems: Array<{ contentType: TrackedContentType; tmdbId: number }> = [];
+  let progress: Array<{ seriesTmdbId: number }> = [];
   let calendarSubscriptionTake: number | undefined;
   const releaseEventQueries: Array<Record<string, unknown>> = [];
   const prisma = {
     notification: {
-      createMany: async () => ({ count: 0 }),
-      deleteMany: async () => ({ count: 0 }),
-      updateMany: async () => ({ count: 0 }),
+      createMany: async () => assert.fail('Reading the calendar must not create notifications'),
+      deleteMany: async () => assert.fail('Reading the calendar must not delete notifications'),
+      updateMany: async () => assert.fail('Reading the calendar must not update notifications'),
+    },
+    userContentState: {
+      findMany: async ({ where }: { where: unknown }) => {
+        assert.deepEqual(where, { userId: 'user-a' });
+        return states;
+      },
+    },
+    personalWatchlistItem: {
+      findMany: async ({ where }: { where: unknown }) => {
+        assert.deepEqual(where, { watchlist: { userId: 'user-a' } });
+        return watchlistItems;
+      },
+    },
+    userEpisodeProgress: {
+      findMany: async ({ where }: { where: unknown }) => {
+        assert.deepEqual(where, { userId: 'user-a' });
+        return progress;
+      },
     },
     releaseAlertSubscription: {
-      findMany: async ({ take }: { take?: number }) => {
+      findMany: async ({ take, where }: { take?: number; where: unknown }) => {
+        assert.deepEqual(where, { userId: 'user-a' });
         calendarSubscriptionTake = take;
         return subscriptions;
       },
@@ -128,7 +151,48 @@ async function run() {
     },
   ]);
 
-  console.log('Release calendar QA passed: personal scope, canonical refresh, ordering, and date precision.');
+  subscriptions.length = 0;
+  states = [
+    ...Array.from({ length: 60 }, (_, index) => ({
+      contentType: TrackedContentType.MOVIE,
+      tmdbId: 1000 + index,
+      status: UserContentStatus.WATCHLISTED,
+    })),
+    { contentType: TrackedContentType.SERIES, tmdbId: 2000, status: UserContentStatus.WATCHING },
+    { contentType: TrackedContentType.SERIES, tmdbId: 2001, status: UserContentStatus.WATCHED },
+    { contentType: TrackedContentType.SERIES, tmdbId: 2002, status: UserContentStatus.DROPPED },
+    { contentType: TrackedContentType.MOVIE, tmdbId: 2003, status: UserContentStatus.WATCHED },
+    { contentType: TrackedContentType.SERIES, tmdbId: 2004, status: null },
+  ];
+  watchlistItems = [
+    { contentType: TrackedContentType.MOVIE, tmdbId: 1000 },
+    { contentType: TrackedContentType.MOVIE, tmdbId: 3000 },
+  ];
+  progress = [{ seriesTmdbId: 2000 }, { seriesTmdbId: 2002 }, { seriesTmdbId: 4000 }];
+  syncCalls.length = 0;
+  await service.listReleaseCalendar({ firebaseUid: 'firebase-a' } as never);
+  assert.equal(syncCalls.length, 64, 'Every followed title must be refreshed, including titles beyond the old 48-alert limit');
+  assert.equal(new Set(syncCalls).size, 64, 'Titles from multiple sources must be deduplicated');
+  assert.ok(syncCalls.includes('SERIES:2001'), 'A watched series must retain upcoming seasons');
+  assert.ok(syncCalls.includes('MOVIE:3000'), 'Personal watchlists must work without a bell');
+  assert.ok(syncCalls.includes('SERIES:4000'), 'Episode progress must count as following a series');
+  assert.ok(!syncCalls.includes('SERIES:2002'), 'Dropped series must not be inferred from old episode progress');
+  assert.ok(!syncCalls.includes('MOVIE:2003'), 'Watched movies alone must not count as upcoming follows');
+  assert.ok(!syncCalls.includes('SERIES:2004'), 'A cleared tracking status must not count as following');
+  const followedWhere = releaseEventQueries[1]?.AND as Array<{ OR: Array<{ contentType: string; tmdbId: number }> }>;
+  assert.deepEqual(
+    followedWhere[0]?.OR.map((item) => `${item.contentType}:${item.tmdbId}`).sort(),
+    [...syncCalls].sort(),
+    'The canonical event query must use exactly the personal followed titles',
+  );
+  states = [];
+  watchlistItems = [];
+  progress = [];
+  syncCalls.length = 0;
+  assert.deepEqual(await service.listReleaseCalendar({ firebaseUid: 'firebase-a' } as never), { items: [] });
+  assert.equal(syncCalls.length, 0, 'An empty calendar must not sync any titles');
+
+  console.log('Release calendar QA passed: followed titles, personal scope, no notification side effects, canonical refresh, ordering, and date precision.');
 }
 
 void run().catch((error: unknown) => {
