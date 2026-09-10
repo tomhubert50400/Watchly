@@ -109,8 +109,8 @@ assert.match(
 const exploreSource = source('../catalogue/ExploreScreen.tsx');
 assert.match(
   exploreSource,
-  /const resultCount = items\.length \+ people\.length;[\s\S]*isLoading && resultCount === 0/,
-  'Explore must reserve search loading UI for an empty media and people result area',
+  /const resultCount = items\.length \+ people\.length \+ actors\.items\.length;[\s\S]*\(isLoading \|\| actors\.isLoading\) && resultCount === 0/,
+  'Explore must reserve full search loading UI for an empty media, people and actor result area',
 );
 
 const progressSource = source('../tracking/EpisodeProgressControl.tsx');

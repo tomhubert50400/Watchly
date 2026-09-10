@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import { readFileSync } from 'node:fs';
+import './actorFilmographyModel.qa';
 import { formatCatalogueRating } from './catalogueRatingModel';
 
 assert.equal(formatCatalogueRating(null), null);
