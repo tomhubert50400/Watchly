@@ -1,6 +1,8 @@
 import { ChevronLeft } from 'lucide-react-native';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Platform, PlatformColor, Pressable, StyleSheet, Text } from 'react-native';
 import { colors } from '../design/tokens';
+
+const foregroundColor = Platform.OS === 'ios' ? PlatformColor('label') : colors.text;
 
 export function StackBackButton({ label, onPress }: { label: string; onPress: () => void }) {
   return (
@@ -11,7 +13,7 @@ export function StackBackButton({ label, onPress }: { label: string; onPress: ()
       onPress={onPress}
       style={({ pressed }) => [styles.button, pressed && styles.pressed]}
     >
-      <ChevronLeft color={colors.text} size={24} />
+      <ChevronLeft color={foregroundColor} size={24} />
       <Text numberOfLines={1} style={styles.label}>{label}</Text>
     </Pressable>
   );
@@ -26,6 +28,6 @@ const styles = StyleSheet.create({
     maxWidth: 180,
     paddingRight: 12,
   },
-  label: { color: colors.text, flexShrink: 1, fontSize: 17 },
+  label: { color: foregroundColor, flexShrink: 1, fontSize: 17 },
   pressed: { opacity: 0.58 },
 });

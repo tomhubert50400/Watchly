@@ -30,7 +30,7 @@
       "image": "./assets/splash-icon-w.png",
       "resizeMode": "contain"
     },
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "ios": {
       "bundleIdentifier": "com.tom.tvapp.dev",
       "supportsTablet": true,
