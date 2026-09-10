@@ -127,7 +127,7 @@ function MovieDetailContent({
   return (
     <View>
       <ScreenReveal delay={50}><MediaHero
-        actionAccessory={<ReleaseAlertControl contentType="movie" tmdbId={movie.tmdbId} />}
+        actionAccessory={<ReleaseAlertControl collectionName={movie.collection?.name} contentType="movie" tmdbId={movie.tmdbId} />}
         actions={<AddToWatchlistControl contentType="movie" tmdbId={movie.tmdbId} />}
         backdropUrl={movie.backdropUrl}
         logoAspectRatio={movie.logoAspectRatio}

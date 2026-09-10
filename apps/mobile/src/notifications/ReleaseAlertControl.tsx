@@ -27,11 +27,12 @@ import {
 } from './releaseAlertControlState';
 
 type ReleaseAlertControlProps = {
+  collectionName?: string;
   contentType: ReleaseAlertContentType;
   tmdbId: number;
 };
 
-export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControlProps) {
+export function ReleaseAlertControl({ collectionName, contentType, tmdbId }: ReleaseAlertControlProps) {
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
   const { showToast } = useToast();
   const { isSignedIn, requestScope } = getReleaseAlertControlSession({
@@ -148,6 +149,9 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
           ? await enableReleaseAlert(token, contentType, tmdbId)
           : await disableReleaseAlert(token, contentType, tmdbId);
         batchChangedRef.current = true;
+        if (nextEnabled && collectionName && !pushSetup?.message) {
+          showToast(`Release alerts enabled, including future films in ${collectionName}.`);
+        }
         if (pushSetup?.message) showToast(pushSetup.message);
       } catch (toggleError) {
         hapticError();
@@ -183,6 +187,7 @@ export function ReleaseAlertControl({ contentType, tmdbId }: ReleaseAlertControl
     <>
       <Pressable
         accessibilityLabel={requiresSignIn ? 'Sign in to enable release alerts' : presentation.accessibilityLabel}
+        accessibilityHint={collectionName ? `Includes future films in ${collectionName}.` : undefined}
         accessibilityRole="button"
         accessibilityState={{ disabled: requiresSignIn ? false : presentation.disabled, selected: enabled }}
         disabled={requiresSignIn ? false : presentation.disabled}
