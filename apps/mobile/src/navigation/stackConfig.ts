@@ -18,8 +18,8 @@ type BackRoute = {
 
 const routeLabels: Record<string, string> = {
   MainTabs: 'Home',
-  Notifications: 'Releases',
-  ReleaseCalendar: 'Releases',
+  Notifications: 'Alerts',
+  ReleaseCalendar: 'Calendar',
   Onboarding: 'Tastes',
   PublicProfile: 'Profile',
   SharedVotingSession: 'Vote',

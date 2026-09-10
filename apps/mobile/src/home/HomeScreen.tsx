@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { CompositeNavigationProp, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { CalendarDays, UserCircle } from 'lucide-react-native';
+import { Bell, CalendarDays } from 'lucide-react-native';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   CatalogueSearchItem,
@@ -179,28 +179,28 @@ export function HomeScreen() {
       trailing={
         <View style={styles.headerActions}>
           {isSignedIn ? (
-            <View>
-              <IconButton
-                accessibilityLabel={unreadNotificationCount === 0
-                  ? 'Open release calendar, no unread alerts'
-                  : `Open release calendar, ${unreadNotificationCount} unread ${unreadNotificationCount === 1 ? 'alert' : 'alerts'}`}
-                icon={<CalendarDays color={colors.textMuted} size={22} strokeWidth={2} />}
-                onPress={() => navigation.navigate('ReleaseCalendar')}
-              />
-              {unreadNotificationCount > 0 ? (
-                <View pointerEvents="none" style={styles.notificationBadge}>
-                  <Text maxFontSizeMultiplier={1.5} style={styles.notificationBadgeLabel}>
-                    {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
+            <IconButton
+              accessibilityLabel="Open release calendar"
+              icon={<CalendarDays color={colors.textMuted} size={22} strokeWidth={2} />}
+              onPress={() => navigation.navigate('ReleaseCalendar')}
+            />
           ) : null}
-          <IconButton
-            accessibilityLabel="Open Profile"
-            icon={<UserCircle color={colors.textMuted} size={22} strokeWidth={2} />}
-            onPress={() => navigation.navigate('Profile')}
-          />
+          <View>
+            <IconButton
+              accessibilityLabel={unreadNotificationCount === 0
+                ? 'Open Alerts, no unread alerts'
+                : `Open Alerts, ${unreadNotificationCount} unread ${unreadNotificationCount === 1 ? 'alert' : 'alerts'}`}
+              icon={<Bell color={colors.textMuted} size={22} strokeWidth={2} />}
+              onPress={() => navigation.navigate('Notifications')}
+            />
+            {unreadNotificationCount > 0 ? (
+              <View pointerEvents="none" style={styles.notificationBadge}>
+                <Text maxFontSizeMultiplier={1.5} style={styles.notificationBadgeLabel}>
+                  {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                </Text>
+              </View>
+            ) : null}
+          </View>
         </View>
       }
     >

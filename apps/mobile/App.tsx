@@ -34,7 +34,8 @@ import { detailBackOptions, needsCustomStackBackButton, resolvePreviousPageLabel
 import { StackBackButton } from './src/navigation/StackBackButton';
 import { mainTabs, MainTabName } from './src/navigation/tabConfig';
 import { RootStackParamList, RootTabParamList } from './src/navigation/types';
-import { ReleasesScreen } from './src/notifications/ReleasesScreen';
+import { NotificationsScreen } from './src/notifications/NotificationsScreen';
+import { ReleaseCalendarScreen } from './src/notifications/ReleaseCalendarScreen';
 import { NotificationPreferencesScreen } from './src/notifications/NotificationPreferencesScreen';
 import { PushNavigationObserver } from './src/notifications/PushNavigationObserver';
 import { PushRegistrationSync } from './src/notifications/PushRegistrationSync';
@@ -288,9 +289,9 @@ function AppNavigator() {
               name="LegalDocument"
               options={({ route }) => ({ title: legalDocuments[route.params.document].title })}
             />
-            <Stack.Screen component={ReleasesScreen} name="Notifications" options={{ title: 'Releases' }} />
+            <Stack.Screen component={NotificationsScreen} name="Notifications" options={{ title: 'Alerts' }} />
             <Stack.Screen component={NotificationPreferencesScreen} name="NotificationPreferences" options={{ title: 'Notifications' }} />
-            <Stack.Screen component={ReleasesScreen} name="ReleaseCalendar" options={{ title: 'Releases' }} />
+            <Stack.Screen component={ReleaseCalendarScreen} name="ReleaseCalendar" options={{ title: 'Calendar' }} />
             <Stack.Screen component={SettingsScreen} name="Settings" options={{ title: 'Settings' }} />
             <Stack.Screen component={BlockedUsersScreen} name="BlockedUsers" options={{ title: 'Blocked users' }} />
             <Stack.Screen component={ImportDataScreen} name="ImportData" options={{ title: 'Import your data' }} />
