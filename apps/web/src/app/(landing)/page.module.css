@@ -21,6 +21,7 @@
 .root button { font-family: inherit; }
 .root :is(button,a):focus-visible { outline: 2px solid #ab6670; outline-offset: 5px; }
 .header { position: absolute; inset: 0 0 auto; z-index: 10; height: 108px; padding: 0 4.5%; display: flex; align-items: center; justify-content: space-between; gap: 28px; }
+.headerLogo { display: block; width: 150px; height: auto; }
 .wordmark { display: inline-flex; align-items: center; gap: 10px; font-size: 29px; letter-spacing: -.07em; font-weight: 570; }
 .wordmark > span { display: inline-block; width: 19px; height: 23px; border: 1px solid currentColor; border-radius: 50% 50% 1px 1px; position: relative; }
 .wordmark > span::after { content: ''; position: absolute; inset: 5px; border: 1px solid currentColor; border-bottom: 0; border-radius: 50% 50% 0 0; }
@@ -198,6 +199,7 @@
 }
 @media (max-width: 700px) {
   .header { height: 83px; padding: 0 6%; }
+  .headerLogo { width: 120px; }
   .wordmark { font-size: 26px; }
   .wordmark > span { width: 17px; height: 21px; }
   .header nav { display: none; }

@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import Link from 'next/link';
+import watchlyWordmark from '../../../../mobile/assets/watchly-wordmark-ui.png';
 import { WaitlistForm } from '../../components/WaitlistForm';
 import { CinemaExperience } from './CinemaExperience';
 import styles from './page.module.css';
@@ -11,7 +13,7 @@ export default function CinemaPreview() {
     <div className={styles.root}>
       <a className="skip-link" href="#main-content">Skip to content</a>
       <header className={styles.header}>
-        <Link href="/" aria-label="Watchly home"><span className={styles.wordmark}><span aria-hidden="true" />watchly</span></Link>
+        <Link href="/" aria-label="Watchly home"><Image alt="Watchly" className={styles.headerLogo} priority src={watchlyWordmark} /></Link>
         <nav aria-label="Primary navigation"><a href="#journal">Your journal</a><a href="#lists">Your next film</a><a href="#series">Your series</a></nav>
         <a href="#join" className={styles.headerCta}>Get early access <span aria-hidden="true">↗</span></a>
       </header>
