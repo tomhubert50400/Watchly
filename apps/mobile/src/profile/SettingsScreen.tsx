@@ -65,6 +65,7 @@ import type { LegalDocumentId } from '../legal/legalDocuments';
 import type { RootStackParamList } from '../navigation/types';
 import { clearOnboardingDraft } from '../onboarding/onboardingDraft';
 import appConfig from '../../app.json';
+import { SpoilerSettingsSheet } from '../feed/SpoilerSettingsSheet';
 import { chooseAndUploadProfileAvatar } from './uploadProfileAvatar';
 
 type LoadStatus = 'idle' | 'loading' | 'ready' | 'saving' | 'error';
@@ -88,6 +89,7 @@ const microsoftProviderWired = authProviders.some((provider) => provider.id === 
 
 export function SettingsScreen() {
   const navigation = useNavigation<SettingsNavigation>();
+  const [spoilerSettingsOpen, setSpoilerSettingsOpen] = useState(false);
   const microsoftAuth = useMicrosoftAuth();
   const [googleRequest, , promptGoogleAsync] = Google.useIdTokenAuthRequest({
     androidClientId: googleClientIds.androidClientId ?? 'missing-android-client-id',
@@ -716,6 +718,12 @@ export function SettingsScreen() {
             </View>
           </SettingsSection>
 
+          <SettingsSection title="Community" subtitle="Choose what to reveal in your feed.">
+            <View style={styles.group}>
+              <SettingsActionRow icon={Eye} label="Spoiler protection" body="Blur unwatched titles and recent releases. Reveal any post when you want." last onPress={() => setSpoilerSettingsOpen(true)} />
+            </View>
+          </SettingsSection>
+
           <SettingsSection
             subtitle="Add another provider now so you can use either one to access the same account."
             title="Sign-in methods"
@@ -902,6 +910,7 @@ export function SettingsScreen() {
         </View>
       </Screen>
 
+      <SpoilerSettingsSheet userId={currentUser?.id ?? 'signed-out'} visible={spoilerSettingsOpen} onClose={() => setSpoilerSettingsOpen(false)} />
       <BottomActionSheet
         footer={(
           <View style={styles.deleteActions}>

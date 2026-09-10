@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import { defaultSpoilerPreferences, parseSpoilerPreferences, spoilerReason } from './spoilerModel';
+
+const now = new Date('2026-09-10T12:00:00Z');
+const episode = { content: { contentType: 'episode' as const }, viewerHasWatched: false, inWatchlist: false, releaseDate: '2026-09-01' };
+const movie = { ...episode, content: { contentType: 'movie' as const } };
+const enabled = { ...defaultSpoilerPreferences, enabled: true };
+assert.equal(spoilerReason(defaultSpoilerPreferences, episode, now), null);
+assert.equal(spoilerReason(enabled, episode, now), 'Episode not watched yet');
+assert.equal(spoilerReason(enabled, { ...episode, viewerHasWatched: true }, now), null);
+assert.equal(spoilerReason(enabled, movie, now), null);
+assert.equal(spoilerReason({ ...enabled, unwatchedMovies: true }, movie, now), 'Movie not watched yet');
+assert.equal(spoilerReason({ ...enabled, watchlist: true }, { ...movie, inWatchlist: true }, now), 'Still on your watchlist');
+assert.equal(spoilerReason({ ...enabled, watchlist: true }, { ...movie, inWatchlist: true, viewerHasWatched: true }, now), null);
+assert.equal(spoilerReason(enabled, { ...movie, releaseDate: '2026-09-09' }, now), 'Released less than 3 days ago');
+assert.equal(spoilerReason(enabled, { ...movie, releaseDate: '2026-09-07T12:00:00Z' }, now), null, 'Exact three-day boundary');
+assert.equal(spoilerReason({ ...enabled, recentDays: 7 }, { ...movie, releaseDate: '2026-09-05' }, now), 'Released less than 7 days ago');
+assert.equal(spoilerReason(enabled, { ...movie, releaseDate: '2026-09-15' }, now), 'Not released yet');
+assert.equal(spoilerReason(enabled, { ...movie, releaseDate: null }, now), 'Release date unavailable');
+assert.equal(spoilerReason({ ...enabled, recentDays: 0 }, { ...movie, releaseDate: null }, now), null);
+assert.equal(spoilerReason({ ...enabled, unwatchedEpisodes: false, recentDays: 0 }, episode, now), null);
+assert.equal(spoilerReason({ ...enabled, unwatchedEpisodes: false }, { ...episode, viewerHasWatched: true, releaseDate: '2026-09-09' }, now), 'Released less than 3 days ago', 'Rules combine independently');
+assert.deepEqual(parseSpoilerPreferences(null), defaultSpoilerPreferences);
+assert.deepEqual(parseSpoilerPreferences({ enabled: true, recentDays: 999, unwatchedEpisodes: 'false' }), enabled);
+console.log('Community spoiler QA passed: independent rules, combinations, dates, defaults and validation.');

@@ -54,6 +54,20 @@ export type FeedResponse = {
   items: FeedItem[];
 };
 
+export type CommunityItem = Omit<FeedItem, 'content' | 'type'> & {
+  content: FeedItem['content'] | { contentType: 'series'; seriesTmdbId: number };
+  type: FeedItem['type'] | 'movieRating' | 'seriesRating' | 'episodeRating' | 'viewing';
+  followed: boolean;
+  viewerHasWatched: boolean;
+  inWatchlist: boolean;
+};
+
+export function getCommunityFeed(token: string, cursor?: string) {
+  return apiGet<{ items: CommunityItem[]; nextCursor: string | null }>(
+    `/feed/community${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, { token },
+  );
+}
+
 export function getFeed(firebaseIdToken: string): Promise<FeedResponse> {
   return apiGet<FeedResponse>('/feed', {
     token: firebaseIdToken,

@@ -14,7 +14,8 @@ const publicProfile = read('../profile/PublicProfileScreen.tsx');
 const sheet = read('./ReportSheet.tsx');
 
 assert.match(socialPost, /accessibilityLabel=\{`Report \$\{visibleAuthor\}'s review`\}/);
-assert.match(feed, /type: item\.type/);
+assert.match(feed, /item\.type === 'movieReview' \|\| item\.type === 'episodeReview' \? item\.type : null/);
+assert.match(feed, /type: reviewType/);
 assert.match(home, /type: item\.type/);
 assert.match(episodeCommunity, /type: 'episodeReview'/);
 assert.match(publicProfile, /accessibilityLabel="More profile actions"/);

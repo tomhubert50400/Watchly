@@ -13,6 +13,7 @@ import { ExpandableReviewText } from './ExpandableReviewText';
 import { MediaPoster } from './MediaPoster';
 import { StarRatingDisplay } from './StarRatingDisplay';
 import { UserAvatar } from './UserAvatar';
+import { SpoilerGuard } from './SpoilerGuard';
 
 type SocialReviewPostProps = {
   authorAvatarUrl: string | null;
@@ -25,7 +26,12 @@ type SocialReviewPostProps = {
   likedByViewer: boolean;
   onOpenContent: () => void;
   onReport?: () => void;
-  onSetLiked: (liked: boolean) => Promise<FeedLikeState>;
+  onSetLiked?: (liked: boolean) => Promise<FeedLikeState>;
+  onOpenAuthor?: () => void;
+  spoilerReason?: string | null;
+  spoilerKey?: string;
+  spoilerContextLabel?: string;
+  canReveal?: boolean;
   rating: number | null;
   updatedAt: string;
 };
@@ -42,6 +48,11 @@ export const SocialReviewPost = memo(function SocialReviewPost({
   onOpenContent,
   onReport,
   onSetLiked,
+  onOpenAuthor,
+  spoilerReason,
+  spoilerKey,
+  spoilerContextLabel,
+  canReveal,
   rating,
   updatedAt,
 }: SocialReviewPostProps) {
@@ -64,6 +75,7 @@ export const SocialReviewPost = memo(function SocialReviewPost({
   }, [likeCount, likedByViewer]);
 
   const toggleLike = async () => {
+    if (!onSetLiked) return;
     const mutation = beginLikeMutation(likeStateRef.current);
     if (pendingLikeCountRef.current === 0) {
       confirmedLikeStateRef.current = likeStateRef.current;
@@ -96,74 +108,83 @@ export const SocialReviewPost = memo(function SocialReviewPost({
   return (
     <View style={styles.post}>
       <View style={styles.byline}>
-        <UserAvatar avatarUrl={authorAvatarUrl} displayName={visibleAuthor} size={42} />
-        <Text numberOfLines={1} style={styles.author}>{visibleAuthor}</Text>
+        {onOpenAuthor ? <Pressable accessibilityRole="button" accessibilityLabel={`Open ${visibleAuthor}'s profile`} onPress={onOpenAuthor} style={styles.authorLink}>
+          <UserAvatar avatarUrl={authorAvatarUrl} displayName={visibleAuthor} size={42} />
+          <Text numberOfLines={1} style={styles.author}>{visibleAuthor}</Text>
+        </Pressable> : <>
+          <UserAvatar avatarUrl={authorAvatarUrl} displayName={visibleAuthor} size={42} />
+          <Text numberOfLines={1} style={styles.author}>{visibleAuthor}</Text>
+        </>}
         <Text style={styles.date}>{formatDate(updatedAt)}</Text>
       </View>
-      <Pressable
-        accessibilityLabel={`Open ${contentTitle}`}
-        accessibilityRole="button"
-        onPress={onOpenContent}
-        style={({ pressed }) => [styles.mediaLink, pressed ? styles.mediaLinkPressed : null]}
-      >
-        <MediaPoster
-          accessibilityLabel={`${contentTitle} artwork`}
-          posterUrl={contentImageUrl}
-          style={styles.poster}
-        />
-        <View style={styles.mediaCopy}>
-          <Text style={styles.mediaMeta}>{contentMeta}</Text>
-          <Text numberOfLines={2} style={styles.mediaTitle}>{contentTitle}</Text>
-          <Text style={styles.openLabel}>Open content</Text>
-        </View>
-      </Pressable>
-      {rating !== null ? (
-        <View style={styles.rating}>
-          <StarRatingDisplay rating={rating} showValue size={17} />
+      <SpoilerGuard reason={spoilerReason} contextLabel={spoilerContextLabel} revealKey={`${spoilerKey ?? ''}:${body}:${contentTitle}`} canReveal={canReveal}>
+        <Pressable
+          accessibilityLabel={`Open ${contentTitle}`}
+          accessibilityRole="button"
+          onPress={onOpenContent}
+          style={({ pressed }) => [styles.mediaLink, pressed ? styles.mediaLinkPressed : null]}
+        >
+          <MediaPoster
+            accessibilityLabel={`${contentTitle} artwork`}
+            posterUrl={contentImageUrl}
+            style={styles.poster}
+          />
+          <View style={styles.mediaCopy}>
+            <Text style={styles.mediaMeta}>{contentMeta}</Text>
+            <Text numberOfLines={2} style={styles.mediaTitle}>{contentTitle}</Text>
+            <Text style={styles.openLabel}>Open content</Text>
+          </View>
+        </Pressable>
+        {rating !== null ? (
+          <View style={styles.rating}>
+            <StarRatingDisplay rating={rating} showValue size={17} />
+          </View>
+        ) : null}
+        {body ? <ExpandableReviewText body={body} style={styles.review} /> : null}
+      </SpoilerGuard>
+      {onReport || onSetLiked ? (
+        <View style={styles.actions}>
+          {onReport ? (
+            <Pressable
+              accessibilityLabel={`Report ${visibleAuthor}'s review`}
+              accessibilityRole="button"
+              onPress={onReport}
+              style={({ pressed }) => [styles.actionButton, pressed ? styles.actionButtonPressed : null]}
+            >
+              <Flag color={colors.textMuted} size={18} strokeWidth={2} />
+            </Pressable>
+          ) : null}
+          {onSetLiked ? <Pressable
+            accessibilityLabel={`${likeState.likedByViewer ? 'Unlike' : 'Like'} ${visibleAuthor}'s review, ${likeState.likeCount} ${likeState.likeCount === 1 ? 'like' : 'likes'}`}
+            accessibilityRole="button"
+            accessibilityState={{
+              selected: likeState.likedByViewer,
+            }}
+            onPress={() => {
+              void toggleLike();
+            }}
+            style={({ pressed }) => [
+              styles.likeButton,
+              pressed ? styles.likeButtonPressed : null,
+            ]}
+          >
+            {likeState.likeCount > 0 ? (
+              <Text
+                accessibilityLiveRegion="polite"
+                style={[styles.likeCount, likeState.likedByViewer ? styles.likeCountActive : null]}
+              >
+                {likeState.likeCount}
+              </Text>
+            ) : null}
+            <Heart
+              color={likeState.likedByViewer ? colors.accentText : colors.textMuted}
+              fill={likeState.likedByViewer ? colors.accent : 'transparent'}
+              size={19}
+              strokeWidth={2.2}
+            />
+          </Pressable> : null}
         </View>
       ) : null}
-      <ExpandableReviewText body={body} style={styles.review} />
-      <View style={styles.actions}>
-        {onReport ? (
-          <Pressable
-            accessibilityLabel={`Report ${visibleAuthor}'s review`}
-            accessibilityRole="button"
-            onPress={onReport}
-            style={({ pressed }) => [styles.actionButton, pressed ? styles.actionButtonPressed : null]}
-          >
-            <Flag color={colors.textMuted} size={18} strokeWidth={2} />
-          </Pressable>
-        ) : null}
-        <Pressable
-          accessibilityLabel={`${likeState.likedByViewer ? 'Unlike' : 'Like'} ${visibleAuthor}'s review, ${likeState.likeCount} ${likeState.likeCount === 1 ? 'like' : 'likes'}`}
-          accessibilityRole="button"
-          accessibilityState={{
-            selected: likeState.likedByViewer,
-          }}
-          onPress={() => {
-            void toggleLike();
-          }}
-          style={({ pressed }) => [
-            styles.likeButton,
-            pressed ? styles.likeButtonPressed : null,
-          ]}
-        >
-          {likeState.likeCount > 0 ? (
-            <Text
-              accessibilityLiveRegion="polite"
-              style={[styles.likeCount, likeState.likedByViewer ? styles.likeCountActive : null]}
-            >
-              {likeState.likeCount}
-            </Text>
-          ) : null}
-          <Heart
-            color={likeState.likedByViewer ? colors.accentText : colors.textMuted}
-            fill={likeState.likedByViewer ? colors.accent : 'transparent'}
-            size={19}
-            strokeWidth={2.2}
-          />
-        </Pressable>
-      </View>
     </View>
   );
 });
@@ -179,6 +200,13 @@ function formatDate(value: string) {
 }
 
 const styles = StyleSheet.create({
+  authorLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+    minHeight: touchTargets.min,
+  },
   actions: {
     alignItems: 'center',
     flexDirection: 'row',

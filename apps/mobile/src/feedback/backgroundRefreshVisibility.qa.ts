@@ -128,7 +128,7 @@ assert.doesNotMatch(
 const feedSource = source('../feed/FeedScreen.tsx');
 assert.match(
   feedSource,
-  /const items = resource\.data \?\? \[\]/,
+  /const items = \[\.\.\.\(resource\.data \?\? \[\]\), \.\.\.extraItems\]/,
   'Feed must keep rendering the cached Community items during revalidation',
 );
 assert.match(
