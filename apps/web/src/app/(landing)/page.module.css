@@ -52,8 +52,6 @@
 .enterLink small { display: block; font-size: 10px; color: var(--muted); margin-top: 6px; }
 .roundArrow { width: 44px; height: 44px; border: 1px solid #716c6560; border-radius: 50%; display: grid; place-items: center; font-size: 16px; transition: background .25s, transform .4s; }
 .enterLink:hover .roundArrow { background: #662d3910; transform: translateY(5px); }
-.heroFooter { position: absolute; bottom: 34px; left: 4.5%; right: 15%; display: flex; gap: 20px; justify-content: space-between; align-items: center; opacity: var(--intro); font-size: 8px; letter-spacing: .05em; z-index: 3; }
-.heroFooter i { display: inline-block; width: 5px; height: 5px; background: var(--wine); border-radius: 50%; margin-right: 10px; }
 .programme { position: absolute; bottom: 95px; right: 5%; width: 220px; z-index: 3; opacity: var(--intro); transform: translateY(calc(var(--p) * 150px)); }
 .programme > span { display: block; font-size: 9px; letter-spacing: .14em; color: var(--muted); margin-bottom: 13px; }
 .programme button { width: 100%; display: flex; align-items: center; text-align: left; gap: 13px; padding: 11px 0; font-size: 11px; border: 0; border-top: 1px solid #35322f20; background: transparent; color: #77736d; transition: color .2s, padding .3s; }
@@ -92,7 +90,6 @@
 .saveButton { background: none; color: #ddd8d0; font-size: 11px; border: 0; border-bottom: 1px solid #e8e5df35; padding: 10px 0; }
 .saveButton > span { margin-right: 16px; }
 .saveButton[aria-pressed='true'] { color: #ddb79b; }
-.demoNote { grid-column: 1 / -1; font-size: 8px; color: #8e8889; line-height: 1.6; }
 .journal { padding: 120px 10% 140px; background: #e8e5df; position: relative; }
 .journalHeading { text-align: center; }
 .journalHeading h2 { font: 400 clamp(48px, 6.3vw, 100px)/1.1 'Anton', Impact, sans-serif; letter-spacing: 0; text-transform: uppercase; margin: 25px 0; }
@@ -150,7 +147,6 @@
 .episode > button { margin-top: 25px; display: flex; justify-content: space-between; width: 100%; border: 1px solid #ede2cd40; padding: 14px 17px; background: #fff08a05; color: #eee7d9; font-size: 10px; transition: background .3s; }
 .episode > button:hover:not(:disabled) { background: #fff08a15; }
 .episode > button:disabled { opacity: .6; cursor: default; }
-.episode > small { display: block; margin-top: 12px; font-size: 8px; color: #959b92; }
 .seriesCredit { position: absolute; right: 5%; bottom: 36px; font-size: 8px; letter-spacing: .05em; }
 .join { background: #26252a; color: #e8e5df; padding: 115px 9% 95px; }
 .joinInner { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 12%; }
@@ -216,8 +212,6 @@
   .programme > span { font-size: 8px; margin-bottom: 9px; grid-column: 1 / -1; }
   .programme button { font-size: 9px; padding: 12px 0; gap: 5px; min-height: 44px; }
   .programme button > span { display: none; }
-  .heroFooter { left: 7%; bottom: 35px; font-size: 6px; }
-  .heroFooter > span:last-child { display: none; }
   .roomCaption { left: 8%; bottom: 12%; }
   .roomCaption p:last-child { font-size: 36px; }
   .filmTitle { left: 8%; right: 8%; bottom: 15%; }
@@ -236,7 +230,6 @@
   .filmCard h3 { font-size: 26px; }
   .filmCard .eyebrow { font-size: 8px; }
   .rating button { width: 29px; height: 42px; font-size: 24px; }
-  .demoNote { font-size: 7px; }
   .journal { padding: 70px 5% 85px; }
   .journalHeading h2 { font-size: 48px; }
   .journalHeading > p:last-child { font-size: 10px; }
