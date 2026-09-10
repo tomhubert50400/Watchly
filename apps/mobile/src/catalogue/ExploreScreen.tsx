@@ -42,6 +42,7 @@ import { CatalogueRating } from './CatalogueRating';
 import { loadCatalogueSections, PUBLIC_CATALOGUE_SECTIONS_KEY } from './catalogueSectionsResource';
 import { ExploreMediaCard } from './ExploreMediaCard';
 import { ActorSearchGroup, useActorSearch } from './ActorSearchGroup';
+import { SearchResultsSkeleton } from './SearchResultsSkeleton';
 import {
   buildExploreSections,
   deduplicateMediaItems,
@@ -528,7 +529,7 @@ export function SearchComposition({
   const retry = () => { actors.retry(); onRetry(); };
 
   if ((isLoading || actors.isLoading) && resultCount === 0) {
-    return <InlineStatusBanner title={viewState.loadingLabel} tone="updating" />;
+    return <SearchResultsSkeleton actors={actors.isLoading} titles={isLoading} />;
   }
 
   if ((error || actors.error) && resultCount === 0) {
@@ -545,9 +546,11 @@ export function SearchComposition({
 
   return (
     <View style={styles.composition}>
+      {actors.isLoading ? <SearchResultsSkeleton actors titles={false} /> : null}
       <ActorSearchGroup items={actors.items} />
       {actors.error ? <Button label="Retry actor search" onPress={actors.retry} /> : null}
       {error ? <Button label="Retry title and people search" onPress={onRetry} /> : null}
+      {isLoading && items.length === 0 ? <SearchResultsSkeleton actors={false} titles /> : null}
       <SearchGroup items={items} onOpen={onOpen} title={title} />
       <PeopleSearchGroup items={people} onOpen={onOpenPerson} />
     </View>
