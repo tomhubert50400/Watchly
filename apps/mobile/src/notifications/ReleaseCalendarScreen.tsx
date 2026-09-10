@@ -1,362 +1,169 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { CalendarClock, ChevronRight, Clapperboard, Tv } from 'lucide-react-native';
-import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { AppState, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { listReleaseCalendar } from '../api/notifications';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { useUserDataRevision } from '../sync/userDataEvents';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
+import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
 import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
+import { MediaPoster } from '../components/MediaPoster';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
-import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
+import { colors, radii, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
-import { ReleaseCalendarMonth } from './ReleaseCalendarMonth';
-import {
-  filterReleaseCalendarItems,
-  filterReleaseCalendarItemsByDate,
-  getInitialReleaseMonthKey,
-  getReleaseMonthItems,
-  getReleaseMonthKeys,
-  type ReleaseCalendarFilter,
-  type ReleaseCalendarItem,
-} from './releaseCalendarModel';
+import { filterReleaseCalendarItems, getReleaseDaysRemaining, getReleaseDisplay, getUpcomingReleases, type ReleaseCalendarFilter, type ReleaseCalendarItem } from './releaseCalendarModel';
 
-type ReleaseCalendarScreenProps = Pick<NativeStackScreenProps<RootStackParamList, 'ReleaseCalendar' | 'Notifications'>, 'navigation'>;
-
+type Props = Pick<NativeStackScreenProps<RootStackParamList, 'ReleaseCalendar' | 'Notifications'>, 'navigation'>;
 const filters: Array<{ label: string; value: ReleaseCalendarFilter }> = [
-  { label: 'All', value: 'all' },
-  { label: 'Movies', value: 'movies' },
-  { label: 'Series', value: 'series' },
+  { label: 'All', value: 'all' }, { label: 'Movies', value: 'movies' }, { label: 'Series', value: 'series' },
 ];
+const emptyItems: ReleaseCalendarItem[] = [];
 
-export function ReleaseCalendarScreen({ navigation }: ReleaseCalendarScreenProps) {
-  const {
-    currentUser,
-    firebaseIdToken,
-    getFirebaseIdToken,
-  } = useAuthSession();
-  const releaseAlertRevision = useUserDataRevision('releaseAlerts', 'tracking', 'watchlists', 'episodeProgress');
+export function ReleaseCalendarScreen({ navigation }: Props) {
+  const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
+  const { getCachedMovie, getCachedSeries, refreshMovie, refreshSeries } = useCatalogueCache();
+  const releaseRevision = useUserDataRevision('releaseAlerts', 'tracking', 'watchlists', 'episodeProgress');
   const ownerId = currentUser?.id ?? null;
   const [filter, setFilter] = useState<ReleaseCalendarFilter>('all');
-  const [monthKey, setMonthKey] = useState<string | null>(null);
-  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
   const load = useCallback(async () => {
-    void releaseAlertRevision;
+    void releaseRevision;
     const token = await getFirebaseIdToken();
-
-    if (!ownerId || !token) {
-      throw new Error('Sign in again to update your release calendar.');
-    }
-
+    if (!ownerId || !token) throw new Error('Sign in again to update your upcoming releases.');
     return (await listReleaseCalendar(token)).items;
-  }, [getFirebaseIdToken, ownerId, releaseAlertRevision]);
+  }, [getFirebaseIdToken, ownerId, releaseRevision]);
   const resource = useCachedResource<ReleaseCalendarItem[]>({
     enabled: Boolean(ownerId && firebaseIdToken),
     key: getPrivateCacheKey(ownerId ?? 'visitor', 'release-calendar:v2'),
     load,
   });
-  const items = resource.data ?? [];
-  const filteredItems = useMemo(
-    () => filterReleaseCalendarItems(items, filter),
-    [filter, items],
-  );
-  const monthKeys = useMemo(() => getReleaseMonthKeys(filteredItems), [filteredItems]);
+  const items = resource.data ?? emptyItems;
+  const upcomingItems = useMemo(() => getUpcomingReleases(items, now), [items, now]);
+  const filteredItems = useMemo(() => filterReleaseCalendarItems(upcomingItems, filter), [upcomingItems, filter]);
 
   useEffect(() => {
-    if (!monthKey || !monthKeys.includes(monthKey)) {
-      setMonthKey(getInitialReleaseMonthKey(filteredItems));
-      setSelectedDateKey(null);
-    }
-  }, [filteredItems, monthKey, monthKeys]);
+    const nextDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const timer = setTimeout(() => setNow(new Date()), Math.max(1, nextDay.getTime() - Date.now()));
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') setNow(new Date());
+    });
+    return () => { clearTimeout(timer); subscription.remove(); };
+  }, [now]);
 
-  const monthItems = monthKey ? getReleaseMonthItems(filteredItems, monthKey) : [];
-  const agendaItems = selectedDateKey
-    ? filterReleaseCalendarItemsByDate(monthItems, selectedDateKey)
-    : monthItems;
-  const undatedItems = filteredItems.filter((item) => item.releaseDate === null);
+  useEffect(() => {
+    if (!ownerId) return;
+    let active = true;
+    const titles = [...new Map(items.map((item) => [`${item.contentType}:${item.tmdbId}`, item])).values()];
+    void (async () => {
+      for (let offset = 0; active && offset < titles.length; offset += 3) {
+        await Promise.allSettled(titles.slice(offset, offset + 3).map((item) =>
+          item.contentType === 'movie' ? refreshMovie(item.tmdbId) : refreshSeries(item.tmdbId),
+        ));
+      }
+    })();
+    return () => { active = false; };
+  }, [items, ownerId, refreshMovie, refreshSeries]);
 
   if (!ownerId || !firebaseIdToken) {
-    return (
-      <Screen contentReady={!resource.isInitialLoading || items.length > 0} title="">
-        <SignInRequiredCard
-          body="Sign in to see upcoming releases from your watchlist and the series you follow."
-          title="Sign in to view your calendar"
-        />
-      </Screen>
-    );
+    return <Screen title=""><SignInRequiredCard body="Sign in to see upcoming releases from your watchlist and the series you follow." title="Sign in to view upcoming releases" /></Screen>;
   }
-
   if (resource.isInitialLoading && items.length === 0) {
-    return (
-      <Screen contentReady={!resource.isInitialLoading || items.length > 0} title="">
-        <LoadingState variant="list" label="Loading release calendar" />
-      </Screen>
-    );
+    return <Screen title=""><LoadingState variant="list" label="Loading upcoming releases" /></Screen>;
   }
-
   if (resource.error && items.length === 0) {
-    return (
-      <Screen contentReady={!resource.isInitialLoading || items.length > 0} title="">
-        <EmptyState body={resource.error} title="Your calendar is unavailable">
-          <Button label="Retry" onPress={resource.retry} />
-        </EmptyState>
-      </Screen>
-    );
+    return <Screen title=""><EmptyState body={resource.error} title="Upcoming releases are unavailable"><Button label="Retry" onPress={resource.retry} /></EmptyState></Screen>;
   }
 
   return (
-    <Screen contentReady={!resource.isInitialLoading || items.length > 0}
+    <Screen
       horizontalPadding={spacing.md}
-      refreshControl={
-        <RefreshControl
-          onRefresh={resource.retry}
-          refreshing={resource.isRefreshing}
-          tintColor={colors.accent}
-        />
-      }
+      refreshControl={<RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} />}
       statusBanner={resource.error ? <InlineStatusBanner detail={resource.error} tone="error" /> : undefined}
       title=""
     >
       <View style={styles.content}>
-        <ScreenReveal delay={50} style={styles.intro}>
-          <Text style={styles.introTitle}>Your upcoming releases</Text>
-          <Text style={styles.introBody}>Movies on your watchlist and new seasons and episodes from the series you follow.</Text>
-        </ScreenReveal>
         <SegmentedControl onChange={setFilter} options={filters} value={filter} />
         {filteredItems.length === 0 ? (
           <EmptyState
-            body={items.length === 0
+            body={upcomingItems.length === 0
               ? 'Add a movie to your watchlist or follow a series. Its upcoming releases will appear here, no alerts needed.'
               : 'No releases match this filter.'}
-            title={items.length === 0 ? 'No upcoming releases yet' : 'No matching releases'}
+            title={upcomingItems.length === 0 ? 'No upcoming releases yet' : 'No matching releases'}
           >
-            {items.length === 0 ? (
-              <Button
-                label="Explore coming soon"
-                onPress={() => navigation.navigate('MainTabs', { screen: 'Explore' })}
-              />
-            ) : null}
+            {upcomingItems.length === 0 ? <Button label="Explore coming soon" onPress={() => navigation.navigate('MainTabs', { screen: 'Explore' })} /> : null}
           </EmptyState>
         ) : (
-          <>
-            {monthKey ? (
-              <ScreenReveal delay={100}><ReleaseCalendarMonth
-                items={filteredItems}
-                monthKey={monthKey}
-                onMonthChange={(nextMonthKey) => {
-                  setMonthKey(nextMonthKey);
-                  setSelectedDateKey(null);
-                }}
-                onSelectDate={(dateKey) => setSelectedDateKey((current) => current === dateKey ? null : dateKey)}
-                selectedDateKey={selectedDateKey}
-              /></ScreenReveal>
-            ) : null}
-            {agendaItems.length > 0 ? (
-              <ScreenReveal delay={150}><CalendarSection
-                items={agendaItems}
-                label={selectedDateKey ? formatLongDate(selectedDateKey) : monthKey ? formatMonth(monthKey) : 'Agenda'}
-                onOpen={(item) => openRelease(navigation, item)}
-              /></ScreenReveal>
-            ) : null}
-            {undatedItems.length > 0 && !selectedDateKey ? (
-              <ScreenReveal delay={200}><CalendarSection
-                items={undatedItems}
-                label="Date pending"
-                onOpen={(item) => openRelease(navigation, item)}
-              /></ScreenReveal>
-            ) : null}
-          </>
+          <ScreenReveal style={styles.list}>
+            {filteredItems.map((item) => {
+              const display = getReleaseDisplay(item);
+              const content = item.contentType === 'movie' ? getCachedMovie(item.tmdbId) : getCachedSeries(item.tmdbId);
+              const days = getReleaseDaysRemaining(item, now);
+              const countdown = days === null ? 'Date pending' : days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `${days} days`;
+              const title = content?.title ?? display.title;
+              return (
+                <Pressable
+                  accessibilityLabel={`${title}. ${display.detail}. ${display.episodeName ?? ''}. ${countdown}.`}
+                  accessibilityHint="Opens the release details."
+                  accessibilityRole="button"
+                  key={item.id}
+                  onPress={() => {
+                    if (item.type === 'episode_release' && item.seasonNumber !== null && item.episodeNumber !== null) {
+                      navigation.navigate('EpisodeDetail', {
+                        tmdbId: item.tmdbId, seasonNumber: item.seasonNumber, episodeNumber: item.episodeNumber,
+                        seriesTitle: title, title: display.episodeName ?? display.detail,
+                      });
+                    } else if (item.contentType === 'movie') {
+                      navigation.navigate('FilmDetail', { title, tmdbId: item.tmdbId });
+                    } else {
+                      navigation.navigate('SeriesDetail', { title, tmdbId: item.tmdbId });
+                    }
+                  }}
+                  style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+                >
+                  <MediaPoster posterUrl={content?.posterUrl ?? null} style={styles.poster} />
+                  <View style={styles.copy}>
+                    <Text numberOfLines={2} style={styles.title}>{title}</Text>
+                    <Text style={styles.detail}>{display.detail}</Text>
+                    {display.episodeName ? <Text numberOfLines={2} style={styles.episode}>{display.episodeName}</Text> : null}
+                  </View>
+                  <View style={styles.countdown}>
+                    {days !== null && days > 1 ? (
+                      <><Text adjustsFontSizeToFit minimumFontScale={0.65} numberOfLines={1} style={styles.days}>{days}</Text><Text style={styles.daysLabel}>days</Text></>
+                    ) : <Text style={[styles.relativeDay, days === null && styles.pending]}>{countdown}</Text>}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScreenReveal>
         )}
       </View>
     </Screen>
   );
 }
 
-function CalendarSection({
-  items,
-  label,
-  onOpen,
-}: {
-  items: ReleaseCalendarItem[];
-  label: string;
-  onOpen: (item: ReleaseCalendarItem) => void;
-}) {
-  return (
-    <View style={styles.section}>
-      <Text accessibilityRole="header" style={styles.sectionLabel}>{label}</Text>
-      <View style={styles.agenda}>
-        {items.map((item, index) => (
-          <ReleaseRow
-            item={item}
-            key={item.id}
-            onPress={() => onOpen(item)}
-            showDivider={index < items.length - 1}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function ReleaseRow({
-  item,
-  onPress,
-  showDivider,
-}: {
-  item: ReleaseCalendarItem;
-  onPress: () => void;
-  showDivider: boolean;
-}) {
-  const Icon = item.contentType === 'movie' ? Clapperboard : Tv;
-  const metadata = getReleaseMetadata(item);
-
-  return (
-    <Pressable
-      accessibilityHint="Opens the related title, where you can manage its alert."
-      accessibilityLabel={`${item.title}. ${metadata}.`}
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.row,
-        showDivider ? styles.rowDivider : null,
-        pressed ? styles.pressed : null,
-      ]}
-    >
-      <View style={styles.rowIcon}>
-        <Icon color={colors.accentText} size={20} strokeWidth={2} />
-      </View>
-      <View style={styles.rowCopy}>
-        <Text numberOfLines={2} style={styles.rowTitle}>{item.title}</Text>
-        <Text style={styles.rowMeta}>{metadata}</Text>
-      </View>
-      <ChevronRight color={colors.textSubtle} size={18} strokeWidth={2} />
-    </Pressable>
-  );
-}
-
-function openRelease(
-  navigation: ReleaseCalendarScreenProps['navigation'],
-  item: ReleaseCalendarItem,
-) {
-  if (item.contentType === 'movie') {
-    navigation.navigate('FilmDetail', { title: item.title, tmdbId: item.tmdbId });
-    return;
-  }
-
-  navigation.navigate('SeriesDetail', { title: item.title, tmdbId: item.tmdbId });
-}
-
-function getReleaseMetadata(item: ReleaseCalendarItem) {
-  const date = item.releaseDate ? formatShortDate(item.releaseDate) : 'Date to be announced';
-
-  if (item.type === 'episode_release') {
-    return `S${item.seasonNumber ?? '?'} E${item.episodeNumber ?? '?'} · ${date}`;
-  }
-
-  if (item.type === 'season_release') {
-    return `Season ${item.seasonNumber ?? '?'} · ${date}`;
-  }
-
-  return `Movie · ${date}`;
-}
-
-function formatShortDate(dateKey: string) {
-  return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString('en-US', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  });
-}
-
-function formatLongDate(dateKey: string) {
-  return new Date(`${dateKey}T00:00:00.000Z`).toLocaleDateString('en-US', {
-    day: 'numeric',
-    month: 'long',
-    timeZone: 'UTC',
-    weekday: 'long',
-    year: 'numeric',
-  });
-}
-
-function formatMonth(monthKey: string) {
-  const [year, month] = monthKey.split('-').map(Number);
-  return new Date(Date.UTC(year!, month! - 1, 1)).toLocaleDateString('en-US', {
-    month: 'long',
-    timeZone: 'UTC',
-    year: 'numeric',
-  });
-}
-
 const styles = StyleSheet.create({
-  agenda: {
-    borderBottomColor: colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  content: {
-    gap: spacing.lg,
-  },
-  intro: {
-    gap: spacing.xs,
-  },
-  introBody: {
-    ...typography.body,
-    color: colors.textMuted,
-  },
-  introTitle: {
-    ...typography.title,
-    color: colors.text,
-  },
-  pressed: {
-    opacity: 0.76,
-  },
+  content: { gap: spacing.md },
+  list: { gap: spacing.md },
   row: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: spacing.sm,
-    minHeight: 76,
-    paddingVertical: spacing.sm,
+    alignItems: 'center', backgroundColor: colors.panel, borderColor: colors.border,
+    borderRadius: radii.lg, borderWidth: 1, flexDirection: 'row', gap: spacing.sm, padding: spacing.sm,
   },
-  rowCopy: {
-    flex: 1,
-    minWidth: 0,
-  },
-  rowDivider: {
-    borderBottomColor: colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  rowIcon: {
-    alignItems: 'center',
-    backgroundColor: colors.panelElevated,
-    borderRadius: radii.md,
-    height: touchTargets.min,
-    justifyContent: 'center',
-    width: touchTargets.min,
-  },
-  rowMeta: {
-    ...typography.meta,
-    color: colors.textSubtle,
-    marginTop: 3,
-  },
-  rowTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '800',
-    lineHeight: 19,
-  },
-  section: {
-    gap: spacing.sm,
-  },
-  sectionLabel: {
-    ...typography.eyebrow,
-    color: colors.accentText,
-  },
+  poster: { width: 56, height: 84, flexShrink: 0, borderRadius: radii.sm },
+  copy: { flex: 1, minWidth: 0, gap: 4 },
+  title: { color: colors.text, fontSize: 15, fontWeight: '700', lineHeight: 20 },
+  detail: { ...typography.meta, color: colors.textMuted },
+  episode: { fontSize: 12, lineHeight: 17, color: colors.textMuted },
+  countdown: { alignItems: 'center', justifyContent: 'center', width: 78, flexShrink: 0 },
+  days: { color: colors.accentText, fontSize: 34, lineHeight: 40, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  daysLabel: { color: colors.textMuted, fontSize: 12 },
+  relativeDay: { color: colors.accentText, fontSize: 15, fontWeight: '800', textAlign: 'center' },
+  pending: { color: colors.textMuted, fontSize: 12, fontWeight: '500' },
+  pressed: { opacity: 0.76 },
 });
