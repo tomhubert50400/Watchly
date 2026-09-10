@@ -1,5 +1,6 @@
 // Deterministic service-level QA without a database or external network.
 import assert from 'node:assert/strict';
+import { ReleaseEventsService } from '../release-events/release-events.service';
 import { TrackedContentType } from '../generated/prisma/enums';
 import { buildReleaseReminderCandidates, NotificationsService } from '../notifications/notifications.service';
 
@@ -94,6 +95,7 @@ async function run() {
     withConnectionRetry: async (operation: () => Promise<unknown>) => operation(),
   };
   const releaseEvents = {
+    expandFollowedTitles: async (items: unknown[]) => items,
     syncContent: async (contentType: TrackedContentType, tmdbId: number) => {
       releaseEventCalls += 1;
       inFlight += 1;
@@ -148,6 +150,10 @@ async function run() {
   let canonicalFullSyncCount = 0;
   let canonicalContentReadCount = 0;
   const projectedUsers: string[] = [];
+  const sagaResolver = new ReleaseEventsService({
+    getMovie: async () => ({ item: { releaseDate: '2021-01-01', collection: { id: 10 } } }),
+    getCollection: async () => ({ items: [{ tmdbId: 603, releaseDate: '2099-01-01' }] }),
+  } as never, {} as never);
   const scheduledPrisma = {
     notification: {
       createMany: async ({ data }: { data: Array<{ userId: string }> }) => {
@@ -161,17 +167,20 @@ async function run() {
     releaseAlertSubscription: {
       findMany: async () => [
         { contentType: TrackedContentType.MOVIE, tmdbId: 603, userId: 'user-a' },
-        { contentType: TrackedContentType.MOVIE, tmdbId: 603, userId: 'user-b' },
+        { contentType: TrackedContentType.MOVIE, tmdbId: 1, userId: 'user-b' },
+        { contentType: TrackedContentType.MOVIE, tmdbId: 1, userId: 'user-a' },
       ],
     },
     withConnectionRetry: async (operation: () => Promise<unknown>) => operation(),
   };
   const scheduledReleaseEvents = {
+    expandFollowedTitles: sagaResolver.expandFollowedTitles.bind(sagaResolver),
     syncAllTrackedContent: async () => {
       canonicalFullSyncCount += 1;
     },
-    syncContent: async () => {
+    syncContent: async (_contentType: TrackedContentType, tmdbId: number) => {
       canonicalContentReadCount += 1;
+      if (tmdbId !== 603) return { events: [] };
       return {
         events: [{
           contentType: TrackedContentType.MOVIE,
@@ -206,13 +215,13 @@ async function run() {
   assert.equal(canonicalFullSyncCount, 1, 'scheduled projection must refresh canonical events first');
   assert.equal(
     canonicalContentReadCount,
-    1,
+    2,
     'subscribers to the same content must share one canonical event read',
   );
   assert.deepEqual(
     projectedUsers.sort(),
     ['user-a', 'user-b'],
-    'scheduled release notifications must project to every subscriber',
+    'A sequel must reach direct and inherited subscribers once, despite overlapping bells',
   );
 
   console.log(`Notifications sync QA passed: quota=48, maxInFlight=${maximumInFlight}, unique=${dedupeKeys.size}.`);

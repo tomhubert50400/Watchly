@@ -95,10 +95,11 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
   async sync(identity: AuthenticatedIdentity) {
     const userId = await this.getUserId(identity);
     const alertSubscriptions = await this.listAlertSubscriptions(userId);
+    const followedTitles = await this.releaseEvents.expandFollowedTitles(alertSubscriptions);
     let createdCount = 0;
 
-    for (let offset = 0; offset < alertSubscriptions.length; offset += SYNC_BATCH_SIZE) {
-      const batch = alertSubscriptions.slice(offset, offset + SYNC_BATCH_SIZE);
+    for (let offset = 0; offset < followedTitles.length; offset += SYNC_BATCH_SIZE) {
+      const batch = followedTitles.slice(offset, offset + SYNC_BATCH_SIZE);
       const createdCounts = await Promise.all(
         batch.map((item) =>
           this.syncSubscription(userId, item.contentType, item.tmdbId),
@@ -366,7 +367,7 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
           },
         }),
       );
-      const groups = groupSubscriptionsByContent(subscriptions);
+      const groups = groupSubscriptionsByContent(await this.releaseEvents.expandFollowedTitles(subscriptions));
       let createdCount = 0;
       let failedContentCount = 0;
 
@@ -484,7 +485,8 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
     const watching = progress
       .filter((item) => !droppedSeries.has(item.seriesTmdbId))
       .map((item) => ({ contentType: TrackedContentType.SERIES, tmdbId: item.seriesTmdbId }));
-    return [...new Map([...alerts, ...tracked, ...watchlistItems, ...watching].map((item) =>
+    const followedAlerts = await this.releaseEvents.expandFollowedTitles(alerts);
+    return [...new Map([...followedAlerts, ...tracked, ...watchlistItems, ...watching].map((item) =>
       [`${item.contentType}:${item.tmdbId}`, { contentType: item.contentType, tmdbId: item.tmdbId }],
     )).values()];
   }

@@ -31,7 +31,47 @@ type StoredEvent = {
   updatedAt: Date;
 };
 
+async function verifySagaSubscriptions() {
+  const now = new Date('2026-09-10T12:00:00Z');
+  let parts = [
+    { tmdbId: 1, releaseDate: '2017-01-01' },
+    { tmdbId: 2, releaseDate: '2021-01-01' },
+    { tmdbId: 3, releaseDate: '2026-09-17' },
+    { tmdbId: 4, releaseDate: null },
+  ];
+  let failing = false;
+  const service = new ReleaseEventsService({
+    getMovie: async (tmdbId: number) => ({ item: {
+      releaseDate: tmdbId === 1 ? '2017-01-01' : '2021-01-01',
+      collection: tmdbId === 99 ? null : { id: tmdbId === 50 ? 20 : 10 },
+    } }),
+    getCollection: async (id: number) => {
+      if (failing) throw new Error('unavailable');
+      return { items: id === 10 ? parts : [{ tmdbId: 51, releaseDate: '2026-09-17' }] };
+    },
+  } as never, {} as never);
+  const root = { contentType: TrackedContentType.MOVIE, tmdbId: 2, userId: 'a' };
+  const ids = (items: { tmdbId: number }[]) => items.map((item) => item.tmdbId);
+  assert.deepEqual(ids(await service.expandFollowedTitles([root], now)), [2, 3, 4],
+    'Only upcoming films in the same collection follow the original bell');
+  assert.deepEqual(ids(await service.expandFollowedTitles([{ ...root, tmdbId: 50 }], now)), [50, 51],
+    'Another Spider-Man collection must stay separate');
+  assert.deepEqual(ids(await service.expandFollowedTitles([{ ...root, tmdbId: 99 }], now)), [99]);
+  const overlapping = await service.expandFollowedTitles([root, { ...root, tmdbId: 1 }, { ...root, userId: 'b' }], now);
+  assert.equal(overlapping.filter((item) => item.userId === 'a' && item.tmdbId === 3).length, 1,
+    'Multiple bells in a saga must not duplicate sequel reminders for a user');
+  assert.equal(overlapping.filter((item) => item.userId === 'b' && item.tmdbId === 3).length, 1);
+  parts = [...parts, { tmdbId: 5, releaseDate: '2027-01-01' }];
+  assert.ok(ids(await service.expandFollowedTitles([root], now)).includes(5),
+    'A newly announced sequel must be discovered without reactivating the bell');
+  assert.deepEqual(await service.expandFollowedTitles([], now), [], 'Disabling the root stops inherited follows');
+  failing = true;
+  assert.deepEqual(await service.expandFollowedTitles([root], now), [root],
+    'A collection outage must preserve the directly followed title');
+}
+
 async function run() {
+  await verifySagaSubscriptions();
   assert.equal(parseTmdbDate('2026-02-29'), null, 'invalid calendar dates must not be normalized');
   assert.equal(parseTmdbDate('2028-02-29')?.toISOString(), '2028-02-29T00:00:00.000Z');
   assert.deepEqual(

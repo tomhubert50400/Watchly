@@ -47,7 +47,11 @@ Release reminders are created only on the UTC calendar day seven days before a d
 
 Episodes of the same series released on the same date share one reminder. Movie dedupe keys remain stable per movie (movie:603:one-week); series keys identify a release date (series:1399:date:2026-09-17:one-week). Repeated synchronization cannot create another reminder for the same key. Legacy unread future announcements and season/release-day alerts are removed during synchronization; J-7 reminders remain in the inbox after the reminder day.
 
-Film subscriptions still target individual films. Automatic following of other films in a collection is not implemented by this policy.
+A film bell also follows future films in that film's TMDB collection. Each notification sync refreshes collection membership, so newly added sequels are discovered automatically. Released predecessors are excluded; undated collection entries remain eligible for calendar display until a date becomes available. Separate TMDB collections never cross over based on actors, characters, or similar titles.
+
+The original bell remains the saved subscription. Removing it stops its inherited follows, unless another active bell still covers them. Expansion is deduplicated per user and film before projecting notifications, so overlapping bells cannot produce duplicate sequel reminders. The release calendar includes the same inherited titles. A collection lookup failure preserves the original title and logs the failed lookup for retry at the next sync.
+
+The movie-detail bell explains that future films in the named collection are included. Character following is not enabled.
 
 ## Personal release calendar
 

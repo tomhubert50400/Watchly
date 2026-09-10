@@ -95,7 +95,10 @@ async function run() {
     },
     withConnectionRetry: async <T>(operation: () => Promise<T>) => operation(),
   };
+  let includeSequel = false;
   const releaseEvents = {
+    expandFollowedTitles: async (items: Array<{ contentType: TrackedContentType; tmdbId: number }>) =>
+      includeSequel ? [...items, { contentType: TrackedContentType.MOVIE, tmdbId: 604 }] : items,
     syncContent: async (contentType: TrackedContentType, tmdbId: number) => {
       syncCalls.push(`${contentType}:${tmdbId}`);
       return { events: [] };
@@ -151,6 +154,12 @@ async function run() {
     },
   ]);
 
+  includeSequel = true;
+  await service.listReleaseCalendar({ firebaseUid: 'firebase-a' } as never);
+  const sequelWhere = releaseEventQueries.pop()?.AND as Array<{ OR: Array<{ tmdbId: number }> }>;
+  assert.ok(sequelWhere[0].OR.some((item) => item.tmdbId === 604), 'Inherited saga releases must appear in the calendar scope');
+  assert.ok(syncCalls.includes('MOVIE:604'), 'Inherited releases must refresh canonical dates');
+  includeSequel = false;
   subscriptions.length = 0;
   states = [
     ...Array.from({ length: 60 }, (_, index) => ({

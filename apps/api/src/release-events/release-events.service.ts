@@ -81,6 +81,41 @@ export class ReleaseEventsService {
       : this.syncSeries(tmdbId);
   }
 
+  async expandFollowedTitles<T extends { contentType: TrackedContentType; tmdbId: number; userId?: string }>(
+    subscriptions: T[],
+    now = new Date(),
+  ): Promise<T[]> {
+    const movies = [...new Set(subscriptions
+      .filter((item) => item.contentType === TrackedContentType.MOVIE)
+      .map((item) => item.tmdbId))];
+    const successors = new Map<number, number[]>();
+    const today = now.toISOString().slice(0, 10);
+    for (let offset = 0; offset < movies.length; offset += SCHEDULE_BATCH_SIZE) {
+      await Promise.all(movies.slice(offset, offset + SCHEDULE_BATCH_SIZE).map(async (tmdbId) => {
+        try {
+          const { item: movie } = await this.catalogue.getMovie(tmdbId);
+          if (!movie.collection) return;
+          const collection = await this.catalogue.getCollection(movie.collection.id);
+          successors.set(tmdbId, collection.items.filter((part) =>
+            part.tmdbId !== tmdbId &&
+            (!part.releaseDate || (part.releaseDate >= today &&
+              (!movie.releaseDate || part.releaseDate > movie.releaseDate))),
+          ).map((part) => part.tmdbId));
+        } catch {
+          this.logger.warn(JSON.stringify({ event: 'release_events.collection_sync.failed', tmdbId }));
+        }
+      }));
+    }
+    const expanded = subscriptions.flatMap((item) => [
+      item,
+      ...(item.contentType === TrackedContentType.MOVIE ? successors.get(item.tmdbId) ?? [] : [])
+        .map((tmdbId) => ({ ...item, tmdbId })),
+    ]);
+    return [...new Map(expanded.map((item) =>
+      [`${item.userId ?? ''}:${item.contentType}:${item.tmdbId}`, item],
+    )).values()];
+  }
+
   async syncAllTrackedContent() {
     if (this.fullSyncPromise) {
       return this.fullSyncPromise;
