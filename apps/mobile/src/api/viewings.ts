@@ -43,6 +43,7 @@ export type ViewingStats = {
 };
 
 export type MovieViewingSummary = {
+  latestLoggedAt?: string | null;
   history?: ViewingHistoryItem[];
   tmdbId: number;
   viewCount: number;
@@ -57,6 +58,7 @@ export type EpisodeViewingSummary = {
 };
 
 export type SeriesViewingSummary = {
+  episodes?: Array<{ seasonNumber: number; episodeNumber: number; viewCount: number; latestLoggedAt: string }>;
   rewatchCount: number;
   seriesTmdbId: number;
   totalViewCount: number;

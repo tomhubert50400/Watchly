@@ -77,6 +77,28 @@ async function run() {
   assert.equal(movieStateWrites, 1);
   await service.saveHistory({} as never, { ...input, contentType: 'episode', seasonNumber: 1, episodeNumber: 2, previous: [], entries: [{ id: randomUUID(), watchedDate: '2026-01-01' }] });
   assert.equal(episodeWrites, 1);
+  const cycleRows = [
+    { userId: 'owner', contentType: 'MOVIE', tmdbId: 557, id: 'first', watchedAt: null, createdAt: new Date('2026-01-01') },
+    { userId: 'owner', contentType: 'MOVIE', tmdbId: 557, id: 'rewatch', watchedAt: new Date('2025-01-01'), createdAt: new Date('2026-09-08') },
+    { userId: 'other-owner', contentType: 'MOVIE', tmdbId: 557, id: 'private', watchedAt: null, createdAt: new Date('2026-09-09') },
+    ...[1, 1, 2].map((episodeNumber, index) => ({ userId: 'owner', contentType: 'EPISODE', tmdbId: 99,
+      seasonNumber: 1, episodeNumber, createdAt: new Date(`2026-09-0${index + 1}`) })),
+  ];
+  const cycleService = new ViewingsService({ getOrCreateUser: async () => ({ id: 'owner' }) } as never, {
+    withConnectionRetry: async (operation: () => Promise<unknown>) => operation(),
+    viewingEvent: { findMany: async ({ where }: { where: Record<string, unknown> }) => cycleRows.filter((row) =>
+      Object.entries(where).every(([key, value]) => row[key as keyof typeof row] === value)) },
+  } as never, {} as never);
+  const movieSummary = await cycleService.getMovieSummary({} as never, 557);
+  assert.equal(movieSummary.viewCount, 2, 'viewings belong only to the authenticated owner');
+  assert.equal(movieSummary.latestLoggedAt, '2026-09-08T00:00:00.000Z', 'cycle follows log creation, including backdated and undated watches');
+  assert.deepEqual(movieSummary.history[0], { id: 'first', watchedAt: null }, 'history editing payload keeps its existing shape');
+  const seriesSummary = await cycleService.getSeriesSummary({} as never, 99);
+  assert.deepEqual(seriesSummary.episodes, [
+    { seasonNumber: 1, episodeNumber: 1, viewCount: 2, latestLoggedAt: '2026-09-02T00:00:00.000Z' },
+    { seasonNumber: 1, episodeNumber: 2, viewCount: 1, latestLoggedAt: '2026-09-03T00:00:00.000Z' },
+  ]);
+  assert.equal(seriesSummary.rewatchCount, 1);
   console.log('Viewing history API QA passed.');
 }
 

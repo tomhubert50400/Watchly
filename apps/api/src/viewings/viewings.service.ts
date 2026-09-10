@@ -258,7 +258,7 @@ export class ViewingsService {
     const userId = await this.getUserId(identity);
     const events = await this.prisma.withConnectionRetry(() =>
       this.prisma.viewingEvent.findMany({
-        select: { episodeNumber: true, seasonNumber: true },
+        select: { episodeNumber: true, seasonNumber: true, createdAt: true },
         where: {
           contentType: 'EPISODE',
           tmdbId: seriesTmdbId,
@@ -269,8 +269,22 @@ export class ViewingsService {
     const uniqueEpisodes = new Set(
       events.map((event) => `${event.seasonNumber}:${event.episodeNumber}`),
     );
+    const episodes = new Map<string, { seasonNumber: number; episodeNumber: number; viewCount: number; latestLoggedAt: string }>();
+    for (const event of events) {
+      if (event.seasonNumber === null || event.episodeNumber === null) continue;
+      const key = `${event.seasonNumber}:${event.episodeNumber}`;
+      const previous = episodes.get(key);
+      const loggedAt = event.createdAt.toISOString();
+      episodes.set(key, {
+        seasonNumber: event.seasonNumber,
+        episodeNumber: event.episodeNumber,
+        viewCount: (previous?.viewCount ?? 0) + 1,
+        latestLoggedAt: previous && previous.latestLoggedAt > loggedAt ? previous.latestLoggedAt : loggedAt,
+      });
+    }
 
     return {
+      episodes: [...episodes.values()],
       rewatchCount: Math.max(0, events.length - uniqueEpisodes.size),
       seriesTmdbId,
       totalViewCount: events.length,
@@ -594,13 +608,21 @@ export class ViewingsService {
   private async getMovieSummaryForUser(userId: string, tmdbId: number) {
     const history = await this.prisma.withConnectionRetry(() =>
       this.prisma.viewingEvent.findMany({
-        select: { id: true, watchedAt: true },
+        select: { id: true, watchedAt: true, createdAt: true },
         orderBy: [{ watchedAt: 'desc' }, { id: 'asc' }],
         where: { contentType: 'MOVIE', tmdbId, userId },
       }),
     );
 
-    return { tmdbId, viewCount: history.length, history: history.map((item) => ({ ...item, watchedAt: item.watchedAt?.toISOString() ?? null })) };
+    return {
+      tmdbId,
+      viewCount: history.length,
+      latestLoggedAt: history.reduce<string | null>((latest, item) => {
+        const loggedAt = item.createdAt.toISOString();
+        return !latest || loggedAt > latest ? loggedAt : latest;
+      }, null),
+      history: history.map((item) => ({ id: item.id, watchedAt: item.watchedAt?.toISOString() ?? null })),
+    };
   }
 
   private async getEpisodeSummaryForUser(
