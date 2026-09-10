@@ -41,6 +41,7 @@ import { useCatalogueCache } from './CatalogueCacheContext';
 import { CatalogueRating } from './CatalogueRating';
 import { loadCatalogueSections, PUBLIC_CATALOGUE_SECTIONS_KEY } from './catalogueSectionsResource';
 import { ExploreMediaCard } from './ExploreMediaCard';
+import { ActorSearchGroup, useActorSearch } from './ActorSearchGroup';
 import {
   buildExploreSections,
   deduplicateMediaItems,
@@ -332,6 +333,7 @@ export function ExploreScreen({ isActive = true, searchOnly = false }: ExploreSc
         <View style={styles.content}>
           {isSearching ? (
             <SearchComposition
+              query={trimmedQuery}
               error={visibleError}
               isLoading={isSearchLoading}
               items={visibleSearchItems}
@@ -498,6 +500,7 @@ function DiscoveryRail({
 }
 
 export function SearchComposition({
+  query,
   error,
   isLoading,
   items,
@@ -508,6 +511,7 @@ export function SearchComposition({
   searchType,
   viewState,
 }: {
+  query: string;
   error: string | null;
   isLoading: boolean;
   items: readonly CatalogueSearchItem[];
@@ -519,16 +523,18 @@ export function SearchComposition({
   viewState: ReturnType<typeof getExploreViewState>;
 }) {
   const title = searchType === 'movie' ? 'Movies' : searchType === 'series' ? 'TV Shows' : 'Results';
-  const resultCount = items.length + people.length;
+  const actors = useActorSearch(query);
+  const resultCount = items.length + people.length + actors.items.length;
+  const retry = () => { actors.retry(); onRetry(); };
 
-  if (isLoading && resultCount === 0) {
+  if ((isLoading || actors.isLoading) && resultCount === 0) {
     return <InlineStatusBanner title={viewState.loadingLabel} tone="updating" />;
   }
 
-  if (error && resultCount === 0) {
+  if ((error || actors.error) && resultCount === 0) {
     return (
-      <EmptyState body={error} title={viewState.errorTitle}>
-        <Button label="Retry search" onPress={onRetry} />
+      <EmptyState body={error ?? actors.error ?? ''} title={viewState.errorTitle}>
+        <Button label="Retry search" onPress={retry} />
       </EmptyState>
     );
   }
@@ -539,6 +545,9 @@ export function SearchComposition({
 
   return (
     <View style={styles.composition}>
+      <ActorSearchGroup items={actors.items} />
+      {actors.error ? <Button label="Retry actor search" onPress={actors.retry} /> : null}
+      {error ? <Button label="Retry title and people search" onPress={onRetry} /> : null}
       <SearchGroup items={items} onOpen={onOpen} title={title} />
       <PeopleSearchGroup items={people} onOpen={onOpenPerson} />
     </View>

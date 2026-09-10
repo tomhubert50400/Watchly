@@ -15,6 +15,7 @@ import { ExploreDiscoveryScreen, getDiscoveryLabel } from './src/catalogue/Explo
 import { DiscoverScreen } from './src/catalogue/DiscoverScreen';
 import { DiscoverResultsScreen } from './src/catalogue/DiscoverResultsScreen';
 import { FilmDetailScreen } from './src/catalogue/FilmDetailScreen';
+import { ActorDetailScreen } from './src/catalogue/ActorDetailScreen';
 import { SeriesDetailScreen } from './src/catalogue/SeriesDetailScreen';
 import { colors } from './src/design/tokens';
 import { FeedScreen } from './src/feed/FeedScreen';
@@ -317,6 +318,7 @@ function AppNavigator() {
               })}
             />
             <Stack.Screen component={FilmDetailScreen} name="FilmDetail" options={{ title: '' }} />
+            <Stack.Screen component={ActorDetailScreen} name="ActorDetail" options={{ title: '' }} />
             <Stack.Screen
               component={PersonalWatchlistScreen}
               name="PersonalWatchlist"

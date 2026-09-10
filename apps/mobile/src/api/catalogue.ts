@@ -2,6 +2,20 @@ import { apiGet } from './client';
 
 export type CatalogueSearchType = 'all' | 'movie' | 'series';
 
+export type CatalogueActor = {
+  tmdbId: number;
+  name: string;
+  profileUrl: string | null;
+};
+
+export function searchActors(query: string) {
+  return apiGet<{ items: CatalogueActor[] }>(`/catalog/actors/search?${new URLSearchParams({ query })}`);
+}
+
+export function getActor(tmdbId: number) {
+  return apiGet<{ item: CatalogueActor & { biography: string; credits: CatalogueSearchItem[] } }>(`/catalog/actors/${tmdbId}`);
+}
+
 export type CatalogueSearchItem = {
   id: string;
   mediaType: 'movie' | 'series';

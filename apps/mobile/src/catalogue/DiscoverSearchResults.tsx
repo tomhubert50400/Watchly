@@ -34,6 +34,7 @@ export function DiscoverSearchResults({ query, searchType }: { query: string; se
 
   const visible = result?.key === key ? result : null;
   return <SearchComposition
+    query={query}
     error={visible?.error ?? null}
     isLoading={!visible}
     items={visible?.items ?? []}
