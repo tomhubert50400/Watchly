@@ -138,7 +138,7 @@ export function FeedScreen() {
       trailing={firebaseIdToken ? (
         <IconButton
           accessibilityLabel="Spoiler protection"
-          icon={<EyeOff color={colors.text} size={21} />}
+          icon={<EyeOff color={protection.preferences.enabled ? colors.accent : colors.text} size={21} />}
           onPress={() => setSpoilerSettingsOpen(true)}
         />
       ) : undefined}
