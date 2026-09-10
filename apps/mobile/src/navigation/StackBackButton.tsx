@@ -7,6 +7,7 @@ export function StackBackButton({ label, onPress }: { label: string; onPress: ()
     <Pressable
       accessibilityLabel={`Back to ${label}`}
       accessibilityRole="button"
+      hitSlop={{ top: 8, bottom: 8 }}
       onPress={onPress}
       style={({ pressed }) => [styles.button, pressed && styles.pressed]}
     >
@@ -19,10 +20,11 @@ export function StackBackButton({ label, onPress }: { label: string; onPress: ()
 const styles = StyleSheet.create({
   button: {
     alignItems: 'center',
+    alignSelf: 'stretch',
     flexDirection: 'row',
-    minHeight: 44,
     minWidth: 44,
     maxWidth: 180,
+    paddingRight: 12,
   },
   label: { color: colors.text, flexShrink: 1, fontSize: 17 },
   pressed: { opacity: 0.58 },
