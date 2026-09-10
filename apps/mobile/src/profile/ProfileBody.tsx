@@ -1,6 +1,7 @@
 import { memo, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { ViewingStats } from '../api/viewings';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { ExpandableReviewText } from '../components/ExpandableReviewText';
 import { MediaPoster } from '../components/MediaPoster';
 import { StarRatingDisplay } from '../components/StarRatingDisplay';
@@ -88,7 +89,7 @@ export function ProfileBody({
   return (
     <View style={styles.stack}>
       <View style={styles.profileIntro}>
-        <ProfileSummaryCard
+        <ScreenReveal delay={50}><ProfileSummaryCard
           avatarLoading={avatarLoading}
           avatarUrl={avatarUrl}
           displayName={displayName}
@@ -99,52 +100,52 @@ export function ProfileBody({
           onFollowersPress={onFollowersPress}
           onFollowingPress={onFollowingPress}
           reviewsCount={reviewsCount}
-        />
+        /></ScreenReveal>
         {identityAction}
         <View pointerEvents="none" style={styles.statsDivider} />
-        <ViewingStatsSummaryCard
+        <ScreenReveal delay={100}><ViewingStatsSummaryCard
           accessibilityHint={statsAccessibilityHint}
           onPress={onOpenStats}
           stats={stats}
           title={statsTitle}
-        />
+        /></ScreenReveal>
         <View pointerEvents="none" style={styles.statsDivider} />
       </View>
       {notice}
       {showMediaRails ? (
         <>
-          <ProfileMediaRail
+          <ScreenReveal delay={150}><ProfileMediaRail
             emptyLabel={mediaEmptyLabels.series}
             items={mediaPreviews.series}
             onOpen={onOpenMediaItem}
             onViewAll={() => onViewAllMedia('series')}
             title="Series"
-          />
-          <ProfileMediaRail
+          /></ScreenReveal>
+          <ScreenReveal delay={200}><ProfileMediaRail
             emptyLabel={mediaEmptyLabels.movies}
             items={mediaPreviews.movies}
             onOpen={onOpenMediaItem}
             onViewAll={() => onViewAllMedia('movies')}
             title="Movies"
-          />
-          <ProfileMediaRail
+          /></ScreenReveal>
+          <ScreenReveal delay={200}><ProfileMediaRail
             emptyLabel={mediaEmptyLabels.favorites}
             items={mediaPreviews.favorites}
             onOpen={onOpenMediaItem}
             onViewAll={() => onViewAllMedia('favorites')}
             title="Favorites"
-          />
+          /></ScreenReveal>
         </>
       ) : null}
       {opinions.length === 0 && reviewsCount === 0 ? (
-        <View style={styles.emptyActivity}>
+        <ScreenReveal delay={200} style={styles.emptyActivity}>
           <Text style={styles.emptyActivityTitle}>{emptyActivityTitle}</Text>
           <Text style={styles.emptyActivityBody}>{emptyActivityBody}</Text>
           {emptyActivityAction}
-        </View>
+        </ScreenReveal>
       ) : (
         <>
-          <View style={styles.opinionsSection}>
+          <ScreenReveal delay={200} style={styles.opinionsSection}>
             <Text accessibilityRole="header" style={styles.sectionTitle}>RECENT ACTIVITY</Text>
             <ScrollView
               contentContainerStyle={styles.recentRail}
@@ -159,9 +160,9 @@ export function ProfileBody({
                 />
               ))}
             </ScrollView>
-          </View>
+          </ScreenReveal>
           {reviewsCount > 0 ? (
-            <View style={styles.opinionsSection}>
+            <ScreenReveal delay={200} style={styles.opinionsSection}>
               <View style={styles.reviewsHeader}>
                 <Text accessibilityRole="header" style={styles.sectionTitle}>LATEST REVIEWS</Text>
                 <Pressable accessibilityLabel="View all reviews" accessibilityRole="button" onPress={onViewAllReviews} style={styles.viewAll}>
@@ -177,7 +178,7 @@ export function ProfileBody({
                   />
                 ))}
               </View>
-            </View>
+            </ScreenReveal>
           ) : null}
         </>
       )}

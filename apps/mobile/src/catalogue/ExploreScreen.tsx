@@ -25,10 +25,11 @@ import {
 import { ProfileSearchItem, searchProfiles } from '../api/profile';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { useCachedResource } from '../cache/useCachedResource';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
 import { EmptyState } from '../components/EmptyState';
-import { InlineStatusBanner } from '../components/InlineStatusBanner';
+import { LoadingState } from '../components/LoadingState';
 import { SectionHeader } from '../components/SectionHeader';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
@@ -245,7 +246,7 @@ export function ExploreScreen({ isActive = true, searchOnly = false }: ExploreSc
         }
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
+        <ScreenReveal delay={0} style={styles.header}>
           <Text accessibilityRole="header" style={styles.screenTitle}>{searchOnly ? 'Search' : 'Explore'}</Text>
           <View style={styles.searchBox}>
             <Search color={colors.muted} size={20} strokeWidth={2.2} />
@@ -329,7 +330,7 @@ export function ExploreScreen({ isActive = true, searchOnly = false }: ExploreSc
               value={activeSection}
             />
           )}
-        </View>
+        </ScreenReveal>
 
         <View style={styles.content}>
           {isSearching ? (
@@ -410,7 +411,7 @@ function DiscoveryComposition({
   const itemCount = movies.length + series.length;
 
   if (isInitialLoading) {
-    return <InlineStatusBanner detail="Fetching current discovery picks." title={viewState.loadingLabel} tone="updating" />;
+    return <LoadingState variant="detail" label={viewState.loadingLabel} />;
   }
 
   if (error && itemCount === 0) {
@@ -427,29 +428,29 @@ function DiscoveryComposition({
 
   return (
     <View style={styles.composition}>
-      <ExploreFeature
+      <ScreenReveal delay={80}><ExploreFeature
         item={featured}
         logoAspectRatio={featuredDetails?.logoAspectRatio ?? null}
         logoUrl={featuredDetails?.logoUrl ?? null}
         onPress={() => onOpen(featured)}
         section={activeSection}
-      />
-      <DiscoveryRail
+      /></ScreenReveal>
+      <ScreenReveal delay={130}><DiscoveryRail
         items={movies.filter((item) => item !== featured)}
         mediaType="movie"
         onOpen={onOpen}
         onViewMore={() => onViewMore(activeSection, 'movie')}
         showReleaseAlert={activeSection === 'announced'}
         title="Movies"
-      />
-      <DiscoveryRail
+      /></ScreenReveal>
+      <ScreenReveal delay={180}><DiscoveryRail
         items={series.filter((item) => item !== featured)}
         mediaType="series"
         onOpen={onOpen}
         onViewMore={() => onViewMore(activeSection, 'series')}
         showReleaseAlert={activeSection === 'announced'}
         title="TV Shows"
-      />
+      /></ScreenReveal>
     </View>
   );
 }

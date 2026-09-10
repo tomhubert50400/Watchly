@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from 'react-native-svg';
 import { EpisodeDetails, EpisodeDetailsResponse } from '../api/catalogue';
 import { useCachedResource } from '../cache/useCachedResource';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
@@ -54,7 +55,7 @@ export function EpisodeDetailScreen({ navigation, route }: EpisodeDetailScreenPr
       >
         {!episode && resource.isInitialLoading ? (
           <View style={styles.loadingFrame}>
-            <LoadingState label="Loading episode details" />
+            <LoadingState variant="detail" label="Loading episode details" />
           </View>
         ) : !episode && resource.error ? (
           <EmptyState body={resource.error} title="Episode detail failed">
@@ -135,7 +136,7 @@ function EpisodeDetailContent({
 
   return (
     <View>
-      <View style={[styles.hero, { height: heroHeight }]}>
+      <ScreenReveal delay={50} style={[styles.hero, { height: heroHeight }]}>
         {episode.stillUrl ? (
           <Image
             accessibilityIgnoresInvertColors
@@ -167,8 +168,8 @@ function EpisodeDetailContent({
           <Text style={styles.title}>{episode.title}</Text>
           <HeaderInfoPills items={infoItems} />
         </View>
-      </View>
-      <View style={styles.bodyStack}>
+      </ScreenReveal>
+      <ScreenReveal delay={100} style={styles.bodyStack}>
         {previousEpisode || nextEpisode ? (
           <View style={styles.episodeNavigation}>
             <AdjacentEpisodeButton
@@ -259,7 +260,7 @@ function EpisodeDetailContent({
           <Text style={styles.sectionTitle}>Details</Text>
           <Text style={styles.detailSummary}>{detailItems.join(' · ')}</Text>
         </View>
-      </View>
+      </ScreenReveal>
     </View>
   );
 }

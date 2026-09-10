@@ -24,6 +24,7 @@ import {
   BottomActionSheet,
   BottomActionSheetScrollView,
 } from '../components/BottomActionSheet';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { Screen } from '../components/Screen';
 import { colors, radii, spacing, typography } from '../design/tokens';
@@ -375,18 +376,18 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
       <View style={styles.page}>
         {!embedded ? (
           <>
-            <View style={styles.intro}>
+            <ScreenReveal delay={0} style={styles.intro}>
               <Text accessibilityRole="header" style={styles.title}>Import your library</Text>
               <Text style={styles.body}>
                 Bring in your watch history, ratings, and reviews from another tracker.
               </Text>
-            </View>
+            </ScreenReveal>
 
             <Text style={styles.instruction}>Choose a service to see how to export and import your data.</Text>
           </>
         ) : null}
 
-        <View style={styles.sourceList}>
+        <ScreenReveal delay={50} style={styles.sourceList}>
           {visibleSources.map((source) => (
             <ImportSourceRow
               busy={status === 'previewing' && activeSource === source.brand}
@@ -397,7 +398,7 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
               source={source}
             />
           ))}
-        </View>
+        </ScreenReveal>
 
         {progress ? <Text accessibilityLiveRegion="polite" style={styles.body}>{progress}</Text> : null}
 
@@ -413,25 +414,25 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
         ) : null}
 
         {previews.length > 0 ? (
-          <ImportPreviewPanel
+          <ScreenReveal delay={100}><ImportPreviewPanel
             confirming={status === 'confirming'}
             onConfirm={requestConfirmation}
             onReview={reviewMatches}
             preview={combinedPreview}
             showAction={!embedded}
-          />
+          /></ScreenReveal>
         ) : null}
 
-        {result ? <ImportResultPanel result={result} /> : null}
+        {result ? <ScreenReveal delay={100}><ImportResultPanel result={result} /></ScreenReveal> : null}
 
         {!embedded ? (
           <>
-            <View style={styles.note}>
+            <ScreenReveal delay={150} style={styles.note}>
               <ShieldCheck color={colors.textSubtle} size={18} strokeWidth={2} />
               <Text style={styles.noteText}>
                 Review every match before confirming. Original dates and privacy settings are preserved, and existing Watchly ratings or reviews are never overwritten.
               </Text>
-            </View>
+            </ScreenReveal>
 
             <Text style={styles.disclaimer}>Watchly is not affiliated with these services.</Text>
           </>

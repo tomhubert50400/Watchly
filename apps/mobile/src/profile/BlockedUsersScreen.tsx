@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { UserX } from 'lucide-react-native';
 import {
   type BlockedUser,
@@ -8,6 +8,7 @@ import {
 } from '../api/blocks';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { notifyUserDataChanged } from '../sync/userDataEvents';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
@@ -137,7 +138,7 @@ export function BlockedUsersScreen() {
   }
 
   return (
-    <Screen title="">
+    <Screen contentReady={status !== 'loading' || items.length > 0} title="">
       <View style={styles.page}>
         <TextInput
           accessibilityLabel="Search blocked users"
@@ -155,7 +156,7 @@ export function BlockedUsersScreen() {
           value={query}
         />
         {status === 'loading' ? (
-          <LoadingState label="Loading blocked users" />
+          <LoadingState label="Loading blocked users" variant="people" />
         ) : status === 'error' ? (
           <EmptyState
             body={message ?? 'Check your connection and try again.'}
@@ -190,7 +191,7 @@ export function BlockedUsersScreen() {
               Blocked people cannot follow you or interact with your Watchly activity.
             </Text>
             {items.length > 0 ? (
-              <View style={styles.list}>
+              <ScreenReveal delay={100} style={styles.list}>
                 {items.map((item, index) => (
                   <View
                     key={item.userId}
@@ -217,14 +218,11 @@ export function BlockedUsersScreen() {
                     </Pressable>
                   </View>
                 ))}
-              </View>
+              </ScreenReveal>
             ) : null}
 
             {paginationStatus === 'loading' ? (
-              <View accessibilityLiveRegion="polite" style={styles.paginationState}>
-                <ActivityIndicator color={colors.accent} size="small" />
-                <Text style={styles.paginationText}>Loading more</Text>
-              </View>
+              <LoadingState label="Loading more blocked users" variant="people" count={2} />
             ) : paginationStatus === 'error' ? (
               <View accessibilityLiveRegion="polite" style={styles.paginationState}>
                 <Text style={styles.paginationText}>Could not load more blocked users.</Text>

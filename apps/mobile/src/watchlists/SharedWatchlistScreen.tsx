@@ -17,6 +17,7 @@ import {
   BottomActionSheet,
   BottomActionSheetScrollView,
 } from '../components/BottomActionSheet';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
@@ -287,7 +288,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
       >
         {statusBanner}
 
-        <WatchlistSection>
+        <WatchlistSection delay={50}>
           <SectionHeader title="Titles" />
           {details.hydratedItems.length === 0 ? (
             <Text style={styles.emptyCopy}>
@@ -298,7 +299,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
           )}
         </WatchlistSection>
 
-        <WatchlistSection>
+        <WatchlistSection delay={100}>
           <SectionHeader
             actionLabel={isVoteComposerOpen ? 'Cancel' : 'New vote'}
             onActionPress={() => setIsVoteComposerOpen((current) => !current)}
@@ -318,7 +319,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
           {watchlist.votingSessions.length === 0 ? (
             <Text style={styles.emptyCopy}>No voting sessions yet.</Text>
           ) : (
-            <View style={styles.sessionList}>
+            <ScreenReveal delay={100} style={styles.sessionList}>
               {watchlist.votingSessions.map((session) => {
                 const lifecycle = getVoteLifecycle(session);
                 const leaders = getVoteLeaders(session.candidates);
@@ -353,7 +354,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
                   </Pressable>
                 );
               })}
-            </View>
+            </ScreenReveal>
           )}
         </WatchlistSection>
       </WatchlistPage>
@@ -377,7 +378,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
             {watchlist.memberCount} {watchlist.memberCount === 1 ? 'member' : 'members'}
           </Text>
 
-          <View style={styles.memberList}>
+          <ScreenReveal delay={150} style={styles.memberList}>
             {watchlist.members.map((member) => (
               <View key={member.id} style={styles.memberRow}>
                 <View style={styles.avatar}>
@@ -388,7 +389,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
                 </Text>
               </View>
             ))}
-          </View>
+          </ScreenReveal>
           {memberForm}
         </BottomActionSheetScrollView>
       </BottomActionSheet>

@@ -9,8 +9,10 @@ import { browseGenreLabel, browseResourceKey, collectionFilters, discoverMoods, 
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { getPrivateCacheKey, getPublicCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
+import { LoadingState } from '../components/LoadingState';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
@@ -65,21 +67,21 @@ function DiscoverGrid({ type, onType, filters, onFilters }: { type: CatalogueSea
     finally { if (request === version.current) { busy.current = false; setLoadingMore(false); } }
   };
   const items = [...new Map([...(resource.data?.items ?? []), ...extra].map(item => [item.id, item])).values()].filter(item => type === 'all' || item.mediaType === type);
-  return <Screen title="" leading={<Pressable accessibilityRole="button" accessibilityLabel="Back to Discover" onPress={() => navigation.goBack()} style={styles.back}><ChevronLeft size={22} color={colors.text} /><Text style={styles.backText}>Discover</Text></Pressable>} background={<SpotlightAtmosphere imageUrl={items[0]?.posterUrl ?? null} />} refreshControl={<RefreshControl refreshing={resource.isRefreshing} onRefresh={resource.retry} tintColor={colors.accent} />}>
+  return <Screen contentReady={Boolean(resource.data)} title="" leading={<Pressable accessibilityRole="button" accessibilityLabel="Back to Discover" onPress={() => navigation.goBack()} style={styles.back}><ChevronLeft size={22} color={colors.text} /><Text style={styles.backText}>Discover</Text></Pressable>} background={<SpotlightAtmosphere imageUrl={items[0]?.posterUrl ?? null} />} refreshControl={<RefreshControl refreshing={resource.isRefreshing} onRefresh={resource.retry} tintColor={colors.accent} />}>
     <View style={styles.content}>
-      <View style={styles.titleRow}>
+      <ScreenReveal delay={0} style={styles.titleRow}>
         <Text accessibilityRole="header" style={styles.title}>Explore</Text>
         <Pressable accessibilityRole="button" accessibilityLabel="Filters" onPress={onFilters} style={({ pressed }) => [styles.filterButton, pressed && { opacity: 0.7 }]}>
           <SlidersHorizontal size={22} color={colors.text} />
         </Pressable>
-      </View>
+      </ScreenReveal>
       <Text style={styles.description}>{[discoverMoods.find(mood => mood.id === filters.mood)?.label, filters.genre ? browseGenreLabel(filters.genre) : null, filters.decade ? `${filters.decade}s` : null, filters.awards ? 'Award winners' : null].filter(Boolean).join(' · ') || 'All stories. Choose filters to find your next watch.'}</Text>
       <SegmentedControl options={discoverTypeOptions} value={type} onChange={onType} />
-      {resource.isInitialLoading && !resource.data ? <InlineStatusBanner title="Loading titles" detail="Collecting movies and TV shows." tone="updating" /> : null}
+      {resource.isInitialLoading && !resource.data ? <LoadingState variant="grid" label="Loading titles" /> : null}
       {resource.error ? <EmptyState title="Could not load this selection" body={resource.error}><Button label="Retry" onPress={resource.retry} /></EmptyState> : null}
-      {resource.data?.partial ? <InlineStatusBanner title="Some titles are unavailable" detail="Pull to refresh to try again." tone="updating" /> : null}
+      {resource.data?.partial ? <InlineStatusBanner title="Some titles are unavailable" detail="Pull to refresh to try again." tone="error" /> : null}
       {resource.data && !items.length ? <EmptyState title="No titles for this filter" body="Try All, or choose another selection." /> : null}
-      <View style={styles.grid}>{items.map(item => <ExploreMediaCard key={item.id} layout="grid" item={item} onPress={() => navigation.navigate(item.mediaType === 'movie' ? 'FilmDetail' : 'SeriesDetail', { title: item.title, tmdbId: item.tmdbId })} />)}</View>
+      <ScreenReveal delay={100} style={styles.grid}>{items.map(item => <ExploreMediaCard key={item.id} layout="grid" item={item} onPress={() => navigation.navigate(item.mediaType === 'movie' ? 'FilmDetail' : 'SeriesDetail', { title: item.title, tmdbId: item.tmdbId })} />)}</ScreenReveal>
       {moreError ? <Text accessibilityRole="alert" style={styles.description}>{moreError}</Text> : null}
       {hasMore ? <Button disabled={loadingMore || resource.isRefreshing} label={loadingMore ? 'Loading…' : moreError ? 'Retry loading more' : 'Load more'} onPress={() => void loadMore()} /> : null}
     </View>

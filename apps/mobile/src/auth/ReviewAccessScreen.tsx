@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { useFocusedFieldVisibility } from '../components/useFocusedFieldVisibility';
 import { Button } from '../components/Button';
 import { colors, radii, spacing } from '../design/tokens';
@@ -49,15 +50,15 @@ export function ReviewAccessScreen({ navigation }: NativeStackScreenProps<RootSt
       <ScrollView ref={scrollRef} {...visibility} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Explore Watchly</Text>
         {currentUser ? (
-          <View style={styles.form}>
+          <ScreenReveal delay={100} style={styles.form}>
             <Text style={styles.description}>Signed in as {currentUser.displayName || currentUser.handle || 'a Watchly user'}.</Text>
             <Button label="Continue to Watchly" onPress={close} />
             <Button label="Sign out" variant="secondary" loading={status === 'loading'} onPress={() => {
               void signOut().catch(() => setError('Sign-out could not finish. Please try again.'));
             }} />
-          </View>
+          </ScreenReveal>
         ) : (
-          <View style={styles.form}>
+          <ScreenReveal delay={150} style={styles.form}>
             <Text style={styles.description}>Use the demo credentials provided in the review instructions.</Text>
             <Text style={styles.label}>Username</Text>
             <TextInput accessibilityLabel="Username" autoCapitalize="none" autoCorrect={false} autoComplete="username"
@@ -70,7 +71,7 @@ export function ReviewAccessScreen({ navigation }: NativeStackScreenProps<RootSt
               onSubmitEditing={() => void submit()} ref={passwordInput} returnKeyType="go" secureTextEntry
               style={styles.input} textContentType="password" value={password} />
             <Button disabled={!username.trim() || !password} label="Sign in" loading={submitting || status === 'loading'} onPress={() => void submit()} />
-          </View>
+          </ScreenReveal>
         )}
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
         <Button label="Close" onPress={close} variant="ghost" disabled={submitting} />

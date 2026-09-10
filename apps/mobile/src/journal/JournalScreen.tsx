@@ -10,6 +10,7 @@ import { listJournalViewings } from '../api/viewings';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { useCachedResource } from '../cache/useCachedResource';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { BottomActionSheet, BottomActionSheetScrollView } from '../components/BottomActionSheet';
 import { EmptyState } from '../components/EmptyState';
@@ -88,14 +89,14 @@ export function JournalScreen() {
   const entries = filterJournalEntriesByDate(filteredEntries, selectedDateKey);
   const groups = groupJournalEntriesByMonth(entries);
   const yearCount = (data?.entries ?? []).filter((entry) => entry.date.slice(0, 4) === String(new Date().getFullYear())).length;
-  return <Screen refreshControl={currentUser ? <RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined} title="">
+  return <Screen contentReady={!currentUser || Boolean(resource.data)} refreshControl={currentUser ? <RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined} title="">
     {!currentUser ? <SignInRequiredCard body="You need to be signed in to use your private Journal. Sign in here to see your viewing history and opinions." title="Sign in to use Journal" />
       : resource.isInitialLoading && !resource.data ? <LoadingState label="Loading your Journal" />
       : resource.error && !resource.data ? <EmptyState body={resource.error} title="Journal unavailable"><Button label="Retry" onPress={resource.retry} /></EmptyState>
       : resource.data ? <View>
-        <View style={styles.intro}><Text style={styles.introText}>Your viewing history, ratings and the stories you kept.</Text><View style={styles.stats}><Stat label={`entries in ${new Date().getFullYear()}`} value={String(yearCount)} /><Stat label="average rating" value={data!.averageRating === null ? '-' : data!.averageRating.toFixed(1)} /><Stat label="reviews" value={String(data!.reviewCount)} /></View></View>
+        <ScreenReveal delay={50} style={styles.intro}><Text style={styles.introText}>Your viewing history, ratings and the stories you kept.</Text><View style={styles.stats}><Stat label={`entries in ${new Date().getFullYear()}`} value={String(yearCount)} /><Stat label="average rating" value={data!.averageRating === null ? '-' : data!.averageRating.toFixed(1)} /><Stat label="reviews" value={String(data!.reviewCount)} /></View></ScreenReveal>
         <ScrollView contentContainerStyle={styles.filters} horizontal showsHorizontalScrollIndicator={false}>{(['all', 'movies', 'series', 'reviews'] as const).map((value) => <Button key={value} label={value === 'all' ? 'All' : value === 'reviews' ? 'With review' : value[0]!.toUpperCase() + value.slice(1)} onPress={() => { setFilter(value); setSelectedDateKey(null); setCalendarMonthKey(null); setCalendarOpen(false); }} variant={filter === value ? 'secondary' : 'ghost'} />)}</ScrollView>
-        <View style={styles.dateControls}>
+        <ScreenReveal delay={100} style={styles.dateControls}>
           <Button
             compact
             disabled={!filteredEntries.length}
@@ -108,11 +109,11 @@ export function JournalScreen() {
             variant={calendarOpen || selectedDateKey ? 'secondary' : 'ghost'}
           />
           {selectedDateKey ? <Button compact icon={<X color={colors.textMuted} size={17} />} label="Clear date" onPress={() => setSelectedDateKey(null)} variant="ghost" /> : null}
-        </View>
+        </ScreenReveal>
         {calendarOpen && visibleMonthKey ? <JournalCalendar entries={filteredEntries} monthKey={visibleMonthKey} onMonthChange={setCalendarMonthKey} onSelectDate={setSelectedDateKey} selectedDateKey={selectedDateKey} /> : null}
         {data!.entries.length === 0 ? <EmptyState body="Watch, rate or review a film or episode and it will appear here." title="Your Journal is ready" />
           : groups.length === 0 ? <EmptyState body={selectedDateKey ? 'Clear the date or choose another marked day.' : 'Choose another filter to see your entries.'} title={selectedDateKey ? `No entries on ${formatSelectedDate(selectedDateKey)}` : 'No matching entries'} />
-          : <View style={styles.months}>{groups.map((group) => <View key={group.key}><Text style={styles.month}>{formatMonth(group.key)}</Text>{group.entries.map((entry) => <JournalEntryCard entry={entry as HydratedJournalEntry} key={entry.key} onEdit={() => entry.kind === 'movie' ? setEditing({ contentType: 'movie', tmdbId: entry.tmdbId, title: (entry as HydratedJournalEntry).title }) : setEpisodeChoices(entry as HydratedJournalEntry)} onPress={() => openEntry(navigation, entry as HydratedJournalEntry)} />)}</View>)}</View>}
+          : <ScreenReveal delay={150} style={styles.months}>{groups.map((group) => <View key={group.key}><Text style={styles.month}>{formatMonth(group.key)}</Text>{group.entries.map((entry) => <JournalEntryCard entry={entry as HydratedJournalEntry} key={entry.key} onEdit={() => entry.kind === 'movie' ? setEditing({ contentType: 'movie', tmdbId: entry.tmdbId, title: (entry as HydratedJournalEntry).title }) : setEpisodeChoices(entry as HydratedJournalEntry)} onPress={() => openEntry(navigation, entry as HydratedJournalEntry)} />)}</View>)}</ScreenReveal>}
       </View> : null}
     {editing ? <ViewingCountControl {...(editing.contentType === 'movie' ? editing : { ...editing, seriesTmdbId: editing.tmdbId })} key={`${currentUser?.id}:${editing.tmdbId}:${editing.contentType === 'episode' ? `${editing.seasonNumber}:${editing.episodeNumber}` : 'movie'}`} onEditorClose={() => setEditing(null)} variant="editor" /> : null}
     {episodeChoices ? <BottomActionSheet onClose={() => setEpisodeChoices(null)} title="Edit viewing dates" visible><BottomActionSheetScrollView>{[...new Map(episodeChoices.episodes.map((episode) => [`${episode.seasonNumber}:${episode.episodeNumber}`, episode])).values()].map((episode) => <Button key={`${episode.seasonNumber}:${episode.episodeNumber}`} label={`Season ${episode.seasonNumber}, episode ${episode.episodeNumber}`} onPress={() => { setEditing({ contentType: 'episode', tmdbId: episodeChoices.tmdbId, seasonNumber: episode.seasonNumber, episodeNumber: episode.episodeNumber, title: episodeChoices.title }); setEpisodeChoices(null); }} variant="ghost" />)}</BottomActionSheetScrollView></BottomActionSheet> : null}

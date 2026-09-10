@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BookmarkPlus, Plus } from 'lucide-react-native';
 import {
   addSharedWatchlistItem,
@@ -29,6 +29,7 @@ import {
   BottomActionSheetScrollView,
 } from '../components/BottomActionSheet';
 import { Button } from '../components/Button';
+import { LoadingState } from '../components/LoadingState';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
@@ -446,10 +447,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
           <Text style={styles.sheetSubtitle}>Select one or more lists.</Text>
 
           {(!hasCurrentOptions || (isLoading && options.length === 0)) ? (
-            <View style={styles.centerState}>
-              <ActivityIndicator color={colors.accent} />
-              <Text style={styles.stateText}>Loading your lists…</Text>
-            </View>
+            <LoadingState label="Loading your lists" variant="settings" />
           ) : options.length === 0 ? (
             <View style={styles.centerState}>
               <Text style={styles.emptyTitle}>No lists yet</Text>

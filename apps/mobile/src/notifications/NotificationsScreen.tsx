@@ -20,8 +20,10 @@ import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey, writePersistedCache } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
+import { LoadingState } from '../components/LoadingState';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
@@ -362,7 +364,7 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
 
   if (!ownerId || !firebaseIdToken) {
     return (
-      <Screen title="">
+      <Screen contentReady={!resource.isInitialLoading || items.length > 0 || visibleFollowRequests.length > 0} title="">
         <SignInRequiredCard
           body="You need to be signed in to use this section. Sign in here to see follow requests, releases, and shared-list alerts."
           title="Sign in to view Alerts"
@@ -373,15 +375,15 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
 
   if (resource.isInitialLoading && items.length === 0 && visibleFollowRequests.length === 0) {
     return (
-      <Screen title="">
-        <InlineStatusBanner detail="Loading your private alert inbox." tone="updating" />
+      <Screen contentReady={!resource.isInitialLoading || items.length > 0 || visibleFollowRequests.length > 0} title="">
+        <LoadingState variant="people" label="Loading notifications" />
       </Screen>
     );
   }
 
   if (resource.error && items.length === 0 && visibleFollowRequests.length === 0) {
     return (
-      <Screen title="">
+      <Screen contentReady={!resource.isInitialLoading || items.length > 0 || visibleFollowRequests.length > 0} title="">
         <EmptyState body={resource.error} title="Alerts are unavailable">
           <Button label="Retry" onPress={resource.retry} />
         </EmptyState>
@@ -390,7 +392,7 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
   }
 
   return (
-    <Screen
+    <Screen contentReady={!resource.isInitialLoading || items.length > 0 || visibleFollowRequests.length > 0}
       horizontalPadding={spacing.md}
       refreshControl={
         <RefreshControl
@@ -426,7 +428,7 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
         <ChevronRight color={colors.textSubtle} size={19} strokeWidth={2} />
       </Pressable>
       {visibleFollowRequests.length > 0 && filter === 'all' ? (
-        <View style={styles.requestsSection}>
+        <ScreenReveal delay={100} style={styles.requestsSection}>
           <Text style={styles.groupLabel}>Follow requests</Text>
           <View style={styles.groupItems}>
             {visibleFollowRequests.map((request) => (
@@ -438,18 +440,18 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
               />
             ))}
           </View>
-        </View>
+        </ScreenReveal>
       ) : null}
       <SegmentedControl onChange={setFilter} options={filters} value={filter} />
       {groups.length === 0 && !(visibleFollowRequests.length > 0 && filter === 'all') ? (
-        <View style={styles.empty}>
+        <ScreenReveal delay={100} style={styles.empty}>
           <EmptyState
             body={items.length === 0 ? 'Follow requests, release updates, and shared-list activity will appear here.' : 'No alerts match this filter.'}
             title={items.length === 0 ? 'You are all caught up' : 'No matching alerts'}
           />
-        </View>
+        </ScreenReveal>
       ) : (
-        <View style={styles.list}>
+        <ScreenReveal delay={150} style={styles.list}>
           {groups.map((group) => (
             <View key={group.key}>
               <Text style={styles.groupLabel}>{group.label}</Text>
@@ -465,7 +467,7 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
               </View>
             </View>
           ))}
-        </View>
+        </ScreenReveal>
       )}
     </Screen>
   );

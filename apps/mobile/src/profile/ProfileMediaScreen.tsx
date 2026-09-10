@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RefreshControl, StyleSheet, View } from 'react-native';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
@@ -42,7 +43,7 @@ export function ProfileMediaScreen() {
   }, [navigation]);
 
   return (
-    <Screen
+    <Screen contentReady={usesProvidedItems || Boolean(resource.data)}
       background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null}
       refreshControl={usesProvidedItems ? undefined : (
         <RefreshControl
@@ -55,7 +56,7 @@ export function ProfileMediaScreen() {
       title=""
     >
       {!usesProvidedItems && resource.isInitialLoading && !resource.data ? (
-        <LoadingState label="Loading your titles" />
+        <LoadingState variant="grid" label="Loading your titles" />
       ) : !usesProvidedItems && resource.error && !resource.data ? (
         <EmptyState body={resource.error} title="Titles unavailable">
           <Button label="Retry" onPress={resource.retry} />
@@ -63,25 +64,25 @@ export function ProfileMediaScreen() {
       ) : (
         <View style={styles.content}>
           {route.params.filter !== 'movies' ? (
-            <ProfileMediaRail
+            <ScreenReveal delay={50}><ProfileMediaRail
               emptyLabel="Nothing in progress right now."
               items={groups.inProgress}
               onOpen={openItem}
               title="In progress"
-            />
+            /></ScreenReveal>
           ) : null}
-          <ProfileMediaRail
+          <ScreenReveal delay={100}><ProfileMediaRail
             emptyLabel="No planned titles yet."
             items={groups.planned}
             onOpen={openItem}
             title="Planned"
-          />
-          <ProfileMediaRail
+          /></ScreenReveal>
+          <ScreenReveal delay={150}><ProfileMediaRail
             emptyLabel="No completed titles yet."
             items={groups.completed}
             onOpen={openItem}
             title="Completed"
-          />
+          /></ScreenReveal>
         </View>
       )}
     </Screen>

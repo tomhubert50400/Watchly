@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Users } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { getProfileConnections, type ProfileSearchItem } from '../api/profile';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
@@ -82,9 +83,9 @@ export function ProfileConnectionsScreen({ navigation, route }: ProfileConnectio
   );
 
   return (
-    <Screen leading={leading} title={title}>
+    <Screen contentReady={status !== 'loading' || items.length > 0} leading={leading} title={title}>
       {status === 'loading' && items.length === 0 ? (
-        <LoadingState label={`Loading ${kind}`} />
+        <LoadingState variant="people" label={`Loading ${kind}`} />
       ) : status === 'error' ? (
         <EmptyState body={message ?? 'Try again later.'} title="List unavailable">
           <Button compact label="Retry" onPress={() => setRevision((value) => value + 1)} />
@@ -102,7 +103,7 @@ export function ProfileConnectionsScreen({ navigation, route }: ProfileConnectio
           title={kind === 'followers' ? 'No followers yet' : 'Not following anyone yet'}
         />
       ) : (
-        <View style={styles.list}>
+        <ScreenReveal delay={100} style={styles.list}>
           {items.map((item, index) => (
             <Pressable
               accessibilityHint="Opens this Watchly profile."
@@ -124,7 +125,7 @@ export function ProfileConnectionsScreen({ navigation, route }: ProfileConnectio
               <ChevronRight color={colors.textSubtle} size={20} strokeWidth={2} />
             </Pressable>
           ))}
-        </View>
+        </ScreenReveal>
       )}
     </Screen>
   );

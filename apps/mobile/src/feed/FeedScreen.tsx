@@ -11,6 +11,7 @@ import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { useCachedResource } from '../cache/useCachedResource';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { IconButton } from '../components/IconButton';
@@ -142,7 +143,7 @@ export function FeedScreen() {
   }, [navigation]);
 
   return (
-    <Screen
+    <Screen contentReady={!resource.isInitialLoading || items.length > 0}
       refreshControl={firebaseIdToken ? <RefreshControl colors={[colors.accent]} onRefresh={resource.revalidate} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined}
       title="Community"
       trailing={firebaseIdToken ? (
@@ -154,7 +155,7 @@ export function FeedScreen() {
       ) : undefined}
     >
       {firebaseIdToken ? (
-        <View accessibilityRole="tablist" style={styles.feedIntro}>
+        <ScreenReveal delay={50} accessibilityRole="tablist" style={styles.feedIntro}>
           {([['for-you', 'For you'], ['following', 'Following']] as const).map(([value, label]) => (
             <Pressable
               accessibilityRole="tab"
@@ -170,12 +171,12 @@ export function FeedScreen() {
               <Text style={[styles.feedIntroTitle, mode !== value && styles.feedTabMuted]}>{label}</Text>
             </Pressable>
           ))}
-        </View>
+        </ScreenReveal>
       ) : null}
       {!firebaseIdToken ? (
         <SignInRequiredCard body="Discover public ratings and reviews about the movies and series you love." title="Sign in to join Community" />
       ) : resource.isInitialLoading && items.length === 0 ? (
-        <LoadingState label="Loading feed" />
+        <LoadingState variant="feed" label="Loading feed" />
       ) : resource.error && items.length === 0 ? (
         <EmptyState body={resource.error} title="Community failed"><Button label="Retry" onPress={resource.retry} /></EmptyState>
       ) : <>
@@ -183,7 +184,7 @@ export function FeedScreen() {
           <EmptyState body={mode === 'following' ? "Follow people to see their public ratings, reviews and viewing activity here." : "New public ratings and reviews will appear here. Pull down to refresh."} title={mode === 'following' ? "No activity from people you follow yet" : "No community activity yet"}>
             <Button label="Refresh" onPress={resource.revalidate} variant="secondary" />
           </EmptyState>
-        ) : <View style={styles.list}>
+        ) : <ScreenReveal delay={100} style={styles.list}>
           {items.map((item) => {
             const reviewType = item.type === 'movieReview' || item.type === 'episodeReview' ? item.type : null;
             return <SocialReviewPost
@@ -215,7 +216,7 @@ export function FeedScreen() {
           })}
           {pageError ? <Text accessibilityRole="alert" style={styles.feedIntroBody}>{pageError}</Text> : null}
           {nextCursor ? <Button label={pageError ? 'Retry loading more' : 'Load more'} loading={loadingPage} onPress={() => void loadMore()} variant="secondary" /> : null}
-        </View>}
+        </ScreenReveal>}
       </>}
       <ReportSheet onClose={() => setReportTarget(null)} target={reportTarget} />
       <SpoilerSettingsSheet userId={currentUser?.id ?? 'signed-out'} visible={spoilerSettingsOpen} onClose={() => setSpoilerSettingsOpen(false)} />

@@ -8,8 +8,10 @@ import { browseResourceKey, collectionFilters, discoverMoods, getDiscover, getDi
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { getPrivateCacheKey, getPublicCacheKey } from '../cache/persistedCache';
 import { preloadCachedResource, useCachedResource } from '../cache/useCachedResource';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
+import { LoadingState } from '../components/LoadingState';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { Screen } from '../components/Screen';
 import { SectionHeader } from '../components/SectionHeader';
@@ -91,7 +93,7 @@ export function DiscoverScreen({ isActive = true }: { isActive?: boolean }) {
       trailing={<Pressable accessibilityLabel={moodLabel ? `Mood: ${moodLabel}. Change mood` : 'Choose a mood'} accessibilityRole="button" onPress={() => setShowMood(true)} style={[styles.moodButton, mood && styles.moodSelected]}><SlidersHorizontal size={17} color={mood ? colors.accentText : colors.textMuted} /><Text style={styles.moodText}>Mood</Text>{mood ? <View style={styles.moodDot} /> : null}</Pressable>}
     >
       <View style={styles.content}>
-        <View style={styles.search}>
+        <ScreenReveal delay={50} style={styles.search}>
           <Search color={colors.muted} size={20} />
           <TextInput
             accessibilityLabel="Search for movies, TV shows or people"
@@ -101,32 +103,32 @@ export function DiscoverScreen({ isActive = true }: { isActive?: boolean }) {
             onChangeText={setQuery} onSubmitEditing={Keyboard.dismiss} value={query} style={styles.searchText}
           />
           {query.length > 0 ? <Pressable accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={12} onPress={() => setQuery('')}><X color={colors.muted} size={18} /></Pressable> : null}
-        </View>
+        </ScreenReveal>
         <SegmentedControl options={discoverTypeOptions} value={mediaType} onChange={setMediaType} />
         {isSearching ? <DiscoverSearchResults query={trimmedQuery} searchType={mediaType} /> : <>
         {moodLabel ? <Text style={styles.reason}>Mood: {moodLabel}</Text> : null}
-        {resource.isInitialLoading && !resource.data ? <InlineStatusBanner title="Finding your next watch" detail="Collecting movies and TV shows." tone="updating" /> : null}
+        {resource.isInitialLoading && !resource.data ? <LoadingState variant="grid" label="Finding your next watch" /> : null}
         {resource.error ? <EmptyState title={resource.data ? 'Could not refresh your picks' : 'Discovery is unavailable'} body={resource.error}><Button label="Retry" onPress={resource.retry} /></EmptyState> : null}
-        {resource.data?.partial ? <InlineStatusBanner title="Some picks are unavailable" detail="Pull to refresh to try again." tone="updating" /> : null}
-        {items.length ? <DiscoverCarousel items={featured} onOpen={openItem} /> : resource.data && !resource.error ? <EmptyState title="No new picks here yet" body={mood ? 'Try another mood or clear it to explore more titles.' : 'Rate or favorite titles you enjoy to help shape your next recommendations.'}>{mood ? <Button label="Change mood" onPress={() => setShowMood(true)} /> : null}</EmptyState> : null}
-        <View>
+        {resource.data?.partial ? <InlineStatusBanner title="Some picks are unavailable" detail="Pull to refresh to try again." tone="error" /> : null}
+        {items.length ? <ScreenReveal delay={100}><DiscoverCarousel items={featured} onOpen={openItem} /></ScreenReveal> : resource.data && !resource.error ? <EmptyState title="No new picks here yet" body={mood ? 'Try another mood or clear it to explore more titles.' : 'Rate or favorite titles you enjoy to help shape your next recommendations.'}>{mood ? <Button label="Change mood" onPress={() => setShowMood(true)} /> : null}</EmptyState> : null}
+        <ScreenReveal delay={150} ready={!collections.isInitialLoading || Boolean(collections.data)}>
           <SectionHeader title="Explore your way" actionLabel="Explore all" onActionPress={() => navigation.navigate('DiscoverResults', { title: 'Explore', mediaType, mood })} />
           {collections.error ? <EmptyState title="Collections are unavailable" body={collections.error}><Button label="Retry collections" onPress={collections.retry} /></EmptyState> : null}
-          {collections.isInitialLoading && !collections.data ? <InlineStatusBanner title="Loading collections" detail="Gathering movies and shows." tone="updating" /> : null}
-          {collections.data?.partial ? <InlineStatusBanner title="Some collections are unavailable" detail="Pull to refresh to try again." tone="updating" /> : null}
+          {collections.isInitialLoading && !collections.data ? <LoadingState variant="grid" label="Loading collections" /> : null}
+          {collections.data?.partial ? <InlineStatusBanner title="Some collections are unavailable" detail="Pull to refresh to try again." tone="error" /> : null}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.collectionRail}>
             {collections.data?.items.map(collection => <Pressable key={collection.id} accessibilityRole="button" accessibilityLabel={`Open ${collection.title}`} style={styles.collection} onPress={() => navigation.navigate('DiscoverResults', { collectionId: collection.id, title: collection.title, description: collection.description, mediaType })}>
               <View style={styles.collectionArtwork}><BlendedArtwork blendId={`discover-${collection.id}`} urls={collection.artwork} /></View>
               <Text style={styles.collectionTitle}>{collection.title}</Text>
             </Pressable>)}
           </ScrollView>
-        </View>
-        {items.length > featured.length ? <View>
+        </ScreenReveal>
+        {items.length > featured.length ? <ScreenReveal delay={200}>
           <SectionHeader title="More for you" actionLabel="View more" onActionPress={() => navigation.navigate('DiscoverResults', { title: 'Selected for you', mediaType, mood })} />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
             {items.slice(featured.length, featured.length + 10).map(item => <ExploreMediaCard key={item.id} item={item} onPress={() => openItem(item)} />)}
           </ScrollView>
-        </View> : null}
+        </ScreenReveal> : null}
         </>}
       </View>
     </Screen>

@@ -519,7 +519,7 @@ export function PublicProfileScreen() {
 
   if (!firebaseIdToken) {
     return (
-      <Screen leading={backButton} tabBarPadding title="">
+      <Screen contentReady={Boolean(profile)} leading={backButton} tabBarPadding title="">
         <SignInRequiredCard
           body="You need to be signed in to view profiles and follow people. Sign in here to continue."
           title="Sign in to view profiles"
@@ -529,7 +529,7 @@ export function PublicProfileScreen() {
   }
 
   return (
-    <Screen
+    <Screen contentReady={Boolean(profile)}
       background={atmosphereUrl ? <SpotlightAtmosphere fadeIn imageUrl={atmosphereUrl} /> : null}
       leading={backButton}
       tabBarPadding

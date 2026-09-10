@@ -9,6 +9,7 @@ import { useAuthSession } from '../auth/AuthSessionContext';
 import { getOrCreateResourceRequest, setMemoryResource } from '../cache/memoryResourceCache';
 import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { AppHeader } from '../components/AppHeader';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -92,7 +93,7 @@ export function ProfileReviewsScreen({ navigation, route }: NativeStackScreenPro
 
   return (
     <SafeAreaView style={styles.screen}>
-      <View style={styles.header}>
+      <ScreenReveal delay={0} style={styles.header}>
         <AppHeader title="Reviews" leading={(
           <ProfileHeaderButton accessibilityLabel="Back" onPress={() => navigation.goBack()}>
             <ChevronLeft color={colors.text} size={30} strokeWidth={2} />
@@ -119,8 +120,8 @@ export function ProfileReviewsScreen({ navigation, route }: NativeStackScreenPro
             <Button compact label="Retry details" onPress={() => setRetry((value) => value + 1)} variant="secondary" />
           </View>
         ) : null}
-      </View>
-      <FlatList
+      </ScreenReveal>
+      <ScreenReveal delay={100} ready={!loading && (results.length > 0 || !indexing)} style={{ flex: 1 }}><FlatList
         automaticallyAdjustKeyboardInsets
         contentContainerStyle={styles.list}
         data={results}
@@ -147,7 +148,7 @@ export function ProfileReviewsScreen({ navigation, route }: NativeStackScreenPro
             else navigation.navigate(target.name, target.params);
           }} />
         )}
-      />
+      /></ScreenReveal>
     </SafeAreaView>
   );
 }

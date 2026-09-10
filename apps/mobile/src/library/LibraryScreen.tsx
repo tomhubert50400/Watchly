@@ -10,6 +10,7 @@ import { useAuthSession } from '../auth/AuthSessionContext';
 import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { writePersistedCache } from '../cache/persistedCache';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { IconButton } from '../components/IconButton';
@@ -186,18 +187,18 @@ export function LibraryScreen() {
       onPress={() => void createList()}
     />
   ) : undefined;
-  return <Screen background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null} eyebrow={currentUser ? 'Your collection' : undefined} footer={createListFooter} refreshControl={currentUser ? <RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined} statusBanner={banner} tabBarPadding title="Library" trailing={currentUser ? <IconButton accessibilityLabel="Open Journal" icon={<BookOpen color={colors.text} size={21} />} onPress={() => navigation.navigate('Journal')} /> : null}>
+  return <Screen contentReady={!currentUser || Boolean(data)} background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null} eyebrow={currentUser ? 'Your collection' : undefined} footer={createListFooter} refreshControl={currentUser ? <RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined} statusBanner={banner} tabBarPadding title="Library" trailing={currentUser ? <IconButton accessibilityLabel="Open Journal" icon={<BookOpen color={colors.text} size={21} />} onPress={() => navigation.navigate('Journal')} /> : null}>
     {!currentUser ? <SignInRequiredCard body="You need to be signed in to use this section. Sign in here to keep your progress, ratings, release alerts and lists together." title="Sign in to use Library" />
-      : resource.isInitialLoading && !data ? <LoadingState label="Loading your library" />
+      : resource.isInitialLoading && !data ? <LoadingState variant="grid" label="Loading your library" />
       : resource.error && !data ? <EmptyState body={resource.error} title="Library unavailable"><Button label="Retry" onPress={resource.retry} /></EmptyState>
       : data && data.items.length === 0 && data.lists.length === 0 ? <EmptyState body="Track a title or create a list. Your progress and ratings will appear here automatically." title="Start your Library"><Button label="Explore titles" onPress={() => navigation.navigate('MainTabs', { screen: 'Explore' })} /></EmptyState>
       : data ? <View style={styles.content}>
-        <LibrarySummary summary={summary} />
+        <ScreenReveal delay={80}><LibrarySummary summary={summary} /></ScreenReveal>
         <SegmentedControl options={[{ label: 'All', value: 'all' }, { accessibilityLabel: 'In progress', label: 'Progress', value: 'progress' }, { label: 'Lists', value: 'lists' }]} value={tab} onChange={setTab} />
-        {tab !== 'lists' && continueItems.length > 0 ? <View style={styles.section}><SectionHeader title="Continue watching" /><ContinueWatchingCard item={continueItems[0]!} onPress={() => openItem(continueItems[0]!, true)} /></View> : null}
-        {tab !== 'progress' ? <View style={styles.section}><SectionHeader actionLabel="Journal" onActionPress={() => navigation.navigate('Journal')} title="My lists" />{data.lists.length ? <WatchlistRail lists={data.lists} onOpen={openList} /> : <Text style={styles.emptyInline}>No personal or shared lists yet.</Text>}</View> : null}
-        {tab === 'lists' ? <View style={styles.create}><SegmentedControl buttonMinHeight={36} options={[{ label: 'Personal', value: 'personal' }, { label: 'Shared', value: 'shared' }]} value={newListKind} onChange={setNewListKind} /><TextInput label="New list" value={newListName} onChangeText={setNewListName} placeholder="Weekend ideas" /></View> : null}
-        {tab !== 'lists' ? <View style={styles.section}><SectionHeader title={tab === 'progress' ? 'In progress' : 'Release alerts'} />{visibleItems.map((item) => <ReleaseAlertRow item={item} key={item.key} onOpen={() => openItem(item)} onToggle={() => void toggleAlert(item)} />)}{visibleItems.length === 0 ? <Text style={styles.emptyInline}>{tab === 'progress' ? 'Nothing in progress right now.' : 'No active release alerts.'}</Text> : null}</View> : null}
+        {tab !== 'lists' && continueItems.length > 0 ? <ScreenReveal delay={130} style={styles.section}><SectionHeader title="Continue watching" /><ContinueWatchingCard item={continueItems[0]!} onPress={() => openItem(continueItems[0]!, true)} /></ScreenReveal> : null}
+        {tab !== 'progress' ? <ScreenReveal delay={180} style={styles.section}><SectionHeader actionLabel="Journal" onActionPress={() => navigation.navigate('Journal')} title="My lists" />{data.lists.length ? <WatchlistRail lists={data.lists} onOpen={openList} /> : <Text style={styles.emptyInline}>No personal or shared lists yet.</Text>}</ScreenReveal> : null}
+        {tab === 'lists' ? <ScreenReveal delay={180} style={styles.create}><SegmentedControl buttonMinHeight={36} options={[{ label: 'Personal', value: 'personal' }, { label: 'Shared', value: 'shared' }]} value={newListKind} onChange={setNewListKind} /><TextInput label="New list" value={newListName} onChangeText={setNewListName} placeholder="Weekend ideas" /></ScreenReveal> : null}
+        {tab !== 'lists' ? <ScreenReveal delay={200} style={styles.section}><SectionHeader title={tab === 'progress' ? 'In progress' : 'Release alerts'} />{visibleItems.map((item) => <ReleaseAlertRow item={item} key={item.key} onOpen={() => openItem(item)} onToggle={() => void toggleAlert(item)} />)}{visibleItems.length === 0 ? <Text style={styles.emptyInline}>{tab === 'progress' ? 'Nothing in progress right now.' : 'No active release alerts.'}</Text> : null}</ScreenReveal> : null}
       </View> : null}
   </Screen>;
 }

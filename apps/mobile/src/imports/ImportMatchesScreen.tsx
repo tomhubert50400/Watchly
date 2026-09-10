@@ -5,6 +5,7 @@ import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, useWin
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { retryImportSuggestion } from '../api/imports';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { MediaPoster } from '../components/MediaPoster';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSelection, hapticSuccess } from '../feedback/haptics';
@@ -84,7 +85,7 @@ export function ImportMatchesScreen({ route }: Props) {
 
   return (
     <SafeAreaView edges={['bottom']} style={styles.screen}>
-      <View accessibilityRole="tablist" style={styles.tabs}>
+      <ScreenReveal delay={0} accessibilityRole="tablist" style={styles.tabs}>
         <ReviewTabButton
           active={activeTab === 'matched'}
           label={`Matched ${matchedItems.length}`}
@@ -95,10 +96,10 @@ export function ImportMatchesScreen({ route }: Props) {
           label={`Skipped ${skippedItems.length}`}
           onPress={() => selectTab('skipped')}
         />
-      </View>
+      </ScreenReveal>
 
       {activeTab === 'matched' ? (
-        <FlatList
+        <ScreenReveal delay={100} style={{ flex: 1 }}><FlatList
           columnWrapperStyle={styles.gridRow}
           contentContainerStyle={styles.content}
           data={matchedItems}
@@ -109,9 +110,9 @@ export function ImportMatchesScreen({ route }: Props) {
           numColumns={MATCH_COLUMNS}
           renderItem={({ item }) => <ImportMatchCard item={item} width={cardWidth} />}
           showsVerticalScrollIndicator={false}
-        />
+        /></ScreenReveal>
       ) : (
-        <FlatList
+        <ScreenReveal delay={100} style={{ flex: 1 }}><FlatList
           contentContainerStyle={styles.content}
           data={skippedRows}
           key="skipped-imports"
@@ -134,7 +135,7 @@ export function ImportMatchesScreen({ route }: Props) {
             />
           )}
           showsVerticalScrollIndicator={false}
-        />
+        /></ScreenReveal>
       )}
     </SafeAreaView>
   );

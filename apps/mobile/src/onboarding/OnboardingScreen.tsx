@@ -1244,16 +1244,16 @@ function TasteStep({
             {selectedMovieGenre?.name ?? 'All genres'}
           </Text>
           <View style={styles.genreTriggerRight}>
-            {genreLoading ? <ActivityIndicator color={colors.accentText} size="small" /> : null}
+            {genreLoading ? <View accessibilityLabel="Loading genres" accessibilityRole="progressbar" style={styles.genreSkeleton} /> : null}
             <ChevronDown color={colors.textMuted} size={20} strokeWidth={2.25} />
           </View>
         </Pressable>
       ) : null}
 
       {optionsLoading && popularItems[selectedType].length === 0 && trimmedQuery.length < 2
-        ? <LoadingState label="Loading popular titles" />
+        ? <LoadingState label="Loading popular titles" variant="grid" />
         : null}
-      {searchLoading && searchItems.length === 0 ? <LoadingState label="Searching TMDB" /> : null}
+      {searchLoading && searchItems.length === 0 ? <LoadingState label="Searching TMDB" variant="grid" /> : null}
       {optionsError ? <Text style={styles.errorText}>{optionsError}</Text> : null}
       {searchError ? <Text style={styles.errorText}>{searchError}</Text> : null}
       {selectionError ? <Text style={styles.errorText}>{selectionError}</Text> : null}
@@ -1497,7 +1497,7 @@ function NotificationPreview({
         />
       ) : (
         <View style={styles.notificationPreviewImageFallback}>
-          <ActivityIndicator color={colors.accentText} size="small" />
+          <View style={styles.notificationPosterSkeleton} />
         </View>
       )}
       <View style={styles.notificationPreviewCopy}>
@@ -1520,6 +1520,8 @@ function normalizeDraftStep(draft: OnboardingDraft | null): OnboardingStep {
 }
 
 const styles = StyleSheet.create({
+  genreSkeleton: { backgroundColor: colors.panelSoft, borderRadius: 4, height: 16, width: 48 },
+  notificationPosterSkeleton: { backgroundColor: colors.panelSoft, width: '100%', height: '100%' },
   actions: {
     flexDirection: 'row',
     gap: spacing.md,

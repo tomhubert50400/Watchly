@@ -51,6 +51,7 @@ import { useMicrosoftAuth } from '../auth/microsoftAuth';
 import { getMissingGoogleClientConfig, googleClientIds } from '../auth/googleAuthConfig';
 import { authProviders } from '../auth/providerConfig';
 import { SignInRequiredCard } from '../auth/SignInRequired';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { BottomActionSheet, BottomActionSheetScrollView } from '../components/BottomActionSheet';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -610,10 +611,10 @@ export function SettingsScreen() {
 
   if (!firebaseIdToken) {
     return (
-      <Screen title="">
+      <Screen contentReady={Boolean(savedSettings) || (!firebaseIdToken && authStatus !== 'loading')} title="">
         <View style={styles.signedOutPage}>
           {authStatus === 'loading' ? (
-            <LoadingState label="Restoring your account" />
+            <LoadingState variant="settings" label="Restoring your account" />
           ) : (
             <SignInRequiredCard
               body="Sign in here to manage your profile, privacy, data, and account."
@@ -628,15 +629,15 @@ export function SettingsScreen() {
 
   if (status === 'loading' && !savedSettings) {
     return (
-      <Screen title="">
-        <LoadingState label="Loading your settings" />
+      <Screen contentReady={Boolean(savedSettings) || (!firebaseIdToken && authStatus !== 'loading')} title="">
+        <LoadingState variant="settings" label="Loading your settings" />
       </Screen>
     );
   }
 
   if (status === 'error' && !savedSettings) {
     return (
-      <Screen title="">
+      <Screen contentReady={Boolean(savedSettings) || (!firebaseIdToken && authStatus !== 'loading')} title="">
         <EmptyState
           body="Your account is still safe. Check the connection and try once more."
           title="Settings unavailable"
@@ -650,7 +651,7 @@ export function SettingsScreen() {
 
   return (
     <>
-      <Screen
+      <Screen contentReady={Boolean(savedSettings) || (!firebaseIdToken && authStatus !== 'loading')}
         footer={isDirty ? (
           <Button
             fullWidth
@@ -682,6 +683,7 @@ export function SettingsScreen() {
           {message ? <SettingsMessage message={message} /> : null}
 
           <SettingsSection
+            delay={100}
             subtitle="One choice controls everything people can see on your profile."
             title="Privacy"
           >
@@ -704,6 +706,7 @@ export function SettingsScreen() {
           </SettingsSection>
 
           <SettingsSection
+            delay={150}
             subtitle="Control which Watchly alerts can appear outside the app."
             title="Notifications"
           >
@@ -801,7 +804,7 @@ export function SettingsScreen() {
             <View style={styles.group}>
               {watchlistsStatus === 'loading' ? (
                 <View style={styles.compactState}>
-                  <Text style={styles.compactStateTitle}>Loading your personal watchlists</Text>
+                  <LoadingState label="Loading your personal watchlists" variant="settings" count={2} />
                 </View>
               ) : null}
               {watchlistsStatus === 'error' ? (
@@ -994,7 +997,7 @@ function ProfileEditor({
   };
 
   return (
-    <View style={styles.profileCard}>
+    <ScreenReveal delay={50} style={styles.profileCard}>
       <View style={styles.profileHeader}>
         <Pressable
           accessibilityHint={avatarUploadsEnabled ? 'Opens your photo library.' : undefined}
@@ -1062,27 +1065,29 @@ function ProfileEditor({
           </Text>
         </View>
       )}
-    </View>
+    </ScreenReveal>
   );
 }
 
 function SettingsSection({
   children,
+  delay = 200,
   subtitle,
   title,
 }: {
   children: ReactNode;
+  delay?: number;
   subtitle: string;
   title: string;
 }) {
   return (
-    <View style={styles.section}>
+    <ScreenReveal delay={delay} style={styles.section}>
       <View style={styles.sectionHeading}>
         <Text accessibilityRole="header" style={styles.sectionTitle}>{title}</Text>
         <Text style={styles.sectionSubtitle}>{subtitle}</Text>
       </View>
       {children}
-    </View>
+    </ScreenReveal>
   );
 }
 

@@ -14,6 +14,7 @@ import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey, writePersistedCache } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
@@ -257,7 +258,7 @@ export function SharedVoteScreen({ route }: Props) {
     <WatchlistPage isRefreshing={resource.isRefreshing} onRefresh={resource.retry}>
       {statusBanner}
 
-      <View style={styles.statusRow}>
+      <ScreenReveal delay={50} style={styles.statusRow}>
         <View style={styles.statusPrimary}>
           <View style={[styles.liveDot, lifecycle !== 'open' && styles.liveDotNeutral]} />
           <Text style={[styles.lifecycleText, lifecycle !== 'open' && styles.lifecycleTextNeutral]}>
@@ -268,7 +269,7 @@ export function SharedVoteScreen({ route }: Props) {
           <Clock3 color={colors.textSubtle} size={15} />
           <Text style={styles.remaining}>{getVoteRemainingLabel(session, now)}</Text>
         </View>
-      </View>
+      </ScreenReveal>
 
       {leaderState.isTie ? (
         <Text style={styles.resultSummary}>
@@ -280,7 +281,7 @@ export function SharedVoteScreen({ route }: Props) {
 
       <WatchlistSection>
         <SectionHeader subtitle={candidateSubtitle} title="Candidates" />
-        <View style={styles.candidateList}>
+        <ScreenReveal delay={100} style={styles.candidateList}>
           {session.candidates.map((candidate) => {
             const catalogueMedia = candidate.contentType === 'movie'
               ? getCachedMovie(candidate.tmdbId)
@@ -338,11 +339,11 @@ export function SharedVoteScreen({ route }: Props) {
               </View>
             );
           })}
-        </View>
+        </ScreenReveal>
       </WatchlistSection>
 
       {details.isOwner && lifecycle === 'open' ? (
-        <View style={styles.closeArea}>
+        <ScreenReveal delay={150} style={styles.closeArea}>
           <Button
             compact
             disabled={!canCloseVote(true, session, now) || pendingVoteCount > 0}
@@ -351,7 +352,7 @@ export function SharedVoteScreen({ route }: Props) {
             onPress={confirmClose}
             variant="ghost"
           />
-        </View>
+        </ScreenReveal>
       ) : null}
     </WatchlistPage>
   );

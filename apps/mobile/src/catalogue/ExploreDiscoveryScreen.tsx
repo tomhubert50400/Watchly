@@ -8,9 +8,10 @@ import {
 } from '../api/catalogue';
 import { useCachedResource } from '../cache/useCachedResource';
 import { getPublicCacheKey } from '../cache/persistedCache';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
-import { InlineStatusBanner } from '../components/InlineStatusBanner';
+import { LoadingState } from '../components/LoadingState';
 import { Screen } from '../components/Screen';
 import { SectionHeader } from '../components/SectionHeader';
 import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
@@ -57,7 +58,7 @@ export function ExploreDiscoveryScreen() {
   }, [navigation]);
 
   return (
-    <Screen
+    <Screen contentReady={Boolean(resource.data)}
       background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null}
       refreshControl={
         <RefreshControl
@@ -71,14 +72,10 @@ export function ExploreDiscoveryScreen() {
     >
       <View style={styles.content}>
         {resource.isInitialLoading && !resource.data ? (
-          <InlineStatusBanner
-            detail="Collecting the strongest current picks across genres."
-            title={`Loading ${getDiscoveryLabel(
+          <LoadingState variant="grid" label={`Loading ${getDiscoveryLabel(
               route.params.section,
               route.params.mediaType,
-            ).toLowerCase()}`}
-            tone="updating"
-          />
+            ).toLowerCase()}`} />
         ) : resource.error && !resource.data ? (
           <EmptyState body={resource.error} title="Discovery is unavailable">
             <Button label="Retry" onPress={resource.retry} />
@@ -89,7 +86,7 @@ export function ExploreDiscoveryScreen() {
             title="No titles to explore yet"
           />
         ) : (
-          <View style={styles.groups}>
+          <ScreenReveal delay={100} style={styles.groups}>
             {groups.map((group) => (
               <View key={group.genre} style={styles.group}>
                 <SectionHeader
@@ -113,7 +110,7 @@ export function ExploreDiscoveryScreen() {
                 </ScrollView>
               </View>
             ))}
-          </View>
+          </ScreenReveal>
         )}
       </View>
     </Screen>

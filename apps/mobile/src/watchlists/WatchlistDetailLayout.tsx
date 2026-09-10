@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { useFocusedFieldVisibility } from '../components/useFocusedFieldVisibility';
 import { MediaPoster } from '../components/MediaPoster';
 import { colors, radii, spacing, typography } from '../design/tokens';
@@ -34,7 +35,7 @@ type WatchlistPosterGridProps = {
   onOpen: (item: WatchlistDisplayItem) => void;
 };
 
-type WatchlistSectionProps = PropsWithChildren;
+type WatchlistSectionProps = PropsWithChildren<{ delay?: number }>;
 
 export function WatchlistPage({
   children,
@@ -85,7 +86,7 @@ export function WatchlistPosterGrid({ items, onOpen }: WatchlistPosterGridProps)
   );
 
   return (
-    <View style={styles.grid}>
+    <ScreenReveal delay={100} style={styles.grid}>
       {items.map((item) => {
         const title = item.title?.trim() || 'Title unavailable';
 
@@ -111,12 +112,12 @@ export function WatchlistPosterGrid({ items, onOpen }: WatchlistPosterGridProps)
           </Pressable>
         );
       })}
-    </View>
+    </ScreenReveal>
   );
 }
 
-export function WatchlistSection({ children }: WatchlistSectionProps) {
-  return <View style={styles.section}>{children}</View>;
+export function WatchlistSection({ children, delay = 50 }: WatchlistSectionProps) {
+  return <ScreenReveal delay={delay} style={styles.section}>{children}</ScreenReveal>;
 }
 
 function resolveColumnCount(availableWidth: number, fontScale: number) {

@@ -2,12 +2,13 @@ import { useEffect } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Check, ChevronRight, Circle, Play } from 'lucide-react-native';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { SeasonDetails } from '../api/catalogue';
 import { ensureEpisodeDetails } from '../catalogue/cataloguePrefetch';
 import { isReleasedDate } from '../catalogue/releaseDates';
 import { SynopsisPanel } from '../catalogue/SynopsisPanel';
 import { Button } from '../components/Button';
+import { LoadingState } from '../components/LoadingState';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
@@ -52,10 +53,7 @@ export function SeasonEpisodeList({
 
   if (model.isLoading && !model.season) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator color={colors.accent} />
-        <Text style={styles.loadingText}>Loading episodes</Text>
-      </View>
+      <LoadingState label="Loading episodes" variant="episodes" />
     );
   }
 
@@ -269,8 +267,6 @@ const styles = StyleSheet.create({
   listHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', paddingBottom: spacing.sm, paddingTop: spacing.sm },
   listMeta: { ...typography.meta, color: colors.textSubtle },
   listTitle: { ...typography.title, color: colors.text },
-  loading: { alignItems: 'center', flexDirection: 'row', gap: spacing.md, paddingVertical: spacing.lg },
-  loadingText: { ...typography.body, color: colors.muted },
   meta: { ...typography.meta, color: colors.muted },
   metaRow: { alignItems: 'center', flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs },
   nextCard: { backgroundColor: colors.panelElevated, borderColor: colors.borderStrong, borderRadius: radii.lg, borderWidth: 1, marginBottom: spacing.xl, overflow: 'hidden', padding: spacing.md },

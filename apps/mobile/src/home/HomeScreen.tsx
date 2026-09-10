@@ -20,8 +20,10 @@ import { BrandWordmark } from '../brand/BrandWordmark';
 import { getPrivateCacheKey, getPublicCacheKey } from '../cache/persistedCache';
 import { setMemoryResource } from '../cache/memoryResourceCache';
 import { useCachedResource } from '../cache/useCachedResource';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
+import { LoadingState } from '../components/LoadingState';
 import { IconButton } from '../components/IconButton';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { MediaPoster } from '../components/MediaPoster';
@@ -141,9 +143,9 @@ export function HomeScreen() {
 
   if (catalogue.isInitialLoading && !catalogue.data) {
     return (
-      <Screen leading={<BrandWordmark height={44} />} title="">
+      <Screen contentReady={Boolean(catalogue.data)} leading={<BrandWordmark height={44} />} title="">
         <View style={styles.blockingState}>
-          <InlineStatusBanner detail="Fetching current catalogue titles." tone="updating" />
+          <LoadingState variant="detail" label="Loading home" />
         </View>
       </Screen>
     );
@@ -151,7 +153,7 @@ export function HomeScreen() {
 
   if (catalogue.error && !catalogue.data) {
     return (
-      <Screen leading={<BrandWordmark height={44} />} title="">
+      <Screen contentReady={Boolean(catalogue.data)} leading={<BrandWordmark height={44} />} title="">
         <EmptyState body={catalogue.error} title="Home is unavailable">
           <Button label="Retry" onPress={catalogue.retry} />
         </EmptyState>
@@ -160,7 +162,7 @@ export function HomeScreen() {
   }
 
   return (
-    <Screen
+    <Screen contentReady={Boolean(catalogue.data)}
       background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null}
       horizontalPadding={false}
       refreshControl={
@@ -207,7 +209,7 @@ export function HomeScreen() {
         {sections.map((section) => {
           if (section.kind === 'hero') {
             return (
-              <View key="hero" style={styles.hero}>
+              <ScreenReveal delay={80} key="hero" style={styles.hero}>
                 <HomeHero
                   item={section.item}
                   onOpen={() => navigation.navigate('FilmDetail', {
@@ -215,13 +217,13 @@ export function HomeScreen() {
                     tmdbId: section.item.tmdbId,
                   })}
                 />
-              </View>
+              </ScreenReveal>
             );
           }
 
           if (section.kind === 'continueWatching') {
             return (
-              <HomeSection key="continue" title="Continue watching">
+              <HomeSection delay={130} key="continue" title="Continue watching">
                 {section.error && section.items.length === 0 ? (
                   <InlineStatusBanner detail={section.error} onRetry={progress.retry} tone="error" />
                 ) : null}
@@ -243,7 +245,7 @@ export function HomeScreen() {
 
           if (section.kind === 'socialActivity') {
             return (
-              <HomeSection key="social" title="From people you follow">
+              <HomeSection delay={180} key="social" title="From people you follow">
                 {section.error && section.items.length === 0 ? (
                   <InlineStatusBanner detail={section.error} onRetry={feed.retry} tone="error" />
                 ) : null}
@@ -268,7 +270,7 @@ export function HomeScreen() {
           }
 
           return (
-            <HomeSection key="trending" title="Trending now">
+            <HomeSection delay={200} key="trending" title="Trending now">
               {section.error && section.items.length === 0 ? (
                 <InlineStatusBanner detail={section.error} onRetry={catalogue.retry} tone="error" />
               ) : null}
@@ -299,12 +301,12 @@ export function HomeScreen() {
   );
 }
 
-function HomeSection({ children, title }: { children: React.ReactNode; title: string }) {
+function HomeSection({ children, delay, title }: { children: React.ReactNode; delay: number; title: string }) {
   return (
-    <View style={styles.section}>
+    <ScreenReveal delay={delay} style={styles.section}>
       <SectionHeader title={title} />
       <View style={styles.sectionBody}>{children}</View>
-    </View>
+    </ScreenReveal>
   );
 }
 

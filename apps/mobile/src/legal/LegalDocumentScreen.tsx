@@ -1,6 +1,7 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ExternalLink } from 'lucide-react-native';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Screen } from '../components/Screen';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
 import type { RootStackParamList } from '../navigation/types';
@@ -13,11 +14,11 @@ export function LegalDocumentScreen({ route }: LegalDocumentScreenProps) {
 
   return (
     <Screen title="">
-      <View style={styles.pageIntro}>
+      <ScreenReveal delay={0} style={styles.pageIntro}>
         <Text style={styles.updated}>Updated {document.updatedAt}</Text>
         <Text style={styles.intro}>{document.intro}</Text>
-      </View>
-      <View style={styles.sections}>
+      </ScreenReveal>
+      <ScreenReveal delay={100} style={styles.sections}>
         {document.sections.map((section) => (
           <View key={section.title} style={styles.section}>
             <Text accessibilityRole="header" style={styles.sectionTitle}>{section.title}</Text>
@@ -36,7 +37,7 @@ export function LegalDocumentScreen({ route }: LegalDocumentScreenProps) {
             ))}
           </View>
         ))}
-      </View>
+      </ScreenReveal>
     </Screen>
   );
 }

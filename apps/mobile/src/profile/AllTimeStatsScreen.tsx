@@ -6,6 +6,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'r
 import { getViewingStats, ViewingStats } from '../api/viewings';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
@@ -54,7 +55,7 @@ export function AllTimeStatsScreen({ route }: Props) {
   }, [currentUser, providedStats, resource.revalidate]));
 
   return (
-    <Screen
+    <Screen contentReady={Boolean(providedStats || resource.data)}
       background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null}
       refreshControl={providedStats ? undefined : (
         <RefreshControl
@@ -67,7 +68,7 @@ export function AllTimeStatsScreen({ route }: Props) {
       title=""
     >
       {!providedStats && resource.isInitialLoading && !resource.data ? (
-        <LoadingState label="Loading all-time stats" />
+        <LoadingState variant="stats" label="Loading all-time stats" />
       ) : !providedStats && resource.error && !resource.data ? (
         <EmptyState body={resource.error} title="Stats unavailable">
           <Button label="Retry" onPress={resource.retry} />
@@ -93,7 +94,7 @@ function AllTimeContent({
 
   return (
     <View style={styles.stack}>
-      <View style={styles.hero}>
+      <ScreenReveal delay={50} style={styles.hero}>
         <Text style={styles.heroEyebrow}>TIME WATCHED</Text>
         <Text
           adjustsFontSizeToFit
@@ -104,17 +105,17 @@ function AllTimeContent({
           {watchTime}
         </Text>
         <Text style={styles.storyTime}>{formatStoryTime(stats.summary.watchMinutes)}</Text>
-      </View>
+      </ScreenReveal>
 
-      <View style={styles.summaryRow}>
+      <ScreenReveal delay={100} style={styles.summaryRow}>
         <SummaryStat label="FILMS" value={stats.summary.movieCount} />
         <View style={styles.summaryDivider} />
         <SummaryStat label="SERIES" value={stats.summary.seriesCount} />
         <View style={styles.summaryDivider} />
         <SummaryStat label="EPISODES" value={stats.summary.episodeCount} />
-      </View>
+      </ScreenReveal>
 
-      <View style={styles.section}>
+      <ScreenReveal delay={150} style={styles.section}>
         <EditorialSectionTitle>HIGHLIGHTS</EditorialSectionTitle>
         {stats.highlights.length > 0 ? (
           <ScrollView
@@ -133,9 +134,9 @@ function AllTimeContent({
         ) : (
           <Text style={styles.emptyCopy}>Your highlights will appear after your first watch.</Text>
         )}
-      </View>
+      </ScreenReveal>
 
-      <View style={styles.section}>
+      <ScreenReveal delay={200} style={styles.section}>
         <EditorialSectionTitle>YOUR TASTE</EditorialSectionTitle>
         {stats.taste.length > 0 ? (
           <View style={styles.tasteList}>
@@ -155,9 +156,9 @@ function AllTimeContent({
         ) : (
           <Text style={styles.emptyCopy}>Genres will settle here as your history grows.</Text>
         )}
-      </View>
+      </ScreenReveal>
 
-      <View style={styles.section}>
+      <ScreenReveal delay={200} style={styles.section}>
         <EditorialSectionTitle>MORE STATS</EditorialSectionTitle>
         <View>
           <MoreStatRow
@@ -180,7 +181,7 @@ function AllTimeContent({
             value={formatRatingStat(stats)}
           />
         </View>
-      </View>
+      </ScreenReveal>
     </View>
   );
 }

@@ -8,8 +8,10 @@ import { useUserDataRevision } from '../sync/userDataEvents';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
+import { LoadingState } from '../components/LoadingState';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
@@ -82,7 +84,7 @@ export function ReleaseCalendarScreen({ navigation }: ReleaseCalendarScreenProps
 
   if (!ownerId || !firebaseIdToken) {
     return (
-      <Screen title="">
+      <Screen contentReady={!resource.isInitialLoading || items.length > 0} title="">
         <SignInRequiredCard
           body="You need to be signed in to see upcoming releases tied to your active alerts."
           title="Sign in to view your calendar"
@@ -93,15 +95,15 @@ export function ReleaseCalendarScreen({ navigation }: ReleaseCalendarScreenProps
 
   if (resource.isInitialLoading && items.length === 0) {
     return (
-      <Screen title="">
-        <InlineStatusBanner detail="Building your release calendar from active alerts." tone="updating" />
+      <Screen contentReady={!resource.isInitialLoading || items.length > 0} title="">
+        <LoadingState variant="list" label="Loading release calendar" />
       </Screen>
     );
   }
 
   if (resource.error && items.length === 0) {
     return (
-      <Screen title="">
+      <Screen contentReady={!resource.isInitialLoading || items.length > 0} title="">
         <EmptyState body={resource.error} title="Your calendar is unavailable">
           <Button label="Retry" onPress={resource.retry} />
         </EmptyState>
@@ -110,7 +112,7 @@ export function ReleaseCalendarScreen({ navigation }: ReleaseCalendarScreenProps
   }
 
   return (
-    <Screen
+    <Screen contentReady={!resource.isInitialLoading || items.length > 0}
       horizontalPadding={spacing.md}
       refreshControl={
         <RefreshControl
@@ -123,10 +125,10 @@ export function ReleaseCalendarScreen({ navigation }: ReleaseCalendarScreenProps
       title=""
     >
       <View style={styles.content}>
-        <View style={styles.intro}>
+        <ScreenReveal delay={50} style={styles.intro}>
           <Text style={styles.introTitle}>Your upcoming releases</Text>
           <Text style={styles.introBody}>Built only from active release alerts. Open a title to manage its alert.</Text>
-        </View>
+        </ScreenReveal>
         <SegmentedControl onChange={setFilter} options={filters} value={filter} />
         {filteredItems.length === 0 ? (
           <EmptyState
@@ -145,7 +147,7 @@ export function ReleaseCalendarScreen({ navigation }: ReleaseCalendarScreenProps
         ) : (
           <>
             {monthKey ? (
-              <ReleaseCalendarMonth
+              <ScreenReveal delay={100}><ReleaseCalendarMonth
                 items={filteredItems}
                 monthKey={monthKey}
                 onMonthChange={(nextMonthKey) => {
@@ -154,21 +156,21 @@ export function ReleaseCalendarScreen({ navigation }: ReleaseCalendarScreenProps
                 }}
                 onSelectDate={(dateKey) => setSelectedDateKey((current) => current === dateKey ? null : dateKey)}
                 selectedDateKey={selectedDateKey}
-              />
+              /></ScreenReveal>
             ) : null}
             {agendaItems.length > 0 ? (
-              <CalendarSection
+              <ScreenReveal delay={150}><CalendarSection
                 items={agendaItems}
                 label={selectedDateKey ? formatLongDate(selectedDateKey) : monthKey ? formatMonth(monthKey) : 'Agenda'}
                 onOpen={(item) => openRelease(navigation, item)}
-              />
+              /></ScreenReveal>
             ) : null}
             {undatedItems.length > 0 && !selectedDateKey ? (
-              <CalendarSection
+              <ScreenReveal delay={200}><CalendarSection
                 items={undatedItems}
                 label="Date pending"
                 onOpen={(item) => openRelease(navigation, item)}
-              />
+              /></ScreenReveal>
             ) : null}
           </>
         )}

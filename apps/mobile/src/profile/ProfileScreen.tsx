@@ -325,14 +325,14 @@ export function ProfileScreen() {
 
   if (!firebaseIdToken || !userId) {
     return (
-      <Screen horizontalPadding={false} leading={<BrandWordmark height={36} />} tabBarPadding={spacing.md} title="">
+      <Screen contentReady={!currentUser || Boolean(profile)} horizontalPadding={false} leading={<BrandWordmark height={36} />} tabBarPadding={spacing.md} title="">
         <ProfileAuthCard />
       </Screen>
     );
   }
 
   return (
-    <Screen
+    <Screen contentReady={!currentUser || Boolean(profile)}
       background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null}
       refreshControl={
         <RefreshControl

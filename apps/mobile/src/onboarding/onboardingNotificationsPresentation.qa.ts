@@ -39,7 +39,7 @@ assert.match(
 );
 assert.match(
   source,
-  /item\?\.posterUrl[\s\S]*<MediaPoster[\s\S]*accessibilityLabel=\{`Artwork for \$\{item\.title\}`\}[\s\S]*<ActivityIndicator/,
+  /item\?\.posterUrl[\s\S]*<MediaPoster[\s\S]*accessibilityLabel=\{`Artwork for \$\{item\.title\}`\}[\s\S]*styles\.notificationPosterSkeleton/,
   'notification examples must show posters with a neutral loading placeholder',
 );
 assert.doesNotMatch(

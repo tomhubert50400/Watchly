@@ -9,6 +9,7 @@ import {
   readPersistedCache,
   writePersistedCache,
 } from '../cache/persistedCache';
+import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
@@ -154,7 +155,7 @@ export function NotificationPreferencesScreen() {
 
   if (!currentUser || !firebaseIdToken) {
     return (
-      <Screen title="">
+      <Screen contentReady={Boolean(preferences)} title="">
         <SignInRequiredCard
           body="Sign in to manage system notifications for your Watchly account."
           title="Sign in to manage notifications"
@@ -164,12 +165,12 @@ export function NotificationPreferencesScreen() {
   }
 
   if (status === 'loading' && !preferences) {
-    return <Screen title=""><LoadingState label="Loading notification preferences" /></Screen>;
+    return <Screen contentReady={Boolean(preferences)} title=""><LoadingState variant="settings" label="Loading notification preferences" /></Screen>;
   }
 
   if (status === 'error' && !preferences) {
     return (
-      <Screen title="">
+      <Screen contentReady={Boolean(preferences)} title="">
         <EmptyState body="Watchly could not load your notification preferences." title="Preferences unavailable">
           <Button label="Retry" onPress={() => void load()} />
         </EmptyState>
@@ -180,18 +181,18 @@ export function NotificationPreferencesScreen() {
   const globalEnabled = Boolean(preferences?.pushEnabled && permission === 'granted');
 
   return (
-    <Screen title="">
+    <Screen contentReady={Boolean(preferences)} title="">
       <View style={styles.page}>
-        <View style={styles.intro}>
+        <ScreenReveal delay={50} style={styles.intro}>
           <Text style={styles.title}>System notifications</Text>
           <Text style={styles.body}>
             Choose which Watchly alerts can appear outside the app. In-app Alerts always remain available.
           </Text>
-        </View>
+        </ScreenReveal>
 
         {message ? <InlineStatusBanner detail={message.detail} tone={message.tone} /> : null}
 
-        <View style={styles.statusCard}>
+        <ScreenReveal delay={100} style={styles.statusCard}>
           <View style={styles.iconShell}>
             <Smartphone color={colors.accentText} size={22} strokeWidth={2} />
           </View>
@@ -199,9 +200,9 @@ export function NotificationPreferencesScreen() {
             <Text style={styles.statusTitle}>{getPermissionTitle(permission, globalEnabled)}</Text>
             <Text style={styles.statusBody}>{getPermissionBody(permission)}</Text>
           </View>
-        </View>
+        </ScreenReveal>
 
-        <View style={styles.group}>
+        <ScreenReveal delay={150} style={styles.group}>
           <PreferenceRow
             body="Master control for every Watchly system notification on this account."
             disabled={status === 'saving'}
@@ -219,7 +220,7 @@ export function NotificationPreferencesScreen() {
             onValueChange={(enabled) => void setReleasePushEnabled(enabled)}
             value={Boolean(globalEnabled && preferences?.releasePushEnabled)}
           />
-        </View>
+        </ScreenReveal>
 
         {permission === 'denied' ? (
           <Button label="Open device settings" onPress={() => void Linking.openSettings()} variant="secondary" />
