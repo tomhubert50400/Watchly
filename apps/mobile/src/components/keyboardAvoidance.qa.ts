@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import { readFileSync } from 'node:fs';
-import { resolveBottomSheetKeyboardInset } from './bottomActionSheetKeyboard';
+import { resolveBottomSheetKeyboardInset, resolveFocusedFieldScrollOffset } from './bottomActionSheetKeyboard';
 
 function source(path: string) {
   return readFileSync(new URL(path, import.meta.url), 'utf8');
@@ -20,6 +20,38 @@ const library = source('../library/LibraryScreen.tsx');
 const settings = source('../profile/SettingsScreen.tsx');
 const onboarding = source('../onboarding/OnboardingScreen.tsx');
 const explore = source('../catalogue/ExploreScreen.tsx');
+
+const reviewFrame = { scrollOffset: 0, viewportTop: 260, viewportHeight: 200, fieldTop: 480, fieldHeight: 120 };
+assert.equal(resolveFocusedFieldScrollOffset(reviewFrame), 148,
+  'a review below the resized viewport must scroll fully above the fixed footer');
+assert.equal(resolveFocusedFieldScrollOffset({ ...reviewFrame, scrollOffset: 148, fieldTop: 332 }), 148,
+  'the keyboard-did-show pass must not scroll an already visible review again');
+assert.equal(resolveFocusedFieldScrollOffset({ ...reviewFrame, scrollOffset: 148, fieldTop: 332, viewportHeight: 160 }), 188,
+  'a taller predictive keyboard must reveal the field again after the viewport shrinks');
+assert.equal(resolveFocusedFieldScrollOffset({ ...reviewFrame, scrollOffset: 180, fieldTop: 230 }), 142,
+  'refocusing a field above the viewport must bring its beginning back into view');
+assert.equal(resolveFocusedFieldScrollOffset({ ...reviewFrame, fieldHeight: 400 }), 212,
+  'a field taller than the viewport must align its beginning, not disappear above the screen');
+assert.equal(resolveFocusedFieldScrollOffset({ ...reviewFrame, scrollOffset: 148, fieldTop: 332, viewportHeight: 500 }), 148,
+  'hiding the keyboard must not unnecessarily jump the content');
+assert.equal(resolveFocusedFieldScrollOffset({ ...reviewFrame, viewportHeight: 0 }), 0,
+  'layout measurements before mounting must not trigger scrolling');
+assert.match(bottomSheet, /onFocus=\{[\s\S]*currentlyFocusedInput\(\)[\s\S]*revealFocusedInput\(\)/,
+  'focus must reveal the input even when the keyboard is already open');
+assert.match(bottomSheet, /onLayout=\{[\s\S]*revealFocusedInput\(\)/,
+  'resizing around the keyboard and footer must reveal the active field');
+assert.match(bottomSheet, /Keyboard\.addListener\('keyboardDidShow', revealFocusedInput\)/,
+  'a final measurement must run after the keyboard finishes opening');
+assert.match(bottomSheet, /getNativeScrollRef\(\)\?\.measureInWindow/,
+  'field visibility must use the actual scroll viewport, not only the keyboard position');
+assert.match(bottomSheet, /keyboardInset > 0 && \{ top: safeAreaInsets\.top \+ spacing\.sm \}/,
+  'editing must expand the sheet into the available safe area');
+assert.match(opinionSheet, /<BottomActionSheet\s+dragFromHandleOnly/,
+  'review editing and scrolling must not trigger sheet dismissal');
+assert.match(opinionSheet, /<BottomActionSheetScrollView disableScrollViewPanResponder=\{false\}/,
+  'the opinion body must keep native scrolling enabled');
+assert.match(opinionSheet, /multiline\s+scrollEnabled/,
+  'long reviews must scroll inside the editor');
 
 const dockedKeyboardInset = resolveBottomSheetKeyboardInset(
   {

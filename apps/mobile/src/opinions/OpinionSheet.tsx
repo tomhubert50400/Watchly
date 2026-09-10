@@ -517,12 +517,13 @@ export function OpinionSheet({
       )}
 
       <BottomActionSheet
+        dragFromHandleOnly
         footer={sheetFooter}
         onClose={closeSheet}
         title={reviewsEnabled ? 'Your opinion' : 'Your rating'}
         visible={isOpen}
       >
-        <BottomActionSheetScrollView keyboardShouldPersistTaps="handled">
+        <BottomActionSheetScrollView disableScrollViewPanResponder={false} keyboardShouldPersistTaps="handled">
           <View style={styles.identity}>
             {posterUrl ? (
               <Image
@@ -590,6 +591,7 @@ export function OpinionSheet({
                 editable={!isSaving && opinion.draftRating !== null}
                 maxLength={MAX_REVIEW_LENGTH}
                 multiline
+                scrollEnabled
                 onChangeText={(draftReview) => setOpinion((current) => ({ ...current, draftReview, error: null }))}
                 placeholder={opinion.draftRating === null ? 'Choose a rating before writing a review' : 'Write your review'}
                 placeholderTextColor={colors.textSubtle}
@@ -687,7 +689,7 @@ const styles = StyleSheet.create({
   poster: { backgroundColor: colors.panelSoft, borderRadius: radii.sm, height: 72, width: 48 },
   reviewHeader: { alignItems: 'center', flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm, marginTop: spacing.lg },
   reviewHelp: { ...typography.meta, color: colors.textSubtle, marginTop: spacing.sm },
-  reviewInput: { ...typography.body, backgroundColor: colors.background, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, color: colors.text, minHeight: 120, padding: spacing.md },
+  reviewInput: { ...typography.body, backgroundColor: colors.background, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, color: colors.text, height: 120, padding: spacing.md },
   reviewLabel: { color: colors.text, fontSize: 14, fontWeight: '700' },
   saveButton: { flex: 1.45 },
   scoreLabel: { color: colors.ratingText, fontSize: 15, fontWeight: '800', marginTop: spacing.sm },

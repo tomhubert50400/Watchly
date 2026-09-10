@@ -21,16 +21,17 @@ import {
   ScrollViewProps,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
 import {
   getBottomSheetDragOffset,
   shouldCaptureBottomSheetDrag,
   shouldDismissBottomSheet,
 } from './bottomActionSheetGesture';
-import { resolveBottomSheetKeyboardInset } from './bottomActionSheetKeyboard';
+import { resolveBottomSheetKeyboardInset, resolveFocusedFieldScrollOffset } from './bottomActionSheetKeyboard';
 
 type BottomActionSheetProps = PropsWithChildren<{
   dragFromHandleOnly?: boolean;
@@ -49,17 +50,73 @@ export function BottomActionSheetScrollView({
   disableScrollViewPanResponder = true,
   keyboardDismissMode = Platform.OS === 'ios' ? 'interactive' : 'on-drag',
   keyboardShouldPersistTaps = 'handled',
+  onFocus,
+  onBlur,
+  onLayout,
+  onScroll,
+  scrollEventThrottle = 16,
   ...scrollViewProps
 }: BottomActionSheetScrollViewProps) {
+  const scrollRef = useRef<ScrollView>(null);
+  const focusedInput = useRef<ReturnType<typeof TextInput.State.currentlyFocusedInput> | null>(null);
+  const scrollOffset = useRef(0);
+  const scheduledFrame = useRef<number | null>(null);
+  const measurementVersion = useRef(0);
+  const revealFocusedInput = useCallback(() => {
+    const version = ++measurementVersion.current;
+    if (scheduledFrame.current !== null) cancelAnimationFrame(scheduledFrame.current);
+    scheduledFrame.current = requestAnimationFrame(() => {
+      scheduledFrame.current = null;
+      const input = focusedInput.current;
+      const scroll = scrollRef.current;
+      if (!input || !scroll || TextInput.State.currentlyFocusedInput() !== input) return;
+      scroll.getNativeScrollRef()?.measureInWindow((_x, viewportTop, _width, viewportHeight) => {
+        input.measureInWindow((_inputX, fieldTop, _inputWidth, fieldHeight) => {
+          if (version !== measurementVersion.current || focusedInput.current !== input || TextInput.State.currentlyFocusedInput() !== input) return;
+          const y = resolveFocusedFieldScrollOffset({ scrollOffset: scrollOffset.current, viewportTop, viewportHeight, fieldTop, fieldHeight });
+          if (Math.abs(y - scrollOffset.current) > 1) scroll.scrollTo({ y, animated: false });
+        });
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    const shown = Keyboard.addListener('keyboardDidShow', revealFocusedInput);
+    return () => {
+      shown.remove();
+      focusedInput.current = null;
+      if (scheduledFrame.current !== null) cancelAnimationFrame(scheduledFrame.current);
+    };
+  }, [revealFocusedInput]);
+
   return (
     <ScrollView
       {...scrollViewProps}
+      ref={scrollRef}
       automaticallyAdjustKeyboardInsets={automaticallyAdjustKeyboardInsets}
       bounces={false}
       contentContainerStyle={styles.scrollContent}
       disableScrollViewPanResponder={disableScrollViewPanResponder}
       keyboardDismissMode={keyboardDismissMode}
       keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+      onFocus={(event) => {
+        focusedInput.current = TextInput.State.currentlyFocusedInput();
+        revealFocusedInput();
+        onFocus?.(event);
+      }}
+      onBlur={(event) => {
+        focusedInput.current = null;
+        onBlur?.(event);
+      }}
+      onLayout={(event) => {
+        revealFocusedInput();
+        onLayout?.(event);
+      }}
+      onScroll={(event) => {
+        scrollOffset.current = event.nativeEvent.contentOffset.y;
+        onScroll?.(event);
+      }}
+      scrollEventThrottle={scrollEventThrottle}
       showsVerticalScrollIndicator={false}
     >
       <View
@@ -74,6 +131,7 @@ export function BottomActionSheetScrollView({
 }
 
 export function BottomActionSheet({ children, dragFromHandleOnly = false, footer, onClose, title, visible }: BottomActionSheetProps) {
+  const safeAreaInsets = useSafeAreaInsets();
   const progress = useRef(new Animated.Value(0)).current;
   const dragY = useRef(new Animated.Value(0)).current;
   const isClosing = useRef(false);
@@ -195,6 +253,7 @@ export function BottomActionSheet({ children, dragFromHandleOnly = false, footer
           accessibilityViewIsModal
           style={[
             styles.sheet,
+            keyboardInset > 0 && { top: safeAreaInsets.top + spacing.sm },
             {
               transform: [{
                 translateY: progress.interpolate({ inputRange: [0, 1], outputRange: [640, 0] }),
