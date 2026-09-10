@@ -2,10 +2,10 @@ import { EyeOff } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import type { MovieDetails, SeriesDetails } from '../api/catalogue';
 import { getEpisodeDetails } from '../api/catalogue';
-import { CommunityItem, getCommunityFeed, setFeedItemLiked } from '../api/feed';
+import { CommunityItem, CommunityMode, getCommunityFeed, setFeedItemLiked } from '../api/feed';
 import type { ReportTarget } from '../api/reports';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
@@ -35,8 +35,8 @@ export type HydratedFeedItem = CommunityItem & {
   nextCursor: string | null;
 };
 
-export function getCommunityFeedKey(userId: string) {
-  return `watchly:user:${userId}:community-feed:v2`;
+export function getCommunityFeedKey(userId: string, mode: CommunityMode = 'for-you') {
+  return `watchly:user:${userId}:community-feed:v3:${mode}`;
 }
 
 export async function loadCommunityFeed(
@@ -45,8 +45,9 @@ export async function loadCommunityFeed(
   loadSeries: (tmdbId: number) => Promise<SeriesDetails>,
   previous: HydratedFeedItem[] = [],
   cursor?: string,
+  mode: CommunityMode = 'for-you',
 ) {
-  const response = await getCommunityFeed(token, cursor);
+  const response = await getCommunityFeed(token, cursor, mode);
   const movies = new Map<number, Promise<MovieDetails>>();
   const series = new Map<number, Promise<SeriesDetails>>();
   const movieFor = (id: number) => {
@@ -77,12 +78,13 @@ export function FeedScreen() {
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   const [spoilerSettingsOpen, setSpoilerSettingsOpen] = useState(false);
   const protection = useSpoilerPreferences(currentUser?.id ?? 'signed-out');
-  const resourceKey = getCommunityFeedKey(currentUser?.id ?? 'signed-out');
+  const [mode, setMode] = useState<CommunityMode>('for-you');
+  const resourceKey = getCommunityFeedKey(currentUser?.id ?? 'signed-out', mode);
   const loadFeed = useCallback(
     (cached?: HydratedFeedItem[]) => firebaseIdToken
-      ? loadCommunityFeed(firebaseIdToken, refreshMovie, refreshSeries, cached)
+      ? loadCommunityFeed(firebaseIdToken, refreshMovie, refreshSeries, cached, undefined, mode)
       : Promise.resolve([]),
-    [feedRevision, firebaseIdToken, refreshMovie, refreshSeries],
+    [feedRevision, firebaseIdToken, refreshMovie, refreshSeries, mode],
   );
   const resource = useCachedResource<HydratedFeedItem[]>({
     enabled: Boolean(currentUser && firebaseIdToken), key: resourceKey, load: loadFeed,
@@ -91,6 +93,11 @@ export function FeedScreen() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [loadingPage, setLoadingPage] = useState(false);
   const pagePending = useRef(false);
+  const pageScope = useRef({ key: resourceKey, version: 0 });
+  if (pageScope.current.key !== resourceKey) {
+    pageScope.current = { key: resourceKey, version: pageScope.current.version + 1 };
+    pagePending.current = false;
+  }
   const baseRef = useRef(resource.data);
   baseRef.current = resource.data;
   const extraItems = extra.base === resource.data ? extra.items : [];
@@ -100,19 +107,22 @@ export function FeedScreen() {
   async function loadMore() {
     if (!firebaseIdToken || !nextCursor || pagePending.current) return;
     const base = resource.data;
+    const scope = pageScope.current;
     pagePending.current = true;
     setLoadingPage(true);
     setPageError(null);
     try {
-      const page = await loadCommunityFeed(firebaseIdToken, refreshMovie, refreshSeries, [], nextCursor);
-      if (baseRef.current !== base) return;
+      const page = await loadCommunityFeed(firebaseIdToken, refreshMovie, refreshSeries, [], nextCursor, mode);
+      if (pageScope.current !== scope || baseRef.current !== base) return;
       const ids = new Set(items.map((item) => item.id));
       setExtra({ base, items: [...extraItems, ...page.filter((item) => !ids.has(item.id))], cursor: page.at(-1)?.nextCursor ?? null });
     } catch (error) {
-      if (baseRef.current === base) setPageError(error instanceof Error ? error.message : 'Could not load more posts.');
+      if (pageScope.current === scope && baseRef.current === base) setPageError(error instanceof Error ? error.message : 'Could not load more posts.');
     } finally {
-      pagePending.current = false;
-      setLoadingPage(false);
+      if (pageScope.current === scope) {
+        pagePending.current = false;
+        setLoadingPage(false);
+      }
     }
   }
 
@@ -143,6 +153,25 @@ export function FeedScreen() {
         />
       ) : undefined}
     >
+      {firebaseIdToken ? (
+        <View accessibilityRole="tablist" style={styles.feedIntro}>
+          {([['for-you', 'For you'], ['following', 'Following']] as const).map(([value, label]) => (
+            <Pressable
+              accessibilityRole="tab"
+              accessibilityState={{ selected: mode === value }}
+              key={value}
+              onPress={() => {
+                setMode(value);
+                setPageError(null);
+                setLoadingPage(false);
+              }}
+              style={[styles.feedTab, mode === value && styles.feedTabSelected]}
+            >
+              <Text style={[styles.feedIntroTitle, mode !== value && styles.feedTabMuted]}>{label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
       {!firebaseIdToken ? (
         <SignInRequiredCard body="Discover public ratings and reviews about the movies and series you love." title="Sign in to join Community" />
       ) : resource.isInitialLoading && items.length === 0 ? (
@@ -150,11 +179,8 @@ export function FeedScreen() {
       ) : resource.error && items.length === 0 ? (
         <EmptyState body={resource.error} title="Community failed"><Button label="Retry" onPress={resource.retry} /></EmptyState>
       ) : <>
-        <View style={styles.feedIntro}>
-          <Text style={styles.feedIntroTitle}>For you</Text>
-        </View>
         {items.length === 0 ? (
-          <EmptyState body="New public ratings and reviews will appear here. Pull down to refresh." title="No community activity yet">
+          <EmptyState body={mode === 'following' ? "Follow people to see their public ratings, reviews and viewing activity here." : "New public ratings and reviews will appear here. Pull down to refresh."} title={mode === 'following' ? "No activity from people you follow yet" : "No community activity yet"}>
             <Button label="Refresh" onPress={resource.revalidate} variant="secondary" />
           </EmptyState>
         ) : <View style={styles.list}>
@@ -235,7 +261,10 @@ function communityLabel(item: CommunityItem) {
 }
 
 const styles = StyleSheet.create({
-  feedIntro: { borderBottomColor: colors.border, borderBottomWidth: 1, gap: spacing.xs, paddingBottom: spacing.md },
+  feedIntro: { borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: 'row', gap: spacing.xl, marginBottom: spacing.md },
+  feedTab: { minHeight: 44, justifyContent: 'center', paddingVertical: spacing.sm, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  feedTabSelected: { borderBottomColor: colors.accent },
+  feedTabMuted: { color: colors.textMuted },
   feedIntroBody: { ...typography.body, color: colors.muted },
   feedIntroTitle: { ...typography.title, color: colors.text },
   list: { gap: 0 },

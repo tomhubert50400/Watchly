@@ -62,9 +62,11 @@ export type CommunityItem = Omit<FeedItem, 'content' | 'type'> & {
   inWatchlist: boolean;
 };
 
-export function getCommunityFeed(token: string, cursor?: string) {
+export type CommunityMode = 'for-you' | 'following';
+
+export function getCommunityFeed(token: string, cursor?: string, mode: CommunityMode = 'for-you') {
   return apiGet<{ items: CommunityItem[]; nextCursor: string | null }>(
-    `/feed/community${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`, { token },
+    `/feed/community?mode=${mode}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { token },
   );
 }
 
