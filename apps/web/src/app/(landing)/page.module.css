@@ -29,7 +29,7 @@
 .headerCta { font-size: 11px; display: flex; gap: 34px; align-items: center; padding: 12px 0; border-bottom: 1px solid #35322f50; }
 .eyebrow { font-size: 10px; line-height: 1.6; letter-spacing: .15em; text-transform: uppercase; font-weight: 450; }
 .experience { overflow: clip; }
-.motionSwitch { position: fixed; bottom: 20px; right: 24px; padding: 8px 0 8px 10px; z-index: 30; border: 0; background: #e8e5dfe8; color: #35322f; border-radius: 2px; font-size: 9px; letter-spacing: .02em; }
+.motionSwitch { position: fixed; bottom: 20px; right: 24px; padding: 8px 10px; z-index: 30; border: 0; background: #e8e5dfe8; color: #35322f; border-radius: 2px; font-size: 9px; letter-spacing: .02em; }
 .motionSwitch span { margin-right: 6px; }
 .motionSwitch:disabled { cursor: default; }
 .screeningChapter { height: 440svh; --p: 0; --intro: 1; --inside: 0; --image: 0; --title: 0; }
