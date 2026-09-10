@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppState, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { listReleaseCalendar } from '../api/notifications';
@@ -44,6 +45,9 @@ export function ReleaseCalendarScreen({ navigation }: Props) {
     key: getPrivateCacheKey(ownerId ?? 'visitor', 'release-calendar:v2'),
     load,
   });
+  useFocusEffect(useCallback(() => {
+    resource.revalidate();
+  }, [resource.revalidate]));
   const items = resource.data ?? emptyItems;
   const upcomingItems = useMemo(() => getUpcomingReleases(items, now), [items, now]);
   const filteredItems = useMemo(() => filterReleaseCalendarItems(upcomingItems, filter), [upcomingItems, filter]);
