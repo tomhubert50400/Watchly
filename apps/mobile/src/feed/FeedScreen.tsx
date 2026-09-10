@@ -1,3 +1,4 @@
+import { EyeOff } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -12,6 +13,7 @@ import { useCachedResource } from '../cache/useCachedResource';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
+import { IconButton } from '../components/IconButton';
 import { LoadingState } from '../components/LoadingState';
 import { Screen } from '../components/Screen';
 import { SocialReviewPost } from '../components/SocialReviewPost';
@@ -133,6 +135,13 @@ export function FeedScreen() {
     <Screen
       refreshControl={firebaseIdToken ? <RefreshControl colors={[colors.accent]} onRefresh={resource.revalidate} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined}
       title="Community"
+      trailing={firebaseIdToken ? (
+        <IconButton
+          accessibilityLabel="Spoiler protection"
+          icon={<EyeOff color={colors.text} size={21} />}
+          onPress={() => setSpoilerSettingsOpen(true)}
+        />
+      ) : undefined}
     >
       {!firebaseIdToken ? (
         <SignInRequiredCard body="Discover public ratings and reviews about the movies and series you love." title="Sign in to join Community" />
@@ -143,8 +152,6 @@ export function FeedScreen() {
       ) : <>
         <View style={styles.feedIntro}>
           <Text style={styles.feedIntroTitle}>For you</Text>
-          <Text style={styles.feedIntroBody}>Your movies and series, familiar people and new perspectives.</Text>
-          <Button label="Spoiler protection" variant="ghost" onPress={() => setSpoilerSettingsOpen(true)} />
         </View>
         {items.length === 0 ? (
           <EmptyState body="New public ratings and reviews will appear here. Pull down to refresh." title="No community activity yet">
