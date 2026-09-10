@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { BellRing, CalendarDays, ListPlus, Vote } from 'lucide-react-native';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
@@ -19,6 +19,7 @@ import { useAuthSession } from '../auth/AuthSessionContext';
 import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey, writePersistedCache } from '../cache/persistedCache';
+import { setMemoryResource } from '../cache/memoryResourceCache';
 import { useCachedResource } from '../cache/useCachedResource';
 import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
@@ -53,6 +54,7 @@ const filters: Array<{ label: string; value: NotificationFilter }> = [
 ];
 
 export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
+  const isFocused = useIsFocused();
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
   const ownerId = currentUser?.id ?? null;
   const ownerIdRef = useRef(ownerId);
@@ -90,6 +92,10 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
     key: cacheKey,
     load,
   });
+  useFocusEffect(useCallback(() => {
+    setMutationError(null);
+    resource.revalidate();
+  }, [ownerId, resource.revalidate]));
 
   const loadPendingFollowRequests = useCallback(async (showRefresh = false) => {
     const expectedOwnerId = ownerIdRef.current;
@@ -214,9 +220,13 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
     const next = { items: nextItems, ownerId: expectedOwnerId };
     ownedInboxRef.current = next;
     setOwnedInbox(next);
+    const savedAt = new Date().toISOString();
+    setMemoryResource(getPrivateCacheKey(expectedOwnerId, 'notifications:inbox:v2'), nextItems, savedAt);
     void writePersistedCache(
       getPrivateCacheKey(expectedOwnerId, 'notifications:inbox:v2'),
       nextItems,
+      undefined,
+      savedAt,
     ).catch(() => undefined);
   }, []);
 
@@ -321,23 +331,11 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
     }
   }, [getFirebaseIdToken, isMutating, persistOwnedItems]);
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <Pressable
-          accessibilityLabel="Mark all alerts as read"
-          accessibilityRole="button"
-          accessibilityState={{ disabled: unreadCount === 0 || isMutating }}
-          disabled={unreadCount === 0 || isMutating}
-          onPress={handleMarkAllRead}
-          style={({ pressed }) => [styles.markAll, pressed ? styles.pressed : null]}
-        >
-          <Text style={styles.markAllLabel}>Mark all read</Text>
-        </Pressable>
-      ),
-    });
-    return () => navigation.setOptions({ headerRight: undefined });
-  }, [handleMarkAllRead, isMutating, navigation, unreadCount]);
+  useEffect(() => {
+    if (isFocused && unreadCount > 0 && !isMutating && !mutationError) {
+      void handleMarkAllRead();
+    }
+  }, [handleMarkAllRead, isFocused, isMutating, mutationError, unreadCount]);
 
   const openTarget = useCallback((target: NotificationTarget) => {
     if (target.name === 'FilmDetail') {
@@ -398,6 +396,7 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
       refreshControl={
         <RefreshControl
           onRefresh={() => {
+            setMutationError(null);
             resource.retry();
             void loadPendingFollowRequests(true);
           }}
@@ -567,16 +566,6 @@ const styles = StyleSheet.create({
   list: {
     gap: spacing.lg,
     paddingTop: spacing.lg,
-  },
-  markAll: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: touchTargets.min,
-    paddingHorizontal: spacing.xs,
-  },
-  markAllLabel: {
-    ...typography.meta,
-    color: colors.accentText,
   },
   pressed: {
     opacity: 0.76,
