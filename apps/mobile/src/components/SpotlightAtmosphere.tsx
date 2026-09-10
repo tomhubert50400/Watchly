@@ -1,3 +1,4 @@
+import { useIsFocused } from '@react-navigation/native';
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-native';
 
@@ -12,7 +13,7 @@ const BACKDROP_FADE_DURATION_MS = 280;
 
 export function SpotlightAtmosphere({
   blurRadius = 8,
-  fadeIn = false,
+  fadeIn = true,
   imageUrl,
 }: SpotlightAtmosphereProps) {
   if (!imageUrl) {
@@ -46,6 +47,8 @@ function SpotlightImage({
   fadeIn: boolean;
   imageUrl: string;
 }) {
+  const focused = useIsFocused();
+  const revealed = useRef(false);
   const opacity = useRef(new Animated.Value(fadeIn ? 0 : BACKDROP_OPACITY)).current;
   const [imageLoaded, setImageLoaded] = useState(!fadeIn);
   const [reduceMotionEnabled, setReduceMotionEnabled] = useState<boolean | null>(
@@ -80,9 +83,12 @@ function SpotlightImage({
 
     if (reduceMotionEnabled) {
       opacity.setValue(BACKDROP_OPACITY);
+      revealed.current = true;
       return;
     }
 
+    if (!focused || revealed.current) return;
+    revealed.current = true;
     opacity.setValue(0);
     const animation = Animated.timing(opacity, {
       duration: BACKDROP_FADE_DURATION_MS,
@@ -92,8 +98,11 @@ function SpotlightImage({
     });
     animation.start();
 
-    return () => animation.stop();
-  }, [fadeIn, imageLoaded, opacity, reduceMotionEnabled]);
+    return () => {
+      animation.stop();
+      opacity.setValue(BACKDROP_OPACITY);
+    };
+  }, [fadeIn, focused, imageLoaded, opacity, reduceMotionEnabled]);
 
   return (
     <Animated.Image

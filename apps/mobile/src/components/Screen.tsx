@@ -13,9 +13,11 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors, spacing } from '../design/tokens';
 import { useFocusedFieldVisibility } from './useFocusedFieldVisibility';
 import { AppHeader } from './AppHeader';
+import { ScreenReveal } from './ScreenReveal';
 
 type ScreenProps = PropsWithChildren<{
   background?: ReactNode;
+  contentReady?: boolean;
   eyebrow?: string;
   footer?: ReactNode;
   gestureHandlers?: GestureResponderHandlers;
@@ -24,6 +26,7 @@ type ScreenProps = PropsWithChildren<{
   leading?: ReactNode;
   nativeKeyboardInsetsOnly?: boolean;
   refreshControl?: ScrollViewProps['refreshControl'];
+  safeAreaEdges?: ('top' | 'right' | 'bottom' | 'left')[];
   scrollViewRef?: RefObject<ScrollView | null>;
   statusBanner?: ReactNode;
   tabBarPadding?: boolean | number;
@@ -34,6 +37,7 @@ type ScreenProps = PropsWithChildren<{
 export function Screen({
   background,
   children,
+  contentReady = true,
   eyebrow,
   footer,
   gestureHandlers,
@@ -42,6 +46,7 @@ export function Screen({
   leading,
   nativeKeyboardInsetsOnly = false,
   refreshControl,
+  safeAreaEdges = ['top'],
   scrollViewRef: providedScrollViewRef,
   statusBanner,
   tabBarPadding = false,
@@ -73,7 +78,7 @@ export function Screen({
   useScrollToTop(scrollViewRef);
 
   return (
-    <SafeAreaView edges={['top']} style={styles.safeArea} {...gestureHandlers}>
+    <SafeAreaView edges={safeAreaEdges} style={styles.safeArea} {...gestureHandlers}>
       {background ? <View pointerEvents="none" style={styles.background}>{background}</View> : null}
       <KeyboardAvoidingView
         behavior={!useNativeKeyboardInsets && Platform.OS === 'ios' ? 'padding' : undefined}
@@ -95,7 +100,7 @@ export function Screen({
           style={styles.container}
         >
           {hasHeader ? (
-            <View
+            <ScreenReveal
               style={[
                 styles.headerShell,
                 background ? styles.transparentHeader : null,
@@ -104,10 +109,10 @@ export function Screen({
               ]}
             >
               <AppHeader eyebrow={eyebrow} leading={leading} title={title} trailing={trailing} />
-            </View>
+            </ScreenReveal>
           ) : null}
           {statusBanner ? <View style={[styles.banner, { marginHorizontal: chromePadding }]}>{statusBanner}</View> : null}
-          <View style={[styles.body, { paddingHorizontal: sidePadding }]}>{children}</View>
+          <ScreenReveal delay={50} ready={contentReady} style={[styles.body, { paddingHorizontal: sidePadding }]}>{children}</ScreenReveal>
         </ScrollView>
         {footer ? (
           <View

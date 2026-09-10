@@ -29,13 +29,13 @@ assert.match(
 );
 assert.match(
   spotlightAtmosphereSource,
-  /fadeIn\?: boolean/,
-  'the shared atmosphere must expose an opt-in fade instead of changing every screen',
+  /fadeIn = true/,
+  'page backdrops must fade in by default',
 );
 assert.match(
   spotlightAtmosphereSource,
   /AccessibilityInfo\.isReduceMotionEnabled\(\)/,
-  'the optional atmosphere fade must respect reduced motion',
+  'the atmosphere fade must respect reduced motion',
 );
 assert.match(
   publicProfileSource,
