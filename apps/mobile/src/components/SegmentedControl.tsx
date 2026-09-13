@@ -129,7 +129,7 @@ export function SegmentedControl<T extends string>({
 const styles = StyleSheet.create({
   button: {
     alignItems: 'center',
-    borderRadius: radii.sm,
+    borderRadius: radii.xl,
     flex: 1,
     justifyContent: 'center',
     minWidth: 0,
@@ -141,14 +141,14 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   buttonStackedSelected: {
-    backgroundColor: colors.segmentSelected,
-    borderColor: colors.segmentSelectedBorder,
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
     borderWidth: 1,
   },
   control: {
     backgroundColor: colors.panelSoft,
     borderColor: colors.border,
-    borderRadius: radii.md,
+    borderRadius: radii.xl,
     borderWidth: controlBorderWidth,
     flexDirection: 'row',
     gap: controlGap,
@@ -161,9 +161,9 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   indicator: {
-    backgroundColor: colors.segmentSelected,
-    borderColor: colors.segmentSelectedBorder,
-    borderRadius: radii.sm,
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBorder,
+    borderRadius: radii.xl,
     borderWidth: 1,
     bottom: controlInset,
     left: controlInset,
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   labelSelected: {
-    color: colors.segmentSelectedText,
+    color: colors.accentText,
   },
   pressed: {
     opacity: 0.78,

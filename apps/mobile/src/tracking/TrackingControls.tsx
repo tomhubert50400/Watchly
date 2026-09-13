@@ -250,7 +250,7 @@ export function TrackingControls({ contentType, onWatchedChange, tmdbId }: Track
             <View style={styles.statusContent}>
               {statusLayout.iconVisible ? (
                 <Icon
-                  color={selected ? colors.textOnAccent : colors.text}
+                  color={selected ? colors.accentText : colors.text}
                   size={16}
                   strokeWidth={2}
                 />
@@ -295,6 +295,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   statusLabelSelected: {
-    color: colors.textOnAccent,
+    color: colors.accentText,
   },
 });
