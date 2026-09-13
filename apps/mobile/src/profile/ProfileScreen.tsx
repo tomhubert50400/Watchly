@@ -33,6 +33,7 @@ import {
   type ProfileModel,
 } from './profileModel';
 import { ProfileBackdropPickerSheet } from './ProfileBackdropPickerSheet';
+import { RecentViewingActivity } from './RecentViewingActivity';
 import { getHydratedProfileOpinionTarget, ProfileBody } from './ProfileBody';
 import { ProfileHeaderButton } from './ProfileHeaderButton';
 import { hydrateViewingStatsArtwork } from './hydrateViewingStatsArtwork';
@@ -388,6 +389,7 @@ export function ProfileScreen() {
         </EmptyState>
       ) : profile ? (
         <ProfileBody
+          recentActivity={<RecentViewingActivity userId={profile.userId} owner />}
           avatarLoading={avatarStatus === 'saving'}
           avatarUrl={avatarUrl}
           displayName={profile.displayName}

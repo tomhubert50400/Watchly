@@ -44,7 +44,7 @@ export type RootStackParamList = {
     matchedItems: ImportReviewMatch[];
     skippedItems: ImportSkippedTitle[];
   };
-  Journal: undefined;
+  Journal: { userId: string } | undefined;
   ReleaseAlerts: undefined;
   LegalDocument: {
     document: LegalDocumentId;

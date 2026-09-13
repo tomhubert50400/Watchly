@@ -285,7 +285,7 @@ function AppNavigator() {
               })}
             />
             <Stack.Screen component={LibraryScreen} name="ReleaseAlerts" options={{ title: 'Release alerts' }} />
-            <Stack.Screen component={JournalScreen} name="Journal" options={{ title: 'Journal' }} />
+            <Stack.Screen component={JournalScreen} name="Journal" options={{ title: 'Viewing history' }} />
             <Stack.Screen
               component={LegalDocumentScreen}
               name="LegalDocument"

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CalendarDays, X } from 'lucide-react-native';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -22,6 +22,7 @@ import { useUserDataRevision } from '../sync/userDataEvents';
 import { applyViewingHistoryUpdates, getViewingHistoryUpdates, reconcileViewingHistoryUpdates, useViewingHistoryUpdates } from '../viewings/viewingHistoryUpdates';
 import { ViewingCountControl } from '../viewings/ViewingCountControl';
 import type { ViewingTarget } from '../api/viewings';
+import { PublicViewingHistoryScreen } from './PublicViewingHistoryScreen';
 import { JournalCalendar } from './JournalCalendar';
 import { JournalEntryCard } from './JournalEntryCard';
 import { buildJournal, filterJournalEntries, filterJournalEntriesByDate, getJournalMonthKeys, groupJournalEntriesByMonth, JournalEntry, JournalFilter } from './journalModel';
@@ -32,6 +33,11 @@ type Navigation = NativeStackNavigationProp<RootStackParamList>;
 const MAX_JOURNAL_HYDRATIONS = 24;
 
 export function JournalScreen() {
+  const route = useRoute<RouteProp<RootStackParamList, 'Journal'>>();
+  return route.params?.userId ? <PublicViewingHistoryScreen userId={route.params.userId} /> : <OwnViewingHistoryScreen />;
+}
+
+function OwnViewingHistoryScreen() {
   const navigation = useNavigation<Navigation>();
   const { currentUser, getFirebaseIdToken } = useAuthSession();
   const journalRevision = useUserDataRevision('episodeProgress', 'opinions', 'viewings');
@@ -44,14 +50,14 @@ export function JournalScreen() {
   const [episodeChoices, setEpisodeChoices] = useState<HydratedJournalEntry | null>(null);
   const key = currentUser ? `watchly:user:${currentUser.id}:journal:v4` : 'watchly:user:visitor:journal-disabled';
   const load = useCallback(async (cached?: JournalData): Promise<JournalData> => {
-    if (!currentUser) throw new Error('Sign in to open your Journal.');
-    const token = await getFirebaseIdToken(); if (!token) throw new Error('Sign in again to open your Journal.');
+    if (!currentUser) throw new Error('Sign in to open your viewing history.');
+    const token = await getFirebaseIdToken(); if (!token) throw new Error('Sign in again to open your viewing history.');
     const previous = cached;
     const [viewings, ratings, opinions] = await Promise.allSettled([listJournalViewings(token), listMovieRatings(token), getOwnProfileOpinions(token)]);
     const topResults = { viewings, ratings, opinions };
-    if (Object.values(topResults).every((result) => result.status === 'rejected')) throw new Error('Could not update your Journal.');
+    if (Object.values(topResults).every((result) => result.status === 'rejected')) throw new Error('Could not update your viewing history.');
     const failures = Object.entries(topResults).flatMap(([name, result]) => result.status === 'rejected' ? [`${name} (${errorLabel(result.reason)})`] : []);
-    if (failures.length && previous) return { ...previous, partialError: `Some Journal data could not update: ${failures.join(', ')}.` };
+    if (failures.length && previous) return { ...previous, partialError: `Some history data could not update: ${failures.join(', ')}.` };
     const input = {
       movieRatings: ratings.status === 'fulfilled' ? ratings.value : [],
       opinions: opinions.status === 'fulfilled' ? opinions.value.items : [],
@@ -66,7 +72,7 @@ export function JournalScreen() {
       if (!hydratedTitles.has(titleKey)) hydratedTitles.set(titleKey, index < MAX_JOURNAL_HYDRATIONS ? hydrateEntry(entry, fallback) : Promise.resolve(fallback ?? toJournalFallback(entry)));
       return hydratedTitles.get(titleKey)!.then((details) => ({ ...details, ...entry }));
     }));
-    return { ...model, input, entries, partialError: failures.length ? `Some Journal data could not update: ${failures.join(', ')}.` : null };
+    return { ...model, input, entries, partialError: failures.length ? `Some history data could not update: ${failures.join(', ')}.` : null };
   }, [currentUser, getFirebaseIdToken, journalRevision, key]);
   const resource = useCachedResource({ enabled: Boolean(currentUser), key, load });
   useEffect(() => {
@@ -90,9 +96,9 @@ export function JournalScreen() {
   const groups = groupJournalEntriesByMonth(entries);
   const yearCount = (data?.entries ?? []).filter((entry) => entry.date.slice(0, 4) === String(new Date().getFullYear())).length;
   return <Screen contentReady={!currentUser || Boolean(resource.data)} refreshControl={currentUser ? <RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined} title="">
-    {!currentUser ? <SignInRequiredCard body="You need to be signed in to use your private Journal. Sign in here to see your viewing history and opinions." title="Sign in to use Journal" />
-      : resource.isInitialLoading && !resource.data ? <LoadingState label="Loading your Journal" />
-      : resource.error && !resource.data ? <EmptyState body={resource.error} title="Journal unavailable"><Button label="Retry" onPress={resource.retry} /></EmptyState>
+    {!currentUser ? <SignInRequiredCard body="You need to be signed in to use your viewing history. Sign in here to see your viewing history and opinions." title="Sign in to view your history" />
+      : resource.isInitialLoading && !resource.data ? <LoadingState label="Loading your viewing history" />
+      : resource.error && !resource.data ? <EmptyState body={resource.error} title="History unavailable"><Button label="Retry" onPress={resource.retry} /></EmptyState>
       : resource.data ? <View>
         <ScreenReveal delay={50} style={styles.intro}><Text style={styles.introText}>Your viewing history, ratings and the stories you kept.</Text><View style={styles.stats}><Stat label={`entries in ${new Date().getFullYear()}`} value={String(yearCount)} /><Stat label="average rating" value={data!.averageRating === null ? '-' : data!.averageRating.toFixed(1)} /><Stat label="reviews" value={String(data!.reviewCount)} /></View></ScreenReveal>
         <ScrollView contentContainerStyle={styles.filters} horizontal showsHorizontalScrollIndicator={false}>{(['all', 'movies', 'series', 'reviews'] as const).map((value) => <Button key={value} label={value === 'all' ? 'All' : value === 'reviews' ? 'With review' : value[0]!.toUpperCase() + value.slice(1)} onPress={() => { setFilter(value); setSelectedDateKey(null); setCalendarMonthKey(null); setCalendarOpen(false); }} variant={filter === value ? 'secondary' : 'ghost'} />)}</ScrollView>
@@ -111,7 +117,7 @@ export function JournalScreen() {
           {selectedDateKey ? <Button compact icon={<X color={colors.textMuted} size={17} />} label="Clear date" onPress={() => setSelectedDateKey(null)} variant="ghost" /> : null}
         </ScreenReveal>
         {calendarOpen && visibleMonthKey ? <JournalCalendar entries={filteredEntries} monthKey={visibleMonthKey} onMonthChange={setCalendarMonthKey} onSelectDate={setSelectedDateKey} selectedDateKey={selectedDateKey} /> : null}
-        {data!.entries.length === 0 ? <EmptyState body="Watch, rate or review a film or episode and it will appear here." title="Your Journal is ready" />
+        {data!.entries.length === 0 ? <EmptyState body="Watch, rate or review a film or episode and it will appear here." title="Your viewing history is ready" />
           : groups.length === 0 ? <EmptyState body={selectedDateKey ? 'Clear the date or choose another marked day.' : 'Choose another filter to see your entries.'} title={selectedDateKey ? `No entries on ${formatSelectedDate(selectedDateKey)}` : 'No matching entries'} />
           : <ScreenReveal delay={150} style={styles.months}>{groups.map((group) => <View key={group.key}><Text style={styles.month}>{formatMonth(group.key)}</Text>{group.entries.map((entry) => <JournalEntryCard entry={entry as HydratedJournalEntry} key={entry.key} onEdit={() => entry.kind === 'movie' ? setEditing({ contentType: 'movie', tmdbId: entry.tmdbId, title: (entry as HydratedJournalEntry).title }) : setEpisodeChoices(entry as HydratedJournalEntry)} onPress={() => openEntry(navigation, entry as HydratedJournalEntry)} />)}</View>)}</ScreenReveal>}
       </View> : null}

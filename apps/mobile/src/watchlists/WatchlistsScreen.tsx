@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RouteProp, useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { BookOpen, Check, ListFilter, Plus, Search, X } from 'lucide-react-native';
+import { Check, ListFilter, Plus, Search, X } from 'lucide-react-native';
 import { ActivityIndicator, Keyboard, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput as NativeTextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSharedWatchlist } from '../api/sharedWatchlists';
@@ -166,7 +166,7 @@ export function WatchlistsScreen() {
         <View ref={filterButtonRef} collapsable={false}>
           <IconButton accessibilityLabel={`Filter ${view}, ${activeFilters.find((item) => item.value === activeFilter)?.label}`} accessibilityState={{ expanded: sheet === 'filter' }} icon={<ListFilter color={activeFilter === 'all' || activeFilter === 'progress' ? colors.textMuted : colors.accentText} size={21} />} onPress={openFilter} />
         </View>
-        {view === 'progress' ? <IconButton accessibilityLabel="Open Journal" icon={<BookOpen color={colors.text} size={21} />} onPress={() => navigation.navigate('Journal')} /> : <Pressable accessibilityRole="button" accessibilityLabel="Create watchlist" onPress={() => { setKind(filter === 'shared' ? 'shared' : 'personal'); setError(null); setSheet('create'); }} style={styles.createButton}><Plus color={colors.textOnAccent} size={24} /></Pressable>}
+        {view !== 'progress' ? <Pressable accessibilityRole="button" accessibilityLabel="Create watchlist" onPress={() => { setKind(filter === 'shared' ? 'shared' : 'personal'); setError(null); setSheet('create'); }} style={styles.createButton}><Plus color={colors.textOnAccent} size={24} /></Pressable> : null}
       </View> : null}>
       <SegmentedControl containerStyle={styles.viewSwitch} options={[{ label: 'Watchlists', value: 'watchlists' }, { label: 'Progress', value: 'progress' }]} value={view} onChange={(value) => { tabNavigation.setParams({ view: value }); setSheet(null); }} />
       {!currentUser ? <SignInRequiredCard title="Sign in to use watchlists" body="Keep your next movies and series together, on your own or with friends." />
@@ -200,9 +200,6 @@ export function WatchlistsScreen() {
             <View style={styles.management}><WatchlistManagementButton list={list} onRemoved={removeList} /></View>
           </ScreenReveal>)}
           {visibleLists.length === 0 ? <EmptyState title={filter === 'all' ? 'Your next watch starts here' : `No ${filter} lists yet`} body="Create a watchlist and add movies or series from their detail pages."><Button label="Create watchlist" onPress={() => { setKind(filter === 'shared' ? 'shared' : 'personal'); setError(null); setSheet('create'); }} /></EmptyState> : null}
-          <View style={styles.utilities}>
-            <Pressable accessibilityRole="button" onPress={() => navigation.navigate('Journal')} style={styles.utility}><BookOpen color={colors.textMuted} size={18} /><Text style={styles.utilityText}>Journal</Text></Pressable>
-          </View>
         </View>}
     </Screen>
     <Modal transparent animationType="fade" visible={sheet === 'filter'} onRequestClose={() => setSheet(null)} statusBarTranslucent>
@@ -240,9 +237,6 @@ const styles = StyleSheet.create({
   createButton: { width: 44, height: 44, borderRadius: radii.md, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   list: { position: 'relative' },
   management: { position: 'absolute', top: spacing.sm, right: spacing.sm },
-  utilities: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.md, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.sm },
-  utility: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', minHeight: 44 },
-  utilityText: { ...typography.body, fontSize: 13, color: colors.textMuted },
   filterOverlay: { flex: 1 },
   filterBubble: { ...shadows.raised, position: 'absolute', backgroundColor: colors.panelElevated, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.borderStrong, overflow: 'hidden' },
   filterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, gap: spacing.sm },

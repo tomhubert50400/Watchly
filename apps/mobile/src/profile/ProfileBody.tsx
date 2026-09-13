@@ -1,5 +1,5 @@
 import { memo, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ViewingStats } from '../api/viewings';
 import { ScreenReveal } from '../components/ScreenReveal';
 import { ExpandableReviewText } from '../components/ExpandableReviewText';
@@ -46,6 +46,7 @@ export function ProfileBody({
   onViewAllReviews,
   opinions,
   reviewsCount,
+  recentActivity,
   showMediaRails = true,
   stats,
   statsAccessibilityHint,
@@ -78,13 +79,14 @@ export function ProfileBody({
   onViewAllReviews: () => void;
   opinions: readonly HydratedProfileOpinion[];
   reviewsCount: number;
+  recentActivity?: ReactNode;
   showMediaRails?: boolean;
   stats: ViewingStats;
   statsAccessibilityHint?: string;
   statsTitle?: string;
 }) {
   const profileReviews = opinions.filter(isHydratedProfileReview);
-  const recentOpinions = getRecentProfileOpinions(opinions);
+
 
   return (
     <View style={styles.stack}>
@@ -112,6 +114,7 @@ export function ProfileBody({
         <View pointerEvents="none" style={styles.statsDivider} />
       </View>
       {notice}
+      {recentActivity}
       {showMediaRails ? (
         <>
           <ScreenReveal delay={150}><ProfileMediaRail
@@ -145,22 +148,6 @@ export function ProfileBody({
         </ScreenReveal>
       ) : (
         <>
-          <ScreenReveal delay={200} style={styles.opinionsSection}>
-            <Text accessibilityRole="header" style={styles.sectionTitle}>RECENT ACTIVITY</Text>
-            <ScrollView
-              contentContainerStyle={styles.recentRail}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-            >
-              {recentOpinions.map((item) => (
-                <ProfileRecentPoster
-                  item={item}
-                  key={`${item.type}-${item.id}`}
-                  onOpenContent={onOpenOpinion}
-                />
-              ))}
-            </ScrollView>
-          </ScreenReveal>
           {reviewsCount > 0 ? (
             <ScreenReveal delay={200} style={styles.opinionsSection}>
               <View style={styles.reviewsHeader}>
@@ -185,31 +172,6 @@ export function ProfileBody({
     </View>
   );
 }
-
-const ProfileRecentPoster = memo(function ProfileRecentPoster({
-  item,
-  onOpenContent,
-}: {
-  item: HydratedProfileOpinion;
-  onOpenContent: (item: HydratedProfileOpinion) => void;
-}) {
-  const contentTitle = getOpinionDisplayTitle(item);
-
-  return (
-    <Pressable
-      accessibilityLabel={`Open ${contentTitle}`}
-      accessibilityRole="button"
-      onPress={() => onOpenContent(item)}
-      style={({ pressed }) => [styles.recentPosterCard, pressed ? styles.cardPressed : null]}
-    >
-      <MediaPoster
-        accessibilityLabel={`${contentTitle} artwork`}
-        posterUrl={item.contentImageUrl}
-        style={styles.recentPosterArtwork}
-      />
-    </Pressable>
-  );
-});
 
 export const ProfileReviewCard = memo(function ProfileReviewCard({
   item,
@@ -247,22 +209,6 @@ export const ProfileReviewCard = memo(function ProfileReviewCard({
     </View>
   );
 });
-
-function getRecentProfileOpinions(items: readonly HydratedProfileOpinion[]) {
-  const seenContent = new Set<string>();
-
-  return items.filter((item) => {
-    const key = item.content.contentType === 'movie'
-      ? `movie:${item.content.tmdbId}`
-      : item.content.contentType === 'series'
-        ? `series:${item.content.seriesTmdbId}`
-        : `episode:${item.content.seriesTmdbId}:${item.content.seasonNumber}:${item.content.episodeNumber}`;
-
-    if (seenContent.has(key)) return false;
-    seenContent.add(key);
-    return true;
-  }).slice(0, 8);
-}
 
 function getOpinionDisplayTitle(item: HydratedProfileOpinion) {
   return item.content.contentType === 'episode'
@@ -341,17 +287,6 @@ const styles = StyleSheet.create({
   },
   profileIntro: {
     gap: spacing.xxl,
-  },
-  recentPosterArtwork: {
-    height: 126,
-    width: 84,
-  },
-  recentPosterCard: {
-    width: 84,
-  },
-  recentRail: {
-    gap: spacing.sm,
-    paddingRight: spacing.xl,
   },
   reviewBody: {
     marginTop: spacing.xs,

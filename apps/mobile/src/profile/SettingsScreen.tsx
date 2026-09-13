@@ -83,7 +83,7 @@ const defaultPrivacy: ProfilePrivacy = {
   ratingsVisibility: 'public',
   reviewsFollowProfileVisibility: true,
   sharedWatchlistVisibility: 'members',
-  viewingHistoryVisibility: 'public',
+  viewingHistoryVisibility: 'private',
 };
 const discordProviderWired = authProviders.some((provider) => provider.id === 'discord' && provider.isWired);
 const microsoftProviderWired = authProviders.some((provider) => provider.id === 'microsoft' && provider.isWired);
@@ -248,6 +248,7 @@ export function SettingsScreen() {
         }),
         updatePrivacy(firebaseIdToken, {
           profileVisibility: privacy.profileVisibility,
+          viewingHistoryVisibility: privacy.viewingHistoryVisibility,
         }),
         Promise.all(changedWatchlists.map((watchlist) =>
           updateWatchlistVisibility(firebaseIdToken, watchlist.id, watchlist.visibility),
@@ -594,7 +595,6 @@ export function SettingsScreen() {
         episodeProgressVisibility: visibility,
         profileVisibility: visibility,
         ratingsVisibility: visibility,
-        viewingHistoryVisibility: visibility,
       };
     });
     setMessage(null);
@@ -684,16 +684,26 @@ export function SettingsScreen() {
 
           <SettingsSection
             delay={100}
-            subtitle="One choice controls everything people can see on your profile."
+            subtitle="Choose who can see your profile and viewing history."
             title="Privacy"
           >
             <PrivacyPanel privacy={privacy}>
               <PrivacyPreferenceRow
-                body="Includes your profile, reviews, ratings, history, and episode progress."
+                body="Includes your profile, reviews, ratings, and episode progress."
                 icon={Eye}
                 label="Profile visibility"
                 onPress={toggleProfileVisibility}
                 value={privacy.profileVisibility}
+              />
+              <PrivacyPreferenceRow
+                body="Share dated viewings with people who can access your profile."
+                icon={Eye}
+                label="Viewing history"
+                onPress={() => {
+                  setPrivacy((current) => ({ ...current, viewingHistoryVisibility: current.viewingHistoryVisibility === 'public' ? 'private' : 'public' }));
+                  setMessage(null);
+                }}
+                value={privacy.viewingHistoryVisibility}
               />
               <SettingsActionRow
                 body="Review people you blocked and restore access."

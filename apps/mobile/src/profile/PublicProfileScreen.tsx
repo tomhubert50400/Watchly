@@ -37,6 +37,7 @@ import type { LibraryMediaItem } from '../library/useLibraryData';
 import { mergeLibraryItems, shouldShowTrackedTitle } from '../library/libraryModel';
 import type { RootStackParamList } from '../navigation/types';
 import { ReportSheet } from '../reports/ReportSheet';
+import { RecentViewingActivity } from './RecentViewingActivity';
 import { getHydratedProfileOpinionTarget, ProfileBody } from './ProfileBody';
 import { ProfileHeaderButton } from './ProfileHeaderButton';
 import { ProfileSummaryCard } from './ProfileSummaryCard';
@@ -626,6 +627,7 @@ export function PublicProfileScreen() {
         ) : profile.viewingStats ? (
           <View style={styles.stack}>
             <ProfileBody
+          recentActivity={<RecentViewingActivity userId={profile.id} />}
               avatarUrl={profile.avatarUrl}
               displayName={profile.displayName}
               emptyActivityBody="Ratings and reviews will appear here when this member shares them."

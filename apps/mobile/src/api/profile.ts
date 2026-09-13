@@ -3,7 +3,17 @@ import type { ReleaseAlertSummary } from './notifications';
 import type { SeriesProgressSummary } from './progress';
 import type { MovieRating } from './ratings';
 import type { TrackingState } from './tracking';
-import type { ViewingStats } from './viewings';
+import type { JournalViewing, ViewingStats } from './viewings';
+
+export type ProfileHistory = {
+  visibility: PrivacyVisibility;
+  items: Array<JournalViewing & { title: string | null; posterUrl: string | null }>;
+  opinions: ProfileOpinion[];
+};
+
+export function getProfileHistory(token: string, userId: string, preview = false) {
+  return apiGet<ProfileHistory>(`/profile/users/${encodeURIComponent(userId)}/history${preview ? '?preview=true' : ''}`, { token });
+}
 
 export type PrivacyVisibility = 'public' | 'private';
 export type SharedWatchlistVisibility = 'members' | 'private';
