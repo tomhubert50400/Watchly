@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Globe, Lock } from 'lucide-react-native';
@@ -6,35 +6,40 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { getProfileHistory, type ProfileHistory } from '../api/profile';
 import { ApiError } from '../api/client';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { useCachedResource } from '../cache/useCachedResource';
+import { getPrivateCacheKey } from '../cache/persistedCache';
 import { MediaPoster } from '../components/MediaPoster';
 import { StarRatingDisplay } from '../components/StarRatingDisplay';
-import { colors, spacing, typography } from '../design/tokens';
+import { colors, radii, spacing, typography } from '../design/tokens';
 import type { RootStackParamList } from '../navigation/types';
 import { useUserDataRevision } from '../sync/userDataEvents';
 
 export function RecentViewingActivity({ userId, owner = false }: { userId: string; owner?: boolean }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { currentUser, getFirebaseIdToken } = useAuthSession();
-  const revision = useUserDataRevision('viewings', 'opinions', 'episodeProgress');
-  const [data, setData] = useState<ProfileHistory | null>(null);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'private' | 'error'>('loading');
-  useFocusEffect(useCallback(() => {
-    let active = true;
-    setData(null);
-    setStatus('loading');
-    void (async () => {
-      try {
-        const token = await getFirebaseIdToken();
-        if (!token) throw new Error('Sign in to view activity.');
-        const result = await getProfileHistory(token, userId, true);
-        if (active) { setData(result); setStatus('ready'); }
-      } catch (error) {
-        if (active) setStatus(error instanceof ApiError && (error.status === 403 || error.status === 404) ? 'private' : 'error');
+  const revision = useUserDataRevision('viewings', 'opinions', 'episodeProgress', 'profile', 'socialGraph');
+  const key = getPrivateCacheKey(currentUser?.id ?? 'visitor', `profile:recent-viewings:${userId}:v1`);
+  const load = useCallback(async (): Promise<ProfileHistory> => {
+    const token = await getFirebaseIdToken();
+    if (!token) throw new Error('Sign in to view activity.');
+    try {
+      return await getProfileHistory(token, userId, true);
+    } catch (error) {
+      if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
+        return { visibility: 'private', items: [], opinions: [] };
       }
-    })();
-    return () => { active = false; };
-  }, [currentUser?.id, getFirebaseIdToken, userId, revision]));
-  if (!owner && (status === 'private' || (data && data.visibility !== 'public'))) return null;
+      throw error;
+    }
+  }, [currentUser?.id, getFirebaseIdToken, userId, revision]);
+  const resource = useCachedResource({ key, load, enabled: Boolean(currentUser), staleTimeMs: owner ? 5 * 60 * 1000 : 0 });
+  const savedAt = useRef(resource.savedAt);
+  savedAt.current = resource.savedAt;
+  useFocusEffect(useCallback(() => {
+    if (savedAt.current && (!owner || Date.now() - Date.parse(savedAt.current) >= 5 * 60 * 1000)) resource.revalidate();
+  }, [key, owner, resource.revalidate]));
+  const data = resource.data;
+  const status = data ? 'ready' : resource.error ? 'error' : 'loading';
+  if (!owner && (data && data.visibility !== 'public')) return null;
   return <View style={styles.section}>
     <View style={styles.header}>
       <View style={styles.headingRow}><Text style={styles.heading}>Recent activity</Text>{owner && data ? <Pressable accessibilityRole="button" accessibilityLabel={`Manage viewing history visibility, currently ${data.visibility}`} onPress={() => navigation.navigate('Settings')} style={styles.visibility}>{data.visibility === 'public' ? <Globe color={colors.textSubtle} size={15} /> : <Lock color={colors.textSubtle} size={15} />}</Pressable> : null}</View>
@@ -62,7 +67,7 @@ const styles = StyleSheet.create({
   section: { gap: spacing.xs }, headingRow: { flexDirection: 'row', alignItems: 'center' }, rail: { gap: spacing.md }, header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   heading: { color: colors.text, fontSize: 22, fontWeight: '700' }, link: { minHeight: 44, justifyContent: 'center', paddingLeft: spacing.md },
   linkText: { ...typography.meta, color: colors.accentText }, visibility: { width: 36, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  row: { width: 220, flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
+  row: { width: 236, minHeight: 90, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.borderStrong, backgroundColor: colors.panel },
   poster: { width: 42, height: 63, borderRadius: 7 }, copy: { flex: 1, gap: 5 },
   title: { color: colors.text, fontSize: 16, fontWeight: '700' }, meta: { ...typography.meta, color: colors.textSubtle },
 });
