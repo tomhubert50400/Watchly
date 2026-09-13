@@ -289,7 +289,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
         {statusBanner}
 
         <WatchlistSection delay={50}>
-          <SectionHeader title="Titles" />
+          <SectionHeader title="Titles" actionLabel="Add titles" onActionPress={() => navigation.navigate('MainTabs', { screen: 'Explore' })} />
           {details.hydratedItems.length === 0 ? (
             <Text style={styles.emptyCopy}>
               Add titles from their detail pages before starting a vote.

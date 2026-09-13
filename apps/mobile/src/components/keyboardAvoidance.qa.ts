@@ -19,7 +19,7 @@ const watchlistPage = source('../watchlists/WatchlistDetailLayout.tsx');
 const sharedWatchlist = source('../watchlists/SharedWatchlistScreen.tsx');
 const opinionSheet = source('../opinions/OpinionSheet.tsx');
 const addToWatchlist = source('../watchlists/AddToWatchlistControl.tsx');
-const library = source('../library/LibraryScreen.tsx');
+const watchlists = source('../watchlists/WatchlistsScreen.tsx');
 const settings = source('../profile/SettingsScreen.tsx');
 const onboarding = source('../onboarding/OnboardingScreen.tsx');
 const explore = source('../catalogue/ExploreScreen.tsx');
@@ -185,7 +185,8 @@ assert.match(
 );
 assert.match(opinionSheet, /footer=\{sheetFooter\}/, 'opinion save actions must use the sheet footer');
 assert.match(addToWatchlist, /<BottomActionSheetScrollView[^>]*>[\s\S]*\{createForm\}/, 'watchlist creation must be inside the scrollable body');
-assert.match(library, /footer=\{createListFooter\}/, 'list creation must use the screen footer');
+assert.match(watchlists, /<BottomActionSheet title="New watchlist"[^\n]*footer=\{<Button label="Create watchlist"/, 'list creation must use the sheet footer');
+assert.match(watchlists, /<BottomActionSheetScrollView[\s\S]*<TextInput label="Name"/, 'list naming must remain in the keyboard-aware sheet body');
 assert.match(
   settings,
   /footer=\{isDirty \? \([\s\S]*label="Save changes"/,

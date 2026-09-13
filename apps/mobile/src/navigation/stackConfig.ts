@@ -18,6 +18,8 @@ type BackRoute = {
 
 const routeLabels: Record<string, string> = {
   MainTabs: 'Home',
+  Library: 'Watchlists',
+  ProgressAlerts: 'Progress & alerts',
   Notifications: 'Alerts',
   ReleaseCalendar: 'Calendar',
   Onboarding: 'Tastes',
@@ -31,7 +33,8 @@ export function resolvePreviousPageLabel(routes: readonly BackRoute[]) {
 
   if (previous.name === 'MainTabs' && previous.state?.routes.length) {
     const activeIndex = previous.state.index ?? 0;
-    return previous.state.routes[activeIndex]?.name ?? 'Home';
+    const name = previous.state.routes[activeIndex]?.name ?? 'Home';
+    return routeLabels[name] ?? name;
   }
 
   const params = previous.params;

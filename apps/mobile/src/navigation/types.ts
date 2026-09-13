@@ -45,6 +45,7 @@ export type RootStackParamList = {
     skippedItems: ImportSkippedTitle[];
   };
   Journal: undefined;
+  ProgressAlerts: undefined;
   LegalDocument: {
     document: LegalDocumentId;
   };

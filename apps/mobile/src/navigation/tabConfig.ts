@@ -10,6 +10,6 @@ export const mainTabs: readonly MainTabConfig[] = [
   { icon: 'home', label: 'Home', name: 'Home' },
   { icon: 'compass', label: 'Discover', name: 'Explore' },
   { icon: 'community', label: 'Community', name: 'Community' },
-  { icon: 'library', label: 'Library', name: 'Library' },
+  { icon: 'library', label: 'Watchlists', name: 'Library' },
   { icon: 'profile', label: 'Profile', name: 'Profile' },
 ] as const;

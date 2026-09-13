@@ -153,7 +153,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
         </EmptyState>
       ) : visibleWatchlist ? (
         <WatchlistSection>
-          <SectionHeader title="Titles" />
+          <SectionHeader title="Titles" actionLabel="Add titles" onActionPress={() => navigation.navigate('MainTabs', { screen: 'Explore' })} />
           {visibleItems.length === 0 ? (
             <Text style={styles.emptyCopy}>
               Add films or series from detail pages to start shaping this list.

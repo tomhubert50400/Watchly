@@ -84,6 +84,10 @@ export function deleteSharedWatchlist(token: string, watchlistId: string) {
   return apiDelete<{ deleted: true }>(`/shared-watchlists/${watchlistId}`, { token });
 }
 
+export function leaveSharedWatchlist(token: string, watchlistId: string) {
+  return apiDelete<{ left: true }>(`/shared-watchlists/${watchlistId}/members/me`, { token });
+}
+
 export function addSharedWatchlistItem(
   token: string,
   watchlistId: string,

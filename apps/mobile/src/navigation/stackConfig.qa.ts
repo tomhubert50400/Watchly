@@ -33,7 +33,7 @@ assert(
   resolvePreviousPageLabel([
     { name: 'MainTabs', state: { index: 2, routes: [{ name: 'Home' }, { name: 'Explore' }, { name: 'Library' }] } },
     { name: 'FilmDetail' },
-  ]) === 'Library',
+  ]) === 'Watchlists',
   'A detail opened from MainTabs must name the active source tab.',
 );
 assert(

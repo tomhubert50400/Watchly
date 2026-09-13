@@ -5,7 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { BlurView } from 'expo-blur';
 import Constants, { AppOwnership, ExecutionEnvironment } from 'expo-constants';
 import { StatusBar } from 'expo-status-bar';
-import { Compass, House, Library, UserCircle, Users } from 'lucide-react-native';
+import { Bookmark, Compass, House, UserCircle, Users } from 'lucide-react-native';
 import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthSessionProvider, useAuthSession } from './src/auth/AuthSessionContext';
@@ -28,6 +28,7 @@ import { WatchlyLaunchGate } from './src/launch/WatchlyLaunchGate';
 import { LegalDocumentScreen } from './src/legal/LegalDocumentScreen';
 import { legalDocuments } from './src/legal/legalDocuments';
 import { LibraryScreen } from './src/library/LibraryScreen';
+import { WatchlistsScreen } from './src/watchlists/WatchlistsScreen';
 import { appLinking } from './src/navigation/linking';
 import { ReviewAccessScreen } from './src/auth/ReviewAccessScreen';
 import { detailBackOptions, needsCustomStackBackButton, resolvePreviousPageLabel, rootStackScreenOptions } from './src/navigation/stackConfig';
@@ -80,14 +81,14 @@ const tabIcons: Record<MainTabName, typeof House> = {
   Community: Users,
   Explore: Compass,
   Home: House,
-  Library,
+  Library: Bookmark,
   Profile: UserCircle,
 };
 const nativeTabIcons = {
   Community: { default: 'person.2', selected: 'person.2.fill' },
   Explore: { default: 'safari', selected: 'safari.fill' },
   Home: { default: 'house', selected: 'house.fill' },
-  Library: { default: 'books.vertical', selected: 'books.vertical.fill' },
+  Library: { default: 'bookmark', selected: 'bookmark.fill' },
   Profile: { default: 'person.crop.circle', selected: 'person.crop.circle.fill' },
 } as const;
 
@@ -145,7 +146,7 @@ function NativeMainTabs() {
       <NativeTabs.Screen component={HomeScreen} name="Home" />
       <NativeTabs.Screen component={ExploreNavigator} name="Explore" />
       <NativeTabs.Screen component={FeedScreen} name="Community" />
-      <NativeTabs.Screen component={LibraryScreen} name="Library" />
+      <NativeTabs.Screen component={WatchlistsScreen} name="Library" />
       <NativeTabs.Screen component={ProfileScreen} name="Profile" />
     </NativeTabs.Navigator>
   );
@@ -178,7 +179,7 @@ function FallbackMainTabs() {
       <Tabs.Screen component={HomeScreen} name="Home" />
       <Tabs.Screen component={ExploreNavigator} name="Explore" />
       <Tabs.Screen component={FeedScreen} name="Community" />
-      <Tabs.Screen component={LibraryScreen} name="Library" />
+      <Tabs.Screen component={WatchlistsScreen} name="Library" />
       <Tabs.Screen component={ProfileScreen} name="Profile" />
     </Tabs.Navigator>
   );
@@ -283,6 +284,7 @@ function AppNavigator() {
                     : 'Favorites',
               })}
             />
+            <Stack.Screen component={LibraryScreen} name="ProgressAlerts" options={{ title: 'Progress & alerts' }} />
             <Stack.Screen component={JournalScreen} name="Journal" options={{ title: 'Journal' }} />
             <Stack.Screen
               component={LegalDocumentScreen}
