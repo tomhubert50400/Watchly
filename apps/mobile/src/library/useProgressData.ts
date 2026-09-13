@@ -1,72 +1,126 @@
-import { useCallback, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { randomUUID } from 'expo-crypto';
 import { listSeriesProgress } from '../api/progress';
 import { getEpisodeViewingSummary, getSeriesViewingSummary, saveViewingHistory } from '../api/viewings';
 import { useAuthSession } from '../auth/AuthSessionContext';
-import { setMemoryResource } from '../cache/memoryResourceCache';
-import { getPrivateCacheKey, writePersistedCache } from '../cache/persistedCache';
-import { useCachedResource } from '../cache/useCachedResource';
+import { getMemoryResource, setMemoryResource } from '../cache/memoryResourceCache';
+import { getPrivateCacheKey, readPersistedCache, writePersistedCache } from '../cache/persistedCache';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
 import { ensureSeasonDetails } from '../catalogue/cataloguePrefetch';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
-import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
+import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { localViewingDay, toHistoryDraft } from '../viewings/viewingHistoryModel';
+import { loadProgressEntries } from './progressLoader';
 import { isProgressCandidate, ProgressItem, resolveProgressItem } from './progressModel';
 import type { LibraryMediaItem } from './useLibraryData';
 
-type ProgressData = { items: ProgressItem[]; loadedAt: number };
+type ProgressData = { items: ProgressItem[]; loadedAt: number; savedAtByKey?: Record<string, number> };
 
 export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
   const { currentUser, getFirebaseIdToken } = useAuthSession();
   const { refreshSeries } = useCatalogueCache();
-  const revision = useUserDataRevision('episodeProgress', 'viewings', 'tracking');
   const ownerId = currentUser?.id;
   const ownerRef = useRef(ownerId);
   ownerRef.current = ownerId;
   const mediaRef = useRef(media);
   mediaRef.current = media;
-  const signature = media.filter(isProgressCandidate).map((item) => item.key).sort().join('|');
+  const signature = media.filter(isProgressCandidate).map((item) => item.key + ':' + item.updatedAt).sort().join('|');
   const key = getPrivateCacheKey(ownerId ?? 'visitor', 'progress-library:v1');
-  const [overrides, setOverrides] = useState<Record<string, { ownerId: string; savedAt: number; item: ProgressItem }>>({});
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
+  const generation = useRef(0);
+  const [snapshot, setSnapshot] = useState<{ key: string; data: ProgressData } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [retryRevision, setRetryRevision] = useState(0);
+  const lastRetry = useRef(0);
+  const [loadError, setLoadError] = useState<{ ownerId: string; message: string } | null>(null);
+  const dataRef = useRef<ProgressData | null>(null);
+  dataRef.current = snapshot?.key === key ? snapshot.data : getMemoryResource<ProgressData>(key)?.data ?? null;
   const [busy, setBusy] = useState<string[]>([]);
   const busyRef = useRef(new Set<string>());
   const [error, setError] = useState<{ ownerId: string; message: string } | null>(null);
-  const load = useCallback(async (): Promise<ProgressData> => {
-    void signature; void revision;
-    const loadedAt = Date.now();
-    const token = await getFirebaseIdToken();
-    if (!token) throw new Error('Sign in again to load your progress.');
-    const candidates = mediaRef.current.filter(isProgressCandidate);
-    const items: ProgressItem[] = new Array(candidates.length);
-    let cursor = 0;
-    // Keep catalogue and private requests bounded, including for large imported libraries.
-    await Promise.all(Array.from({ length: Math.min(3, candidates.length) }, async () => {
-      while (cursor < candidates.length) {
-        const index = cursor++;
-        const item = candidates[index]!;
-        try {
-          const [series, progress, viewings] = await Promise.all([
-            refreshSeries(item.tmdbId), listSeriesProgress(token, item.tmdbId), getSeriesViewingSummary(token, item.tmdbId),
-          ]);
-          items[index] = await resolveProgressItem({
-            media: { ...item, title: series.title, backdropUrl: series.backdropUrl, posterUrl: series.posterUrl, numberOfEpisodes: series.numberOfEpisodes, watchedEpisodeCount: progress.watchedEpisodeCount },
-            series: { seasons: series.seasons, status: series.status, numberOfEpisodes: series.numberOfEpisodes },
-            watched: progress.episodes, viewings: viewings.episodes ?? [],
-          }, async (season) => (await ensureSeasonDetails(item.tmdbId, season)).item);
-        } catch {
-          items[index] = { media: item, series: { seasons: [], status: null, numberOfEpisodes: null }, watched: [], viewings: [], next: null, state: 'progress', error: 'Could not load the next episode.' };
-        }
+
+  useEffect(() => {
+    const version = ++generation.current;
+    if (!enabled || !ownerId) { setLoading(false); return; }
+    const isCurrent = () => generation.current === version && enabledRef.current && ownerRef.current === ownerId;
+    const force = retryRevision !== lastRetry.current;
+    lastRetry.current = retryRevision;
+    setLoading(true);
+    setLoadError(null);
+    const sources = mediaRef.current.filter(isProgressCandidate);
+    const keep = new Set(sources.map((item) => item.key));
+    const publish = (data: ProgressData) => {
+      dataRef.current = data;
+      setSnapshot({ key, data });
+      setMemoryResource(key, data, new Date(data.loadedAt).toISOString());
+    };
+    const persist = () => {
+      const data = dataRef.current;
+      if (data && ownerRef.current === ownerId) void writePersistedCache(key, data).catch(() => undefined);
+    };
+    void (async () => {
+      try {
+        const previous = dataRef.current ?? (await readPersistedCache<ProgressData>(key).catch(() => null))?.data;
+        if (!isCurrent()) return;
+        publish({ items: (previous?.items ?? []).filter((item) => keep.has(item.media.key)), loadedAt: previous?.loadedAt ?? Date.now(), savedAtByKey: previous?.savedAtByKey ?? Object.fromEntries((previous?.items ?? []).map((item) => [item.media.key, previous!.loadedAt])) });
+        let token: string | null = null;
+        await loadProgressEntries(sources, {
+          force, isCurrent,
+          cached: (itemKey) => {
+            const data = dataRef.current;
+            const item = data?.items.find((entry) => entry.media.key === itemKey);
+            return item ? { item, savedAt: data!.savedAtByKey?.[itemKey] ?? data!.loadedAt } : undefined;
+          },
+          load: async (item) => {
+            try {
+              token ??= await getFirebaseIdToken();
+              if (!token || !isCurrent()) throw new Error('Progress loading stopped.');
+              const [series, progress, viewings] = await Promise.all([
+                refreshSeries(item.tmdbId), listSeriesProgress(token, item.tmdbId), getSeriesViewingSummary(token, item.tmdbId),
+              ]);
+              return await resolveProgressItem({
+                media: { ...item, title: series.title, backdropUrl: series.backdropUrl, posterUrl: series.posterUrl, numberOfEpisodes: series.numberOfEpisodes, watchedEpisodeCount: progress.watchedEpisodeCount },
+                series: { seasons: series.seasons, status: series.status, numberOfEpisodes: series.numberOfEpisodes },
+                watched: progress.episodes, viewings: viewings.episodes ?? [],
+              }, async (season) => {
+                if (!isCurrent()) throw new Error('Progress loading stopped.');
+                return (await ensureSeasonDetails(item.tmdbId, season)).item;
+              });
+            } catch {
+              return { media: item, series: { seasons: [], status: null, numberOfEpisodes: null }, watched: [], viewings: [], next: null, state: 'progress', error: 'Could not load the next episode.' };
+            }
+          },
+          onItem: (item, startedAt) => {
+            const current = dataRef.current!;
+            // A background response must not replace an episode saved after it started.
+            if ((current.savedAtByKey?.[item.media.key] ?? 0) > startedAt) return;
+            const byKey = new Map(current.items.map((entry) => [entry.media.key, entry]));
+            byKey.set(item.media.key, item);
+            const now = Date.now();
+            publish({ items: sources.flatMap((source) => byKey.has(source.key) ? [byKey.get(source.key)!] : []), loadedAt: now, savedAtByKey: { ...current.savedAtByKey, [item.media.key]: now } });
+          },
+        });
+      } catch (cause) {
+        if (isCurrent()) setLoadError({ ownerId, message: cause instanceof Error ? cause.message : 'Could not load progress.' });
+      } finally {
+        if (isCurrent()) { persist(); setLoading(false); }
       }
-    }));
-    return { items, loadedAt };
-  }, [getFirebaseIdToken, ownerId, refreshSeries, revision, signature]);
-  const resource = useCachedResource({ key, load, enabled: enabled && Boolean(ownerId), staleTimeMs: 0 });
-  const items = (resource.data?.items ?? []).map((item) => {
-    const override = overrides[item.media.key];
-    return override?.ownerId === ownerId && override.savedAt >= (resource.data?.loadedAt ?? 0) ? override.item : item;
-  });
+    })();
+    return () => { generation.current++; persist(); };
+  }, [enabled, getFirebaseIdToken, key, ownerId, refreshSeries, retryRevision, signature]);
+
+  const items = dataRef.current?.items ?? [];
   const itemsRef = useRef(items);
   itemsRef.current = items;
+  const resource = {
+    data: dataRef.current,
+    error: loadError?.ownerId === ownerId ? loadError?.message ?? null : null,
+    isRefreshing: loading && retryRevision > 0,
+    isLoadingMore: loading,
+    retry: () => setRetryRevision((value) => value + 1),
+    revalidate: () => setRetryRevision((value) => value + 1),
+  };
 
   async function markNext(item: ProgressItem) {
     const episode = item.next;
@@ -105,9 +159,10 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
       }
       if (ownerRef.current !== ownerId) return;
       const savedAt = Date.now();
-      setOverrides((current) => ({ ...current, [item.media.key]: { ownerId, savedAt, item: next } }));
-      const data = { items: (itemsRef.current.length ? itemsRef.current : itemsBefore).map((entry) => entry.media.key === item.media.key ? next : entry), loadedAt: savedAt };
+      const data = { items: (itemsRef.current.length ? itemsRef.current : itemsBefore).map((entry) => entry.media.key === item.media.key ? next : entry), loadedAt: savedAt, savedAtByKey: { ...dataRef.current?.savedAtByKey, [item.media.key]: savedAt } };
       itemsRef.current = data.items;
+      dataRef.current = data;
+      setSnapshot({ key, data });
       setMemoryResource(key, data, now);
       void writePersistedCache(key, data).catch(() => undefined);
       hapticSuccess();

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { RouteProp, useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { BookOpen, Check, ListFilter, Plus } from 'lucide-react-native';
-import { Modal, Pressable, RefreshControl, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, RefreshControl, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSharedWatchlist } from '../api/sharedWatchlists';
 import { createWatchlist } from '../api/watchlists';
@@ -39,6 +39,7 @@ type ListFilterKind = 'all' | 'personal' | 'shared';
 const filters = [{ label: 'All lists', value: 'all' }, { label: 'Personal', value: 'personal' }, { label: 'Shared', value: 'shared' }] as const;
 
 export function WatchlistsScreen() {
+  const isFocused = useIsFocused();
   const route = useRoute<RouteProp<RootTabParamList, 'Library'>>();
   const tabNavigation = useNavigation<BottomTabNavigationProp<RootTabParamList, 'Library'>>();
   const view = route.params?.view ?? 'watchlists';
@@ -53,7 +54,7 @@ export function WatchlistsScreen() {
   const { currentUser, getFirebaseIdToken } = useAuthSession();
   const { preloadWatchlists } = useWatchlistCache();
   const resource = useLibraryData();
-  const progress = useProgressData(resource.data?.items ?? [], view === 'progress' && Boolean(resource.data));
+  const progress = useProgressData(resource.data?.items ?? [], isFocused && view === 'progress' && Boolean(resource.data));
   const [filter, setFilter] = useState<ListFilterKind>('all');
   const [sheet, setSheet] = useState<'create' | 'filter' | null>(null);
   const [name, setName] = useState('');
@@ -161,7 +162,8 @@ export function WatchlistsScreen() {
           {data?.partialError ? <InlineStatusBanner detail={data.partialError} onRetry={resource.retry} tone="error" /> : null}
           {progress.actionError || progress.error ? <InlineStatusBanner detail={progress.actionError ?? progress.error!} onRetry={progress.retry} tone="error" /> : null}
           <Text style={styles.progressLabel}>{progressFilters.find((item) => item.value === progressFilter)?.label}</Text>
-          {!progress.data ? progress.error ? <EmptyState title="Progress unavailable" body="Refresh to load your next episodes." /> : <LoadingState variant="grid" label="Loading your progress" /> : visibleProgress.length === 0 ? <EmptyState title={progressFilter === 'progress' ? 'Nothing in progress right now' : progressFilter === 'caughtUp' ? 'No series up to date yet' : 'No completed series yet'} body={progressFilter === 'progress' ? 'Start a series to find your next episode here. Caught-up series are available in the filter.' : 'Your series will appear here as you mark episodes watched.'} /> : visibleProgress.map((item) => <ProgressCard key={item.media.key} item={item} busy={progress.isBusy(item)} onRetry={progress.retry} onWatched={() => void progress.markNext(item)} onOpen={() => item.next ? navigation.navigate('EpisodeDetail', { ...item.next, seriesTitle: item.media.title, title: item.media.title, tmdbId: item.media.tmdbId }) : navigation.navigate('SeriesDetail', { title: item.media.title, tmdbId: item.media.tmdbId })} />)}
+          {!progress.data ? progress.error ? <EmptyState title="Progress unavailable" body="Refresh to load your next episodes." /> : <LoadingState variant="grid" label="Loading your progress" /> : visibleProgress.length === 0 ? progress.isLoadingMore ? <LoadingState variant="grid" label="Loading your progress" /> : <EmptyState title={progressFilter === 'progress' ? 'Nothing in progress right now' : progressFilter === 'caughtUp' ? 'No series up to date yet' : 'No completed series yet'} body={progressFilter === 'progress' ? 'Start a series to find your next episode here. Caught-up series are available in the filter.' : 'Your series will appear here as you mark episodes watched.'} /> : visibleProgress.map((item) => <ProgressCard key={item.media.key} item={item} busy={progress.isBusy(item)} onRetry={progress.retry} onWatched={() => void progress.markNext(item)} onOpen={() => item.next ? navigation.navigate('EpisodeDetail', { ...item.next, seriesTitle: item.media.title, title: item.media.title, tmdbId: item.media.tmdbId }) : navigation.navigate('SeriesDetail', { title: item.media.title, tmdbId: item.media.tmdbId })} />)}
+          {progress.isLoadingMore && visibleProgress.length > 0 ? <ActivityIndicator accessibilityLabel="Loading more series" color={colors.accent} /> : null}
         </View> : <View style={styles.content}>
           {data?.partialError ? <InlineStatusBanner detail={data.partialError} onRetry={resource.retry} tone="error" /> : null}
           {visibleLists.map((list, index) => <ScreenReveal key={list.key} delay={Math.min(index * 40, 160)} style={styles.list}>
