@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { RouteProp, useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { BookOpen, Check, ListFilter, Plus } from 'lucide-react-native';
-import { ActivityIndicator, Modal, Pressable, RefreshControl, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { BookOpen, Check, ListFilter, Plus, Search, X } from 'lucide-react-native';
+import { ActivityIndicator, Keyboard, Modal, Pressable, RefreshControl, StyleSheet, Text, TextInput as NativeTextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSharedWatchlist } from '../api/sharedWatchlists';
 import { createWatchlist } from '../api/watchlists';
@@ -44,6 +44,7 @@ export function WatchlistsScreen() {
   const tabNavigation = useNavigation<BottomTabNavigationProp<RootTabParamList, 'Library'>>();
   const view = route.params?.view ?? 'watchlists';
   const [progressFilter, setProgressFilter] = useState<ProgressFilter>('progress');
+  const [progressQuery, setProgressQuery] = useState('');
   const { width, height, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const filterButtonRef = useRef<View>(null);
@@ -66,7 +67,7 @@ export function WatchlistsScreen() {
   const ownerRef = useRef(currentUser?.id);
   const creatingRef = useRef(false);
   ownerRef.current = currentUser?.id;
-  useEffect(() => { setSheet(null); setName(''); setError(null); setCreated(null); setRemoved([]); setFilter('all'); }, [currentUser?.id]);
+  useEffect(() => { setSheet(null); setName(''); setError(null); setCreated(null); setRemoved([]); setFilter('all'); setProgressQuery(''); }, [currentUser?.id]);
   useEffect(() => { setSheet((current) => current === 'filter' ? null : current); }, [width, height, fontScale]);
   const data = resource.data;
   useEffect(() => {
@@ -78,7 +79,8 @@ export function WatchlistsScreen() {
   const lists = (created?.ownerId === currentUser?.id && created && !data?.lists.some((list) => list.key === created.list.key)
     ? [created.list, ...(data?.lists ?? [])] : data?.lists ?? []).filter((list) => !removed.includes(list.key));
   const visibleLists = lists.filter((list) => filter === 'all' || list.kind === filter);
-  const visibleProgress = progress.items.filter((item) => item.state === progressFilter);
+  const normalizedQuery = progressQuery.trim().toLocaleLowerCase();
+  const visibleProgress = progress.items.filter((item) => item.state === progressFilter && item.media.title.toLocaleLowerCase().includes(normalizedQuery));
   const activeFilters = view === 'progress' ? progressFilters : filters;
   const activeFilter = view === 'progress' ? progressFilter : filter;
   const lastWatched = getLastWatchedLibraryItem(data?.items ?? []);
@@ -161,8 +163,12 @@ export function WatchlistsScreen() {
         : view === 'progress' ? <View style={styles.content}>
           {data?.partialError ? <InlineStatusBanner detail={data.partialError} onRetry={resource.retry} tone="error" /> : null}
           {progress.actionError || progress.error ? <InlineStatusBanner detail={progress.actionError ?? progress.error!} onRetry={progress.retry} tone="error" /> : null}
-          <Text style={styles.progressLabel}>{progressFilters.find((item) => item.value === progressFilter)?.label}</Text>
-          {!progress.data ? progress.error ? <EmptyState title="Progress unavailable" body="Refresh to load your next episodes." /> : <LoadingState variant="grid" label="Loading your progress" /> : visibleProgress.length === 0 ? progress.isLoadingMore ? <LoadingState variant="grid" label="Loading your progress" /> : <EmptyState title={progressFilter === 'progress' ? 'Nothing in progress right now' : progressFilter === 'caughtUp' ? 'No series up to date yet' : 'No completed series yet'} body={progressFilter === 'progress' ? 'Start a series to find your next episode here. Caught-up series are available in the filter.' : 'Your series will appear here as you mark episodes watched.'} /> : visibleProgress.map((item) => <ProgressCard key={item.media.key} item={item} busy={progress.isBusy(item)} onRetry={progress.retry} onWatched={() => void progress.markNext(item)} onOpen={() => item.next ? navigation.navigate('EpisodeDetail', { ...item.next, seriesTitle: item.media.title, title: item.media.title, tmdbId: item.media.tmdbId }) : navigation.navigate('SeriesDetail', { title: item.media.title, tmdbId: item.media.tmdbId })} />)}
+          <View style={styles.searchBox}>
+            <Search color={colors.muted} size={20} strokeWidth={2.2} />
+            <NativeTextInput accessibilityLabel="Search your series" placeholder="Search your series" placeholderTextColor={colors.muted} value={progressQuery} onChangeText={setProgressQuery} autoCapitalize="none" autoCorrect={false} spellCheck={false} keyboardAppearance="dark" returnKeyType="search" onSubmitEditing={Keyboard.dismiss} style={styles.searchInput} />
+            {progressQuery.length > 0 ? <Pressable accessibilityRole="button" accessibilityLabel="Clear series search" onPress={() => setProgressQuery('')} style={styles.searchClear}><X color={colors.textMuted} size={18} /></Pressable> : null}
+          </View>
+          {!progress.data ? progress.error ? <EmptyState title="Progress unavailable" body="Refresh to load your next episodes." /> : <LoadingState variant="grid" label="Loading your progress" /> : visibleProgress.length === 0 ? progress.isLoadingMore ? <LoadingState variant="grid" label="Loading your progress" /> : <EmptyState title={normalizedQuery ? 'No matching series' : progressFilter === 'progress' ? 'Nothing in progress right now' : progressFilter === 'caughtUp' ? 'No series up to date yet' : 'No completed series yet'} body={normalizedQuery ? 'Try another title or change the filter.' : progressFilter === 'progress' ? 'Start a series to find your next episode here. Caught-up series are available in the filter.' : 'Your series will appear here as you mark episodes watched.'} /> : visibleProgress.map((item) => <ProgressCard key={item.media.key} item={item} busy={progress.isBusy(item)} onRetry={progress.retry} onWatched={() => void progress.markNext(item)} onOpen={() => item.next ? navigation.navigate('EpisodeDetail', { ...item.next, seriesTitle: item.media.title, title: item.media.title, tmdbId: item.media.tmdbId }) : navigation.navigate('SeriesDetail', { title: item.media.title, tmdbId: item.media.tmdbId })} />)}
           {progress.isLoadingMore && visibleProgress.length > 0 ? <ActivityIndicator accessibilityLabel="Loading more series" color={colors.accent} /> : null}
         </View> : <View style={styles.content}>
           {data?.partialError ? <InlineStatusBanner detail={data.partialError} onRetry={resource.retry} tone="error" /> : null}
@@ -198,7 +204,9 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   content: { gap: spacing.lg },
   viewSwitch: { marginBottom: spacing.lg },
-  progressLabel: { ...typography.meta, color: colors.textMuted },
+  searchBox: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 50, paddingHorizontal: spacing.md, backgroundColor: colors.panel, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1 },
+  searchInput: { flex: 1, minWidth: 0, color: colors.text, fontSize: typography.body.fontSize, paddingVertical: spacing.sm },
+  searchClear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   createButton: { width: 44, height: 44, borderRadius: radii.md, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   list: { position: 'relative' },
   management: { position: 'absolute', top: spacing.sm, right: spacing.sm },
