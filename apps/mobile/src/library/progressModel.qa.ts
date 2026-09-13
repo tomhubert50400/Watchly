@@ -42,11 +42,16 @@ async function main() {
   assert.equal(premiereDay.nextSeasonAirDate, null);
   const unknownPremiere = await resolveProgressItem(announced, async (number) => number === 2 ? { episodes: [] } as unknown as SeasonDetails : futureSeason(number), today);
   assert.equal(unknownPremiere.nextSeasonAirDate, null, 'do not invent an episode premiere date');
+  assert.equal(unknownPremiere.state, 'caughtUp', 'an upcoming season without a premiere date stays Up to date');
   const prematureWatch = await resolveProgressItem({ ...announced, watched: [...announced.watched, watched(2, 1)] }, futureSeason, today);
   assert.equal(prematureWatch.watchedReleasedEpisodeCount, 2, 'ignore watched records for future episodes');
   assert.equal((await resolveProgressItem({ ...item, series: { ...item.series, status: 'Ended' }, watched: allReleased }, loadSeason, today)).state, 'completed');
   const gap = await resolveProgressItem({ ...item, watched: [watched(1, 2)] }, loadSeason, today);
   assert.deepEqual(gap.next, { seasonNumber: 1, episodeNumber: 1 }, 'fill gaps before later episodes');
+  const endedWithGap = await resolveProgressItem({ ...item, series: { ...item.series, status: 'Ended' }, watched: [watched(1, 2)] }, loadSeason, today);
+  assert.equal(endedWithGap.state, 'progress', 'an ended series is not completed while released episodes remain unwatched');
+  const canceled = await resolveProgressItem({ ...item, series: { ...item.series, status: 'Canceled' }, watched: allReleased }, loadSeason, today);
+  assert.equal(canceled.state, 'completed', 'a canceled series with all released episodes watched is completed');
   const rewatch = await resolveProgressItem({ ...item, watched: allReleased, viewings: allReleased.map((episode) => ({ ...episode, viewCount: episode.seasonNumber === 1 && episode.episodeNumber === 1 ? 2 : 1, latestLoggedAt: episode.seasonNumber === 1 && episode.episodeNumber === 1 ? '2026-09-13T12:00:00Z' : '2025-01-01T12:00:00Z' })) }, loadSeason, today);
   assert.deepEqual(rewatch.next, { seasonNumber: 1, episodeNumber: 2 }, 'continue a rewatch while retaining previous watched records');
   await assert.rejects(resolveProgressItem(item, async () => { throw new Error('offline'); }, today), /offline/, 'a catalogue failure must not become Up to date');

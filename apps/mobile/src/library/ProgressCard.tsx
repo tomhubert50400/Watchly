@@ -9,7 +9,7 @@ export function ProgressCard({ item, busy, onOpen, onWatched, onRetry, compact =
 }) {
   const { media, next } = item;
   const premiereDate = item.nextSeasonAirDate?.split('-').reverse().join('/');
-  const upToDate = premiereDate ? `Up to date: New season on ${premiereDate}` : 'Up to date';
+  const upToDate = premiereDate ? `Up to date: New season on ${premiereDate}` : 'Up to date: New season incoming';
   const caption = item.error ?? (next ? `Next · S${next.seasonNumber} E${next.episodeNumber}` : item.state === 'completed' ? 'Completed' : upToDate);
   const total = item.releasedEpisodeCount ?? 0;
   const watchedCount = item.watchedReleasedEpisodeCount ?? 0;
