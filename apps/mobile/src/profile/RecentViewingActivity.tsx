@@ -2,13 +2,13 @@ import { useCallback, useRef } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Globe, Lock } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { getProfileHistory, type ProfileHistory } from '../api/profile';
 import { ApiError } from '../api/client';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { useCachedResource } from '../cache/useCachedResource';
 import { getPrivateCacheKey } from '../cache/persistedCache';
-import { MediaPoster } from '../components/MediaPoster';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { StarRatingDisplay } from '../components/StarRatingDisplay';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import type { RootStackParamList } from '../navigation/types';
@@ -54,8 +54,13 @@ export function RecentViewingActivity({ userId, owner = false }: { userId: strin
       });
       const title = item.title ?? (item.contentType === 'movie' ? 'Movie' : 'Series');
       return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${title}`} key={item.id} onPress={() => navigation.navigate(item.contentType === 'movie' ? 'FilmDetail' : 'SeriesDetail', { title, tmdbId: item.tmdbId })} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
-        <MediaPoster posterUrl={item.posterUrl} style={styles.poster} />
-        <View style={styles.copy}><Text numberOfLines={1} style={styles.title}>{title}</Text><Text numberOfLines={1} style={styles.meta}>{item.contentType === 'episode' ? `S${item.seasonNumber} E${item.episodeNumber} · ` : ''}{new Date(item.watchedAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</Text>{opinion?.score != null ? <StarRatingDisplay rating={opinion.score} size={13} /> : null}</View>
+        <ImageBackground source={item.posterUrl ? { uri: item.posterUrl } : undefined} style={styles.artwork}>
+          <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width="100%" height="100%">
+            <Defs><LinearGradient id={`activity-${item.id}`} x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor="#090C13" stopOpacity="0.12" /><Stop offset="0.4" stopColor="#090C13" stopOpacity="0.4" /><Stop offset="1" stopColor="#090C13" stopOpacity="0.95" /></LinearGradient></Defs>
+            <Rect width="100%" height="100%" fill={`url(#activity-${item.id})`} />
+          </Svg>
+        <View style={styles.copy}><Text numberOfLines={1} style={styles.title}>{title}</Text><Text numberOfLines={1} style={styles.cardMeta}>{item.contentType === 'episode' ? `S${item.seasonNumber} E${item.episodeNumber} · ` : ''}{new Date(item.watchedAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</Text>{opinion?.score != null ? <StarRatingDisplay rating={opinion.score} size={13} /> : null}</View>
+        </ImageBackground>
       </Pressable>;
     })}
     </ScrollView>
@@ -67,7 +72,8 @@ const styles = StyleSheet.create({
   section: { gap: spacing.xs }, headingRow: { flexDirection: 'row', alignItems: 'center' }, rail: { gap: spacing.md }, header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   heading: { color: colors.text, fontSize: 22, fontWeight: '700' }, link: { minHeight: 44, justifyContent: 'center', paddingLeft: spacing.md },
   linkText: { ...typography.meta, color: colors.accentText }, visibility: { width: 36, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  row: { width: 236, minHeight: 90, flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.borderStrong, backgroundColor: colors.panel },
-  poster: { width: 42, height: 63, borderRadius: 7 }, copy: { flex: 1, gap: 5 },
+  row: { width: 210, height: 118, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panelElevated, overflow: 'hidden' },
+  artwork: { flex: 1, justifyContent: 'flex-end' }, copy: { padding: spacing.sm, gap: 4 },
+  cardMeta: { fontSize: 11, lineHeight: 15, fontWeight: '600', color: colors.textMuted },
   title: { color: colors.text, fontSize: 16, fontWeight: '700' }, meta: { ...typography.meta, color: colors.textSubtle },
 });
