@@ -628,7 +628,7 @@ export function PublicProfileScreen() {
         ) : profile.viewingStats ? (
           <View style={styles.stack}>
             <ProfileBody
-          recentActivity={<RecentViewingActivity userId={profile.id} />}
+          recentActivity={<RecentViewingActivity mediaItems={[...hydratedPreviewItems, ...mediaItems]} userId={profile.id} />}
               avatarUrl={profile.avatarUrl}
               displayName={profile.displayName}
               emptyActivityBody="Ratings and reviews will appear here when this member shares them."

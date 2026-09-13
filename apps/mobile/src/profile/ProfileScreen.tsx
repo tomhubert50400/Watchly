@@ -389,7 +389,7 @@ export function ProfileScreen() {
         </EmptyState>
       ) : profile ? (
         <ProfileBody
-          recentActivity={<RecentViewingActivity userId={profile.userId} owner />}
+          recentActivity={<RecentViewingActivity mediaItems={[...hydratedPreviewItems, ...mediaItems]} userId={profile.userId} owner />}
           avatarLoading={avatarStatus === 'saving'}
           avatarUrl={avatarUrl}
           displayName={profile.displayName}

@@ -2,7 +2,7 @@ import { useCallback, useRef } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Globe, Lock } from 'lucide-react-native';
-import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { getProfileHistory, type ProfileHistory } from '../api/profile';
 import { ApiError } from '../api/client';
 import { useAuthSession } from '../auth/AuthSessionContext';
@@ -11,10 +11,11 @@ import { getPrivateCacheKey } from '../cache/persistedCache';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { StarRatingDisplay } from '../components/StarRatingDisplay';
 import { colors, radii, spacing, typography } from '../design/tokens';
+import type { LibraryMediaItem } from '../library/useLibraryData';
 import type { RootStackParamList } from '../navigation/types';
 import { useUserDataRevision } from '../sync/userDataEvents';
 
-export function RecentViewingActivity({ userId, owner = false }: { userId: string; owner?: boolean }) {
+export function RecentViewingActivity({ userId, owner = false, mediaItems = [] }: { userId: string; owner?: boolean; mediaItems?: readonly LibraryMediaItem[] }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { currentUser, getFirebaseIdToken } = useAuthSession();
   const revision = useUserDataRevision('viewings', 'opinions', 'episodeProgress', 'profile', 'socialGraph');
@@ -52,10 +53,11 @@ export function RecentViewingActivity({ userId, owner = false }: { userId: strin
         return item.contentType === 'movie' ? content.contentType === 'movie' && content.tmdbId === item.tmdbId
           : content.contentType === 'episode' && content.seriesTmdbId === item.tmdbId && content.seasonNumber === item.seasonNumber && content.episodeNumber === item.episodeNumber;
       });
+      const media = mediaItems.find((media) => media.tmdbId === item.tmdbId && media.contentType === (item.contentType === 'movie' ? 'movie' : 'series'));
+      const artworkUrl = media?.backdropUrl ?? item.posterUrl;
       const title = item.title ?? (item.contentType === 'movie' ? 'Movie' : 'Series');
       return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${title}`} key={item.id} onPress={() => navigation.navigate(item.contentType === 'movie' ? 'FilmDetail' : 'SeriesDetail', { title, tmdbId: item.tmdbId })} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
-        {item.posterUrl ? <Image accessible={false} blurRadius={12} source={{ uri: item.posterUrl }} style={StyleSheet.absoluteFill} /> : null}
-        <ImageBackground source={item.posterUrl ? { uri: item.posterUrl } : undefined} imageStyle={styles.reducedArtwork} style={styles.artwork}>
+        <ImageBackground source={artworkUrl ? { uri: artworkUrl } : undefined} resizeMode="cover" style={styles.artwork}>
           <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width="100%" height="100%">
             <Defs><LinearGradient id={`activity-${item.id}`} x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor="#090C13" stopOpacity="0.12" /><Stop offset="0.4" stopColor="#090C13" stopOpacity="0.4" /><Stop offset="1" stopColor="#090C13" stopOpacity="0.95" /></LinearGradient></Defs>
             <Rect width="100%" height="100%" fill={`url(#activity-${item.id})`} />
@@ -74,7 +76,6 @@ const styles = StyleSheet.create({
   heading: { color: colors.text, fontSize: 22, fontWeight: '700' }, link: { minHeight: 44, justifyContent: 'center', paddingLeft: spacing.md },
   linkText: { ...typography.meta, color: colors.accentText }, visibility: { width: 36, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   row: { width: 210, height: 118, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panelElevated, overflow: 'hidden' },
-  reducedArtwork: { width: '85%', height: '150%', left: '7.5%', top: '-25%' },
   artwork: { flex: 1, justifyContent: 'flex-end' }, copy: { padding: spacing.sm, gap: 4 },
   cardMeta: { fontSize: 11, lineHeight: 15, fontWeight: '600', color: colors.textMuted },
   title: { color: colors.text, fontSize: 16, fontWeight: '700' }, meta: { ...typography.meta, color: colors.textSubtle },
