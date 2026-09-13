@@ -18,6 +18,9 @@ export type ProgressItem = {
   next: { seasonNumber: number; episodeNumber: number } | null;
   state: ProgressFilter;
   error: string | null;
+  releasedEpisodeCount?: number;
+  watchedReleasedEpisodeCount?: number;
+  nextSeasonAirDate?: string | null;
 };
 
 export function isProgressCandidate(item: LibraryMediaItem) {
@@ -33,11 +36,38 @@ export function selectRecentProgress(items: ProgressItem[]) {
 export async function resolveProgressItem(
   item: Omit<ProgressItem, 'next' | 'state' | 'error'>,
   loadSeason: (seasonNumber: number) => Promise<SeasonDetails>,
-  today?: string,
+  today = new Date().toISOString().slice(0, 10),
 ): Promise<ProgressItem> {
+  const seasons = new Map<number, Promise<SeasonDetails>>();
+  const cachedSeason = (number: number) => {
+    if (!seasons.has(number)) seasons.set(number, loadSeason(number));
+    return seasons.get(number)!;
+  };
+  const watchedKeys = new Set(item.watched.map((episode) => `${episode.seasonNumber}:${episode.episodeNumber}`));
+  let releasedEpisodeCount = 0;
+  let watchedReleasedEpisodeCount = 0;
+  const regularSeasons = item.series.seasons.filter((season) => season.seasonNumber > 0);
+  for (const season of regularSeasons) {
+    if (season.airDate && season.airDate > today) continue;
+    const details = await cachedSeason(season.seasonNumber);
+    for (const episode of details.episodes) {
+      if (!episode.airDate || episode.airDate > today) continue;
+      releasedEpisodeCount++;
+      if (watchedKeys.has(`${season.seasonNumber}:${episode.episodeNumber}`)) watchedReleasedEpisodeCount++;
+    }
+  }
+  const upcomingSeason = regularSeasons.filter((season) => season.airDate && season.airDate > today)
+    .sort((a, b) => a.seasonNumber - b.seasonNumber)[0];
+  let nextSeasonAirDate: string | null = null;
+  if (upcomingSeason) {
+    // An unavailable future season must not hide already resolved viewing progress.
+    const details = await cachedSeason(upcomingSeason.seasonNumber).catch(() => null);
+    const premiere = details?.episodes.find((episode) => episode.episodeNumber === 1)?.airDate;
+    if (premiere && premiere > today) nextSeasonAirDate = premiere;
+  }
   const anchor = getSeriesRewatchAnchor(item.viewings);
   const watched = anchor ? item.viewings.filter((episode) => episode.latestLoggedAt >= anchor.latestLoggedAt) : item.watched;
-  const next = await findNextSeriesEpisode(item.series.seasons, watched, loadSeason, today, anchor);
+  const next = await findNextSeriesEpisode(item.series.seasons, watched, cachedSeason, today, anchor);
   const ended = item.series.status === 'Ended' || item.series.status === 'Canceled';
-  return { ...item, next, state: next ? 'progress' : ended ? 'completed' : 'caughtUp', error: null };
+  return { ...item, releasedEpisodeCount, watchedReleasedEpisodeCount, nextSeasonAirDate, next, state: next ? 'progress' : ended ? 'completed' : 'caughtUp', error: null };
 }

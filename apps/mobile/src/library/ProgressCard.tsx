@@ -8,9 +8,12 @@ export function ProgressCard({ item, busy, onOpen, onWatched, onRetry, compact =
   item: ProgressItem; busy: boolean; onOpen: () => void; onWatched: () => void; onRetry: () => void; compact?: boolean;
 }) {
   const { media, next } = item;
-  const caption = item.error ?? (next ? `Next · S${next.seasonNumber} E${next.episodeNumber}` : item.state === 'completed' ? 'Completed' : 'Up to date');
-  const total = media.numberOfEpisodes;
-  const ratio = total ? Math.min(1, media.watchedEpisodeCount / total) : 0;
+  const premiereDate = item.nextSeasonAirDate?.split('-').reverse().join('/');
+  const upToDate = premiereDate ? `Up to date: New season on ${premiereDate}` : 'Up to date';
+  const caption = item.error ?? (next ? `Next · S${next.seasonNumber} E${next.episodeNumber}` : item.state === 'completed' ? 'Completed' : upToDate);
+  const total = item.releasedEpisodeCount ?? 0;
+  const watchedCount = item.watchedReleasedEpisodeCount ?? 0;
+  const ratio = total ? Math.min(1, watchedCount / total) : 0;
   return <View style={[styles.card, compact && styles.compactCard]}>
     <Pressable accessibilityRole="button" accessibilityLabel={`Open ${media.title}, ${caption}`} onPress={onOpen} style={({ pressed }) => [compact ? styles.compactOpen : styles.open, pressed && styles.pressed]}>
       {compact ? <>
@@ -18,7 +21,7 @@ export function ProgressCard({ item, busy, onOpen, onWatched, onRetry, compact =
         <View style={styles.compactCopy}>
           <Text numberOfLines={2} style={styles.compactTitle}>{media.title}</Text>
           <Text style={styles.compactMeta}>{caption}</Text>
-          {!item.error ? <><View style={styles.track}><View style={[styles.progress, { width: `${ratio * 100}%` }]} /></View><Text style={styles.compactCount}>{media.watchedEpisodeCount}{total ? ` / ${total}` : ''} episodes</Text></> : null}
+          {!item.error ? <><View style={styles.track}><View style={[styles.progress, { width: `${ratio * 100}%` }]} /></View><Text style={styles.compactCount}>{watchedCount} / {total} episodes</Text></> : null}
         </View>
       </> : <ImageBackground source={media.backdropUrl || media.posterUrl ? { uri: media.backdropUrl ?? media.posterUrl! } : undefined} style={styles.background}>
         <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width="100%" height="100%">
@@ -28,7 +31,7 @@ export function ProgressCard({ item, busy, onOpen, onWatched, onRetry, compact =
         <View style={styles.copy}>
           <Text numberOfLines={2} style={styles.title}>{media.title}</Text>
           <Text style={styles.meta}>{caption}</Text>
-          {!item.error ? <><View style={styles.track}><View style={[styles.progress, { width: `${ratio * 100}%` }]} /></View><Text style={styles.count}>{media.watchedEpisodeCount}{total ? ` / ${total}` : ''} episodes watched</Text></> : null}
+          {!item.error ? <><View style={styles.track}><View style={[styles.progress, { width: `${ratio * 100}%` }]} /></View><Text style={styles.count}>{watchedCount} / {total} episodes watched</Text></> : null}
         </View>
       </ImageBackground>}
     </Pressable>

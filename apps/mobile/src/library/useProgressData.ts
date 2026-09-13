@@ -25,7 +25,7 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
   const mediaRef = useRef(media);
   mediaRef.current = media;
   const signature = media.filter(isProgressCandidate).map((item) => item.key + ':' + item.updatedAt).sort().join('|');
-  const key = getPrivateCacheKey(ownerId ?? 'visitor', 'progress-library:v1');
+  const key = getPrivateCacheKey(ownerId ?? 'visitor', 'progress-library:v2');
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
   const generation = useRef(0);
