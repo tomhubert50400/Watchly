@@ -19,16 +19,16 @@ export async function loadWatchlistPreviewUrls({
 }: {
   fallback: Array<string | null>;
   list: PreviewList;
-  loadArtwork: (item: PreviewItem) => Promise<string | null>;
+  loadArtwork: (item: PreviewItem, index: number) => Promise<string | null>;
   token: string;
 }) {
   try {
     const details = list.kind === 'personal'
       ? await getWatchlist(token, list.id)
       : await getSharedWatchlist(token, list.id);
-    const urls = await Promise.all(details.items.slice(0, 4).map(async (item) => {
+    const urls = await Promise.all(details.items.slice(0, 4).map(async (item, index) => {
       try {
-        return await loadArtwork(item);
+        return await loadArtwork(item, index);
       } catch {
         return null;
       }

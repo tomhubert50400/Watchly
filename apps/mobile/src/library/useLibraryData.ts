@@ -27,7 +27,9 @@ export type LibraryMediaItem = LibraryItemBase & {
 export type LibraryListItem = {
   id: string; isOwner: boolean; itemCount: number; key: string; kind: 'personal' | 'shared';
   memberCount: number | null; name: string; posterUrls: Array<string | null>; updatedAt: string;
+  previewItems?: WatchlistPreviewItem[];
 };
+export type WatchlistPreviewItem = { contentType: 'movie' | 'series'; tmdbId: number; title: string; posterUrl: string | null };
 export type LibraryData = { items: LibraryMediaItem[]; lists: LibraryListItem[]; partialError: string | null };
 type CatalogueLoaders = {
   loadMovie: (tmdbId: number) => Promise<MovieDetails>;
@@ -40,7 +42,7 @@ const defaultCatalogueLoaders: CatalogueLoaders = {
 };
 
 export function getLibraryResourceKey(userId: string) {
-  return getPrivateCacheKey(userId, 'library:v5');
+  return getPrivateCacheKey(userId, 'library:v6');
 }
 
 export function useLibraryData(enabled = true) {
@@ -117,20 +119,27 @@ export async function loadLibraryData(
       const details = contentType === 'movie'
         ? await catalogueLoaders.loadMovie(tmdbId)
         : await catalogueLoaders.loadSeries(tmdbId);
-      return details.backdropUrl ?? details.posterUrl;
+      return { contentType: contentType === 'movie' ? 'movie' as const : 'series' as const, tmdbId, title: details.title, posterUrl: details.posterUrl, artworkUrl: details.backdropUrl ?? details.posterUrl };
     });
     lists = await Promise.all(summaries.map(async (list) => {
       const fallback = previous?.lists.find((old) => old.key === list.key)?.posterUrls ?? [];
+      const previewItems: WatchlistPreviewItem[] = [];
+      const posterUrls = previewKeys.has(list.key)
+        ? await loadWatchlistPreviewUrls({
+            fallback,
+            list,
+            loadArtwork: async (item, index) => {
+              const media = await loadPoster(`${item.contentType}:${item.tmdbId}`);
+              previewItems[index] = { contentType: media.contentType, tmdbId: media.tmdbId, title: media.title, posterUrl: media.posterUrl };
+              return media.artworkUrl;
+            },
+            token,
+          })
+        : fallback;
       return {
         ...list,
-        posterUrls: previewKeys.has(list.key)
-          ? await loadWatchlistPreviewUrls({
-              fallback,
-              list,
-              loadArtwork: (item) => loadPoster(`${item.contentType}:${item.tmdbId}`),
-              token,
-            })
-          : fallback,
+        posterUrls,
+        previewItems: previewItems.filter(Boolean),
       };
     }));
   }

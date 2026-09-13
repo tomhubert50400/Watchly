@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { Fragment, useCallback, useMemo } from 'react';
 import { CompositeNavigationProp, useFocusEffect, useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -49,6 +49,8 @@ import {
 import { SocialActivityList } from './SocialActivityList';
 import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
 import { BackgroundImportCards } from '../imports/BackgroundImportCards';
+import { useLibraryData } from '../library/useLibraryData';
+import { HomeWatchlists } from './HomeWatchlists';
 
 type HomeNavigation = CompositeNavigationProp<
   BottomTabNavigationProp<RootTabParamList, 'Home'>,
@@ -80,6 +82,7 @@ export function HomeScreen() {
   const notificationRevision = useUserDataRevision('notifications');
   const progressRevision = useUserDataRevision('episodeProgress');
   const isSignedIn = Boolean(currentUser && firebaseIdToken);
+  const watchlists = useLibraryData(isSignedIn);
   const loadCatalogue = useCallback(loadHomeCatalogue, []);
   const loadProgress = useCallback(
     () => firebaseIdToken ? loadHomeProgress(firebaseIdToken) : Promise.resolve([]),
@@ -131,15 +134,16 @@ export function HomeScreen() {
     }),
     [catalogue.data, catalogue.error, feed.data, feed.error, isSignedIn, progress.data, progress.error],
   );
-  const isRefreshing = catalogue.isRefreshing || progress.isRefreshing || feed.isRefreshing || notifications.isRefreshing;
+  const isRefreshing = catalogue.isRefreshing || progress.isRefreshing || feed.isRefreshing || notifications.isRefreshing || watchlists.isRefreshing;
   const retryAll = useCallback(() => {
     catalogue.retry();
     if (isSignedIn) {
       progress.retry();
       feed.retry();
       notifications.retry();
+      watchlists.retry();
     }
-  }, [catalogue.retry, feed.retry, isSignedIn, notifications.retry, progress.retry]);
+  }, [catalogue.retry, feed.retry, isSignedIn, notifications.retry, progress.retry, watchlists.retry]);
 
   if (catalogue.isInitialLoading && !catalogue.data) {
     return (
@@ -206,10 +210,11 @@ export function HomeScreen() {
     >
       <View style={styles.composition}>
         {isSignedIn ? <BackgroundImportCards /> : null}
+        {isSignedIn && !sections.some((section) => section.kind === 'hero') ? <HomeWatchlists data={watchlists.data} error={watchlists.error} loading={watchlists.isInitialLoading} onRetry={watchlists.retry} /> : null}
         {sections.map((section) => {
           if (section.kind === 'hero') {
             return (
-              <ScreenReveal delay={80} key="hero" style={styles.hero}>
+              <Fragment key="hero"><ScreenReveal delay={80} style={styles.hero}>
                 <HomeHero
                   item={section.item}
                   onOpen={() => navigation.navigate('FilmDetail', {
@@ -218,6 +223,8 @@ export function HomeScreen() {
                   })}
                 />
               </ScreenReveal>
+              {isSignedIn ? <HomeWatchlists data={watchlists.data} error={watchlists.error} loading={watchlists.isInitialLoading} onRetry={watchlists.retry} /> : null}
+              </Fragment>
             );
           }
 
