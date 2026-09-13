@@ -11,13 +11,13 @@ assert.match(
 );
 assert.match(
   source,
-  /<Text style=\{styles\.tasteHeading\}>Show us your taste<\/Text>[\s\S]*\{activeSelectionCount\}\/\{ONBOARDING_TASTE_LIMIT_PER_TYPE\}/,
-  'Taste must show its title and active 5-item counter on one row',
+  /<Text style=\{styles\.tasteHeading\}>Show us your taste<\/Text>[\s\S]*\{activeSelectionCount\}\/\{activeSelectionLimit\}/,
+  'Taste must show its title and the counter for the active filter on one row',
 );
 assert.match(
   source,
-  /\{ label: 'Movies', value: 'movie' \}[\s\S]*\{ label: 'TV Shows', value: 'series' \}/,
-  'Taste must provide the requested Movies and TV Shows selector',
+  /\{ label: 'All', value: 'all' \}[\s\S]*\{ label: 'Movies', value: 'movie' \}[\s\S]*\{ label: 'TV Shows', value: 'series' \}/,
+  'Taste must provide the requested All, Movies and TV Shows selector',
 );
 assert.match(
   source,

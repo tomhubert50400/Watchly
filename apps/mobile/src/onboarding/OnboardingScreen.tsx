@@ -79,7 +79,8 @@ import {
 } from './onboardingTaste';
 
 const steps: readonly OnboardingStep[] = ['profile', 'import', 'taste', 'notifications'];
-const tasteMediaOptions: { label: string; value: 'movie' | 'series' }[] = [
+const tasteMediaOptions: { label: string; value: 'all' | 'movie' | 'series' }[] = [
+  { label: 'All', value: 'all' },
   { label: 'Movies', value: 'movie' },
   { label: 'TV Shows', value: 'series' },
 ];
@@ -1026,9 +1027,12 @@ function TasteStep({
   const [optionsError, setOptionsError] = useState<string | null>(null);
   const [optionsLoading, setOptionsLoading] = useState(true);
   const [selectedMovieGenreId, setSelectedMovieGenreId] = useState<number | null>(null);
-  const [selectedType, setSelectedType] = useState<'movie' | 'series'>('movie');
+  const [selectedType, setSelectedType] = useState<'all' | 'movie' | 'series'>('all');
   const trimmedQuery = query.trim();
-  const activeSelectionCount = getOnboardingTasteCount(selected, selectedType);
+  const activeSelectionCount = selectedType === 'all'
+    ? selected.length
+    : getOnboardingTasteCount(selected, selectedType);
+  const activeSelectionLimit = ONBOARDING_TASTE_LIMIT_PER_TYPE * (selectedType === 'all' ? 2 : 1);
   const selectedMovieGenre = movieGenres?.find((genre) => genre.id === selectedMovieGenreId) ?? null;
   const tasteCardWidth = Math.floor(
     (windowWidth - spacing.xl * 2 - spacing.sm * 2) / 3,
@@ -1109,7 +1113,7 @@ function TasteStep({
         .then((response) => {
           if (!active) return;
           setSearchItems(response.items.filter((item) =>
-            item.mediaType === selectedType
+            (selectedType === 'all' || item.mediaType === selectedType)
             && (!item.releaseDate || item.releaseDate <= new Date().toISOString().slice(0, 10))
           ));
         })
@@ -1128,9 +1132,15 @@ function TasteStep({
     };
   }, [selectedType, trimmedQuery]);
 
-  const activePopularItems = selectedType === 'movie' && genreMovieItems
-    ? genreMovieItems
-    : popularItems[selectedType];
+  const activePopularItems = selectedType === 'all'
+    ? Array.from({ length: Math.max(popularItems.movie.length, popularItems.series.length) })
+        .flatMap((_, index) => [
+          ...popularItems.movie.slice(index, index + 1),
+          ...popularItems.series.slice(index, index + 1),
+        ])
+    : selectedType === 'movie' && genreMovieItems
+      ? genreMovieItems
+      : popularItems[selectedType];
   const visibleItems = trimmedQuery.length >= 2
     ? searchItems
     : trimmedQuery.length === 1
@@ -1184,7 +1194,7 @@ function TasteStep({
       <View style={styles.tasteHeadingRow}>
         <Text style={styles.tasteHeading}>Show us your taste</Text>
         <Text style={styles.tasteCounter}>
-          {activeSelectionCount}/{ONBOARDING_TASTE_LIMIT_PER_TYPE}
+          {activeSelectionCount}/{activeSelectionLimit}
         </Text>
       </View>
 
@@ -1198,7 +1208,7 @@ function TasteStep({
           }
           setQuery(value);
         }}
-        placeholder={selectedType === 'movie' ? 'Search movies' : 'Search TV shows'}
+        placeholder={selectedType === 'all' ? 'Search movies and TV shows' : selectedType === 'movie' ? 'Search movies' : 'Search TV shows'}
         returnKeyType="search"
         value={query}
       />
@@ -1250,7 +1260,7 @@ function TasteStep({
         </Pressable>
       ) : null}
 
-      {optionsLoading && popularItems[selectedType].length === 0 && trimmedQuery.length < 2
+      {optionsLoading && activePopularItems.length === 0 && trimmedQuery.length < 2
         ? <LoadingState label="Loading popular titles" variant="grid" />
         : null}
       {searchLoading && searchItems.length === 0 ? <LoadingState label="Searching TMDB" variant="grid" /> : null}
@@ -1265,6 +1275,7 @@ function TasteStep({
             item={item}
             key={item.id}
             onPress={() => toggle(item)}
+            showMediaType={selectedType === 'all'}
             selected={selected.some((selectedItem) =>
               selectedItem.contentType === item.mediaType && selectedItem.tmdbId === item.tmdbId
             )}
@@ -1311,15 +1322,19 @@ function TasteCard({
   item,
   onPress,
   selected,
+  showMediaType,
 }: {
   cardWidth: number;
   item: CatalogueSearchItem;
   onPress: () => void;
   selected: boolean;
+  showMediaType: boolean;
 }) {
+  const year = item.releaseDate?.match(/^\d{4}/)?.[0] ?? 'N/A';
+  const mediaTypeLabel = item.mediaType === 'movie' ? 'Movie' : 'TV Show';
   return (
     <Pressable
-      accessibilityLabel={`${selected ? 'Remove' : 'Add'} ${item.title}`}
+      accessibilityLabel={`${selected ? 'Remove' : 'Add'} ${item.title}, ${year}, ${mediaTypeLabel}`}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
@@ -1338,7 +1353,10 @@ function TasteCard({
           </View>
         ) : null}
       </View>
-      <Text numberOfLines={2} style={styles.tasteCardTitle}>{item.title}</Text>
+      <Text ellipsizeMode="tail" numberOfLines={1} style={styles.tasteCardTitle}>{item.title}</Text>
+      <Text adjustsFontSizeToFit numberOfLines={1} style={styles.tasteCardMeta}>
+        {year}{showMediaType ? ` · ${mediaTypeLabel}` : ''}
+      </Text>
     </Pressable>
   );
 }
@@ -1895,6 +1913,13 @@ const styles = StyleSheet.create({
   },
   tasteCard: {
     gap: spacing.xs,
+    minWidth: 0,
+    flexShrink: 0,
+  },
+  tasteCardMeta: {
+    color: colors.textMuted,
+    fontSize: 11,
+    lineHeight: 16,
   },
   tasteCardTitle: {
     color: colors.text,
