@@ -31,7 +31,7 @@ import { LibraryScreen } from './src/library/LibraryScreen';
 import { WatchlistsScreen } from './src/watchlists/WatchlistsScreen';
 import { appLinking } from './src/navigation/linking';
 import { ReviewAccessScreen } from './src/auth/ReviewAccessScreen';
-import { detailBackOptions, needsCustomStackBackButton, resolvePreviousPageLabel, rootStackScreenOptions } from './src/navigation/stackConfig';
+import { goBackIfFocused, detailBackOptions, needsCustomStackBackButton, resolvePreviousPageLabel, rootStackScreenOptions } from './src/navigation/stackConfig';
 import { StackBackButton } from './src/navigation/StackBackButton';
 import { mainTabs, MainTabName } from './src/navigation/tabConfig';
 import { RootStackParamList, RootTabParamList } from './src/navigation/types';
@@ -232,7 +232,7 @@ function AppNavigator() {
           ...(needsCustomStackBackButton(Platform.OS, Platform.Version) ? {
             headerBackVisible: false,
             headerLeft: ({ canGoBack, label }: { canGoBack?: boolean; label?: string }) => canGoBack ? (
-              <StackBackButton label={label ?? 'Back'} onPress={() => navigation.goBack()} />
+              <StackBackButton label={label ?? 'Back'} onPress={() => goBackIfFocused(navigation)} />
             ) : null,
           } : {}),
           headerShadowVisible: false,

@@ -1,3 +1,4 @@
+import { goBackIfFocused } from '../navigation/stackConfig';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ChevronLeft, ChevronRight, Users } from 'lucide-react-native';
@@ -77,7 +78,7 @@ export function ProfileConnectionsScreen({ navigation, route }: ProfileConnectio
   }, [currentUser?.id, navigation]);
 
   const leading = (
-    <ProfileHeaderButton accessibilityLabel="Back" onPress={() => navigation.goBack()}>
+    <ProfileHeaderButton accessibilityLabel="Back" onPress={() => goBackIfFocused(navigation)}>
       <ChevronLeft color={colors.text} size={30} strokeWidth={2} />
     </ProfileHeaderButton>
   );

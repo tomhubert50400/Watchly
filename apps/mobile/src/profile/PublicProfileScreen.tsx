@@ -1,3 +1,4 @@
+import { goBackIfFocused } from '../navigation/stackConfig';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -513,7 +514,7 @@ export function PublicProfileScreen() {
   ) : null;
 
   const backButton = (
-    <ProfileHeaderButton accessibilityLabel="Back" onPress={() => navigation.goBack()}>
+    <ProfileHeaderButton accessibilityLabel="Back" onPress={() => goBackIfFocused(navigation)}>
       <ChevronLeft color={colors.text} size={30} strokeWidth={2} />
     </ProfileHeaderButton>
   );

@@ -1,7 +1,7 @@
 // Node types are intentionally not part of the Expo runtime TypeScript configuration.
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import { readFileSync } from 'node:fs';
-import { detailBackOptions, needsCustomStackBackButton, resolvePreviousPageLabel, rootStackScreenOptions } from './stackConfig';
+import { goBackIfFocused, detailBackOptions, needsCustomStackBackButton, resolvePreviousPageLabel, rootStackScreenOptions } from './stackConfig';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -56,3 +56,18 @@ assert(
 );
 
 console.log('Stack config QA passed.');
+
+let backCalls = 0;
+let focused = true;
+let canGoBack = true;
+const navigation = { isFocused: () => focused, canGoBack: () => canGoBack, goBack: () => { backCalls++; focused = false; } };
+goBackIfFocused(navigation);
+goBackIfFocused(navigation);
+assert(backCalls === 1, 'A repeated press on the outgoing screen must not pop the next screen.');
+focused = true;
+canGoBack = false;
+goBackIfFocused(navigation);
+assert(backCalls === 1, 'A root screen must not dispatch an unhandled GO_BACK.');
+canGoBack = true;
+goBackIfFocused(navigation);
+assert(Number(backCalls) === 2, 'Back remains usable when a new screen is focused.');

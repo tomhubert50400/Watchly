@@ -2,6 +2,10 @@ export const rootStackScreenOptions = {
   headerBackButtonDisplayMode: 'minimal',
 } as const;
 
+export function goBackIfFocused(navigation: { isFocused: () => boolean; canGoBack: () => boolean; goBack: () => void }) {
+  if (navigation.isFocused() && navigation.canGoBack()) navigation.goBack();
+}
+
 // Screens 4.16 can leave the native back button disabled after a pop on iOS 26.
 export function needsCustomStackBackButton(platform: string, version: string | number) {
   return platform === 'ios' && Number.parseInt(String(version), 10) >= 26;

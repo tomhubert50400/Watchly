@@ -1,3 +1,4 @@
+import { goBackIfFocused } from '../navigation/stackConfig';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useIsFocused } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -95,7 +96,7 @@ export function ProfileReviewsScreen({ navigation, route }: NativeStackScreenPro
     <SafeAreaView style={styles.screen}>
       <ScreenReveal delay={0} style={styles.header}>
         <AppHeader title="Reviews" leading={(
-          <ProfileHeaderButton accessibilityLabel="Back" onPress={() => navigation.goBack()}>
+          <ProfileHeaderButton accessibilityLabel="Back" onPress={() => goBackIfFocused(navigation)}>
             <ChevronLeft color={colors.text} size={30} strokeWidth={2} />
           </ProfileHeaderButton>
         )} />
