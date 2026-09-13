@@ -42,6 +42,7 @@ export function MovieRatingControl({ mediaTitle = 'This film', posterUrl, tmdbId
 
   return (
     <OpinionSheet
+      triggerVariant="inline"
       isSignedIn={Boolean(firebaseIdToken)}
       key={`${currentUser?.id ?? 'signed-out'}:movie:${tmdbId}`}
       load={load}

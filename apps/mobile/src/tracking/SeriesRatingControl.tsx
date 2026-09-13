@@ -46,6 +46,7 @@ export function SeriesRatingControl({
 
   return (
     <OpinionSheet
+      triggerVariant="inline"
       isSignedIn={Boolean(firebaseIdToken)}
       key={`${currentUser?.id ?? 'signed-out'}:series:${seriesTmdbId}`}
       load={load}

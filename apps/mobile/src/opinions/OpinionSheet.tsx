@@ -70,7 +70,7 @@ type OpinionSheetProps = {
   resourceKey?: string;
   reviewsEnabled?: boolean;
   signedOutMessage: string;
-  triggerVariant?: 'activity' | 'default';
+  triggerVariant?: 'activity' | 'default' | 'inline';
 };
 
 export function OpinionSheet({
@@ -407,7 +407,7 @@ export function OpinionSheet({
             void (async () => {
               setIsOpen(false);
               const succeeded = await runOperations(buildClearPlan(opinion));
-              if (!succeeded) setIsOpen(true);
+              if (!succeeded && triggerVariant !== 'inline') setIsOpen(true);
             })();
           },
           style: 'destructive',
@@ -439,16 +439,19 @@ export function OpinionSheet({
 
   return (
     <View style={triggerVariant === 'activity' ? styles.activityRoot : styles.triggerPanel}>
-      {triggerVariant === 'activity' ? (
+      {triggerVariant === 'activity' || triggerVariant === 'inline' ? (
         <View style={styles.activityOpinionRow}>
           <View style={styles.activityRatingCell}>
-            <Text style={styles.activityLabel}>Your rating</Text>
+            <View style={[styles.inlineRatingHeader, triggerVariant === 'inline' && styles.inlineHeaderHeight]}>
+              <Text style={styles.activityLabel}>Your rating</Text>
+              {triggerVariant === 'inline' && opinion.savedRating !== null ? <Pressable accessibilityRole="button" accessibilityLabel="Clear your rating" disabled={isSaving || activityPendingMutationCountRef.current > 0} onPress={confirmClearRating} style={styles.inlineClear}><Trash2 color={colors.textSubtle} size={16} /></Pressable> : null}
+            </View>
             <View
               accessibilityActions={[
                 { label: 'Increase rating by half a star', name: 'increment' },
                 { label: 'Decrease rating by half a star', name: 'decrement' },
               ]}
-              accessibilityLabel="Episode rating"
+              accessibilityLabel={triggerVariant === 'activity' ? 'Episode rating' : `Your rating for ${mediaLabel}`}
               accessibilityRole="adjustable"
               accessibilityState={{}}
               accessibilityValue={getRatingAccessibilityValue(opinion.savedRating)}
@@ -481,18 +484,19 @@ export function OpinionSheet({
               </View>
             </View>
           </View>
-          <View style={styles.activityDivider} />
+          {reviewsEnabled ? <><View style={styles.activityDivider} />
           <Pressable
             accessibilityLabel={opinion.savedReview ? 'Edit your review' : 'Write a review'}
             accessibilityRole="button"
+            disabled={isSaving || activityPendingMutationCountRef.current > 0}
             onPress={openTrigger}
-            style={({ pressed }) => [styles.activityReviewCell, pressed && styles.activityPressed]}
+            style={({ pressed }) => [styles.activityReviewCell, triggerVariant === 'inline' && styles.inlineReviewCell, pressed && styles.activityPressed]}
           >
             <SquarePen color={colors.accentText} size={22} strokeWidth={2.1} />
             <Text style={styles.activityReviewLabel}>
               {opinion.savedReview ? 'Edit review' : 'Write a review'}
             </Text>
-          </Pressable>
+          </Pressable></> : null}
         </View>
       ) : (
         <>
@@ -666,6 +670,10 @@ function operationError(operation: OpinionOperation) {
 }
 
 const styles = StyleSheet.create({
+  inlineRatingHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  inlineHeaderHeight: { minHeight: 44 },
+  inlineReviewCell: { flexBasis: 104, flexGrow: 0, flexShrink: 0, paddingLeft: spacing.sm },
+  inlineClear: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   actionButton: { flex: 1 },
   activityDivider: { alignSelf: 'stretch', backgroundColor: colors.border, width: StyleSheet.hairlineWidth },
   activityLabel: { ...typography.meta, color: colors.textSubtle, marginBottom: spacing.xs },
