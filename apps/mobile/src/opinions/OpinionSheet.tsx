@@ -453,8 +453,8 @@ export function OpinionSheet({
   return (
     <View style={triggerVariant === 'activity' ? styles.activityRoot : styles.triggerPanel}>
       {triggerVariant === 'activity' || triggerVariant === 'inline' ? (
-        <View style={styles.activityOpinionRow}>
-          <View style={[styles.activityRatingCell, triggerVariant === 'inline' && !reviewsEnabled && styles.inlineRatingCell]}>
+        <View style={[styles.activityOpinionRow, triggerVariant === 'inline' && styles.inlineOpinionColumn]}>
+          <View style={[styles.activityRatingCell, triggerVariant === 'inline' && styles.inlineRatingCell]}>
             <View style={[styles.inlineRatingHeader, triggerVariant === 'inline' && styles.inlineHeaderHeight]}>
               <Text style={[styles.activityLabel, triggerVariant === 'inline' && styles.inlineRatingTitle]}>Your rating</Text>
             </View>
@@ -496,7 +496,7 @@ export function OpinionSheet({
               </View>
             </View>
           </View>
-          {reviewsEnabled ? <><View style={styles.activityDivider} />
+          {reviewsEnabled ? <>{triggerVariant !== 'inline' ? <View style={styles.activityDivider} /> : null}
           <Pressable
             accessibilityLabel={opinion.savedReview ? 'Edit your review' : 'Write a review'}
             accessibilityRole="button"
@@ -684,10 +684,11 @@ function operationError(operation: OpinionOperation) {
 const styles = StyleSheet.create({
   inlineRatingHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   inlineHeaderHeight: { minHeight: 44 },
-  inlineReviewCell: { flexBasis: 104, flexGrow: 0, flexShrink: 0, paddingLeft: spacing.sm },
+  inlineReviewCell: { flexBasis: 'auto', flexGrow: 0, flexShrink: 0, minHeight: touchTargets.min, paddingLeft: 0, marginTop: spacing.sm },
+  inlineOpinionColumn: { flexDirection: 'column' },
   inlineStars: { alignSelf: 'center', width: '100%', maxWidth: 260 },
   inlineRatingTitle: { ...typography.title, color: colors.text },
-  inlineRatingCell: { paddingRight: 0 },
+  inlineRatingCell: { flexBasis: 'auto', flexGrow: 0, flexShrink: 0, paddingRight: 0 },
   actionButton: { flex: 1 },
   activityDivider: { alignSelf: 'stretch', backgroundColor: colors.border, width: StyleSheet.hairlineWidth },
   activityLabel: { ...typography.meta, color: colors.textSubtle, marginBottom: spacing.xs },
