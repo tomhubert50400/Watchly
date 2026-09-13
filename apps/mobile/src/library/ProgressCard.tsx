@@ -14,13 +14,16 @@ export function ProgressCard({ item, busy, onOpen, onWatched, onRetry, compact =
   const total = item.releasedEpisodeCount ?? 0;
   const watchedCount = item.watchedReleasedEpisodeCount ?? 0;
   const ratio = total ? Math.min(1, watchedCount / total) : 0;
+  const cycleBadge = !item.error && (item.viewingCycle ?? 1) > 1 ? (
+    <View style={styles.cycleBadge}><Text style={styles.cycleLabel}>×{item.viewingCycle}</Text></View>
+  ) : null;
   return <View style={[styles.card, compact && styles.compactCard]}>
-    <Pressable accessibilityRole="button" accessibilityLabel={`Open ${media.title}, ${caption}`} onPress={onOpen} style={({ pressed }) => [compact ? styles.compactOpen : styles.open, pressed && styles.pressed]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`Open ${media.title}, ${caption}${cycleBadge ? `, viewing ${item.viewingCycle}` : ''}`} onPress={onOpen} style={({ pressed }) => [compact ? styles.compactOpen : styles.open, pressed && styles.pressed]}>
       {compact ? <>
         <Image accessible={false} source={media.posterUrl ? { uri: media.posterUrl } : undefined} style={styles.poster} />
         <View style={styles.compactCopy}>
           <Text numberOfLines={2} style={styles.compactTitle}>{media.title}</Text>
-          <Text style={styles.compactMeta}>{caption}</Text>
+          <View style={styles.captionRow}><Text style={[styles.compactMeta, styles.caption]}>{caption}</Text>{cycleBadge}</View>
           {!item.error ? <><View style={styles.track}><View style={[styles.progress, { width: `${ratio * 100}%` }]} /></View><Text style={styles.compactCount}>{watchedCount} / {total} episodes</Text></> : null}
         </View>
       </> : <ImageBackground source={media.backdropUrl || media.posterUrl ? { uri: media.backdropUrl ?? media.posterUrl! } : undefined} style={styles.background}>
@@ -30,7 +33,7 @@ export function ProgressCard({ item, busy, onOpen, onWatched, onRetry, compact =
         </Svg>
         <View style={styles.copy}>
           <Text numberOfLines={2} style={styles.title}>{media.title}</Text>
-          <Text style={styles.meta}>{caption}</Text>
+          <View style={styles.captionRow}><Text style={[styles.meta, styles.caption]}>{caption}</Text>{cycleBadge}</View>
           {!item.error ? <><View style={styles.track}><View style={[styles.progress, { width: `${ratio * 100}%` }]} /></View><Text style={styles.count}>{watchedCount} / {total} episodes watched</Text></> : null}
         </View>
       </ImageBackground>}
@@ -43,6 +46,10 @@ export function ProgressCard({ item, busy, onOpen, onWatched, onRetry, compact =
 }
 
 const styles = StyleSheet.create({
+  captionRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  caption: { flexShrink: 1 },
+  cycleBadge: { flexShrink: 0, paddingHorizontal: 6, paddingVertical: 1, borderRadius: radii.sm, backgroundColor: colors.accentSoft, borderColor: colors.accentBorder, borderWidth: 1 },
+  cycleLabel: { color: colors.accentText, fontSize: 10, lineHeight: 14, fontWeight: '700' },
   card: { ...shadows.panel, backgroundColor: colors.panelElevated, borderColor: colors.border, borderWidth: 1, borderRadius: radii.lg, overflow: 'hidden' },
   compactCard: { backgroundColor: 'transparent', borderWidth: 0, borderRadius: 0, shadowOpacity: 0, elevation: 0 },
   compactOpen: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, paddingRight: 66, minHeight: 104 },

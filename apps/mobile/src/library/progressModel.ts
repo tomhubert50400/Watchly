@@ -20,6 +20,7 @@ export type ProgressItem = {
   error: string | null;
   releasedEpisodeCount?: number;
   watchedReleasedEpisodeCount?: number;
+  viewingCycle?: number;
   nextSeasonAirDate?: string | null;
 };
 
@@ -43,7 +44,9 @@ export async function resolveProgressItem(
     if (!seasons.has(number)) seasons.set(number, loadSeason(number));
     return seasons.get(number)!;
   };
-  const watchedKeys = new Set(item.watched.map((episode) => `${episode.seasonNumber}:${episode.episodeNumber}`));
+  const anchor = getSeriesRewatchAnchor(item.viewings);
+  const watched = anchor ? item.viewings.filter((episode) => episode.latestLoggedAt >= anchor.latestLoggedAt) : item.watched;
+  const watchedKeys = new Set(watched.map((episode) => `${episode.seasonNumber}:${episode.episodeNumber}`));
   let releasedEpisodeCount = 0;
   let watchedReleasedEpisodeCount = 0;
   const regularSeasons = item.series.seasons.filter((season) => season.seasonNumber > 0);
@@ -53,7 +56,10 @@ export async function resolveProgressItem(
     for (const episode of details.episodes) {
       if (!episode.airDate || episode.airDate > today) continue;
       releasedEpisodeCount++;
-      if (watchedKeys.has(`${season.seasonNumber}:${episode.episodeNumber}`)) watchedReleasedEpisodeCount++;
+      // Match the position used by findNextSeriesEpisode for the current viewing cycle.
+      const beforeAnchor = anchor && (season.seasonNumber < anchor.seasonNumber
+        || season.seasonNumber === anchor.seasonNumber && episode.episodeNumber <= anchor.episodeNumber);
+      if (beforeAnchor || watchedKeys.has(`${season.seasonNumber}:${episode.episodeNumber}`)) watchedReleasedEpisodeCount++;
     }
   }
   const upcomingSeason = regularSeasons.filter((season) => season.airDate && season.airDate > today)
@@ -65,9 +71,7 @@ export async function resolveProgressItem(
     const premiere = details?.episodes.find((episode) => episode.episodeNumber === 1)?.airDate;
     if (premiere && premiere > today) nextSeasonAirDate = premiere;
   }
-  const anchor = getSeriesRewatchAnchor(item.viewings);
-  const watched = anchor ? item.viewings.filter((episode) => episode.latestLoggedAt >= anchor.latestLoggedAt) : item.watched;
   const next = await findNextSeriesEpisode(item.series.seasons, watched, cachedSeason, today, anchor);
   const ended = item.series.status === 'Ended' || item.series.status === 'Canceled';
-  return { ...item, releasedEpisodeCount, watchedReleasedEpisodeCount, nextSeasonAirDate, next, state: next ? 'progress' : ended ? 'completed' : 'caughtUp', error: null };
+  return { ...item, releasedEpisodeCount, watchedReleasedEpisodeCount, viewingCycle: anchor?.viewCount ?? 1, nextSeasonAirDate, next, state: next ? 'progress' : ended ? 'completed' : 'caughtUp', error: null };
 }
