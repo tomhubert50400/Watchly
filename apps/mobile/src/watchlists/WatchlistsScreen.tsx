@@ -85,7 +85,13 @@ export function WatchlistsScreen() {
   const activeFilters = view === 'progress' ? progressFilters : filters;
   const activeFilter = view === 'progress' ? progressFilter : filter;
   const lastWatched = getLastWatchedLibraryItem(data?.items ?? []);
-  const atmosphereUrl = lastWatched?.posterUrl ?? lastWatched?.backdropUrl ?? lists[0]?.posterUrls.find(Boolean) ?? null;
+  const latestAtmosphereUrl = lastWatched?.posterUrl ?? lastWatched?.backdropUrl ?? lists[0]?.posterUrls.find(Boolean) ?? null;
+  const atmosphereRef = useRef({ ownerId: currentUser?.id, view, focused: isFocused, url: latestAtmosphereUrl });
+  const atmosphere = atmosphereRef.current;
+  if (!isFocused || !atmosphere.focused || atmosphere.ownerId !== currentUser?.id || atmosphere.view !== view || !atmosphere.url) {
+    atmosphereRef.current = { ownerId: currentUser?.id, view, focused: isFocused, url: latestAtmosphereUrl };
+  }
+  const atmosphereUrl = atmosphereRef.current.url;
 
   function openProgress(item: ProgressItem) {
     if (item.next) navigation.navigate('EpisodeDetail', { ...item.next, seriesTitle: item.media.title, title: item.media.title, tmdbId: item.media.tmdbId });
