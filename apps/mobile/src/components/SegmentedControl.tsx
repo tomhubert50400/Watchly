@@ -129,7 +129,7 @@ export function SegmentedControl<T extends string>({
 const styles = StyleSheet.create({
   button: {
     alignItems: 'center',
-    borderRadius: radii.xl,
+    borderRadius: radii.sm,
     flex: 1,
     justifyContent: 'center',
     minWidth: 0,
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   control: {
     backgroundColor: colors.panelSoft,
     borderColor: colors.border,
-    borderRadius: radii.xl,
+    borderRadius: radii.md,
     borderWidth: controlBorderWidth,
     flexDirection: 'row',
     gap: controlGap,
@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
   indicator: {
     backgroundColor: colors.accentSoft,
     borderColor: colors.accentBorder,
-    borderRadius: radii.xl,
+    borderRadius: radii.sm,
     borderWidth: 1,
     bottom: controlInset,
     left: controlInset,
