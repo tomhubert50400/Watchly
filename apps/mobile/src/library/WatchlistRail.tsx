@@ -3,6 +3,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import Svg, {
   Defs,
   Image as SvgImage,
+  LinearGradient,
   Mask,
   RadialGradient,
   Rect,
@@ -31,6 +32,7 @@ type WatchlistCardProps = {
   blendId: string;
   isSelectable?: boolean;
   isSelected?: boolean;
+  fullWidth?: boolean;
   name: string;
   onPress: () => void;
   posterUrls: Array<string | null>;
@@ -42,6 +44,7 @@ export function WatchlistCard({
   blendId,
   isSelectable = false,
   isSelected = false,
+  fullWidth = false,
   name,
   onPress,
   posterUrls,
@@ -55,12 +58,22 @@ export function WatchlistCard({
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
+        fullWidth ? styles.fullWidthCard : null,
         isSelected ? styles.cardSelected : null,
         pressed ? styles.pressed : null,
       ]}
     >
       <BlendedArtwork blendId={blendId} urls={posterUrls} />
-      <View style={styles.overlay} />
+      <Svg pointerEvents="none" style={styles.overlay} width="100%" height="100%">
+        <Defs>
+          <LinearGradient id={`${blendId}-shade`} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor="#090C13" stopOpacity="0.08" />
+            <Stop offset="0.45" stopColor="#090C13" stopOpacity="0.2" />
+            <Stop offset="1" stopColor="#090C13" stopOpacity="0.9" />
+          </LinearGradient>
+        </Defs>
+        <Rect width="100%" height="100%" fill={`url(#${blendId}-shade)`} />
+      </Svg>
       <Text numberOfLines={2} style={styles.title}>{name}</Text>
       {isSelectable ? (
         <View style={[styles.selectionControl, isSelected ? styles.selectionControlSelected : null]}>
@@ -202,12 +215,16 @@ const styles = StyleSheet.create({
     borderColor: colors.accent,
     borderWidth: 2,
   },
+  fullWidthCard: {
+    width: '100%',
+    height: undefined,
+    aspectRatio: ARTWORK_WIDTH / ARTWORK_HEIGHT,
+  },
   collage: {
     ...StyleSheet.absoluteFillObject,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(9, 12, 19, 0.16)',
   },
   placeholder: {
     ...StyleSheet.absoluteFillObject,
@@ -245,9 +262,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '800',
     lineHeight: 29,
-    maxWidth: '82%',
+    left: spacing.md,
+    right: spacing.md,
+    bottom: spacing.md,
     position: 'absolute',
-    textAlign: 'center',
+    textAlign: 'left',
     textShadowColor: 'rgba(0, 0, 0, 0.72)',
     textShadowOffset: { height: 1, width: 0 },
     textShadowRadius: 8,
