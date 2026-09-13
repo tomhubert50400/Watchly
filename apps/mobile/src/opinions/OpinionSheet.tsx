@@ -686,7 +686,7 @@ const styles = StyleSheet.create({
   inlineHeaderHeight: { minHeight: 44 },
   inlineReviewCell: { flexBasis: 104, flexGrow: 0, flexShrink: 0, paddingLeft: spacing.sm },
   inlineStars: { alignSelf: 'center', width: '100%', maxWidth: 260 },
-  inlineRatingTitle: { ...typography.title },
+  inlineRatingTitle: { ...typography.title, color: colors.text },
   inlineRatingCell: { paddingRight: 0 },
   actionButton: { flex: 1 },
   activityDivider: { alignSelf: 'stretch', backgroundColor: colors.border, width: StyleSheet.hairlineWidth },

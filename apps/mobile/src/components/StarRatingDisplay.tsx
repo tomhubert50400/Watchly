@@ -19,6 +19,7 @@ export function StarRatingDisplay({
   spread = false,
   spaceAround = false,
 }: StarRatingDisplayProps) {
+  const glyphHeight = Math.ceil(size * 1.4);
   const normalized = normalizeRating(rating);
   const fills = getStarFillRatios(normalized);
   const label = accessibilityLabel ?? `Rating ${normalized} out of 5`;
@@ -35,11 +36,11 @@ export function StarRatingDisplay({
         style={[styles.stars, spread && styles.starsSpread, spaceAround && { justifyContent: 'space-around' }]}
       >
         {fills.map((fill, index) => (
-          <View key={index} style={[styles.star, { height: size, width: size }]}>
-            <Text style={[styles.glyph, { color: colors.textSubtle, fontSize: size, lineHeight: size }]}>★</Text>
+          <View key={index} style={[styles.star, { height: glyphHeight, width: size }]}>
+            <Text style={[styles.glyph, { color: colors.textSubtle, fontSize: size, lineHeight: glyphHeight }]}>★</Text>
             {fill > 0 ? (
-              <View style={[styles.fillClip, { height: size, width: size * fill }]}>
-                <Text style={[styles.glyph, { color: colors.rating, fontSize: size, lineHeight: size, width: size }]}>★</Text>
+              <View style={[styles.fillClip, { height: glyphHeight, width: size * fill }]}>
+                <Text style={[styles.glyph, { color: colors.rating, fontSize: size, lineHeight: glyphHeight, width: size }]}>★</Text>
               </View>
             ) : null}
           </View>
