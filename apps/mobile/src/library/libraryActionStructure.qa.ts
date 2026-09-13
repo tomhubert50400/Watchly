@@ -20,8 +20,8 @@ for (const file of ['ReleaseAlertRow.tsx', 'WatchlistRail.tsx']) {
 const watchlistSource = readFileSync(new URL('WatchlistRail.tsx', import.meta.url), 'utf8');
 assert.doesNotMatch(
   watchlistSource,
-  /Trash2|itemCount|memberCount|Private/,
-  'watchlist covers must not show actions or metadata',
+  /Trash2|WatchlistManagementButton/,
+  'watchlist covers must keep destructive actions outside their navigation Pressable',
 );
 assert.match(
   watchlistSource,

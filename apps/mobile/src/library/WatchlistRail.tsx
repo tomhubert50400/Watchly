@@ -34,6 +34,7 @@ type WatchlistCardProps = {
   isSelected?: boolean;
   fullWidth?: boolean;
   name: string;
+  subtitle?: string;
   onPress: () => void;
   posterUrls: Array<string | null>;
 };
@@ -46,6 +47,7 @@ export function WatchlistCard({
   isSelected = false,
   fullWidth = false,
   name,
+  subtitle,
   onPress,
   posterUrls,
 }: WatchlistCardProps) {
@@ -74,7 +76,10 @@ export function WatchlistCard({
         </Defs>
         <Rect width="100%" height="100%" fill={`url(#${blendId}-shade)`} />
       </Svg>
-      <Text numberOfLines={2} style={styles.title}>{name}</Text>
+      <View style={styles.caption}>
+        <Text numberOfLines={2} style={styles.title}>{name}</Text>
+        {subtitle ? <Text numberOfLines={2} style={styles.subtitle}>{subtitle}</Text> : null}
+      </View>
       {isSelectable ? (
         <View style={[styles.selectionControl, isSelected ? styles.selectionControlSelected : null]}>
           {isSelected ? <Check color={colors.textOnAccent} size={18} strokeWidth={3} /> : null}
@@ -257,15 +262,23 @@ const styles = StyleSheet.create({
   singleArtwork: {
     ...StyleSheet.absoluteFillObject,
   },
+  caption: {
+    left: spacing.md,
+    right: spacing.md,
+    bottom: spacing.md,
+    position: 'absolute',
+    gap: spacing.xs,
+  },
+  subtitle: {
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 12,
+    lineHeight: 17,
+  },
   title: {
     color: colors.text,
     fontSize: 24,
     fontWeight: '800',
     lineHeight: 29,
-    left: spacing.md,
-    right: spacing.md,
-    bottom: spacing.md,
-    position: 'absolute',
     textAlign: 'left',
     textShadowColor: 'rgba(0, 0, 0, 0.72)',
     textShadowOffset: { height: 1, width: 0 },

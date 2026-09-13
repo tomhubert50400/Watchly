@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { BookOpen, Check, ListFilter, Play, Plus, Users } from 'lucide-react-native';
+import { BookOpen, Check, ListFilter, Play, Plus } from 'lucide-react-native';
 import { Modal, Pressable, RefreshControl, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSharedWatchlist } from '../api/sharedWatchlists';
@@ -147,8 +147,8 @@ export function WatchlistsScreen() {
         : <View style={styles.content}>
           {data?.partialError ? <InlineStatusBanner detail={data.partialError} onRetry={resource.retry} tone="error" /> : null}
           {visibleLists.map((list, index) => <ScreenReveal key={list.key} delay={Math.min(index * 40, 160)} style={styles.list}>
-            <WatchlistCard fullWidth blendId={`watchlists-${list.key}`} name={list.name} posterUrls={list.posterUrls} onPress={() => navigation.navigate(list.kind === 'personal' ? 'PersonalWatchlist' : 'SharedWatchlist', { title: list.name, watchlistId: list.id })} />
-            <View style={styles.metadata}><Text style={styles.meta}>{list.itemCount} {list.itemCount === 1 ? 'title' : 'titles'}</Text><View style={styles.actions}>{list.kind === 'shared' ? <Users color={colors.textMuted} size={16} /> : null}<Text style={styles.meta}>{list.kind === 'shared' ? `Shared · ${list.memberCount ?? 1} members` : 'Personal'}</Text><WatchlistManagementButton list={list} onRemoved={removeList} /></View></View>
+            <WatchlistCard fullWidth blendId={`watchlists-${list.key}`} name={list.name} subtitle={`${list.itemCount} ${list.itemCount === 1 ? 'title' : 'titles'} · ${list.kind === 'shared' ? `Shared · ${list.memberCount ?? 1} ${(list.memberCount ?? 1) === 1 ? 'member' : 'members'}` : 'Personal'}`} posterUrls={list.posterUrls} onPress={() => navigation.navigate(list.kind === 'personal' ? 'PersonalWatchlist' : 'SharedWatchlist', { title: list.name, watchlistId: list.id })} />
+            <View style={styles.management}><WatchlistManagementButton list={list} onRemoved={removeList} /></View>
           </ScreenReveal>)}
           {visibleLists.length === 0 ? <EmptyState title={filter === 'all' ? 'Your next watch starts here' : `No ${filter} lists yet`} body="Create a watchlist and add movies or series from their detail pages."><Button label="Create watchlist" onPress={() => { setKind(filter === 'shared' ? 'shared' : 'personal'); setError(null); setSheet('create'); }} /></EmptyState> : null}
           <View style={styles.utilities}>
@@ -179,9 +179,8 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   content: { gap: spacing.lg },
   createButton: { width: 44, height: 44, borderRadius: radii.md, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
-  list: { gap: spacing.sm },
-  metadata: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: spacing.xs },
-  meta: { ...typography.body, fontSize: 12, color: colors.textMuted },
+  list: { position: 'relative' },
+  management: { position: 'absolute', top: spacing.sm, right: spacing.sm },
   utilities: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.md, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.sm },
   utility: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', minHeight: 44 },
   utilityText: { ...typography.body, fontSize: 13, color: colors.textMuted },
