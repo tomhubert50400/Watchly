@@ -56,7 +56,7 @@ assert.equal(resolveFocusedFieldScrollOffset({ ...reviewFrame, viewportHeight: 5
   'native insets must clip the visible viewport at the keyboard');
 assert.match(report, /multiline\s+scrollEnabled/, 'long reports must scroll inside the editor');
 assert.match(report, /height: 120/, 'report text must not grow beyond the available viewport');
-assert.match(report, /<BottomActionSheet\s+dragFromHandleOnly/, 'report selection must not dismiss the sheet');
+assert.match(bottomSheet, /event.target === focusedInput/, 'gestures inside a focused editor must not dismiss the sheet');
 assert.match(screen, /background \? styles\.transparentFooter : null/, 'illustrated screens must preserve their background below actions');
 assert.match(screen, /useNativeKeyboardInsets = nativeKeyboardInsetsOnly && !footer/,
   'screens with fixed actions must resize their entire frame');
@@ -64,8 +64,8 @@ assert.match(watchlistPage, /automaticallyAdjustKeyboardInsets=\{false\}/,
   'watchlist screens must not apply keyboard space twice');
 assert.match(bottomSheet, /keyboardInset > 0 && \{ top: safeAreaInsets\.top \+ spacing\.sm \}/,
   'editing must expand the sheet into the available safe area');
-assert.match(opinionSheet, /<BottomActionSheet\s+dragFromHandleOnly/,
-  'review editing and scrolling must not trigger sheet dismissal');
+assert.doesNotMatch(opinionSheet, /dragFromHandleOnly/,
+  'review sheets must allow dismissal from their body');
 assert.match(opinionSheet, /<BottomActionSheetScrollView disableScrollViewPanResponder=\{false\}/,
   'the opinion body must keep native scrolling enabled');
 assert.match(opinionSheet, /multiline\s+scrollEnabled/,

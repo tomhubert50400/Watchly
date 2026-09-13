@@ -23,7 +23,7 @@ export function SignInSheet({ body, onClose, title, visible }: SignInSheetProps)
   if (!visible) return null;
 
   return (
-    <BottomActionSheet dragFromHandleOnly onClose={onClose} title="Sign in to Watchly" visible>
+    <BottomActionSheet onClose={onClose} title="Sign in to Watchly" visible>
       <BottomActionSheetScrollView
         disableScrollViewPanResponder={false}
         contentContainerStyle={styles.sheetContent}

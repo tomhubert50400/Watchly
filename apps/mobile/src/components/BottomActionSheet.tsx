@@ -2,7 +2,9 @@ import { X } from 'lucide-react-native';
 import {
   PropsWithChildren,
   ReactNode,
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -21,6 +23,7 @@ import {
   ScrollViewProps,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,6 +46,8 @@ type BottomActionSheetProps = PropsWithChildren<{
 
 type BottomActionSheetScrollViewProps = PropsWithChildren<ScrollViewProps>;
 
+const SheetScrollGestureContext = createContext<{ current: number } | null>(null);
+
 export function BottomActionSheetScrollView({
   automaticallyAdjustKeyboardInsets = false,
   children,
@@ -54,11 +59,14 @@ export function BottomActionSheetScrollView({
   onBlur,
   onLayout,
   onScroll,
+  onTouchStart,
   onContentSizeChange,
   scrollEventThrottle = 16,
   ...scrollViewProps
 }: BottomActionSheetScrollViewProps) {
   const scrollRef = useRef<ScrollView>(null);
+  const scrollOffset = useRef(0);
+  const gestureScrollOffset = useContext(SheetScrollGestureContext);
   const visibility = useFocusedFieldVisibility(scrollRef);
 
   return (
@@ -84,8 +92,15 @@ export function BottomActionSheetScrollView({
         onLayout?.(event);
       }}
       onScroll={(event) => {
+        scrollOffset.current = event.nativeEvent.contentOffset.y;
         visibility.onScroll(event);
         onScroll?.(event);
+      }}
+      onTouchStart={(event) => {
+        if (gestureScrollOffset && !scrollViewProps.horizontal) {
+          gestureScrollOffset.current = scrollOffset.current;
+        }
+        onTouchStart?.(event);
       }}
       onContentSizeChange={(width, height) => {
         visibility.onContentSizeChange();
@@ -110,6 +125,7 @@ export function BottomActionSheet({ children, dragFromHandleOnly = false, footer
   const progress = useRef(new Animated.Value(0)).current;
   const dragY = useRef(new Animated.Value(0)).current;
   const isClosing = useRef(false);
+  const gestureScrollOffset = useRef(0);
   const [keyboardInset, setKeyboardInset] = useState(0);
 
   useEffect(() => {
@@ -184,9 +200,17 @@ export function BottomActionSheet({ children, dragFromHandleOnly = false, footer
   }, [dragY]);
 
   const panResponder = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponderCapture: (_, gesture) => (
-      shouldCaptureBottomSheetDrag(gesture.dx, gesture.dy)
-    ),
+    onStartShouldSetPanResponderCapture: () => {
+      gestureScrollOffset.current = 0;
+      return false;
+    },
+    onMoveShouldSetPanResponderCapture: (event, gesture) => {
+      const focusedInput = TextInput.State.currentlyFocusedInput();
+      if (focusedInput && event.target === focusedInput) {
+        return false;
+      }
+      return shouldCaptureBottomSheetDrag(gesture.dx, gesture.dy, gestureScrollOffset.current);
+    },
     onPanResponderMove: (_, gesture) => {
       dragY.setValue(getBottomSheetDragOffset(gesture.dy));
     },
@@ -253,7 +277,9 @@ export function BottomActionSheet({ children, dragFromHandleOnly = false, footer
                   </Pressable>
                 </View>
               </View>
-              <View style={styles.body}>{children}</View>
+              <SheetScrollGestureContext.Provider value={gestureScrollOffset}>
+                <View style={styles.body}>{children}</View>
+              </SheetScrollGestureContext.Provider>
               {footer ? <View style={styles.footer}>{footer}</View> : null}
             </SafeAreaView>
           </View>

@@ -360,7 +360,6 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
       </WatchlistPage>
 
       <BottomActionSheet
-        dragFromHandleOnly
         onClose={() => {
           setIsMembersSheetOpen(false);
           setMemberError(null);

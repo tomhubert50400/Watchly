@@ -87,7 +87,6 @@ export function ReportSheet({ onClose, target }: ReportSheetProps) {
 
   return (
     <BottomActionSheet
-      dragFromHandleOnly
       footer={footer}
       onClose={close}
       title="Report"

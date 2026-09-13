@@ -7,8 +7,8 @@ export function getBottomSheetDragOffset(distanceY: number) {
   return distanceY >= 0 ? distanceY : distanceY * UPWARD_DRAG_RESISTANCE;
 }
 
-export function shouldCaptureBottomSheetDrag(distanceX: number, distanceY: number) {
-  return distanceY > DRAG_ACTIVATION_DISTANCE && Math.abs(distanceY) > Math.abs(distanceX);
+export function shouldCaptureBottomSheetDrag(distanceX: number, distanceY: number, scrollOffsetAtStart = 0) {
+  return scrollOffsetAtStart <= 0 && distanceY > DRAG_ACTIVATION_DISTANCE && Math.abs(distanceY) > Math.abs(distanceX);
 }
 
 export function shouldDismissBottomSheet(distanceY: number, velocityY: number) {

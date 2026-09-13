@@ -442,7 +442,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
         <Text style={styles.triggerLabel}>Add to watchlist</Text>
       </Pressable>
 
-      <BottomActionSheet dragFromHandleOnly onClose={dismissSheet} title="Add to a list" visible={isOpen}>
+      <BottomActionSheet onClose={dismissSheet} title="Add to a list" visible={isOpen}>
         <BottomActionSheetScrollView disableScrollViewPanResponder={false} contentContainerStyle={styles.optionSections}>
           <Text style={styles.sheetSubtitle}>Select one or more lists.</Text>
 

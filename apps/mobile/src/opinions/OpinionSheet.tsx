@@ -533,7 +533,6 @@ export function OpinionSheet({
       )}
 
       <BottomActionSheet
-        dragFromHandleOnly
         footer={sheetFooter}
         onClose={closeSheet}
         title={reviewsEnabled ? 'Your opinion' : 'Your rating'}

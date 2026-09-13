@@ -3,6 +3,9 @@
 import assert from 'node:assert/strict';
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import { readFileSync } from 'node:fs';
+// @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
+import { readdirSync } from 'node:fs';
+import ts from 'typescript';
 import {
   getBottomSheetDragOffset,
   shouldCaptureBottomSheetDrag,
@@ -52,7 +55,7 @@ assert.match(
 );
 assert.match(sheetSource, /dragFromHandleOnly = false/, 'other sheets retain full-surface dragging by default');
 const historySource = readFileSync(new URL('../viewings/ViewingHistorySheet.tsx', import.meta.url), 'utf8');
-assert.match(historySource, /<BottomActionSheet dragFromHandleOnly/, 'the year wheel must not drag the sheet');
+assert.match(historySource, /<BottomActionSheet dragFromHandleOnly=\{monthPickerOpen\}/, 'the year wheel must not drag the sheet');
 assert.match(historySource, /scrollEnabled=\{!monthPickerOpen\}/, 'the outer content must not scroll while the wheel is open');
 
 for (const file of scrollableSheetFiles) {
@@ -69,4 +72,36 @@ for (const file of scrollableSheetFiles) {
   );
 }
 
-console.log('Bottom action sheet gesture QA passed.');
+assert.equal(shouldCaptureBottomSheetDrag(2, 120, 80), false, 'dragging a scrolled list must scroll instead of dismissing');
+assert.equal(shouldCaptureBottomSheetDrag(2, 120, 0), true, 'dragging from the top must dismiss');
+assert.equal(shouldCaptureBottomSheetDrag(2, 120, -5), true, 'overscroll at the top must allow dismissal');
+
+assert.match(sheetSource, /gestureScrollOffset.current = scrollOffset.current/, 'remember the scroll position at touch start');
+assert.match(sheetSource, /shouldCaptureBottomSheetDrag\(gesture.dx, gesture.dy, gestureScrollOffset.current\)/, 'the sheet must respect the initial scroll position');
+
+let sheetCount = 0;
+function checkSheets(directory: URL) {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const file = new URL(entry.name + (entry.isDirectory() ? '/' : ''), directory);
+    if (entry.isDirectory()) {
+      checkSheets(file);
+    } else if (entry.name.endsWith('.tsx')) {
+      const source = ts.createSourceFile(entry.name, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+      function visit(node: ts.Node) {
+        if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && node.tagName.getText(source) === 'BottomActionSheet') {
+          sheetCount += 1;
+          const restriction = node.attributes.properties.find(attribute => ts.isJsxAttribute(attribute) && attribute.name.getText(source) === 'dragFromHandleOnly');
+          if (restriction) {
+            assert.equal(entry.name, 'ViewingHistorySheet.tsx', `${file.pathname} must support body swipe dismissal`);
+            assert.equal(restriction.getText(source), 'dragFromHandleOnly={monthPickerOpen}', 'only the open year wheel may reserve body gestures');
+          }
+        }
+        ts.forEachChild(node, visit);
+      }
+      visit(source);
+    }
+  }
+}
+checkSheets(new URL('../', import.meta.url));
+assert.ok(sheetCount > 0, 'the sheet inventory must not be empty');
+console.log(`Bottom action sheet gesture QA passed (${sheetCount} sheets checked).`);

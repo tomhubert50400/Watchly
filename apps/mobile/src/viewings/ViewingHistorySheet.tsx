@@ -57,7 +57,7 @@ export function ViewingHistorySheet({ history, title, onClose, onSave }: Props) 
     setCalendarOpen(true);
   }
 
-  return <BottomActionSheet dragFromHandleOnly onClose={onClose} title="My viewings" visible footer={
+  return <BottomActionSheet dragFromHandleOnly={monthPickerOpen} onClose={onClose} title="My viewings" visible footer={
     calendarOpen ? undefined : <Button disabled={!countText || Boolean(error) || Number(countText) !== entries.length} label={`Save ${entries.length} ${entries.length === 1 ? 'viewing' : 'viewings'}`} onPress={() => onSave(entries)} />
   }>
     <BottomActionSheetScrollView disableScrollViewPanResponder={false} scrollEnabled={!monthPickerOpen} contentContainerStyle={styles.content}>
