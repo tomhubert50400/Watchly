@@ -11,12 +11,14 @@ import { notifyUserDataChanged } from '../sync/userDataEvents';
 
 type SeriesRatingControlProps = {
   posterUrl?: string | null;
+  onRatingGestureChange?: (active: boolean) => void;
   seriesTitle?: string;
   seriesTmdbId: number;
 };
 
 export function SeriesRatingControl({
   posterUrl,
+  onRatingGestureChange,
   seriesTitle = 'This series',
   seriesTmdbId,
 }: SeriesRatingControlProps) {
@@ -47,6 +49,7 @@ export function SeriesRatingControl({
   return (
     <OpinionSheet
       triggerVariant="inline"
+      onRatingGestureChange={onRatingGestureChange}
       isSignedIn={Boolean(firebaseIdToken)}
       key={`${currentUser?.id ?? 'signed-out'}:series:${seriesTmdbId}`}
       load={load}

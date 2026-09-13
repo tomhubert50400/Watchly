@@ -3,6 +3,7 @@ import { MovieRatingControl } from '../tracking/MovieRatingControl';
 type MovieReviewEditorProps = {
   mediaTitle?: string;
   posterUrl?: string | null;
+  onRatingGestureChange?: (active: boolean) => void;
   tmdbId: number;
 };
 

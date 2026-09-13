@@ -8,6 +8,7 @@ type StarRatingDisplayProps = {
   showValue?: boolean;
   size?: number;
   spread?: boolean;
+  spaceAround?: boolean;
 };
 
 export function StarRatingDisplay({
@@ -16,6 +17,7 @@ export function StarRatingDisplay({
   showValue = false,
   size = 18,
   spread = false,
+  spaceAround = false,
 }: StarRatingDisplayProps) {
   const normalized = normalizeRating(rating);
   const fills = getStarFillRatios(normalized);
@@ -30,7 +32,7 @@ export function StarRatingDisplay({
       <View
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
-        style={[styles.stars, spread && styles.starsSpread]}
+        style={[styles.stars, spread && styles.starsSpread, spaceAround && { justifyContent: 'space-around' }]}
       >
         {fills.map((fill, index) => (
           <View key={index} style={[styles.star, { height: size, width: size }]}>

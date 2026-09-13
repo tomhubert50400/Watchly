@@ -9,10 +9,11 @@ import { OpinionOperation } from '../opinions/opinionState';
 type MovieRatingControlProps = {
   mediaTitle?: string;
   posterUrl?: string | null;
+  onRatingGestureChange?: (active: boolean) => void;
   tmdbId: number;
 };
 
-export function MovieRatingControl({ mediaTitle = 'This film', posterUrl, tmdbId }: MovieRatingControlProps) {
+export function MovieRatingControl({ mediaTitle = 'This film', posterUrl, tmdbId, onRatingGestureChange }: MovieRatingControlProps) {
   const { currentUser, firebaseIdToken } = useAuthSession();
   const load = useCallback(async () => {
     if (!firebaseIdToken) return { rating: null, review: null };
@@ -43,6 +44,7 @@ export function MovieRatingControl({ mediaTitle = 'This film', posterUrl, tmdbId
   return (
     <OpinionSheet
       triggerVariant="inline"
+      onRatingGestureChange={onRatingGestureChange}
       isSignedIn={Boolean(firebaseIdToken)}
       key={`${currentUser?.id ?? 'signed-out'}:movie:${tmdbId}`}
       load={load}

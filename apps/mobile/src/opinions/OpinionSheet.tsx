@@ -64,6 +64,7 @@ type OpinionSheetProps = {
   mediaLabel: string;
   mediaMeta?: string | null;
   onChanged: () => void;
+  onRatingGestureChange?: (active: boolean) => void;
   ownerKey?: string | null;
   perform: (operation: OpinionOperation) => Promise<void>;
   posterUrl?: string | null;
@@ -79,6 +80,7 @@ export function OpinionSheet({
   mediaLabel,
   mediaMeta,
   onChanged,
+  onRatingGestureChange,
   ownerKey,
   perform,
   posterUrl,
@@ -153,6 +155,8 @@ export function OpinionSheet({
     setOpinion(createOpinionState(null, null));
     void loadOpinion();
   }, [loadOpinion, requestScope]);
+
+  useEffect(() => () => onRatingGestureChange?.(false), [onRatingGestureChange]);
 
   const summary = useMemo(() => {
     if (!isSignedIn) return signedOutMessage;
@@ -262,7 +266,7 @@ export function OpinionSheet({
     setOpinion((current) => resetOpinionDraft(current));
   }
 
-  async function saveActivityRating(score: number) {
+  async function saveActivityRating(score: number | null) {
     if (!isSignedIn) {
       setIsSignInOpen(true);
       return;
@@ -273,7 +277,13 @@ export function OpinionSheet({
       return;
     }
 
+    if (score === null && opinion.savedReview !== null) {
+      setOpinion((current) => resetOpinionDraft(current));
+      confirmClearRating();
+      return;
+    }
     if (opinion.savedRating === score) return;
+    const operation: OpinionOperation = score === null ? { kind: 'clearRating' } : { kind: 'saveRating', score };
     if (activityPendingMutationCountRef.current === 0) {
       activityConfirmedRatingRef.current = opinion.savedRating;
       activityBatchChangedRef.current = false;
@@ -284,7 +294,7 @@ export function OpinionSheet({
     setOpinion((current) => {
       const optimistic = applyOperationSuccess(
         beginOpinionOperations({ ...current, draftRating: score }),
-        { kind: 'saveRating', score },
+        operation,
       );
       if (cacheKey) {
         void writePersistedCache(cacheKey, {
@@ -298,7 +308,7 @@ export function OpinionSheet({
 
     const commitMutation = async () => {
       try {
-        await perform({ kind: 'saveRating', score });
+        await perform(operation);
         activityConfirmedRatingRef.current = score;
         activityBatchChangedRef.current = true;
       } catch {
@@ -351,12 +361,13 @@ export function OpinionSheet({
     }
 
     activityRatingGestureActiveRef.current = true;
+    onRatingGestureChange?.(true);
     selectActivityRatingAtTouch(event);
   }
 
   function selectActivityRatingAtTouch(event: GestureResponderEvent) {
     if (!isSignedIn || loadError) return;
-    selectDraftRating(getRatingFromTrackPosition(
+    selectDraftRating(triggerVariant === 'inline' && event.nativeEvent.locationX <= 8 ? null : getRatingFromTrackPosition(
       event.nativeEvent.locationX,
       activityRatingTrackWidthRef.current,
     ));
@@ -364,12 +375,14 @@ export function OpinionSheet({
 
   function saveActivityRatingAtRelease() {
     activityRatingGestureActiveRef.current = false;
+    onRatingGestureChange?.(false);
     const score = draftRatingRef.current;
-    if (score !== null) void saveActivityRating(score);
+    if (score !== null || triggerVariant === 'inline') void saveActivityRating(score);
   }
 
   function cancelActivityRatingGesture() {
     activityRatingGestureActiveRef.current = false;
+    onRatingGestureChange?.(false);
     draftRatingRef.current = opinion.savedRating;
     setOpinion((current) => ({ ...current, draftRating: current.savedRating }));
   }
@@ -444,7 +457,6 @@ export function OpinionSheet({
           <View style={styles.activityRatingCell}>
             <View style={[styles.inlineRatingHeader, triggerVariant === 'inline' && styles.inlineHeaderHeight]}>
               <Text style={styles.activityLabel}>Your rating</Text>
-              {triggerVariant === 'inline' && opinion.savedRating !== null ? <Pressable accessibilityRole="button" accessibilityLabel="Clear your rating" disabled={isSaving || activityPendingMutationCountRef.current > 0} onPress={confirmClearRating} style={styles.inlineClear}><Trash2 color={colors.textSubtle} size={16} /></Pressable> : null}
             </View>
             <View
               accessibilityActions={[
@@ -459,8 +471,8 @@ export function OpinionSheet({
                 const value = opinion.savedRating ?? 0;
                 const score = event.nativeEvent.actionName === 'increment'
                   ? Math.min(5, value + 0.5)
-                  : Math.max(0.5, value - 0.5);
-                void saveActivityRating(score);
+                  : Math.max(triggerVariant === 'inline' ? 0 : 0.5, value - 0.5);
+                void saveActivityRating(score === 0 ? null : score);
               }}
               onLayout={(event) => {
                 activityRatingTrackWidthRef.current = event.nativeEvent.layout.width;
@@ -472,7 +484,7 @@ export function OpinionSheet({
               onResponderTerminate={cancelActivityRatingGesture}
               onResponderTerminationRequest={() => false}
               onStartShouldSetResponder={() => true}
-              style={styles.activityStars}
+              style={[styles.activityStars, triggerVariant === 'inline' && styles.inlineStars]}
             >
               <View
                 accessibilityElementsHidden
@@ -480,7 +492,7 @@ export function OpinionSheet({
                 pointerEvents="none"
                 style={styles.activityStarDisplay}
               >
-                <StarRatingDisplay rating={opinion.draftRating ?? 0} size={26} spread />
+                <StarRatingDisplay rating={opinion.draftRating ?? 0} size={26} spread spaceAround={triggerVariant === 'inline'} />
               </View>
             </View>
           </View>
@@ -673,7 +685,7 @@ const styles = StyleSheet.create({
   inlineRatingHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   inlineHeaderHeight: { minHeight: 44 },
   inlineReviewCell: { flexBasis: 104, flexGrow: 0, flexShrink: 0, paddingLeft: spacing.sm },
-  inlineClear: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  inlineStars: { maxWidth: 260 },
   actionButton: { flex: 1 },
   activityDivider: { alignSelf: 'stretch', backgroundColor: colors.border, width: StyleSheet.hairlineWidth },
   activityLabel: { ...typography.meta, color: colors.textSubtle, marginBottom: spacing.xs },

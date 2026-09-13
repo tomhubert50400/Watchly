@@ -45,6 +45,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'SeriesDetail'>;
 
 export function SeriesDetailScreen({ navigation, route }: Props) {
   const { tmdbId } = route.params;
+  const [isRatingGestureActive, setIsRatingGestureActive] = useState(false);
   const { getCachedSeries, refreshSeries } = useCatalogueCache();
   const load = useCallback(() => refreshSeries(tmdbId), [refreshSeries, tmdbId]);
   const resource = useCachedResource<SeriesDetails>({
@@ -81,7 +82,7 @@ export function SeriesDetailScreen({ navigation, route }: Props) {
   return (
     <SafeAreaView edges={[]} style={styles.safeArea}>
       {atmosphereUrl ? <SpotlightAtmosphere blurRadius={28} imageUrl={atmosphereUrl} /> : null}
-      <ScrollView contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="never" showsVerticalScrollIndicator={false}>
+      <ScrollView scrollEnabled={!isRatingGestureActive} contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="never" showsVerticalScrollIndicator={false}>
         {renderMode === 'loading' ? (
           <View style={styles.stateFrame}><LoadingState variant="detail" label="Loading series details" /></View>
         ) : renderMode === 'fullError' ? (
@@ -92,6 +93,7 @@ export function SeriesDetailScreen({ navigation, route }: Props) {
           </View>
         ) : series ? (
           <SeriesDetailContent
+            onRatingGestureChange={setIsRatingGestureActive}
             onOpenRelated={(item) => openRelatedSeries(navigation, item)}
             series={series}
           />
@@ -101,7 +103,8 @@ export function SeriesDetailScreen({ navigation, route }: Props) {
   );
 }
 
-function SeriesDetailContent({ onOpenRelated, series }: {
+function SeriesDetailContent({ onOpenRelated, series, onRatingGestureChange }: {
+  onRatingGestureChange: (active: boolean) => void;
   onOpenRelated: (item: CatalogueRelatedItem) => void;
   series: SeriesDetails;
 }) {
@@ -165,6 +168,7 @@ function SeriesDetailContent({ onOpenRelated, series }: {
               <Text style={styles.personalEyebrow}>Your activity</Text>
               <TrackingControls contentType="series" onWatchedChange={setIsWatched} tmdbId={series.tmdbId} />
               <SeriesRatingControl
+                onRatingGestureChange={onRatingGestureChange}
                 posterUrl={series.posterUrl}
                 seriesTitle={series.title}
                 seriesTmdbId={series.tmdbId}

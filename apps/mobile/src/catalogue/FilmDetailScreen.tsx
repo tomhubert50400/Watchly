@@ -45,6 +45,7 @@ type FilmDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'FilmDet
 
 export function FilmDetailScreen({ navigation, route }: FilmDetailScreenProps) {
   const { tmdbId } = route.params;
+  const [isRatingGestureActive, setIsRatingGestureActive] = useState(false);
   const { getCachedMovie, refreshMovie } = useCatalogueCache();
   const load = useCallback(() => refreshMovie(tmdbId), [refreshMovie, tmdbId]);
   const resource = useCachedResource<MovieDetails>({
@@ -71,7 +72,7 @@ export function FilmDetailScreen({ navigation, route }: FilmDetailScreenProps) {
   return (
     <SafeAreaView edges={[]} style={styles.safeArea}>
       {atmosphereUrl ? <SpotlightAtmosphere blurRadius={28} imageUrl={atmosphereUrl} /> : null}
-      <ScrollView
+      <ScrollView scrollEnabled={!isRatingGestureActive}
         contentContainerStyle={styles.content}
         contentInsetAdjustmentBehavior="never"
         showsVerticalScrollIndicator={false}
@@ -89,6 +90,7 @@ export function FilmDetailScreen({ navigation, route }: FilmDetailScreenProps) {
         ) : movie ? (
           <MovieDetailContent
             movie={movie}
+            onRatingGestureChange={setIsRatingGestureActive}
             onOpenRelated={(item) => openRelatedMovie(navigation, item)}
           />
         ) : null}
@@ -100,8 +102,10 @@ export function FilmDetailScreen({ navigation, route }: FilmDetailScreenProps) {
 function MovieDetailContent({
   movie,
   onOpenRelated,
+  onRatingGestureChange,
 }: {
   movie: MovieDetails;
+  onRatingGestureChange: (active: boolean) => void;
   onOpenRelated: (item: CatalogueRelatedItem) => void;
 }) {
   const [isWatched, setIsWatched] = useState(false);
@@ -152,7 +156,7 @@ function MovieDetailContent({
           <ViewingCountControl contentType="movie" title={movie.title} tmdbId={movie.tmdbId} />
           {isWatched && movie.collection ? <MovieWhatsNext collectionId={movie.collection.id} tmdbId={movie.tmdbId} onOpen={onOpenRelated} /> : null}
           {isReleased ? (
-            <MovieReviewEditor mediaTitle={movie.title} posterUrl={movie.posterUrl} tmdbId={movie.tmdbId} />
+            <MovieReviewEditor onRatingGestureChange={onRatingGestureChange} mediaTitle={movie.title} posterUrl={movie.posterUrl} tmdbId={movie.tmdbId} />
           ) : null}
         </View>
         <DetailFacts items={detailFacts} />
