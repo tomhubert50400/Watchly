@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react-native';
+import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 import { ActivityIndicator, Image, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { colors, radii, shadows, spacing } from '../design/tokens';
@@ -38,7 +38,7 @@ export function ProgressCard({ item, busy, onOpen, onWatched, onRetry, compact =
     {item.error ? <Pressable accessibilityRole="button" accessibilityLabel={`Retry progress for ${media.title}`} onPress={onRetry} style={[styles.retry, compact && styles.compactAction]}><Text style={styles.retryText}>Retry</Text></Pressable> : next ?
       <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: busy, disabled: busy, busy }} accessibilityLabel={`Mark ${media.title}, season ${next.seasonNumber}, episode ${next.episodeNumber} as watched`} disabled={busy} onPress={onWatched} style={[styles.checkTarget, compact && styles.compactAction]}>
         <View style={[styles.circle, busy && styles.checked]}>{busy ? <ActivityIndicator color={colors.textOnAccent} size="small" /> : null}</View>
-      </Pressable> : <View accessible={false} style={[styles.checkTarget, compact && styles.compactAction]}><View style={[styles.circle, styles.checked]}><Check color={colors.textOnAccent} size={18} strokeWidth={2.5} /></View></View>}
+      </Pressable> : <View style={[styles.checkTarget, compact && styles.compactAction]}><ReleaseAlertControl contentType="series" tmdbId={media.tmdbId} /></View>}
   </View>;
 }
 
