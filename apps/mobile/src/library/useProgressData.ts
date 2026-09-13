@@ -150,7 +150,7 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
       const matches = (entry: { seasonNumber: number; episodeNumber: number }) => entry.seasonNumber === episode.seasonNumber && entry.episodeNumber === episode.episodeNumber;
       const watched = [...item.watched.filter((entry) => !matches(entry)), { ...episode, id: result.items[0]!.id, seriesTmdbId: item.media.tmdbId, updatedAt: now, watchedAt: now }];
       const viewings = [...item.viewings.filter((entry) => !matches(entry)), { ...episode, viewCount: result.items.length, latestLoggedAt: now }];
-      const updated = { ...item, watched, viewings, media: { ...item.media, watchedEpisodeCount: watched.length } };
+      const updated = { ...item, watched, viewings, media: { ...item.media, watchedEpisodeCount: watched.length, lastWatchedAt: now } };
       let next: ProgressItem;
       try {
         next = await resolveProgressItem(updated, async (season) => (await ensureSeasonDetails(item.media.tmdbId, season)).item);

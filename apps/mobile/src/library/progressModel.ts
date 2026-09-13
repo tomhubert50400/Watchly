@@ -24,6 +24,12 @@ export function isProgressCandidate(item: LibraryMediaItem) {
   return item.contentType === 'series' && (item.status === 'watching' || item.status === 'watched' || item.watchedEpisodeCount > 0);
 }
 
+export function selectRecentProgress(items: ProgressItem[]) {
+  return items.filter((item) => item.next && !item.error && item.media.watchedEpisodeCount > 0)
+    .sort((a, b) => (b.media.lastWatchedAt ?? '').localeCompare(a.media.lastWatchedAt ?? ''))
+    .slice(0, 6);
+}
+
 export async function resolveProgressItem(
   item: Omit<ProgressItem, 'next' | 'state' | 'error'>,
   loadSeason: (seasonNumber: number) => Promise<SeasonDetails>,

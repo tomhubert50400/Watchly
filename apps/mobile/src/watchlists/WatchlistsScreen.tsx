@@ -3,7 +3,7 @@ import { RouteProp, useIsFocused, useNavigation, useRoute } from '@react-navigat
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { BookOpen, Check, ListFilter, Plus, Search, X } from 'lucide-react-native';
-import { ActivityIndicator, Keyboard, Modal, Pressable, RefreshControl, StyleSheet, Text, TextInput as NativeTextInput, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput as NativeTextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSharedWatchlist } from '../api/sharedWatchlists';
 import { createWatchlist } from '../api/watchlists';
@@ -28,7 +28,7 @@ import { getLastWatchedLibraryItem } from '../library/libraryModel';
 import { LibraryData, LibraryListItem, useLibraryData } from '../library/useLibraryData';
 import { WatchlistCard } from '../library/WatchlistRail';
 import { ProgressCard } from '../library/ProgressCard';
-import { ProgressFilter, progressFilters } from '../library/progressModel';
+import { ProgressFilter, progressFilters, ProgressItem, selectRecentProgress } from '../library/progressModel';
 import { useProgressData } from '../library/useProgressData';
 import { RootStackParamList, RootTabParamList } from '../navigation/types';
 import { notifyUserDataChanged } from '../sync/userDataEvents';
@@ -81,10 +81,16 @@ export function WatchlistsScreen() {
   const visibleLists = lists.filter((list) => filter === 'all' || list.kind === filter);
   const normalizedQuery = progressQuery.trim().toLocaleLowerCase();
   const visibleProgress = progress.items.filter((item) => item.state === progressFilter && item.media.title.toLocaleLowerCase().includes(normalizedQuery));
+  const recentProgress = !normalizedQuery && progressFilter === 'progress' ? selectRecentProgress(progress.items) : [];
   const activeFilters = view === 'progress' ? progressFilters : filters;
   const activeFilter = view === 'progress' ? progressFilter : filter;
   const lastWatched = getLastWatchedLibraryItem(data?.items ?? []);
   const atmosphereUrl = lastWatched?.posterUrl ?? lastWatched?.backdropUrl ?? lists[0]?.posterUrls.find(Boolean) ?? null;
+
+  function openProgress(item: ProgressItem) {
+    if (item.next) navigation.navigate('EpisodeDetail', { ...item.next, seriesTitle: item.media.title, title: item.media.title, tmdbId: item.media.tmdbId });
+    else navigation.navigate('SeriesDetail', { title: item.media.title, tmdbId: item.media.tmdbId });
+  }
 
   function openFilter() {
     filterButtonRef.current?.measureInWindow((x, y, buttonWidth, buttonHeight) => {
@@ -168,7 +174,18 @@ export function WatchlistsScreen() {
             <NativeTextInput accessibilityLabel="Search your series" placeholder="Search your series" placeholderTextColor={colors.muted} value={progressQuery} onChangeText={setProgressQuery} autoCapitalize="none" autoCorrect={false} spellCheck={false} keyboardAppearance="dark" returnKeyType="search" onSubmitEditing={Keyboard.dismiss} style={styles.searchInput} />
             {progressQuery.length > 0 ? <Pressable accessibilityRole="button" accessibilityLabel="Clear series search" onPress={() => setProgressQuery('')} style={styles.searchClear}><X color={colors.textMuted} size={18} /></Pressable> : null}
           </View>
-          {!progress.data ? progress.error ? <EmptyState title="Progress unavailable" body="Refresh to load your next episodes." /> : <LoadingState variant="grid" label="Loading your progress" /> : visibleProgress.length === 0 ? progress.isLoadingMore ? <LoadingState variant="grid" label="Loading your progress" /> : <EmptyState title={normalizedQuery ? 'No matching series' : progressFilter === 'progress' ? 'Nothing in progress right now' : progressFilter === 'caughtUp' ? 'No series up to date yet' : 'No completed series yet'} body={normalizedQuery ? 'Try another title or change the filter.' : progressFilter === 'progress' ? 'Start a series to find your next episode here. Caught-up series are available in the filter.' : 'Your series will appear here as you mark episodes watched.'} /> : visibleProgress.map((item) => <ProgressCard key={item.media.key} item={item} busy={progress.isBusy(item)} onRetry={progress.retry} onWatched={() => void progress.markNext(item)} onOpen={() => item.next ? navigation.navigate('EpisodeDetail', { ...item.next, seriesTitle: item.media.title, title: item.media.title, tmdbId: item.media.tmdbId }) : navigation.navigate('SeriesDetail', { title: item.media.title, tmdbId: item.media.tmdbId })} />)}
+          {!progress.data ? progress.error ? <EmptyState title="Progress unavailable" body="Refresh to load your next episodes." /> : <LoadingState variant="grid" label="Loading your progress" /> : visibleProgress.length === 0 ? progress.isLoadingMore ? <LoadingState variant="grid" label="Loading your progress" /> : <EmptyState title={normalizedQuery ? 'No matching series' : progressFilter === 'progress' ? 'Nothing in progress right now' : progressFilter === 'caughtUp' ? 'No series up to date yet' : 'No completed series yet'} body={normalizedQuery ? 'Try another title or change the filter.' : progressFilter === 'progress' ? 'Start a series to find your next episode here. Caught-up series are available in the filter.' : 'Your series will appear here as you mark episodes watched.'} /> : <>
+            {recentProgress.length > 0 ? <View style={styles.progressSection}>
+              <Text style={styles.progressHeading}>Pick up where you left off</Text>
+              <ScrollView horizontal accessibilityLabel="Recently watched series" showsHorizontalScrollIndicator={false} style={{ marginRight: width < 360 ? -spacing.md : -spacing.xl }} contentContainerStyle={[styles.recentRail, { paddingRight: width < 360 ? spacing.md : spacing.xl }]}>
+                {recentProgress.map((item) => <View key={item.media.key} style={{ width: Math.min(278, width - 64) }}><ProgressCard item={item} busy={progress.isBusy(item)} onRetry={progress.retry} onWatched={() => void progress.markNext(item)} onOpen={() => openProgress(item)} /></View>)}
+              </ScrollView>
+            </View> : null}
+            <View style={styles.progressSection}>
+              <View style={styles.progressSectionHeader}><Text style={styles.progressHeading}>{normalizedQuery ? 'Search results' : 'All my series'}</Text><Text style={styles.progressCount}>{visibleProgress.length}</Text></View>
+              <View style={styles.progressGroup}>{visibleProgress.map((item, index) => <View key={item.media.key} style={index < visibleProgress.length - 1 ? styles.progressDivider : undefined}><ProgressCard compact item={item} busy={progress.isBusy(item)} onRetry={progress.retry} onWatched={() => void progress.markNext(item)} onOpen={() => openProgress(item)} /></View>)}</View>
+            </View>
+          </>}
           {progress.isLoadingMore && visibleProgress.length > 0 ? <ActivityIndicator accessibilityLabel="Loading more series" color={colors.accent} /> : null}
         </View> : <View style={styles.content}>
           {data?.partialError ? <InlineStatusBanner detail={data.partialError} onRetry={resource.retry} tone="error" /> : null}
@@ -203,6 +220,13 @@ export function WatchlistsScreen() {
 const styles = StyleSheet.create({
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   content: { gap: spacing.lg },
+  progressSection: { gap: 12 },
+  progressSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  progressHeading: { color: colors.text, fontSize: 18, fontWeight: '800', lineHeight: 24 },
+  progressCount: { color: colors.textMuted, fontSize: 12 },
+  recentRail: { gap: 12 },
+  progressGroup: { backgroundColor: 'rgba(15,19,29,0.74)', borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1, overflow: 'hidden' },
+  progressDivider: { borderBottomWidth: 1, borderBottomColor: colors.border },
   viewSwitch: { marginBottom: spacing.lg },
   searchBox: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 50, paddingHorizontal: spacing.md, backgroundColor: colors.panel, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1 },
   searchInput: { flex: 1, minWidth: 0, color: colors.text, fontSize: typography.body.fontSize, paddingVertical: spacing.sm },

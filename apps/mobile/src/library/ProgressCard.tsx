@@ -1,19 +1,26 @@
 import { Check } from 'lucide-react-native';
-import { ActivityIndicator, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { colors, radii, shadows, spacing } from '../design/tokens';
 import type { ProgressItem } from './progressModel';
 
-export function ProgressCard({ item, busy, onOpen, onWatched, onRetry }: {
-  item: ProgressItem; busy: boolean; onOpen: () => void; onWatched: () => void; onRetry: () => void;
+export function ProgressCard({ item, busy, onOpen, onWatched, onRetry, compact = false }: {
+  item: ProgressItem; busy: boolean; onOpen: () => void; onWatched: () => void; onRetry: () => void; compact?: boolean;
 }) {
   const { media, next } = item;
   const caption = item.error ?? (next ? `Next · S${next.seasonNumber} E${next.episodeNumber}` : item.state === 'completed' ? 'Completed' : 'Up to date');
   const total = media.numberOfEpisodes;
   const ratio = total ? Math.min(1, media.watchedEpisodeCount / total) : 0;
-  return <View style={styles.card}>
-    <Pressable accessibilityRole="button" accessibilityLabel={`Open ${media.title}, ${caption}`} onPress={onOpen} style={({ pressed }) => [styles.open, pressed && styles.pressed]}>
-      <ImageBackground source={media.backdropUrl || media.posterUrl ? { uri: media.backdropUrl ?? media.posterUrl! } : undefined} style={styles.background}>
+  return <View style={[styles.card, compact && styles.compactCard]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`Open ${media.title}, ${caption}`} onPress={onOpen} style={({ pressed }) => [compact ? styles.compactOpen : styles.open, pressed && styles.pressed]}>
+      {compact ? <>
+        <Image accessible={false} source={media.posterUrl ? { uri: media.posterUrl } : undefined} style={styles.poster} />
+        <View style={styles.compactCopy}>
+          <Text numberOfLines={2} style={styles.compactTitle}>{media.title}</Text>
+          <Text style={styles.compactMeta}>{caption}</Text>
+          {!item.error ? <><View style={styles.track}><View style={[styles.progress, { width: `${ratio * 100}%` }]} /></View><Text style={styles.compactCount}>{media.watchedEpisodeCount}{total ? ` / ${total}` : ''} episodes</Text></> : null}
+        </View>
+      </> : <ImageBackground source={media.backdropUrl || media.posterUrl ? { uri: media.backdropUrl ?? media.posterUrl! } : undefined} style={styles.background}>
         <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width="100%" height="100%">
           <Defs><LinearGradient id={`progress-${media.tmdbId}`} x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor="#090C13" stopOpacity="0.12" /><Stop offset="0.4" stopColor="#090C13" stopOpacity="0.4" /><Stop offset="1" stopColor="#090C13" stopOpacity="0.95" /></LinearGradient></Defs>
           <Rect width="100%" height="100%" fill={`url(#progress-${media.tmdbId})`} />
@@ -23,17 +30,25 @@ export function ProgressCard({ item, busy, onOpen, onWatched, onRetry }: {
           <Text style={styles.meta}>{caption}</Text>
           {!item.error ? <><View style={styles.track}><View style={[styles.progress, { width: `${ratio * 100}%` }]} /></View><Text style={styles.count}>{media.watchedEpisodeCount}{total ? ` / ${total}` : ''} episodes watched</Text></> : null}
         </View>
-      </ImageBackground>
+      </ImageBackground>}
     </Pressable>
-    {item.error ? <Pressable accessibilityRole="button" accessibilityLabel={`Retry progress for ${media.title}`} onPress={onRetry} style={styles.retry}><Text style={styles.retryText}>Retry</Text></Pressable> : next ?
-      <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: busy, disabled: busy, busy }} accessibilityLabel={`Mark ${media.title}, season ${next.seasonNumber}, episode ${next.episodeNumber} as watched`} disabled={busy} onPress={onWatched} style={styles.checkTarget}>
+    {item.error ? <Pressable accessibilityRole="button" accessibilityLabel={`Retry progress for ${media.title}`} onPress={onRetry} style={[styles.retry, compact && styles.compactAction]}><Text style={styles.retryText}>Retry</Text></Pressable> : next ?
+      <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: busy, disabled: busy, busy }} accessibilityLabel={`Mark ${media.title}, season ${next.seasonNumber}, episode ${next.episodeNumber} as watched`} disabled={busy} onPress={onWatched} style={[styles.checkTarget, compact && styles.compactAction]}>
         <View style={[styles.circle, busy && styles.checked]}>{busy ? <ActivityIndicator color={colors.textOnAccent} size="small" /> : null}</View>
-      </Pressable> : <View accessible={false} style={styles.checkTarget}><View style={[styles.circle, styles.checked]}><Check color={colors.textOnAccent} size={18} strokeWidth={2.5} /></View></View>}
+      </Pressable> : <View accessible={false} style={[styles.checkTarget, compact && styles.compactAction]}><View style={[styles.circle, styles.checked]}><Check color={colors.textOnAccent} size={18} strokeWidth={2.5} /></View></View>}
   </View>;
 }
 
 const styles = StyleSheet.create({
   card: { ...shadows.panel, backgroundColor: colors.panelElevated, borderColor: colors.border, borderWidth: 1, borderRadius: radii.lg, overflow: 'hidden' },
+  compactCard: { backgroundColor: 'transparent', borderWidth: 0, borderRadius: 0, shadowOpacity: 0, elevation: 0 },
+  compactOpen: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, paddingRight: 66, minHeight: 104 },
+  poster: { width: 49, height: 74, borderRadius: radii.sm, backgroundColor: colors.panelElevated },
+  compactCopy: { flex: 1, minWidth: 0, gap: 4 },
+  compactTitle: { color: colors.text, fontSize: 16, lineHeight: 20, fontWeight: '800' },
+  compactMeta: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
+  compactCount: { color: colors.textSubtle, fontSize: 11, lineHeight: 15 },
+  compactAction: { bottom: '50%', marginBottom: -22 },
   open: { minHeight: 190 },
   background: { flex: 1, justifyContent: 'flex-end', minHeight: 190 },
   copy: { padding: spacing.md, paddingRight: 70, paddingTop: 65, gap: spacing.xs },
