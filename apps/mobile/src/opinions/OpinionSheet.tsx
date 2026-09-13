@@ -454,9 +454,9 @@ export function OpinionSheet({
     <View style={triggerVariant === 'activity' ? styles.activityRoot : styles.triggerPanel}>
       {triggerVariant === 'activity' || triggerVariant === 'inline' ? (
         <View style={styles.activityOpinionRow}>
-          <View style={styles.activityRatingCell}>
+          <View style={[styles.activityRatingCell, triggerVariant === 'inline' && !reviewsEnabled && styles.inlineRatingCell]}>
             <View style={[styles.inlineRatingHeader, triggerVariant === 'inline' && styles.inlineHeaderHeight]}>
-              <Text style={styles.activityLabel}>Your rating</Text>
+              <Text style={[styles.activityLabel, triggerVariant === 'inline' && styles.inlineRatingTitle]}>Your rating</Text>
             </View>
             <View
               accessibilityActions={[
@@ -685,7 +685,9 @@ const styles = StyleSheet.create({
   inlineRatingHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   inlineHeaderHeight: { minHeight: 44 },
   inlineReviewCell: { flexBasis: 104, flexGrow: 0, flexShrink: 0, paddingLeft: spacing.sm },
-  inlineStars: { maxWidth: 260 },
+  inlineStars: { alignSelf: 'center', width: '100%', maxWidth: 260 },
+  inlineRatingTitle: { ...typography.title },
+  inlineRatingCell: { paddingRight: 0 },
   actionButton: { flex: 1 },
   activityDivider: { alignSelf: 'stretch', backgroundColor: colors.border, width: StyleSheet.hairlineWidth },
   activityLabel: { ...typography.meta, color: colors.textSubtle, marginBottom: spacing.xs },
