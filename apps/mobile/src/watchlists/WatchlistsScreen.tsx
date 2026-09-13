@@ -3,7 +3,7 @@ import { RouteProp, useIsFocused, useNavigation, useRoute } from '@react-navigat
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { Check, ListFilter, Plus, Search, X } from 'lucide-react-native';
-import { ActivityIndicator, Keyboard, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput as NativeTextInput, useWindowDimensions, View } from 'react-native';
+import { Keyboard, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput as NativeTextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSharedWatchlist } from '../api/sharedWatchlists';
 import { createWatchlist } from '../api/watchlists';
@@ -192,7 +192,6 @@ export function WatchlistsScreen() {
               <View style={styles.progressGroup}>{visibleProgress.map((item, index) => <View key={item.media.key} style={index < visibleProgress.length - 1 ? styles.progressDivider : undefined}><ProgressCard compact item={item} busy={progress.isBusy(item)} onRetry={progress.retry} onWatched={() => void progress.markNext(item)} onOpen={() => openProgress(item)} /></View>)}</View>
             </View>
           </>}
-          {progress.isLoadingMore && visibleProgress.length > 0 ? <ActivityIndicator accessibilityLabel="Loading more series" color={colors.accent} /> : null}
         </View> : <View style={styles.content}>
           {data?.partialError ? <InlineStatusBanner detail={data.partialError} onRetry={resource.retry} tone="error" /> : null}
           {visibleLists.map((list, index) => <ScreenReveal key={list.key} delay={Math.min(index * 40, 160)} style={styles.list}>
