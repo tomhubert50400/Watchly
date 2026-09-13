@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { BookOpen, Check, ListFilter, Play, Plus, Users } from 'lucide-react-native';
-import { Pressable, RefreshControl, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Modal, Pressable, RefreshControl, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createSharedWatchlist } from '../api/sharedWatchlists';
 import { createWatchlist } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
@@ -20,7 +21,7 @@ import { ScreenReveal } from '../components/ScreenReveal';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { TextInput } from '../components/TextInput';
-import { colors, radii, spacing, typography } from '../design/tokens';
+import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import { hapticSuccess } from '../feedback/haptics';
 import { getLastWatchedLibraryItem } from '../library/libraryModel';
 import { LibraryData, LibraryListItem, useLibraryData } from '../library/useLibraryData';
@@ -34,7 +35,12 @@ type ListFilterKind = 'all' | 'personal' | 'shared';
 const filters = [{ label: 'All lists', value: 'all' }, { label: 'Personal', value: 'personal' }, { label: 'Shared', value: 'shared' }] as const;
 
 export function WatchlistsScreen() {
-  const { width } = useWindowDimensions();
+  const { width, height, fontScale } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const filterButtonRef = useRef<View>(null);
+  const [filterAnchor, setFilterAnchor] = useState({ x: 0, y: 0 });
+  const filterWidth = Math.min(width - spacing.md * 2, Math.max(190, 140 * fontScale));
+  const filterRowHeight = Math.max(48, typography.body.lineHeight * fontScale + spacing.lg);
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { currentUser, getFirebaseIdToken } = useAuthSession();
   const { preloadWatchlists } = useWatchlistCache();
@@ -51,6 +57,7 @@ export function WatchlistsScreen() {
   const creatingRef = useRef(false);
   ownerRef.current = currentUser?.id;
   useEffect(() => { setSheet(null); setName(''); setError(null); setCreated(null); setRemoved([]); setFilter('all'); }, [currentUser?.id]);
+  useEffect(() => { setSheet((current) => current === 'filter' ? null : current); }, [width, height, fontScale]);
   const data = resource.data;
   useEffect(() => {
     if (created && data?.lists.some((list) => list.key === created.list.key)) setCreated(null);
@@ -63,6 +70,16 @@ export function WatchlistsScreen() {
   const visibleLists = lists.filter((list) => filter === 'all' || list.kind === filter);
   const lastWatched = getLastWatchedLibraryItem(data?.items ?? []);
   const atmosphereUrl = lastWatched?.posterUrl ?? lastWatched?.backdropUrl ?? lists[0]?.posterUrls.find(Boolean) ?? null;
+
+  function openFilter() {
+    filterButtonRef.current?.measureInWindow((x, y, buttonWidth, buttonHeight) => {
+      setFilterAnchor({
+        x: Math.max(spacing.md, Math.min(x + buttonWidth - filterWidth, width - filterWidth - spacing.md)),
+        y: Math.max(insets.top + spacing.sm, Math.min(y + buttonHeight + spacing.sm, height - insets.bottom - filterRowHeight * filters.length - spacing.lg)),
+      });
+      setSheet('filter');
+    });
+  }
 
   function removeList(key: string) {
     setRemoved((current) => [...current, key]);
@@ -114,12 +131,14 @@ export function WatchlistsScreen() {
   }
 
   return <>
-    <Screen title="Watchlists" eyebrow={currentUser ? 'Your collection' : undefined} tabBarPadding horizontalPadding={width < 360 ? spacing.md : spacing.xl}
+    <Screen title="Watchlists" tabBarPadding horizontalPadding={width < 360 ? spacing.md : spacing.xl}
       contentReady={!currentUser || Boolean(data)}
       background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null}
       refreshControl={currentUser ? <RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined}
       trailing={currentUser ? <View style={styles.actions}>
-        <IconButton accessibilityLabel={`Filter watchlists, ${filters.find((item) => item.value === filter)?.label}`} icon={<ListFilter color={filter === 'all' ? colors.textMuted : colors.accentText} size={21} />} onPress={() => setSheet('filter')} />
+        <View ref={filterButtonRef} collapsable={false}>
+          <IconButton accessibilityLabel={`Filter watchlists, ${filters.find((item) => item.value === filter)?.label}`} accessibilityState={{ expanded: sheet === 'filter' }} icon={<ListFilter color={filter === 'all' ? colors.textMuted : colors.accentText} size={21} />} onPress={openFilter} />
+        </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Create watchlist" onPress={() => { setKind(filter === 'shared' ? 'shared' : 'personal'); setError(null); setSheet('create'); }} style={styles.createButton}><Plus color={colors.textOnAccent} size={24} /></Pressable>
       </View> : null}>
       {!currentUser ? <SignInRequiredCard title="Sign in to use watchlists" body="Keep your next movies and series together, on your own or with friends." />
@@ -138,9 +157,14 @@ export function WatchlistsScreen() {
           </View>
         </View>}
     </Screen>
-    <BottomActionSheet title="Show watchlists" visible={sheet === 'filter'} onClose={() => setSheet(null)}>
-      {filters.map((item) => <Pressable key={item.value} accessibilityRole="radio" accessibilityState={{ checked: filter === item.value }} style={styles.filterRow} onPress={() => { setFilter(item.value); setSheet(null); }}><Text style={styles.filterText}>{item.label}</Text>{filter === item.value ? <Check color={colors.accentText} size={20} /> : null}</Pressable>)}
-    </BottomActionSheet>
+    <Modal transparent animationType="fade" visible={sheet === 'filter'} onRequestClose={() => setSheet(null)} statusBarTranslucent>
+      <View style={styles.filterOverlay}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Close watchlist filters" style={StyleSheet.absoluteFill} onPress={() => setSheet(null)} />
+        <View accessibilityViewIsModal onAccessibilityEscape={() => setSheet(null)} style={[styles.filterBubble, { left: filterAnchor.x, top: filterAnchor.y, width: filterWidth }]}>
+          {filters.map((item) => <Pressable key={item.value} accessibilityRole="radio" accessibilityState={{ checked: filter === item.value }} style={({ pressed }) => [styles.filterRow, { minHeight: filterRowHeight }, pressed && styles.filterRowPressed]} onPress={() => { setFilter(item.value); setSheet(null); }}><Text style={styles.filterText}>{item.label}</Text>{filter === item.value ? <Check color={colors.accentText} size={20} /> : null}</Pressable>)}
+        </View>
+      </View>
+    </Modal>
     <BottomActionSheet title="New watchlist" visible={sheet === 'create'} onClose={() => { if (!creating) setSheet(null); }} footer={<Button label="Create watchlist" fullWidth disabled={creating || !name.trim()} onPress={() => void createList()} />}>
       <BottomActionSheetScrollView contentContainerStyle={styles.content}>
         <SegmentedControl options={[{ label: 'Personal', value: 'personal' }, { label: 'Shared', value: 'shared' }]} value={kind} onChange={(value) => { setKind(value); setError(null); }} />
@@ -161,6 +185,9 @@ const styles = StyleSheet.create({
   utilities: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.md, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: spacing.sm },
   utility: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', minHeight: 44 },
   utilityText: { ...typography.body, fontSize: 13, color: colors.textMuted },
-  filterRow: { minHeight: 48, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.xl },
-  filterText: { ...typography.body, color: colors.text },
+  filterOverlay: { flex: 1 },
+  filterBubble: { ...shadows.raised, position: 'absolute', backgroundColor: colors.panelElevated, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.borderStrong, overflow: 'hidden' },
+  filterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.md, gap: spacing.sm },
+  filterRowPressed: { backgroundColor: colors.segmentSelected },
+  filterText: { ...typography.body, color: colors.text, flex: 1 },
 });
