@@ -11,7 +11,7 @@ export type RootTabParamList = {
   Community: undefined;
   Explore: undefined;
   Home: undefined;
-  Library: undefined;
+  Library: { view?: 'watchlists' | 'progress' } | undefined;
   Profile: undefined;
 };
 
@@ -45,7 +45,7 @@ export type RootStackParamList = {
     skippedItems: ImportSkippedTitle[];
   };
   Journal: undefined;
-  ProgressAlerts: undefined;
+  ReleaseAlerts: undefined;
   LegalDocument: {
     document: LegalDocumentId;
   };

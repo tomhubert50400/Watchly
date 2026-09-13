@@ -230,7 +230,7 @@ export function HomeScreen() {
 
           if (section.kind === 'continueWatching') {
             return (
-              <HomeSection delay={130} key="continue" title="Continue watching">
+              <HomeSection delay={130} key="continue" title="Continue watching" onViewAll={() => navigation.navigate('MainTabs', { screen: 'Library', params: { view: 'progress' } })}>
                 {section.error && section.items.length === 0 ? (
                   <InlineStatusBanner detail={section.error} onRetry={progress.retry} tone="error" />
                 ) : null}
@@ -308,10 +308,10 @@ export function HomeScreen() {
   );
 }
 
-function HomeSection({ children, delay, title }: { children: React.ReactNode; delay: number; title: string }) {
+function HomeSection({ children, delay, title, onViewAll }: { children: React.ReactNode; delay: number; title: string; onViewAll?: () => void }) {
   return (
     <ScreenReveal delay={delay} style={styles.section}>
-      <SectionHeader title={title} />
+      <SectionHeader title={title} actionLabel={onViewAll ? 'View all' : undefined} onActionPress={onViewAll} />
       <View style={styles.sectionBody}>{children}</View>
     </ScreenReveal>
   );

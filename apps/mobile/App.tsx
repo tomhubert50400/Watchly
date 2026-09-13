@@ -284,7 +284,7 @@ function AppNavigator() {
                     : 'Favorites',
               })}
             />
-            <Stack.Screen component={LibraryScreen} name="ProgressAlerts" options={{ title: 'Progress & alerts' }} />
+            <Stack.Screen component={LibraryScreen} name="ReleaseAlerts" options={{ title: 'Release alerts' }} />
             <Stack.Screen component={JournalScreen} name="Journal" options={{ title: 'Journal' }} />
             <Stack.Screen
               component={LegalDocumentScreen}

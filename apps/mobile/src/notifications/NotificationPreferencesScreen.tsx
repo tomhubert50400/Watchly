@@ -1,4 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/types';
 import { BellRing, Smartphone } from 'lucide-react-native';
 import { Linking, StyleSheet, Switch, Text, View } from 'react-native';
 import { getPushPreferences, PushPreferences, updatePushPreferences } from '../api/push';
@@ -28,6 +31,7 @@ import {
 type ScreenStatus = 'error' | 'loading' | 'ready' | 'saving';
 
 export function NotificationPreferencesScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
   const [message, setMessage] = useState<{ detail: string; tone: 'error' | 'success' } | null>(null);
   const [permission, setPermission] = useState<SystemPushPermission>('undetermined');
@@ -223,6 +227,7 @@ export function NotificationPreferencesScreen() {
           />
         </ScreenReveal>
 
+        <Button label="Manage release alerts" variant="secondary" onPress={() => navigation.navigate('ReleaseAlerts')} />
         <CharacterAlertsPanel />
 
         {permission === 'denied' ? (

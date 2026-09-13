@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { BookOpen } from 'lucide-react-native';
 import { RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { disableReleaseAlert, enableReleaseAlert } from '../api/notifications';
 import { useAuthSession } from '../auth/AuthSessionContext';
@@ -11,24 +10,19 @@ import { writePersistedCache } from '../cache/persistedCache';
 import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
-import { IconButton } from '../components/IconButton';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { LoadingState } from '../components/LoadingState';
 import { Screen } from '../components/Screen';
 import { SectionHeader } from '../components/SectionHeader';
-import { SegmentedControl } from '../components/SegmentedControl';
 import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { colors, spacing, typography } from '../design/tokens';
 import { hapticError } from '../feedback/haptics';
 import { RootStackParamList } from '../navigation/types';
-import { ContinueWatchingCard } from './ContinueWatchingCard';
-import { buildLibrarySummary, getLastWatchedLibraryItem } from './libraryModel';
+import { getLastWatchedLibraryItem } from './libraryModel';
 import { OwnerScopedData, replaceOwnedData, updateOwnedData } from './libraryState';
-import { LibrarySummary } from './LibrarySummary';
 import { ReleaseAlertRow } from './ReleaseAlertRow';
 import { LibraryData, LibraryMediaItem, useLibraryData } from './useLibraryData';
 
-type Tab = 'alerts' | 'progress';
 type Navigation = NativeStackNavigationProp<RootStackParamList>;
 
 export function LibraryScreen() {
@@ -36,7 +30,6 @@ export function LibraryScreen() {
   const { currentUser, getFirebaseIdToken } = useAuthSession();
   const resource = useLibraryData();
   const [scopedData, setScopedData] = useState<OwnerScopedData<LibraryData> | null>(null);
-  const [tab, setTab] = useState<Tab>('progress');
   const [actionError, setActionError] = useState<string | null>(null);
   const alertConfirmedValuesRef = useRef(new Map<string, boolean>());
   const alertMutationQueuesRef = useRef(new Map<string, Promise<void>>());
@@ -69,17 +62,12 @@ export function LibraryScreen() {
     }
   }, [currentUser?.id, resource.data]);
   useEffect(() => { setActionError(null); }, [currentUser?.id]);
-  const summary = useMemo(() => buildLibrarySummary(data?.items ?? [], data?.lists.length ?? 0), [data]);
-  const continueItems = (data?.items ?? []).filter((item) => item.contentType === 'series' && item.resumeEpisodeNumber !== null);
   const alertItems = (data?.items ?? []).filter((item) => item.hasReleaseAlert);
-  const visibleItems = tab === 'progress' ? continueItems : alertItems;
   const lastWatchedItem = getLastWatchedLibraryItem(data?.items ?? []);
   const atmosphereUrl = lastWatchedItem?.posterUrl ?? lastWatchedItem?.backdropUrl ?? null;
 
-  function openItem(item: LibraryMediaItem, resume = false) {
-    if (resume && item.contentType === 'series' && item.resumeSeasonNumber && item.resumeEpisodeNumber) {
-      navigation.navigate('EpisodeDetail', { episodeNumber: item.resumeEpisodeNumber, seasonNumber: item.resumeSeasonNumber, seriesTitle: item.title, title: item.title, tmdbId: item.tmdbId });
-    } else if (item.contentType === 'movie') navigation.navigate('FilmDetail', { title: item.title, tmdbId: item.tmdbId });
+  function openItem(item: LibraryMediaItem) {
+    if (item.contentType === 'movie') navigation.navigate('FilmDetail', { title: item.title, tmdbId: item.tmdbId });
     else navigation.navigate('SeriesDetail', { title: item.title, tmdbId: item.tmdbId });
   }
   function updateData(ownerId: string, update: (current: LibraryData) => LibraryData) {
@@ -143,16 +131,17 @@ export function LibraryScreen() {
   }
 
   const banner = actionError ? <InlineStatusBanner detail={actionError} tone="error" title="Action failed" /> : null;
-  return <Screen contentReady={!currentUser || Boolean(data)} background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null} safeAreaEdges={['bottom']} refreshControl={currentUser ? <RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined} statusBanner={banner} title="" trailing={currentUser ? <IconButton accessibilityLabel="Open Journal" icon={<BookOpen color={colors.text} size={21} />} onPress={() => navigation.navigate('Journal')} /> : null}>
-    {!currentUser ? <SignInRequiredCard body="You need to be signed in to use this section. Sign in here to keep your progress, ratings and release alerts together." title="Sign in to view progress" />
-      : resource.isInitialLoading && !data ? <LoadingState variant="grid" label="Loading your library" />
-      : resource.error && !data ? <EmptyState body={resource.error} title="Library unavailable"><Button label="Retry" onPress={resource.retry} /></EmptyState>
-      : data && data.items.length === 0 && data.lists.length === 0 ? <EmptyState body="Track a title. Your progress and ratings will appear here automatically." title="Start tracking"><Button label="Explore titles" onPress={() => navigation.navigate('MainTabs', { screen: 'Explore' })} /></EmptyState>
+  return <Screen contentReady={!currentUser || Boolean(data)} background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null} safeAreaEdges={['bottom']} refreshControl={currentUser ? <RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined} statusBanner={banner} title="">
+    {!currentUser ? <SignInRequiredCard body="Sign in to manage alerts for the movies and series you follow." title="Sign in to manage release alerts" />
+      : resource.isInitialLoading && !data ? <LoadingState variant="grid" label="Loading release alerts" />
+      : resource.error && !data ? <EmptyState body={resource.error} title="Release alerts unavailable"><Button label="Retry" onPress={resource.retry} /></EmptyState>
       : data ? <View style={styles.content}>
-        <ScreenReveal delay={80}><LibrarySummary summary={summary} /></ScreenReveal>
-        <SegmentedControl options={[{ accessibilityLabel: 'In progress', label: 'Progress', value: 'progress' }, { label: 'Release alerts', value: 'alerts' }]} value={tab} onChange={setTab} />
-        {tab === 'progress' && continueItems.length > 0 ? <ScreenReveal delay={130} style={styles.section}><SectionHeader title="Continue watching" /><ContinueWatchingCard item={continueItems[0]!} onPress={() => openItem(continueItems[0]!, true)} /></ScreenReveal> : null}
-        <ScreenReveal delay={200} style={styles.section}><SectionHeader title={tab === 'progress' ? 'In progress' : 'Release alerts'} />{visibleItems.map((item) => <ReleaseAlertRow item={item} key={item.key} onOpen={() => openItem(item)} onToggle={() => void toggleAlert(item)} />)}{visibleItems.length === 0 ? <Text style={styles.emptyInline}>{tab === 'progress' ? 'Nothing in progress right now.' : 'No active release alerts.'}</Text> : null}</ScreenReveal>
+        {data.partialError ? <InlineStatusBanner detail={data.partialError} onRetry={resource.retry} tone="error" /> : null}
+        <ScreenReveal delay={80} style={styles.section}>
+          <SectionHeader title="Followed titles" />
+          {alertItems.map((item) => <ReleaseAlertRow item={item} key={item.key} onOpen={() => openItem(item)} onToggle={() => void toggleAlert(item)} />)}
+          {alertItems.length === 0 ? <Text style={styles.emptyInline}>No active release alerts.</Text> : null}
+        </ScreenReveal>
       </View> : null}
   </Screen>;
 }

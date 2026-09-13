@@ -98,17 +98,12 @@ assert.match(
 const librarySource = readFileSync(new URL('LibraryScreen.tsx', import.meta.url), 'utf8');
 assert.match(
   librarySource,
-  /accessibilityLabel: 'In progress', label: 'Progress'/,
-  'the constrained Library segment must keep the full accessible name while using a non-truncating visible label',
-);
-assert.match(
-  librarySource,
-  /const alertItems = \(data\?\.items \?\? \[\]\)\.filter\(\(item\) => item\.hasReleaseAlert\);[\s\S]*const visibleItems = tab === 'progress' \? continueItems : alertItems;/,
+  /const alertItems = \(data\?\.items \?\? \[\]\)\.filter\(\(item\) => item\.hasReleaseAlert\);[\s\S]*alertItems\.map/,
   'the Library release-alert list must only render titles with an active bell',
 );
 assert.match(
   librarySource,
-  /tab === 'progress' \? 'In progress' : 'Release alerts'/,
+  /No active release alerts\./,
   'the filtered Library section must be labelled as release alerts',
 );
 
