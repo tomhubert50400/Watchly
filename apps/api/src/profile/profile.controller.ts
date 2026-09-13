@@ -43,6 +43,11 @@ export class ProfileController {
     return this.profile.listOwnOpinions(getIdentity(request));
   }
 
+  @Get('users/:userId/history')
+  history(@Req() request: AuthenticatedRequest, @Param('userId') userId: string, @Query('preview') preview?: string) {
+    return this.profile.getViewingHistory(getIdentity(request), userId, preview === 'true');
+  }
+
   @Get('me/export')
   async exportAccountData(@Req() request: AuthenticatedRequest) {
     return this.profile.exportAccountData(getIdentity(request));

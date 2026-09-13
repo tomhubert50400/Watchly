@@ -48,7 +48,6 @@ async function main() {
       changedFields.includes('profileVisibility') &&
         changedFields.includes('reviewsVisibility') &&
         changedFields.includes('ratingsVisibility') &&
-        changedFields.includes('viewingHistoryVisibility') &&
         changedFields.includes('episodeProgressVisibility'),
       'Privacy audit log must include every field controlled by profile visibility.',
     );

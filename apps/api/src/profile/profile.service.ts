@@ -673,7 +673,7 @@ export class ProfileService {
             ? toSharedWatchlistVisibility(input.sharedWatchlistVisibility)
             : undefined,
           userId,
-          viewingHistoryVisibility: profileVisibility ?? (input.viewingHistoryVisibility
+          viewingHistoryVisibility: (input.viewingHistoryVisibility
             ? toPrivacyVisibility(input.viewingHistoryVisibility)
             : undefined),
         },
@@ -687,7 +687,6 @@ export class ProfileService {
                 profileVisibility,
                 ratingsVisibility: profileVisibility,
                 reviewsVisibility: profileVisibility,
-                viewingHistoryVisibility: profileVisibility,
               }
             : {}),
           ...(!profileVisibility && input.ratingsVisibility
@@ -700,7 +699,7 @@ export class ProfileService {
                 ),
               }
             : {}),
-          ...(!profileVisibility && input.viewingHistoryVisibility
+          ...(input.viewingHistoryVisibility
             ? { viewingHistoryVisibility: toPrivacyVisibility(input.viewingHistoryVisibility) }
             : {}),
         },
@@ -893,6 +892,61 @@ export class ProfileService {
       handle: user.handle,
       id: user.id,
       onboardingCompleted: user.onboardingCompleted,
+    };
+  }
+
+  async getViewingHistory(identity: AuthenticatedIdentity, userId: string, preview = false) {
+    assertUuid(userId);
+    const viewerId = await this.getUserId(identity);
+    const user = await this.prisma.withConnectionRetry(() => this.prisma.user.findUnique({
+      where: { id: userId, AND: [activeAccountWhere()] }, include: { privacySettings: true },
+    }));
+    if (!user) throw new NotFoundException('Profile not found.');
+    const owner = viewerId === userId;
+    if (!owner) {
+      if (await this.getProfileBlockRelationship(viewerId, userId)) throw new ForbiddenException('This profile is unavailable.');
+      if (user.privacySettings?.viewingHistoryVisibility !== PrivacyVisibility.PUBLIC) throw new ForbiddenException('This viewing history is private.');
+      if (user.privacySettings?.profileVisibility === PrivacyVisibility.PRIVATE) {
+        const follow = await this.prisma.withConnectionRetry(() => this.prisma.userFollow.findFirst({
+          where: { followedUserId: userId, followerId: viewerId, status: FollowStatus.ACCEPTED }, select: { id: true },
+        }));
+        if (!follow) throw new ForbiddenException('This profile is private.');
+      }
+    }
+    const events = await this.prisma.withConnectionRetry(() => this.prisma.viewingEvent.findMany({
+        where: { userId, watchedAt: { not: null } }, orderBy: [{ watchedAt: 'desc' }, { createdAt: 'desc' }],
+        take: preview ? 3 : undefined,
+      }));
+    const showRatings = owner || user.privacySettings?.ratingsVisibility === PrivacyVisibility.PUBLIC;
+    const movieIds = events.filter((event) => event.contentType === 'MOVIE').map((event) => event.tmdbId);
+    const episodes = events.filter((event) => event.contentType === 'EPISODE').map((event) => ({
+      seriesTmdbId: event.tmdbId, seasonNumber: event.seasonNumber!, episodeNumber: event.episodeNumber!,
+    }));
+    const [movieRatings, episodeRatings, movieReviews, episodeReviews] = await this.prisma.withConnectionRetry(() => Promise.all([
+      showRatings && movieIds.length ? this.prisma.userMovieRating.findMany({ where: { userId, tmdbId: { in: movieIds } } }) : [],
+      showRatings && episodes.length ? this.prisma.userEpisodeRating.findMany({ where: { userId, OR: episodes } }) : [],
+      !preview && movieIds.length ? this.prisma.userMovieReview.findMany({ where: { userId, tmdbId: { in: movieIds }, moderationHiddenAt: null } }) : [],
+      !preview && episodes.length ? this.prisma.userEpisodeReview.findMany({ where: { userId, OR: episodes, moderationHiddenAt: null } }) : [],
+    ] as const));
+    const opinions = [
+      ...movieRatings.map(toMovieRatingOpinion), ...episodeRatings.map(toEpisodeRatingOpinion),
+      ...movieReviews.map((review) => {
+        const rating = movieRatings.find((rating) => rating.tmdbId === review.tmdbId);
+        return toMovieReviewOpinion(review, rating ? rating.scoreHalfSteps / 2 : null);
+      }),
+      ...episodeReviews.map((review) => {
+        const rating = episodeRatings.find((rating) => getEpisodeOpinionKey(rating) === getEpisodeOpinionKey(review));
+        return toEpisodeReviewOpinion(review, rating ? rating.scoreHalfSteps / 2 : null);
+      }),
+    ];
+    return {
+      visibility: fromPrivacyVisibility(user.privacySettings?.viewingHistoryVisibility ?? PrivacyVisibility.PRIVATE),
+      items: events.map((event) => ({
+        id: event.id, contentType: event.contentType === 'MOVIE' ? 'movie' as const : 'episode' as const,
+        tmdbId: event.tmdbId, seasonNumber: event.seasonNumber, episodeNumber: event.episodeNumber,
+        watchedAt: event.watchedAt!.toISOString(), title: event.title, posterUrl: event.artworkUrl,
+      })),
+      opinions,
     };
   }
 
@@ -1760,7 +1814,6 @@ function getPrivacyAuditFields(input: UpdatePrivacySettingsDto) {
       'episodeProgressVisibility',
       'ratingsVisibility',
       'reviewsVisibility',
-      'viewingHistoryVisibility',
     );
   }
 

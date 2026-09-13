@@ -105,8 +105,8 @@ async function assertDefaultPrivacy(profile: ProfileService, identity: Authentic
 
   assert(me.privacy.profileVisibility === 'public', 'New profiles should default to public.');
   assert(
-    me.privacy.viewingHistoryVisibility === 'public',
-    'New viewing history should default to public.',
+    me.privacy.viewingHistoryVisibility === 'private',
+    'New viewing history should default to private.',
   );
   assert(
     me.privacy.episodeProgressVisibility === 'public',

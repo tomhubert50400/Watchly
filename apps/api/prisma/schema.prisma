@@ -245,7 +245,7 @@ model AuthIdentity {
 model PrivacySettings {
   userId                    String                    @id @db.Uuid
   profileVisibility         PrivacyVisibility         @default(PUBLIC)
-  viewingHistoryVisibility  PrivacyVisibility         @default(PUBLIC)
+  viewingHistoryVisibility  PrivacyVisibility         @default(PRIVATE)
   episodeProgressVisibility PrivacyVisibility         @default(PUBLIC)
   reviewsVisibility         PrivacyVisibility         @default(PUBLIC)
   ratingsVisibility         PrivacyVisibility         @default(PUBLIC)
