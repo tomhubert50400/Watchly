@@ -75,24 +75,31 @@ export class SharedWatchlistsService {
 
     const userId = await this.getUserId(identity);
     const watchlist = await this.withConnectionRetry(() =>
-      this.prisma.sharedWatchlist.create({
-      data: {
-        members: {
-          create: {
-            userId,
+      this.prisma.$transaction(async (transaction) => {
+        await transaction.$queryRaw`SELECT id FROM "users" WHERE id = ${userId}::uuid FOR UPDATE`;
+        const count = await transaction.sharedWatchlistMember.count({ where: { userId } });
+        if (count >= 5) {
+          throw new BadRequestException('You can belong to up to 5 shared watchlists, including lists you create.');
+        }
+        return transaction.sharedWatchlist.create({
+          data: {
+            members: {
+              create: {
+                userId,
+              },
+            },
+            name: cleanName,
+            ownerId: userId,
           },
-        },
-        name: cleanName,
-        ownerId: userId,
-      },
-      include: {
-        _count: {
-          select: {
-            items: true,
-            members: true,
+          include: {
+            _count: {
+              select: {
+                items: true,
+                members: true,
+              },
+            },
           },
-        },
-      },
+        });
       }),
     );
 
@@ -200,18 +207,29 @@ export class SharedWatchlistsService {
     }
 
     await this.withConnectionRetry(() =>
-      this.prisma.sharedWatchlistMember.upsert({
-      create: {
-        userId: memberUserId,
-        watchlistId,
-      },
-      update: {},
-      where: {
-        watchlistId_userId: {
-          userId: memberUserId,
-          watchlistId,
-        },
-      },
+      this.prisma.$transaction(async (transaction) => {
+        await transaction.$queryRaw`SELECT id FROM "users" WHERE id = ${memberUserId}::uuid FOR UPDATE`;
+        const existing = await transaction.sharedWatchlistMember.findUnique({
+          where: { watchlistId_userId: { userId: memberUserId, watchlistId } },
+        });
+        if (existing) return existing;
+        const count = await transaction.sharedWatchlistMember.count({ where: { userId: memberUserId } });
+        if (count >= 5) {
+          throw new BadRequestException('This person already belongs to 5 shared watchlists.');
+        }
+        return transaction.sharedWatchlistMember.upsert({
+          create: {
+            userId: memberUserId,
+            watchlistId,
+          },
+          update: {},
+          where: {
+            watchlistId_userId: {
+              userId: memberUserId,
+              watchlistId,
+            },
+          },
+        });
       }),
     );
 
@@ -219,6 +237,23 @@ export class SharedWatchlistsService {
     await this.upsertInviteNotification(userId, memberUserId, watchlistId);
 
     return { added: true };
+  }
+
+  async leaveSharedWatchlist(identity: AuthenticatedIdentity, watchlistId: string) {
+    const userId = await this.getUserId(identity);
+    await this.withConnectionRetry(() => this.prisma.$transaction(async (transaction) => {
+      await transaction.$queryRaw`SELECT id FROM "users" WHERE id = ${userId}::uuid FOR UPDATE`;
+      const watchlist = await transaction.sharedWatchlist.findFirst({
+        where: { id: watchlistId, members: { some: { userId } } },
+        select: { ownerId: true },
+      });
+      if (!watchlist) throw new NotFoundException('Shared watchlist not found.');
+      if (watchlist.ownerId === userId) {
+        throw new BadRequestException('You own this watchlist. Delete it instead of leaving it.');
+      }
+      await transaction.sharedWatchlistMember.deleteMany({ where: { userId, watchlistId } });
+    }));
+    return { left: true };
   }
 
   async addItem(identity: AuthenticatedIdentity, watchlistId: string, input: SharedWatchlistItemDto) {

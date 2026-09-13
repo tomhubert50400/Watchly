@@ -64,18 +64,25 @@ export class WatchlistsService {
 
     const userId = await this.getUserId(identity);
     const watchlist = await this.withConnectionRetry(() =>
-      this.prisma.personalWatchlist.create({
-      data: {
-        name: cleanName,
-        userId,
-      },
-      include: {
-        _count: {
-          select: {
-            items: true,
+      this.prisma.$transaction(async (transaction) => {
+        await transaction.$queryRaw`SELECT id FROM "users" WHERE id = ${userId}::uuid FOR UPDATE`;
+        const count = await transaction.personalWatchlist.count({ where: { userId } });
+        if (count >= 5) {
+          throw new BadRequestException('You can have up to 5 personal watchlists. Delete a list before creating another.');
+        }
+        return transaction.personalWatchlist.create({
+          data: {
+            name: cleanName,
+            userId,
           },
-        },
-      },
+          include: {
+            _count: {
+              select: {
+                items: true,
+              },
+            },
+          },
+        });
       }),
     );
 

@@ -81,6 +81,11 @@ export class SharedWatchlistsController {
     );
   }
 
+  @Delete(':watchlistId/members/me')
+  async leave(@Req() request: AuthenticatedRequest, @Param('watchlistId') watchlistId: string) {
+    return this.watchlists.leaveSharedWatchlist(getIdentity(request), parseUuid(watchlistId, 'watchlistId'));
+  }
+
   @Put(':watchlistId/items')
   async addItem(
     @Req() request: AuthenticatedRequest,
