@@ -440,6 +440,7 @@ export function ProfileScreen() {
           }}
           onViewAllMedia={(filter) => navigation.navigate('ProfileMedia', {
             filter,
+            initialItems: mediaItems,
             profileBackdropUrl: atmosphereUrl,
           })}
           opinions={profile.opinions}

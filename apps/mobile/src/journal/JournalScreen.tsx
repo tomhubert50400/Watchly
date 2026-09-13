@@ -2,11 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CalendarDays, X } from 'lucide-react-native';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { getMovieDetails, getSeriesDetails } from '../api/catalogue';
-import { getOwnProfileOpinions } from '../api/profile';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { getOwnProfileOpinions, getProfileHistory } from '../api/profile';
 import { listMovieRatings } from '../api/ratings';
-import { listJournalViewings } from '../api/viewings';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { useCachedResource } from '../cache/useCachedResource';
@@ -15,8 +13,8 @@ import { Button } from '../components/Button';
 import { BottomActionSheet, BottomActionSheetScrollView } from '../components/BottomActionSheet';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
-import { Screen } from '../components/Screen';
-import { colors, radii, spacing, typography } from '../design/tokens';
+import { JournalTimeline } from './JournalTimeline';
+import { colors, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { useUserDataRevision } from '../sync/userDataEvents';
 import { applyViewingHistoryUpdates, getViewingHistoryUpdates, reconcileViewingHistoryUpdates, useViewingHistoryUpdates } from '../viewings/viewingHistoryUpdates';
@@ -24,13 +22,11 @@ import { ViewingCountControl } from '../viewings/ViewingCountControl';
 import type { ViewingTarget } from '../api/viewings';
 import { PublicViewingHistoryScreen } from './PublicViewingHistoryScreen';
 import { JournalCalendar } from './JournalCalendar';
-import { JournalEntryCard } from './JournalEntryCard';
 import { buildJournal, filterJournalEntries, filterJournalEntriesByDate, getJournalMonthKeys, groupJournalEntriesByMonth, JournalEntry, JournalFilter } from './journalModel';
 
 export type HydratedJournalEntry = JournalEntry & { posterUrl: string | null; title: string };
 type JournalData = { input: Parameters<typeof buildJournal>[0]; averageRating: number | null; entries: HydratedJournalEntry[]; partialError: string | null; reviewCount: number };
 type Navigation = NativeStackNavigationProp<RootStackParamList>;
-const MAX_JOURNAL_HYDRATIONS = 24;
 
 export function JournalScreen() {
   const route = useRoute<RouteProp<RootStackParamList, 'Journal'>>();
@@ -48,12 +44,12 @@ function OwnViewingHistoryScreen() {
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
   const [editing, setEditing] = useState<(ViewingTarget & { title: string }) | null>(null);
   const [episodeChoices, setEpisodeChoices] = useState<HydratedJournalEntry | null>(null);
-  const key = currentUser ? `watchly:user:${currentUser.id}:journal:v4` : 'watchly:user:visitor:journal-disabled';
+  const key = currentUser ? `watchly:user:${currentUser.id}:journal:v5` : 'watchly:user:visitor:journal-disabled';
   const load = useCallback(async (cached?: JournalData): Promise<JournalData> => {
     if (!currentUser) throw new Error('Sign in to open your viewing history.');
     const token = await getFirebaseIdToken(); if (!token) throw new Error('Sign in again to open your viewing history.');
     const previous = cached;
-    const [viewings, ratings, opinions] = await Promise.allSettled([listJournalViewings(token), listMovieRatings(token), getOwnProfileOpinions(token)]);
+    const [viewings, ratings, opinions] = await Promise.allSettled([getProfileHistory(token, currentUser.id), listMovieRatings(token), getOwnProfileOpinions(token)]);
     const topResults = { viewings, ratings, opinions };
     if (Object.values(topResults).every((result) => result.status === 'rejected')) throw new Error('Could not update your viewing history.');
     const failures = Object.entries(topResults).flatMap(([name, result]) => result.status === 'rejected' ? [`${name} (${errorLabel(result.reason)})`] : []);
@@ -64,14 +60,14 @@ function OwnViewingHistoryScreen() {
       viewings: viewings.status === 'fulfilled' ? viewings.value.items : [],
     };
     const model = buildJournal(input);
-    const hydratedTitles = new Map<string, Promise<HydratedJournalEntry>>();
-    const entries = await Promise.all(model.entries.map((entry, index) => {
-      const fallback = previous?.entries.find((old) => old.kind === entry.kind && old.tmdbId === entry.tmdbId);
-      if (fallback?.posterUrl) return { ...fallback, ...entry };
-      const titleKey = `${entry.kind}:${entry.tmdbId}`;
-      if (!hydratedTitles.has(titleKey)) hydratedTitles.set(titleKey, index < MAX_JOURNAL_HYDRATIONS ? hydrateEntry(entry, fallback) : Promise.resolve(fallback ?? toJournalFallback(entry)));
-      return hydratedTitles.get(titleKey)!.then((details) => ({ ...details, ...entry }));
-    }));
+    const metadata = new Map(viewings.status === 'fulfilled' ? viewings.value.items.map((item) => [`${item.contentType === 'movie' ? 'movie' : 'series'}:${item.tmdbId}`, item]) : []);
+    const previousTitles = new Map(previous?.entries.map((entry) => [`${entry.kind}:${entry.tmdbId}`, entry]));
+    const entries = model.entries.map((entry) => {
+      const key = `${entry.kind}:${entry.tmdbId}`;
+      const saved = metadata.get(key);
+      const fallback = previousTitles.get(key);
+      return { ...entry, title: saved?.title ?? fallback?.title ?? toJournalFallback(entry).title, posterUrl: saved?.posterUrl ?? fallback?.posterUrl ?? null };
+    });
     return { ...model, input, entries, partialError: failures.length ? `Some history data could not update: ${failures.join(', ')}.` : null };
   }, [currentUser, getFirebaseIdToken, journalRevision, key]);
   const resource = useCachedResource({ enabled: Boolean(currentUser), key, load });
@@ -95,7 +91,10 @@ function OwnViewingHistoryScreen() {
   const entries = filterJournalEntriesByDate(filteredEntries, selectedDateKey);
   const groups = groupJournalEntriesByMonth(entries);
   const yearCount = (data?.entries ?? []).filter((entry) => entry.date.slice(0, 4) === String(new Date().getFullYear())).length;
-  return <Screen contentReady={!currentUser || Boolean(resource.data)} refreshControl={currentUser ? <RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined} title="">
+  return <JournalTimeline groups={currentUser && resource.data ? groups : []} onOpen={(entry) => openEntry(navigation, entry)} onEdit={(entry) => entry.kind === 'movie' ? setEditing({ contentType: 'movie', tmdbId: entry.tmdbId, title: entry.title }) : setEpisodeChoices(entry)} onRefresh={currentUser ? resource.retry : undefined} refreshing={resource.isRefreshing} overlays={<>
+    {editing ? <ViewingCountControl {...(editing.contentType === 'movie' ? editing : { ...editing, seriesTmdbId: editing.tmdbId })} key={`${currentUser?.id}:${editing.tmdbId}:${editing.contentType === 'episode' ? `${editing.seasonNumber}:${editing.episodeNumber}` : 'movie'}`} onEditorClose={() => setEditing(null)} variant="editor" /> : null}
+    {episodeChoices ? <BottomActionSheet onClose={() => setEpisodeChoices(null)} title="Edit viewing dates" visible><BottomActionSheetScrollView>{[...new Map(episodeChoices.episodes.map((episode) => [`${episode.seasonNumber}:${episode.episodeNumber}`, episode])).values()].map((episode) => <Button key={`${episode.seasonNumber}:${episode.episodeNumber}`} label={`Season ${episode.seasonNumber}, episode ${episode.episodeNumber}`} onPress={() => { setEditing({ contentType: 'episode', tmdbId: episodeChoices.tmdbId, seasonNumber: episode.seasonNumber, episodeNumber: episode.episodeNumber, title: episodeChoices.title }); setEpisodeChoices(null); }} variant="ghost" />)}</BottomActionSheetScrollView></BottomActionSheet> : null}
+  </>}>
     {!currentUser ? <SignInRequiredCard body="You need to be signed in to use your viewing history. Sign in here to see your viewing history and opinions." title="Sign in to view your history" />
       : resource.isInitialLoading && !resource.data ? <LoadingState label="Loading your viewing history" />
       : resource.error && !resource.data ? <EmptyState body={resource.error} title="History unavailable"><Button label="Retry" onPress={resource.retry} /></EmptyState>
@@ -119,18 +118,15 @@ function OwnViewingHistoryScreen() {
         {calendarOpen && visibleMonthKey ? <JournalCalendar entries={filteredEntries} monthKey={visibleMonthKey} onMonthChange={setCalendarMonthKey} onSelectDate={setSelectedDateKey} selectedDateKey={selectedDateKey} /> : null}
         {data!.entries.length === 0 ? <EmptyState body="Watch, rate or review a film or episode and it will appear here." title="Your viewing history is ready" />
           : groups.length === 0 ? <EmptyState body={selectedDateKey ? 'Clear the date or choose another marked day.' : 'Choose another filter to see your entries.'} title={selectedDateKey ? `No entries on ${formatSelectedDate(selectedDateKey)}` : 'No matching entries'} />
-          : <ScreenReveal delay={150} style={styles.months}>{groups.map((group) => <View key={group.key}><Text style={styles.month}>{formatMonth(group.key)}</Text>{group.entries.map((entry) => <JournalEntryCard entry={entry as HydratedJournalEntry} key={entry.key} onEdit={() => entry.kind === 'movie' ? setEditing({ contentType: 'movie', tmdbId: entry.tmdbId, title: (entry as HydratedJournalEntry).title }) : setEpisodeChoices(entry as HydratedJournalEntry)} onPress={() => openEntry(navigation, entry as HydratedJournalEntry)} />)}</View>)}</ScreenReveal>}
+          : null}
       </View> : null}
-    {editing ? <ViewingCountControl {...(editing.contentType === 'movie' ? editing : { ...editing, seriesTmdbId: editing.tmdbId })} key={`${currentUser?.id}:${editing.tmdbId}:${editing.contentType === 'episode' ? `${editing.seasonNumber}:${editing.episodeNumber}` : 'movie'}`} onEditorClose={() => setEditing(null)} variant="editor" /> : null}
-    {episodeChoices ? <BottomActionSheet onClose={() => setEpisodeChoices(null)} title="Edit viewing dates" visible><BottomActionSheetScrollView>{[...new Map(episodeChoices.episodes.map((episode) => [`${episode.seasonNumber}:${episode.episodeNumber}`, episode])).values()].map((episode) => <Button key={`${episode.seasonNumber}:${episode.episodeNumber}`} label={`Season ${episode.seasonNumber}, episode ${episode.episodeNumber}`} onPress={() => { setEditing({ contentType: 'episode', tmdbId: episodeChoices.tmdbId, seasonNumber: episode.seasonNumber, episodeNumber: episode.episodeNumber, title: episodeChoices.title }); setEpisodeChoices(null); }} variant="ghost" />)}</BottomActionSheetScrollView></BottomActionSheet> : null}
-  </Screen>;
+
+  </JournalTimeline>;
 }
 
 function Stat({ label, value }: { label: string; value: string }) { return <View style={styles.stat}><Text style={styles.statValue}>{value}</Text><Text style={styles.statLabel}>{label}</Text></View>; }
-async function hydrateEntry(entry: JournalEntry, fallback?: HydratedJournalEntry): Promise<HydratedJournalEntry> { try { const details = entry.kind === 'movie' ? (await getMovieDetails(entry.tmdbId)).item : (await getSeriesDetails(entry.tmdbId)).item; return { ...entry, posterUrl: details.posterUrl, title: details.title }; } catch { return fallback ? { ...fallback, ...entry } : toJournalFallback(entry); } }
 function toJournalFallback(entry: JournalEntry): HydratedJournalEntry { return { ...entry, posterUrl: null, title: `${entry.kind === 'movie' ? 'Movie' : 'Series'} TMDB ${entry.tmdbId}` }; }
 function openEntry(navigation: Navigation, entry: HydratedJournalEntry) { if (entry.kind === 'movie') navigation.navigate('FilmDetail', { title: entry.title, tmdbId: entry.tmdbId }); else navigation.navigate('SeriesDetail', { title: entry.title, tmdbId: entry.tmdbId }); }
 function errorLabel(error: unknown) { return error instanceof Error ? error.message : 'unknown error'; }
 function formatSelectedDate(dateKey: string) { return new Date(`${dateKey}T00:00:00Z`).toLocaleDateString('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC', year: 'numeric' }); }
-function formatMonth(key: string) { const [year, month] = key.split('-').map(Number); return new Date(year!, month! - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase(); }
-const styles = StyleSheet.create({ dateControls: { alignItems: 'center', flexDirection: 'row', gap: spacing.xs, marginBottom: spacing.md }, intro: { borderBottomColor: colors.border, borderBottomWidth: 1, gap: spacing.md, paddingBottom: spacing.lg }, introText: { ...typography.body, color: colors.textMuted }, stats: { flexDirection: 'row', gap: spacing.lg }, stat: { flex: 1 }, statValue: { color: colors.text, fontSize: 17, fontWeight: '800' }, statLabel: { color: colors.textSubtle, fontSize: 11, marginTop: 2 }, filters: { gap: spacing.xs, paddingVertical: spacing.md }, months: { gap: spacing.md }, month: { ...typography.eyebrow, color: colors.accentText, marginBottom: spacing.md, marginTop: spacing.sm } });
+const styles = StyleSheet.create({ dateControls: { alignItems: 'center', flexDirection: 'row', gap: spacing.xs, marginBottom: spacing.md }, intro: { borderBottomColor: colors.border, borderBottomWidth: 1, gap: spacing.md, paddingBottom: spacing.lg }, introText: { ...typography.body, color: colors.textMuted }, stats: { flexDirection: 'row', gap: spacing.lg }, stat: { flex: 1 }, statValue: { color: colors.text, fontSize: 17, fontWeight: '800' }, statLabel: { color: colors.textSubtle, fontSize: 11, marginTop: 2 }, filters: { gap: spacing.xs, paddingVertical: spacing.md } });

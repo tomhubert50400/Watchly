@@ -24,9 +24,10 @@ export function ProfileMediaScreen() {
   const providedItems = route.params.items;
   const usesProvidedItems = providedItems !== undefined;
   const resource = useLibraryData(!usesProvidedItems);
+  const loadedItems = providedItems ?? resource.data?.items ?? route.params.initialItems;
   const sourceItems = useMemo(
-    () => getProfileMediaItems(providedItems ?? resource.data?.items ?? [], route.params.filter),
-    [providedItems, resource.data?.items, route.params.filter],
+    () => getProfileMediaItems(loadedItems ?? [], route.params.filter),
+    [loadedItems, route.params.filter],
   );
   const groups = useMemo(() => groupProfileMediaByStatus(sourceItems), [sourceItems]);
   const atmosphereUrl = route.params.profileBackdropUrl
@@ -43,7 +44,7 @@ export function ProfileMediaScreen() {
   }, [navigation]);
 
   return (
-    <Screen contentReady={usesProvidedItems || Boolean(resource.data)}
+    <Screen contentReady={Boolean(loadedItems)}
       background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null}
       refreshControl={usesProvidedItems ? undefined : (
         <RefreshControl
@@ -55,9 +56,9 @@ export function ProfileMediaScreen() {
       )}
       title=""
     >
-      {!usesProvidedItems && resource.isInitialLoading && !resource.data ? (
+      {!loadedItems && resource.isInitialLoading ? (
         <LoadingState variant="grid" label="Loading your titles" />
-      ) : !usesProvidedItems && resource.error && !resource.data ? (
+      ) : !loadedItems && resource.error ? (
         <EmptyState body={resource.error} title="Titles unavailable">
           <Button label="Retry" onPress={resource.retry} />
         </EmptyState>
