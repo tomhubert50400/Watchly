@@ -6,6 +6,7 @@ import { basename } from 'node:path';
 export type ImportSourceValue = 'imdb' | 'letterboxd' | 'tv-time';
 
 export type ParsedImportItem = {
+  watchlistKeys?: string[];
   identityIssue?: string;
   episodes?: { seasonNumber: number; episodeNumber: number; watchedDate: string | null; tvdbId?: number }[];
   activityDate: string | null;
@@ -27,12 +28,14 @@ export type ParsedImportItem = {
 };
 
 export type ParsedImportFile = {
+  watchlists: ParsedImportWatchlist[];
   ignoredFileCount: number;
   items: ParsedImportItem[];
 };
 
 type CsvRecord = Record<string, string>;
-type CsvFile = { name: string; records: CsvRecord[] };
+export type ParsedImportWatchlist = { key: string; name: string };
+type CsvFile = { name: string; records: CsvRecord[]; watchlist?: ParsedImportWatchlist };
 
 export function parseImportFile(
   source: ImportSourceValue,
@@ -50,11 +53,15 @@ export function parseImportFile(
       ? parseTvTimeFiles(files)
       : parseImdbFiles(files);
 
-  if (items.length === 0) {
+  const watchlists = files.flatMap((file) => file.watchlist ? [file.watchlist] : []);
+  if (source === 'tv-time' && items.some((item) => item.watchlistKeys?.length)) {
+    watchlists.push({ key: 'watchlist', name: 'Watchlist TV Time' });
+  }
+  if (items.length === 0 && watchlists.length === 0) {
     throw new BadRequestException(`No supported ${getSourceLabel(source)} rows were found.`);
   }
 
-  return { ignoredFileCount, items };
+  return { ignoredFileCount, items, watchlists };
 }
 
 function readCsvFiles(source: ImportSourceValue, fileName: string, buffer: Buffer) {
@@ -64,12 +71,12 @@ function readCsvFiles(source: ImportSourceValue, fileName: string, buffer: Buffe
     }
 
     const entryBaseName = basename(fileName).toLowerCase();
-    if (!isSupportedSourceFile(source, entryBaseName)) {
+    if (!isSupportedSourceFile(source, entryBaseName, buffer.toString('utf8', 0, 80))) {
       throw new BadRequestException(`Choose a supported ${getSourceLabel(source)} CSV export file.`);
     }
 
     return {
-      files: [{ name: fileName, records: parseCsv(buffer.toString('utf8')) }],
+      files: [readCsvFile(source, fileName, buffer.toString('utf8'))],
       ignoredFileCount: 0,
     };
   }
@@ -91,7 +98,7 @@ function readCsvFiles(source: ImportSourceValue, fileName: string, buffer: Buffe
     const entryBaseName = basename(normalizedName);
     const isCsv = entryBaseName.endsWith('.csv');
     const isDeleted = normalizedName.startsWith('deleted/') || normalizedName.includes('/deleted/');
-    const isSupportedFile = isSupportedSourceFile(source, entryBaseName);
+    const isSupportedFile = isSupportedSourceFile(source, normalizedName, strFromU8(content.subarray(0, 80)));
 
     if (!isCsv || isDeleted || !isSupportedFile) {
       if (isCsv) ignoredFileCount += 1;
@@ -103,30 +110,53 @@ function readCsvFiles(source: ImportSourceValue, fileName: string, buffer: Buffe
       throw new BadRequestException('The extracted archive is too large. Split the export into smaller files.');
     }
 
-    files.push({ name: entryName, records: parseCsv(strFromU8(content)) });
+    files.push(readCsvFile(source, entryName, strFromU8(content)));
   }
 
   if (files.length === 0) {
     throw new BadRequestException('The ZIP archive does not contain a supported CSV export.');
   }
 
-  if (files.length > MAX_CSV_FILES) {
-    throw new BadRequestException('The ZIP archive contains too many CSV files.');
-  }
-
   return { files, ignoredFileCount };
 }
 
-function parseCsv(content: string): CsvRecord[] {
+function readCsvFile(source: ImportSourceValue, name: string, content: string): CsvFile {
   try {
-    return parse(content, {
+    const rows = parse(content, {
       bom: true,
-      columns: (headers: string[]) => headers.map(normalizeHeader),
       relax_column_count: true,
       relax_quotes: true,
       skip_empty_lines: true,
-    }) as CsvRecord[];
-  } catch {
+    }) as string[][];
+    const listExport = source === 'letterboxd' && rows[0]?.[0]?.startsWith('Letterboxd list export');
+    const headerIndex = listExport
+      ? rows.findIndex((row) => normalizeHeader(row[0] ?? '') === 'position' && row.some((cell) => normalizeHeader(cell) === 'name'))
+      : 0;
+    if (headerIndex < 0) throw new Error('Missing list headers');
+    const headers = (rows[headerIndex] ?? []).map(normalizeHeader);
+    const records = rows.slice(headerIndex + 1).map((row) =>
+      Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ''])));
+    const file: CsvFile = { name, records };
+    const baseName = basename(name.replaceAll('\\', '/'));
+    const stem = baseName.replace(/\.csv$/i, '');
+    const isLetterboxdList = source === 'letterboxd' && (listExport || getLetterboxdFileRole(name) === 'watchlist');
+    const isImdbList = source === 'imdb' && headers.some((header) => ['title', 'const', 'imdbid'].includes(header))
+      && (headers.includes('position') || stem.toLowerCase() === 'watchlist' || !headers.includes('yourrating'));
+    if (isLetterboxdList || isImdbList) {
+      const metadataHeaders = (rows[1] ?? []).map(normalizeHeader);
+      const metadata = listExport ? Object.fromEntries(metadataHeaders.map((header, index) => [header, rows[2]?.[index] ?? ''])) : {};
+      const defaultList = stem.toLowerCase() === 'watchlist' && !listExport;
+      file.watchlist = {
+        key: metadata.url?.trim() || (defaultList ? 'watchlist' : `list:${stem}`),
+        name: metadata.name?.trim() || (defaultList ? `Watchlist ${getSourceLabel(source)}` : stem),
+      };
+      if (file.watchlist.name.length > 80) {
+        throw new BadRequestException(`Watchlist "${file.watchlist.name}" exceeds the 80-character name limit. Rename it before importing.`);
+      }
+    }
+    return file;
+  } catch (error) {
+    if (error instanceof BadRequestException) throw error;
     throw new BadRequestException('The CSV file could not be read. Check that it is a valid UTF-8 export.');
   }
 }
@@ -152,13 +182,14 @@ function parseLetterboxdFiles(files: CsvFile[]) {
       const rating = readLetterboxdRating(record);
       const review = readReview(record.review, item.warnings);
 
-      if (role === 'watchlist') {
+      if (file.watchlist) {
         item.watchlisted = true;
+        addWatchlist(item, file.watchlist.key);
       } else {
         item.watched = true;
       }
 
-      if (watchedDate && role !== 'watchlist') {
+      if (watchedDate && !file.watchlist) {
         item.watchedDates.add(watchedDate);
       }
 
@@ -177,8 +208,6 @@ function parseImdbFiles(files: CsvFile[]) {
   const items = new Map<string, MutableParsedImportItem>();
 
   files.forEach((file) => {
-    const isRatingsFile = file.records.some((record) => Boolean(record.yourrating));
-
     file.records.forEach((record, index) => {
       const contentHint = readImdbContentHint(record.titletype);
       const metadata = readMetadata(record, index, file.name, contentHint);
@@ -187,7 +216,7 @@ function parseImdbFiles(files: CsvFile[]) {
       const item = items.get(metadata.sourceKey) ?? createMutableItem(metadata);
       const activityDate = readDate(record.daterated || record.date);
 
-      if (isRatingsFile) {
+      if (record.yourrating?.trim()) {
         item.watched = true;
         item.activityDate = laterDate(item.activityDate, activityDate);
 
@@ -197,8 +226,10 @@ function parseImdbFiles(files: CsvFile[]) {
         } else if (record.yourrating?.trim()) {
           addWarning(item.warnings, 'Invalid IMDb rating was skipped.');
         }
-      } else {
+      }
+      if (file.watchlist) {
         item.watchlisted = true;
+        addWatchlist(item, file.watchlist.key);
       }
 
       mergeMetadata(item, metadata);
@@ -250,7 +281,7 @@ function parseTvTimeFiles(files: CsvFile[]) {
         const sourceTitle = record.tvshowname?.trim() ?? '';
         const episodesSeen = readNonNegativeInteger(record.nbepisodesseen);
 
-        if (!tvdbId || !sourceTitle || episodesSeen === 0) return;
+        if (!tvdbId || !sourceTitle || (episodesSeen === 0 && !readBooleanFlag(record.isfollowed))) return;
 
         const sourceKey = `tvdb:${tvdbId}`;
         const item = items.get(sourceKey) ?? createMutableItem({
@@ -263,7 +294,11 @@ function parseTvTimeFiles(files: CsvFile[]) {
           tvdbId,
         });
         item.favorite ||= readBooleanFlag(record.isfavorited);
-        item.watching = true;
+        item.watching = episodesSeen > 0;
+        if (episodesSeen === 0) {
+          item.watchlisted = true;
+          addWatchlist(item, 'watchlist');
+        }
         items.set(sourceKey, item);
       });
       return;
@@ -301,6 +336,7 @@ function parseTvTimeFiles(files: CsvFile[]) {
       });
       item.watched ||= watched;
       item.watchlisted ||= watchlisted;
+      if (watchlisted) addWatchlist(item, 'watchlist');
       records.forEach((record) => {
         const watchedDate = readDate(record.watchdate);
         if (watchedDate && record.type?.trim().toLowerCase() === 'watch') {
@@ -353,7 +389,7 @@ function parseTvTimeFiles(files: CsvFile[]) {
     items.set(sourceKey, item);
   });
   for (const item of items.values()) {
-    if (item.contentHint === 'series' && !item.episodes?.length) {
+    if (item.contentHint === 'series' && item.watching && !item.episodes?.length) {
       addWarning(item.warnings, 'No detailed watched episodes were found for this series. Progress could not be restored.');
     }
   }
@@ -379,7 +415,7 @@ function readMetadata(
   const tmdbId = readPositiveInteger(record.tmdbid);
   const imdbId = readImdbId(record.imdbid || record.const || record.url);
   const sourceYear = readYear(record.year);
-  const uri = (record.letterboxduri || record.uri || '').trim();
+  const uri = (record.letterboxduri || record.uri || (record.url?.includes('letterboxd.com/') ? record.url : '') || '').trim();
 
   if (!sourceTitle && !tmdbId && !imdbId && !uri) {
     return null;
@@ -419,6 +455,11 @@ function createMutableItem(metadata: ImportMetadata): MutableParsedImportItem {
     watchlisted: false,
     warnings: [],
   };
+}
+
+function addWatchlist(item: MutableParsedImportItem, key: string) {
+  item.watchlistKeys ??= [];
+  if (!item.watchlistKeys.includes(key)) item.watchlistKeys.push(key);
 }
 
 function laterDate(current: string | null, candidate: string | null) {
@@ -526,7 +567,9 @@ function readImdbContentHint(value: string | undefined): ParsedImportItem['conte
 }
 
 function getLetterboxdFileRole(fileName: string) {
-  const name = basename(fileName).toLowerCase();
+  const normalizedName = fileName.replaceAll('\\', '/').toLowerCase();
+  const name = basename(normalizedName);
+  if (normalizedName.split('/').includes('lists')) return 'watchlist';
   if (name === 'watchlist.csv') return 'watchlist';
   if (name === 'diary.csv') return 'diary';
   if (name === 'reviews.csv') return 'reviews';
@@ -635,9 +678,10 @@ const TV_TIME_EXPORT_FILES = new Set([
   'user_tv_show_data.csv',
 ]);
 
-function isSupportedSourceFile(source: ImportSourceValue, fileName: string) {
-  if (source === 'letterboxd') return LETTERBOXD_EXPORT_FILES.has(fileName);
-  if (source === 'tv-time') return TV_TIME_EXPORT_FILES.has(fileName);
+function isSupportedSourceFile(source: ImportSourceValue, fileName: string, prefix = '') {
+  if (source === 'letterboxd') return LETTERBOXD_EXPORT_FILES.has(basename(fileName))
+    || (fileName.endsWith('.csv') && (fileName.split('/').includes('lists') || prefix.replace(/^\uFEFF/, '').startsWith('Letterboxd list export')));
+  if (source === 'tv-time') return TV_TIME_EXPORT_FILES.has(basename(fileName));
   return fileName.endsWith('.csv');
 }
 
@@ -645,7 +689,6 @@ function getSourceLabel(source: ImportSourceValue) {
   if (source === 'tv-time') return 'TV Time';
   return source === 'imdb' ? 'IMDb' : 'Letterboxd';
 }
-const MAX_CSV_FILES = 20;
 const MAX_EXTRACTED_BYTES = 100 * 1024 * 1024;
 const ZIP_CENTRAL_HEADER_BYTES = 46;
 const ZIP_CENTRAL_SIGNATURE = 0x02014b50;

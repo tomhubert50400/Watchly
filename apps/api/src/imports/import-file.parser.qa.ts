@@ -75,11 +75,11 @@ const tvTimeZip = Buffer.from(zipSync({
 const tvTime = parseImportFile('tv-time', 'gdpr-data.zip', tvTimeZip);
 
 assert.equal(tvTime.ignoredFileCount, 2, 'sensitive and unrelated CSV files must be ignored before parsing');
-assert.equal(tvTime.items.length, 3);
+assert.equal(tvTime.items.length, 4);
 const tvTimeSeries = tvTime.items.find((item) => item.tvdbId === 81189);
 assert.equal(tvTimeSeries?.watching, true);
 assert.equal(tvTimeSeries?.favorite, true);
-assert.equal(tvTime.items.some((item) => item.sourceTitle === 'Oz'), false);
+assert.equal(tvTime.items.find((item) => item.sourceTitle === 'Oz')?.watchlisted, true);
 assert.equal(tvTime.items.find((item) => item.sourceTitle === 'Heat')?.watched, true);
 assert.deepEqual(
   tvTime.items.find((item) => item.sourceTitle === 'Heat')?.watchedDates,
@@ -137,3 +137,37 @@ const largeExport = parseImportFile('letterboxd', 'export.zip', Buffer.from(zipS
 })));
 assert.equal(largeExport.items.length, 10_000, 'large libraries must be retained and deduplicated across files');
 assert.ok(largeExport.items.every((item) => item.watched && !item.watchlisted), 'watched state must still take precedence over watchlist');
+assert.ok(largeExport.items.every((item) => item.watchlistKeys?.includes('watchlist')), 'watched films must retain list membership');
+
+const namedLists = parseImportFile('letterboxd', 'export.zip', Buffer.from(zipSync({
+  'watched.csv': strToU8('Name,Year,Letterboxd URI\nHeat,1995,https://letterboxd.com/film/heat-1995/'),
+  'lists/crime.csv': strToU8('Letterboxd list export v7\nDate,Name,Tags,URL,Description\n2026-01-01,"Crime, classics",,https://letterboxd.com/me/list/crime/,"Two lines\nof description"\n\nPosition,Name,Year,URL,Description\n1,Heat,1995,https://letterboxd.com/film/heat-1995/,\n2,Thief,1981,https://letterboxd.com/film/thief/,\n'),
+  'lists/favorites.csv': strToU8('Position,Name,Year,Letterboxd URI\n1,Heat,1995,https://letterboxd.com/film/heat-1995/'),
+  'lists/empty.csv': strToU8('Position,Name,Year,URL\n'),
+  'profile.csv': strToU8('Name\nPrivate profile name'),
+  'deleted/lists/old.csv': strToU8('Position,Name,Year\n1,Deleted,2000'),
+})));
+assert.deepEqual(namedLists.watchlists.map((list) => list.name), ['Crime, classics', 'favorites', 'empty']);
+assert.equal(namedLists.ignoredFileCount, 2);
+assert.equal(namedLists.items.length, 2, 'metadata must not become film rows');
+assert.equal(namedLists.items[0].watched, true);
+assert.equal(namedLists.items[0].watchlistKeys?.length, 2, 'one film must belong to every original list');
+assert.equal(namedLists.items[1].watched, false, 'list membership must not invent viewing history');
+assert.equal(parseImportFile('letterboxd', 'watchlist.csv', Buffer.from('Name,Year\n')).watchlists.length, 1);
+assert.throws(() => parseImportFile('letterboxd', 'profile.csv', Buffer.from('Name\nPrivate')), /supported/);
+
+const imdbLists = parseImportFile('imdb', 'export.zip', Buffer.from(zipSync({
+  'Movie night.csv': strToU8('Position,Const,Title,Year,Your Rating,Date Rated\n1,tt0113277,Heat,1995,8,2026-01-01\n2,tt0083190,Thief,1981,,'),
+  'Watchlist.csv': strToU8('Position,Const,Title,Year,Your Rating\n1,tt0113277,Heat,1995,8'),
+})));
+assert.deepEqual(imdbLists.watchlists.map((list) => list.name), ['Movie night', 'Watchlist IMDb']);
+assert.equal(imdbLists.items[0].rating, 4);
+assert.equal(imdbLists.items[0].watchlistKeys?.length, 2);
+assert.equal(imdbLists.items[1].watched, false);
+assert.deepEqual(tvTime.watchlists, [{ key: 'watchlist', name: 'Watchlist TV Time' }]);
+assert.deepEqual(tvTime.items.find((item) => item.sourceTitle === 'Dune: Part Two')?.watchlistKeys, ['watchlist']);
+const manyLists = parseImportFile('letterboxd', 'export.zip', Buffer.from(zipSync(Object.fromEntries(
+  Array.from({ length: 10 }, (_, index) => [`lists/list-${index}.csv`, strToU8('Position,Name,Year\n1,Heat,1995')]),
+))));
+assert.equal(manyLists.watchlists.length, 10);
+assert.equal(manyLists.items[0].watchlistKeys?.length, 10);
