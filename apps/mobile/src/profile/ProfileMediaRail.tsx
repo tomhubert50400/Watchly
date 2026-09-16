@@ -111,7 +111,8 @@ function getMediaMeta(item: LibraryMediaItem) {
   }
   if (item.favorite && item.hasReleaseAlert) return 'Favorite · Alert';
   if (item.favorite) return 'Favorite';
-  return 'Release alert';
+  if (item.hasReleaseAlert) return 'Release alert';
+  return 'Planned';
 }
 
 const styles = StyleSheet.create({
