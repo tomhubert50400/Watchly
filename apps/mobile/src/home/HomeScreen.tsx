@@ -496,7 +496,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
   },
   composition: {
-    gap: spacing.lg,
+    gap: spacing.sm,
   },
   emptySection: {
     ...typography.body,
