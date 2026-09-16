@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   ActivityIndicator,
@@ -143,6 +143,11 @@ export function OnboardingScreen() {
   const [notificationSkipConfirmationVisible, setNotificationSkipConfirmationVisible] = useState(false);
   const [notificationStatus, setNotificationStatus] = useState<'idle' | 'requesting'>('idle');
   const [pendingImportTitleCount, setPendingImportTitleCount] = useState(0);
+  const [pendingImportWatchlistCount, setPendingImportWatchlistCount] = useState(0);
+  const handlePendingImportChange = useCallback((titles: number, lists: number) => {
+    setPendingImportTitleCount(titles);
+    setPendingImportWatchlistCount(lists);
+  }, []);
   const [reduceMotionEnabled, setReduceMotionEnabled] = useState<boolean | null>(null);
   const [step, setStep] = useState<OnboardingStep>('profile');
   const [stepTransition, setStepTransition] = useState<OnboardingStepTransition | null>(null);
@@ -613,7 +618,7 @@ export function OnboardingScreen() {
                       onBack={goBack}
                       onContinue={() => {
                         if (pageStep === 'profile') void continueProfile();
-                        if (pageStep === 'import' && pendingImportTitleCount > 0) {
+                        if (pageStep === 'import' && (pendingImportTitleCount > 0 || pendingImportWatchlistCount > 0)) {
                           importDataRef.current?.requestPendingImport();
                         } else if (pageStep === 'import') {
                           continueImport();
@@ -624,6 +629,7 @@ export function OnboardingScreen() {
                       onFinishWithoutNotifications={() => void finishOnboarding()}
                       onRequestNotificationSkip={requestNotificationSkip}
                       pendingImportTitleCount={pendingImportTitleCount}
+                      pendingImportWatchlistCount={pendingImportWatchlistCount}
                       step={pageStep}
                       tasteSelectionCount={tasteItems.length}
                     />
@@ -710,7 +716,7 @@ export function OnboardingScreen() {
                         setImportSatisfied(true);
                         setError(null);
                       }}
-                      onPendingImportChange={setPendingImportTitleCount}
+                      onPendingImportChange={handlePendingImportChange}
                       ref={importDataRef}
                       workingSourcesOnly
                     />
@@ -786,6 +792,7 @@ function OnboardingFooter({
   onFinishWithoutNotifications,
   onRequestNotificationSkip,
   pendingImportTitleCount,
+  pendingImportWatchlistCount,
   step,
   tasteSelectionCount,
 }: {
@@ -802,6 +809,7 @@ function OnboardingFooter({
   onFinishWithoutNotifications: () => void;
   onRequestNotificationSkip: () => void;
   pendingImportTitleCount: number;
+  pendingImportWatchlistCount: number;
   step: OnboardingStep;
   tasteSelectionCount: number;
 }) {
@@ -865,6 +873,7 @@ function OnboardingFooter({
                   fullWidth
                   label={step === 'import' && pendingImportTitleCount > 0
                     ? `Import ${pendingImportTitleCount} ${pendingImportTitleCount === 1 ? 'title' : 'titles'}`
+                    : step === 'import' && pendingImportWatchlistCount > 0 ? 'Import watchlists'
                     : step === 'import' && !importSatisfied ? 'Skip' : 'Continue'}
                   onPress={onContinue}
                 />

@@ -183,7 +183,8 @@ assert(
 );
 assert(
   importScreenSource.includes('showAction={!embedded}') &&
-    /\{showAction \? \([\s\S]*label=\{`Import \$\{preview\.summary\.ready\}/.test(importScreenSource),
+    /\{showAction \? \([\s\S]*label=\{preview\.summary\.ready === 0 \? 'Import watchlists' : `Import \$\{preview\.summary\.ready\}/.test(importScreenSource) &&
+    onboardingSource.includes("pendingImportWatchlistCount > 0 ? 'Import watchlists'"),
   'Embedded onboarding imports must use the screen footer instead of rendering a duplicate import button.',
 );
 

@@ -10,6 +10,7 @@ export type CombinedImportPreviewItem = ImportPreviewItem & {
 };
 
 export type CombinedImportPreview = {
+  watchlists: NonNullable<ImportPreview['watchlists']>;
   items: CombinedImportPreviewItem[];
   onlyTvTime: boolean;
   summary: ImportPreview['summary'];
@@ -146,6 +147,9 @@ export function combineImportPreviews(previews: ImportPreview[]): CombinedImport
 
   return {
     items: combinedItems,
+    watchlists: previews.flatMap((preview) => (preview.watchlists ?? []).map((list) => ({
+      ...list, key: `${preview.importId}:${list.key}`,
+    }))),
     onlyTvTime: previews.length > 0 && previews.every((preview) => preview.source === 'tv-time'),
     summary: {
       favorites: readyItems.filter((item) => item.actions.favorite).length,

@@ -36,7 +36,7 @@ export function BackgroundImportCards({ refreshKey = 0, onReview }: {
         for (const job of result.imports) {
           if (job.status === 'completed' && !completed.current.has(job.importId)) {
             completed.current.add(job.importId);
-            notifyUserDataChanged('episodeProgress', 'opinions', 'profile', 'tracking', 'viewings');
+            notifyUserDataChanged('episodeProgress', 'opinions', 'profile', 'tracking', 'viewings', 'watchlists');
           }
         }
       } catch {
@@ -103,6 +103,12 @@ export function BackgroundImportCards({ refreshKey = 0, onReview }: {
             ? 'Your progress is saved. Retry to continue the import.'
             : `${job.result?.titlesProcessed ?? 0} titles imported.${job.needsAttention ? ` ${job.needsAttention} titles need review.` : ''}`}
       </Text>
+      {job.status === 'completed' && (job.result?.watchlistsImported ?? 0) > 0 ? (
+        <Text style={styles.body}>{job.result?.watchlistsImported} watchlists imported.</Text>
+      ) : null}
+      {job.status === 'completed' && job.result?.watchlistsSkipped?.length ? (
+        <Text style={styles.body}>5-list limit reached. Skipped watchlists: {job.result.watchlistsSkipped.join(', ')}.</Text>
+      ) : null}
       {job.status === 'failed' ? <Button label="Retry import" loading={busyId === job.importId} onPress={() => void action(job, 'retry')} /> : null}
       {job.status === 'completed' && job.needsAttention > 0 ? <Button label="Review titles" disabled={busyId !== null} onPress={() => void action(job, 'review')} /> : null}
       {job.status === 'completed' ? <Button label="Dismiss" variant="secondary" disabled={busyId !== null} onPress={() => void action(job, 'dismiss')} /> : null}

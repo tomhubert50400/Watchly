@@ -123,6 +123,14 @@ const combined = combineImportPreviews([
 
 assert.equal(combined.items.length, 4, 'Titles shared by several platforms must appear once.');
 assert.equal(combined.onlyTvTime, false);
+const combinedLists = combineImportPreviews([
+  { ...createPreview('letterboxd', 'letterboxd-preview', [heat]), watchlists: [{ key: 'watchlist', name: 'Watchlist Letterboxd', ready: 1, total: 1 }] },
+  { ...createPreview('imdb', 'imdb-preview', [heat]), watchlists: [{ key: 'watchlist', name: 'Watchlist IMDb', ready: 1, total: 2 }] },
+]);
+assert.equal(combinedLists.items.length, 1);
+assert.deepEqual(combinedLists.watchlists.map((list) => list.name), ['Watchlist Letterboxd', 'Watchlist IMDb'], 'deduplicating films must not hide source lists');
+assert.notEqual(combinedLists.watchlists[0].key, combinedLists.watchlists[1].key);
+assert.equal(combinedLists.watchlists[1].total, 2, 'unmatched list entries must remain visible in the preview count');
 assert.deepEqual(combined.summary, {
   favorites: 0,
   needsAttention: 1,

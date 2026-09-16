@@ -33,6 +33,7 @@ export type ImportPreviewItem = {
 };
 
 export type ImportPreview = {
+  watchlists?: { key: string; name: string; total: number; ready: number }[];
   preparation?: { processed: number; total: number };
   fileName: string;
   ignoredFileCount: number;
@@ -53,6 +54,8 @@ export type ImportPreview = {
 };
 
 export type ImportResult = {
+  watchlistsImported?: number;
+  watchlistsSkipped?: string[];
   alreadyCompleted?: boolean;
   preservedExisting: number;
   ratingsCreated: number;

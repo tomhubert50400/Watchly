@@ -67,7 +67,7 @@ type ImportDataScreenProps = {
   embedded?: boolean;
   onImportBatchCompleted?: () => void;
   onImportCompleted?: (completion: { importId: string; result: ImportResult }) => void;
-  onPendingImportChange?: (readyTitleCount: number) => void;
+  onPendingImportChange?: (readyTitleCount: number, watchlistCount: number) => void;
   workingSourcesOnly?: boolean;
 };
 
@@ -95,7 +95,7 @@ const importSources: readonly ImportSource[] = [
     name: 'TV Time',
   },
   {
-    body: 'Ratings and watchlist',
+    body: 'Ratings, watchlist, and custom lists',
     brand: 'imdb',
     exportLinks: [
       { label: 'Open Your Ratings', url: 'https://www.imdb.com/list/ratings/' },
@@ -120,7 +120,7 @@ const importSources: readonly ImportSource[] = [
     name: 'IMDb',
   },
   {
-    body: 'Watched films, ratings, reviews, and watchlist',
+    body: 'Watched films, ratings, reviews, and lists',
     brand: 'letterboxd',
     exportLinks: [
       { label: 'Open Letterboxd export', url: 'https://letterboxd.com/user/exportdata/' },
@@ -211,10 +211,10 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
   }, [firebaseIdToken, previewIds]));
 
   useEffect(() => {
-    onPendingImportChange?.(combinedPreview.summary.ready);
-  }, [combinedPreview.summary.ready, onPendingImportChange]);
+    onPendingImportChange?.(combinedPreview.summary.ready, combinedPreview.watchlists.length);
+  }, [combinedPreview.summary.ready, combinedPreview.watchlists.length, onPendingImportChange]);
 
-  useEffect(() => () => onPendingImportChange?.(0), [onPendingImportChange]);
+  useEffect(() => () => onPendingImportChange?.(0, 0), [onPendingImportChange]);
 
   const chooseFile = async (source: ImportSource) => {
     if (status !== 'idle') return;
@@ -265,7 +265,7 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
       if (analysis.estimatedSeconds > 60) {
         const accepted = await new Promise<boolean>((resolve) => Alert.alert(
           'Large import',
-          `Your import contains ${analysis.preparation?.total ?? analysis.summary.total} titles and will take approximately ${Math.ceil(analysis.estimatedSeconds / 60)} minutes. You can keep using Watchly or close the app. Confident matches will be imported; other titles can be reviewed afterward. Existing ratings and reviews will be kept.`,
+          `Your import contains ${analysis.preparation?.total ?? analysis.summary.total} titles and will take approximately ${Math.ceil(analysis.estimatedSeconds / 60)} minutes. You can keep using Watchly or close the app. Confident matches will be imported; other titles can be reviewed afterward. Existing ratings and reviews will be kept. Watchlists are imported in file order, up to the 5-list limit; remaining lists are skipped.`,
           [
             { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
             { text: 'Import in background', onPress: () => resolve(true) },
@@ -323,20 +323,17 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
         onImportCompleted?.({ importId: preview.importId, result: importResult });
       }
 
-      setResult({
-        ...combineImportResults(importResults),
-        titlesProcessed: combinedPreview.summary.ready,
-      });
+      setResult(combineImportResults(importResults));
       setPreviews([]);
-      notifyUserDataChanged('episodeProgress', 'opinions', 'profile', 'tracking', 'viewings');
+      notifyUserDataChanged('episodeProgress', 'opinions', 'profile', 'tracking', 'viewings', 'watchlists');
       hapticSuccess();
       completedBatch = true;
     } catch (importError) {
-      notifyUserDataChanged('episodeProgress', 'opinions', 'profile', 'tracking', 'viewings');
+      notifyUserDataChanged('episodeProgress', 'opinions', 'profile', 'tracking', 'viewings', 'watchlists');
       if (completedImportIds.length > 0) {
         setPreviews((current) => current.filter((preview) => !completedImportIds.includes(preview.importId)));
         setResult(combineImportResults(importResults));
-        notifyUserDataChanged('episodeProgress', 'opinions', 'profile', 'tracking', 'viewings');
+        notifyUserDataChanged('episodeProgress', 'opinions', 'profile', 'tracking', 'viewings', 'watchlists');
       }
       setError(importError instanceof Error ? importError.message : 'The import could not be completed.');
       hapticError();
@@ -357,11 +354,11 @@ export const ImportDataScreen = forwardRef<ImportDataScreenHandle, ImportDataScr
   };
 
   const requestConfirmation = () => {
-    if (previews.length === 0 || combinedPreview.summary.ready === 0) return;
+    if (previews.length === 0 || (combinedPreview.summary.ready === 0 && combinedPreview.watchlists.length === 0)) return;
 
     Alert.alert(
-      `Import ${combinedPreview.summary.ready} ${combinedPreview.summary.ready === 1 ? 'title' : 'titles'}?`,
-      'Existing Watchly ratings and reviews will be kept. This import cannot be undone automatically.',
+      combinedPreview.summary.ready === 0 ? 'Import watchlists?' : `Import ${combinedPreview.summary.ready} ${combinedPreview.summary.ready === 1 ? 'title' : 'titles'}?`,
+      'Existing Watchly ratings and reviews will be kept. Watchlists are imported in file order, up to the 5-list limit; remaining lists are skipped. This import cannot be undone automatically.',
       [
         { style: 'cancel', text: 'Cancel' },
         { onPress: () => void confirmImport(), text: 'Import' },
@@ -636,6 +633,15 @@ function ImportPreviewPanel({
         <SummaryValue label="Skipped" value={preview.summary.needsAttention} warning />
       </View>
 
+      {preview.watchlists.length > 0 ? (
+        <View>
+          <Text style={styles.previewWarning}>Watchlists, imported in file order up to the 5-list limit:</Text>
+          {preview.watchlists.map((list) => (
+            <Text key={list.key} style={styles.previewWarning}>{list.name}: {list.ready} / {list.total} titles matched</Text>
+          ))}
+        </View>
+      ) : null}
+
       {preview.summary.needsAttention > 0 ? (
         <Text style={styles.previewWarning}>
           {preview.summary.needsAttention === 1
@@ -654,9 +660,9 @@ function ImportPreviewPanel({
 
       {showAction ? (
         <Button
-          disabled={preview.summary.ready === 0}
+          disabled={preview.summary.ready === 0 && preview.watchlists.length === 0}
           fullWidth
-          label={`Import ${preview.summary.ready} ${preview.summary.ready === 1 ? 'title' : 'titles'}`}
+          label={preview.summary.ready === 0 ? 'Import watchlists' : `Import ${preview.summary.ready} ${preview.summary.ready === 1 ? 'title' : 'titles'}`}
           loading={confirming}
           onPress={onConfirm}
         />
@@ -676,6 +682,8 @@ function SummaryValue({ label, value, warning = false }: { label: string; value:
 
 function combineImportResults(results: ImportResult[]): ImportResult {
   return results.reduce<ImportResult>((combined, result) => ({
+    watchlistsImported: (combined.watchlistsImported ?? 0) + (result.watchlistsImported ?? 0),
+    watchlistsSkipped: [...(combined.watchlistsSkipped ?? []), ...(result.watchlistsSkipped ?? [])],
     preservedExisting: combined.preservedExisting + result.preservedExisting,
     ratingsCreated: combined.ratingsCreated + result.ratingsCreated,
     reviewsCreated: combined.reviewsCreated + result.reviewsCreated,
@@ -701,6 +709,12 @@ function ImportResultPanel({ result }: { result: ImportResult }) {
         <Text style={styles.resultBody}>
           {result.titlesProcessed} titles processed, {result.ratingsCreated} ratings, {result.reviewsCreated} reviews, and {result.viewingEventsCreated} viewing entries added.
         </Text>
+        {(result.watchlistsImported ?? 0) > 0 ? (
+          <Text style={styles.resultMeta}>{result.watchlistsImported} watchlists imported.</Text>
+        ) : null}
+        {result.watchlistsSkipped?.length ? (
+          <Text style={styles.resultMeta}>5-list limit reached. Skipped watchlists: {result.watchlistsSkipped.join(', ')}.</Text>
+        ) : null}
         {result.preservedExisting > 0 ? (
           <Text style={styles.resultMeta}>{result.preservedExisting} existing Watchly entries were kept.</Text>
         ) : null}
