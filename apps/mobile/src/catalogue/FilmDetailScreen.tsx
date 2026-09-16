@@ -163,7 +163,7 @@ function MovieDetailContent({
             <MovieReviewEditor onRatingGestureChange={onRatingGestureChange} mediaTitle={movie.title} posterUrl={movie.posterUrl} tmdbId={movie.tmdbId} />
           ) : null}
         </View>
-        {isReleased ? <MovieCommunityPanel key={movie.tmdbId} tmdbId={movie.tmdbId} onViewMore={onViewReviews} /> : null}
+        {isReleased ? <MovieCommunityPanel key={movie.tmdbId} tmdbId={movie.tmdbId} displayRating={movie.displayRating} onViewMore={onViewReviews} /> : null}
         <DetailFacts items={detailFacts} />
         <CatalogueVideoRail videos={movie.videos ?? []} />
         <StreamingAvailabilityPanel contentType="movie" tmdbId={movie.tmdbId} />

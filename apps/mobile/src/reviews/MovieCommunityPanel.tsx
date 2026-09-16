@@ -2,6 +2,7 @@ import { ChevronDown, ChevronUp, Flag } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import type { ReportTarget } from '../api/reports';
+import type { DisplayRating } from '../api/catalogue';
 import { getMovieCommunity, type MovieCommunityResponse } from '../api/reviews';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { useCachedResource } from '../cache/useCachedResource';
@@ -12,9 +13,11 @@ import { UserAvatar } from '../components/UserAvatar';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { ReportSheet } from '../reports/ReportSheet';
 import { useUserDataRevision } from '../sync/userDataEvents';
+import { getRatingDistribution } from './ratingDistribution';
 
-export function MovieCommunityPanel({ tmdbId, onViewMore }: {
+export function MovieCommunityPanel({ tmdbId, displayRating, onViewMore }: {
   tmdbId: number;
+  displayRating?: DisplayRating | null;
   onViewMore: () => void;
 }) {
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
@@ -31,7 +34,7 @@ export function MovieCommunityPanel({ tmdbId, onViewMore }: {
       : getPublicCacheKey(`movie-community:${tmdbId}:${revision}`),
     load,
   });
-  const community = resource.data;
+  const community = resource.data ? getRatingDistribution(resource.data, displayRating) : null;
   const maxCount = Math.max(1, ...community?.distribution.map((bucket) => bucket.count) ?? []);
   const selectedBucket = community?.distribution.find((bucket) => bucket.score === selectedScore);
 
@@ -40,6 +43,7 @@ export function MovieCommunityPanel({ tmdbId, onViewMore }: {
       <Text style={styles.title}>Ratings & reviews</Text>
       {community ? (
         <>
+          {community.estimated ? <Text accessibilityLabel="Estimated distribution based on the average rating and total votes, not individual votes" style={styles.muted}>Estimated distribution</Text> : null}
           <View style={styles.ratingRow}>
             <View style={styles.chart}>
               <View style={styles.histogram}>
@@ -47,7 +51,7 @@ export function MovieCommunityPanel({ tmdbId, onViewMore }: {
                   <Pressable
                     key={bucket.score}
                     accessibilityRole="button"
-                    accessibilityLabel={`${bucket.score} stars: ${bucket.count} ratings`}
+                    accessibilityLabel={`${bucket.score} stars: ${community.estimated ? 'approximately ' : ''}${bucket.count} ${community.estimated ? 'estimated ' : ''}ratings`}
                     accessibilityState={{ selected: selectedScore === bucket.score }}
                     onPress={() => setSelectedScore((current) => current === bucket.score ? null : bucket.score)}
                     style={styles.bucket}
@@ -64,13 +68,13 @@ export function MovieCommunityPanel({ tmdbId, onViewMore }: {
             </View>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={selectedBucket ? `${selectedBucket.count} ratings of ${selectedBucket.score} stars. Show average rating` : `Watchly average: ${community.averageScore ?? 'no ratings'}`}
+              accessibilityLabel={selectedBucket ? `${community.estimated ? 'Approximately ' : ''}${selectedBucket.count} ${community.estimated ? 'estimated ' : ''}ratings of ${selectedBucket.score} stars. Show average rating` : `${community.estimated ? 'Average used for estimated distribution' : 'Watchly average'}: ${community.averageScore ?? 'no ratings'}`}
               accessibilityLiveRegion="polite"
               onPress={() => setSelectedScore(null)}
               style={styles.ratingSummary}
             >
               <Text adjustsFontSizeToFit numberOfLines={1} style={styles.summaryValue}>
-                {selectedBucket ? selectedBucket.count.toLocaleString() : community.averageScore?.toFixed(1) ?? '-'}
+                {selectedBucket ? `${community.estimated ? '≈ ' : ''}${selectedBucket.count.toLocaleString()}` : community.averageScore?.toFixed(1) ?? '-'}
               </Text>
               <StarRatingDisplay rating={selectedBucket?.score ?? community.averageScore ?? 0} size={13} />
             </Pressable>
