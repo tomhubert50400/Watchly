@@ -7,6 +7,7 @@ import {
   Inject,
   Param,
   Put,
+  Query,
   Req,
   UnauthorizedException,
   UseGuards,
@@ -96,6 +97,28 @@ export class EpisodeReviewsController {
     );
 
     return { deleted: true };
+  }
+}
+
+@Controller('community/movies')
+@UseGuards(OptionalAuthGuard)
+export class MovieCommunityController {
+  constructor(@Inject(ReviewsService) private readonly reviews: ReviewsService) {}
+
+  @Get(':tmdbId')
+  async get(
+    @Req() request: AuthenticatedRequest,
+    @Param('tmdbId') tmdbId: string,
+    @Query('page') page = '1',
+    @Query('limit') limit = '6',
+  ) {
+    const pageNumber = Number(page);
+    const pageSize = Number(limit);
+    if (!Number.isSafeInteger(pageNumber) || pageNumber < 1 || pageNumber > 100000
+      || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 20) {
+      throw new BadRequestException('Invalid review pagination.');
+    }
+    return this.reviews.getMovieCommunity(request.authIdentity ?? null, parseTmdbId(tmdbId), pageNumber, pageSize);
   }
 }
 

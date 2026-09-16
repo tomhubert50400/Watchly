@@ -4,12 +4,13 @@ import { PrismaService } from '../database/prisma.service';
 import {
   EpisodeCommunityController,
   EpisodeReviewsController,
+  MovieCommunityController,
   MovieReviewsController,
 } from './reviews.controller';
 import { ReviewsService } from './reviews.service';
 
 @Module({
-  controllers: [MovieReviewsController, EpisodeReviewsController, EpisodeCommunityController],
+  controllers: [MovieReviewsController, MovieCommunityController, EpisodeReviewsController, EpisodeCommunityController],
   imports: [AuthModule],
   providers: [PrismaService, ReviewsService],
 })

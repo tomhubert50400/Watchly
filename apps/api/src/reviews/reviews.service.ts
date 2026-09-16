@@ -31,6 +31,88 @@ export class ReviewsService {
     return review ? toApiMovieReview(review) : null;
   }
 
+  async getMovieCommunity(identity: AuthenticatedIdentity | null, tmdbId: number, page = 1, limit = 6) {
+    const viewerId = identity ? await this.getUserId(identity) : null;
+    return this.prisma.withConnectionRetry(async () => {
+      const blocks = viewerId ? await this.prisma.userBlock.findMany({
+        where: { OR: [{ blockedUserId: viewerId }, { blockerId: viewerId }] },
+      }) : [];
+      const blockedIds = blocks.map((block) => block.blockerId === viewerId ? block.blockedUserId : block.blockerId);
+      const visibleUser = {
+        AND: [activeAccountWhere()],
+        id: { notIn: blockedIds },
+        privacySettings: { profileVisibility: PrivacyVisibility.PUBLIC },
+      };
+      const reviewWhere = {
+        tmdbId,
+        moderationHiddenAt: null,
+        user: {
+          ...visibleUser,
+          movieRatings: { some: { tmdbId } },
+          privacySettings: {
+            profileVisibility: PrivacyVisibility.PUBLIC,
+            reviewsVisibility: PrivacyVisibility.PUBLIC,
+          },
+        },
+      };
+      const [groups, reviewCount, reviews] = await Promise.all([
+        this.prisma.userMovieRating.groupBy({
+          by: ['scoreHalfSteps'],
+          _count: { _all: true },
+          where: {
+            tmdbId,
+            user: {
+              ...visibleUser,
+              OR: [
+                { privacySettings: { ratingsVisibility: PrivacyVisibility.PUBLIC } },
+                {
+                  privacySettings: { reviewsVisibility: PrivacyVisibility.PUBLIC },
+                  movieReviews: { some: { tmdbId, moderationHiddenAt: null } },
+                },
+              ],
+            },
+          },
+        }),
+        this.prisma.userMovieReview.count({ where: reviewWhere }),
+        this.prisma.userMovieReview.findMany({
+          where: reviewWhere,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          skip: (page - 1) * limit,
+          take: limit,
+          include: {
+            user: { select: {
+              id: true, avatarObjectKey: true, displayName: true,
+              movieRatings: { where: { tmdbId }, select: { scoreHalfSteps: true } },
+            } },
+          },
+        }),
+      ]);
+      const distribution = Array.from({ length: 10 }, (_, index) => ({
+        score: (index + 1) / 2,
+        count: groups.find((group) => group.scoreHalfSteps === index + 1)?._count._all ?? 0,
+      }));
+      const ratingCount = distribution.reduce((total, bucket) => total + bucket.count, 0);
+      return {
+        averageScore: ratingCount ? Math.round(distribution.reduce((total, bucket) => total + bucket.score * bucket.count, 0) / ratingCount * 10) / 10 : null,
+        ratingCount,
+        distribution,
+        reviewCount,
+        nextPage: page * limit < reviewCount ? page + 1 : null,
+        reviews: reviews.flatMap((review) => {
+          const rating = review.user.movieRatings[0];
+          return rating ? [{
+            id: review.id, body: review.body, score: rating.scoreHalfSteps / 2,
+            updatedAt: review.updatedAt.toISOString(),
+            author: {
+              id: review.user.id, displayName: review.user.displayName,
+              avatarUrl: this.avatarStorage.getPublicUrl(review.user.avatarObjectKey),
+            },
+          }] : [];
+        }),
+      };
+    });
+  }
+
   async upsertMovieReview(identity: AuthenticatedIdentity, tmdbId: number, body: string) {
     const userId = await this.getUserId(identity);
     const reviewBody = normalizeBody(body);
