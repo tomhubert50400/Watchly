@@ -121,12 +121,16 @@ assert.deepEqual(getProfileMediaItems(plannedItems, 'planned').map((item) => ite
 assert.deepEqual(getProfileMediaPreviews(plannedItems).planned.map((item) => item.key), [
   'series:41', 'movie:40',
 ]);
-assert.equal(getProfileMediaPreviews(recent).planned.length, 10);
+assert.equal(getProfileMediaPreviews(recent).planned.length, 0,
+  'favorites and alerts alone must not add titles to the Planned list');
+assert.equal(getProfileMediaPreviews(recent.map((item) => ({ ...item, status: 'watchlisted' as const }))).planned.length, 10);
 
 const plannedMovie = media('movie:50', {
   status: 'watchlisted', favorite: true, hasReleaseAlert: true,
 });
 assert.equal(getProfileMediaItems([plannedMovie], 'planned').length, 1);
+assert.equal(getProfileMediaItems([{ ...plannedMovie, status: null }], 'planned').length, 0,
+  'removing from Planned must work while preserving favorites and alerts');
 const watchedMovie = { ...plannedMovie, status: 'watched' as const };
 assert.equal(getProfileMediaItems([watchedMovie], 'planned').length, 0,
   'marking a planned movie watched must remove it even if it remains a favorite or has an alert');

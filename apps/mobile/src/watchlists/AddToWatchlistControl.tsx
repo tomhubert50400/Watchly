@@ -279,14 +279,18 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
     trackingLoadVersionRef.current += 1;
     setIsPlanning(true);
     const ownerKey = optionsOwnerKey;
+    const removing = isPlanned;
     try {
       const token = await getFirebaseIdToken();
       if (previewOwnerKeyRef.current !== ownerKey) return;
       if (!token) throw new Error('Sign in again to plan to watch this title.');
 
-      const state = await upsertTrackingState(token, {
+      const existing = removing ? await getTrackingState(token, contentType, tmdbId) : null;
+      if (previewOwnerKeyRef.current !== ownerKey) return;
+      const state = removing && existing?.status !== 'watchlisted' ? existing : await upsertTrackingState(token, {
         contentType,
-        status: 'watchlisted',
+        ...(removing ? { favorite: existing?.favorite ?? false } : {}),
+        status: removing ? null : 'watchlisted',
         tmdbId,
       });
       if (previewOwnerKeyRef.current !== ownerKey) return;
@@ -300,11 +304,11 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
       if (previewOwnerKeyRef.current !== ownerKey) return;
       notifyUserDataChanged('tracking');
       hapticSuccess();
-      openSheet();
+      if (!removing) openSheet();
     } catch (error) {
       if (previewOwnerKeyRef.current !== ownerKey) return;
       hapticError();
-      showToast(error instanceof Error ? error.message : 'Could not add this title to Planned.');
+      showToast(error instanceof Error ? error.message : 'Could not update Planned.');
     } finally {
       planningRef.current = false;
       setIsPlanning(false);
@@ -500,16 +504,23 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   return (
     <>
       {isPlanned ? (
-        <View style={[styles.trigger, styles.plannedTrigger]}>
-          <View accessible accessibilityLabel="Planned" style={styles.plannedStatus}>
+        <View style={styles.plannedTrigger}>
+          <Pressable
+            accessibilityLabel="Remove from Planned"
+            accessibilityRole="button"
+            accessibilityState={{ busy: isPlanning, disabled: isPlanning }}
+            disabled={isPlanning}
+            onPress={() => void planToWatch()}
+            style={({ pressed }) => [styles.trigger, styles.plannedStatus, pressed ? styles.pressed : null]}
+          >
             <Check color={colors.accentText} size={16} strokeWidth={2.4} />
-            <Text style={styles.triggerLabel}>Planned</Text>
-          </View>
+            <Text style={styles.triggerLabel}>{isPlanning ? 'Saving…' : 'Planned'}</Text>
+          </Pressable>
           <Pressable
             accessibilityLabel="Add to watchlist"
             accessibilityRole="button"
             onPress={openSheet}
-            style={({ pressed }) => [styles.watchlistTrigger, pressed ? styles.pressed : null]}
+            style={({ pressed }) => [styles.trigger, styles.watchlistTrigger, pressed ? styles.pressed : null]}
           >
             <BookmarkPlus color={colors.accentText} size={18} strokeWidth={2.4} />
           </Pressable>
@@ -760,25 +771,17 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   plannedTrigger: {
-    gap: 0,
-    overflow: 'hidden',
-    paddingHorizontal: 0,
+    alignSelf: 'stretch',
+    flex: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
   },
   plannedStatus: {
-    alignItems: 'center',
     flex: 2,
-    flexDirection: 'row',
-    gap: spacing.xs,
-    justifyContent: 'center',
-    minHeight: 44,
+    paddingHorizontal: 0,
   },
   watchlistTrigger: {
-    alignItems: 'center',
-    alignSelf: 'stretch',
-    borderLeftColor: colors.accentBorder,
-    borderLeftWidth: 1,
     flex: 1,
-    justifyContent: 'center',
-    minHeight: 44,
+    paddingHorizontal: 0,
   },
 });

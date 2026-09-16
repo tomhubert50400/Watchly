@@ -52,7 +52,7 @@ export function getProfileMediaItems(
   return [...items]
     .filter((item) => {
       if (getProfileMediaStatus(item) === null) return false;
-      if (filter === 'planned') return getProfileMediaStatus(item) === 'planned';
+      if (filter === 'planned') return item.status === 'watchlisted';
       if (filter === 'favorites') return item.favorite;
       return item.contentType === (filter === 'movies' ? 'movie' : 'series');
     })
