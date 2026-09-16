@@ -15,6 +15,7 @@ import { ExploreDiscoveryScreen, getDiscoveryLabel } from './src/catalogue/Explo
 import { DiscoverScreen } from './src/catalogue/DiscoverScreen';
 import { DiscoverResultsScreen } from './src/catalogue/DiscoverResultsScreen';
 import { FilmDetailScreen } from './src/catalogue/FilmDetailScreen';
+import { MovieReviewsScreen } from './src/reviews/MovieReviewsScreen';
 import { ActorDetailScreen } from './src/catalogue/ActorDetailScreen';
 import { SeriesDetailScreen } from './src/catalogue/SeriesDetailScreen';
 import { colors } from './src/design/tokens';
@@ -320,6 +321,7 @@ function AppNavigator() {
               })}
             />
             <Stack.Screen component={FilmDetailScreen} name="FilmDetail" options={{ title: '' }} />
+            <Stack.Screen component={MovieReviewsScreen} name="MovieReviews" options={{ title: 'Reviews' }} />
             <Stack.Screen component={ActorDetailScreen} name="ActorDetail" getId={({ params }) => String(params.tmdbId)} options={{ title: '' }} />
             <Stack.Screen
               component={PersonalWatchlistScreen}

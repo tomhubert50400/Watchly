@@ -16,6 +16,7 @@ import { RootStackParamList } from '../navigation/types';
 import { CharacterAlertsPanel } from '../notifications/CharacterAlertsPanel';
 import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 import { MovieReviewEditor } from '../reviews/MovieReviewEditor';
+import { MovieCommunityPanel } from '../reviews/MovieCommunityPanel';
 import { TrackingControls } from '../tracking/TrackingControls';
 import { ViewingCountControl } from '../viewings/ViewingCountControl';
 import { AddToWatchlistControl } from '../watchlists/AddToWatchlistControl';
@@ -90,6 +91,7 @@ export function FilmDetailScreen({ navigation, route }: FilmDetailScreenProps) {
         ) : movie ? (
           <MovieDetailContent
             movie={movie}
+            onViewReviews={() => navigation.push('MovieReviews', { title: movie.title, tmdbId: movie.tmdbId })}
             onRatingGestureChange={setIsRatingGestureActive}
             onOpenRelated={(item) => openRelatedMovie(navigation, item)}
           />
@@ -103,8 +105,10 @@ function MovieDetailContent({
   movie,
   onOpenRelated,
   onRatingGestureChange,
+  onViewReviews,
 }: {
   movie: MovieDetails;
+  onViewReviews: () => void;
   onRatingGestureChange: (active: boolean) => void;
   onOpenRelated: (item: CatalogueRelatedItem) => void;
 }) {
@@ -160,6 +164,7 @@ function MovieDetailContent({
           ) : null}
         </View>
         <DetailFacts items={detailFacts} />
+        {isReleased ? <MovieCommunityPanel key={movie.tmdbId} tmdbId={movie.tmdbId} displayRating={movie.displayRating} onViewMore={onViewReviews} /> : null}
         <CatalogueVideoRail videos={movie.videos ?? []} />
         <StreamingAvailabilityPanel contentType="movie" tmdbId={movie.tmdbId} />
         <CatalogueCastRail cast={movie.cast ?? []} />

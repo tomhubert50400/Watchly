@@ -39,6 +39,7 @@ export type RootStackParamList = {
     title: string;
     tmdbId: number;
   };
+  MovieReviews: { title: string; tmdbId: number };
   ImportData: undefined;
   ImportMatches: {
     matchedItems: ImportReviewMatch[];

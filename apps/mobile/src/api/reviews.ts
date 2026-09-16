@@ -36,6 +36,19 @@ export function getMovieReview(token: string, tmdbId: number) {
   return apiGet<MovieReview | null>(`/reviews/movies/${tmdbId}`, { token });
 }
 
+export type MovieCommunityResponse = EpisodeCommunityResponse & {
+  distribution: { score: number; count: number }[];
+  reviewCount: number;
+  nextPage: number | null;
+};
+
+export function getMovieCommunity(token: string | null, tmdbId: number, page = 1, limit = 6) {
+  return apiGet<MovieCommunityResponse>(
+    `/community/movies/${tmdbId}?page=${page}&limit=${limit}`,
+    token ? { token } : {},
+  );
+}
+
 export function upsertMovieReview(token: string, tmdbId: number, body: string) {
   return apiPut<MovieReview>(`/reviews/movies/${tmdbId}`, { body }, { token });
 }
