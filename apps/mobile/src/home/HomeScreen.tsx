@@ -297,7 +297,7 @@ export function HomeScreen() {
 function HomeSection({ children, delay, title, onViewAll }: { children: React.ReactNode; delay: number; title: string; onViewAll?: () => void }) {
   return (
     <ScreenReveal delay={delay} style={styles.section}>
-      <SectionHeader title={title} actionLabel={onViewAll ? 'View all' : undefined} onActionPress={onViewAll} />
+      <View style={styles.sectionHeader}><SectionHeader title={title} actionLabel={onViewAll ? 'View all' : undefined} onActionPress={onViewAll} /></View>
       <View style={styles.sectionBody}>{children}</View>
     </ScreenReveal>
   );
@@ -496,7 +496,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
   },
   composition: {
-    gap: spacing.xxl,
+    gap: spacing.lg,
   },
   emptySection: {
     ...typography.body,
@@ -568,6 +568,9 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingLeft: spacing.xl,
+  },
+  sectionHeader: {
+    paddingRight: spacing.xl,
   },
   sectionBody: {
     gap: spacing.sm,
