@@ -1,7 +1,6 @@
 import { ChevronDown, ChevronUp, Flag } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import type { DisplayRating } from '../api/catalogue';
 import type { ReportTarget } from '../api/reports';
 import { getMovieCommunity, type MovieCommunityResponse } from '../api/reviews';
 import { useAuthSession } from '../auth/AuthSessionContext';
@@ -14,9 +13,8 @@ import { colors, radii, spacing, typography } from '../design/tokens';
 import { ReportSheet } from '../reports/ReportSheet';
 import { useUserDataRevision } from '../sync/userDataEvents';
 
-export function MovieCommunityPanel({ tmdbId, displayRating, onViewMore }: {
+export function MovieCommunityPanel({ tmdbId, onViewMore }: {
   tmdbId: number;
-  displayRating: DisplayRating | null;
   onViewMore: () => void;
 }) {
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
@@ -38,21 +36,17 @@ export function MovieCommunityPanel({ tmdbId, displayRating, onViewMore }: {
   return (
     <View style={styles.section}>
       <Text style={styles.title}>Ratings & reviews</Text>
-      {displayRating ? (
-        <Text style={styles.score}>{(displayRating.average / (displayRating.scale / 5)).toFixed(1)}<Text style={styles.muted}> / 5</Text></Text>
-      ) : null}
       {community ? (
         <>
-          {community.ratingCount > 0 ? (
-            <View style={styles.histogram}>
-              {community.distribution.map((bucket) => (
-                <View key={bucket.score} accessible accessibilityLabel={`${bucket.score} stars: ${bucket.count} ratings`} style={styles.bucket}>
-                  <View style={styles.barTrack}><View style={[styles.bar, { height: `${bucket.count / maxCount * 100}%` }]} /></View>
-                  <Text style={styles.axis}>{bucket.score}</Text>
-                </View>
-              ))}
-            </View>
-          ) : null}
+          <View style={styles.histogram}>
+            {community.distribution.map((bucket) => (
+              <View key={bucket.score} accessible accessibilityLabel={`${bucket.score} stars: ${bucket.count} ratings`} style={styles.bucket}>
+                <Text adjustsFontSizeToFit numberOfLines={1} style={styles.voteCount}>{bucket.count.toLocaleString()}</Text>
+                <View style={styles.barTrack}><View style={[styles.bar, { height: `${bucket.count / maxCount * 100}%` }]} /></View>
+                <Text style={styles.axis}>{bucket.score}★</Text>
+              </View>
+            ))}
+          </View>
           {community.reviewCount > 0 ? <Pressable accessibilityRole="button" accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)} style={styles.toggle}>
               <Text style={styles.author}>{expanded ? 'Hide reviews' : `Show reviews (${community.reviewCount})`}</Text>
             {expanded ? <ChevronUp color={colors.textMuted} size={20} /> : <ChevronDown color={colors.textMuted} size={20} />}
@@ -106,13 +100,13 @@ export function MovieCommunityReviewCard({ review, compact = false }: {
 const styles = StyleSheet.create({
   section: { gap: spacing.md, paddingVertical: spacing.xl, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   title: { ...typography.title, color: colors.text },
-  score: { ...typography.heading, color: colors.text },
   muted: { ...typography.meta, color: colors.textSubtle },
   histogram: { flexDirection: 'row', gap: spacing.xs },
   bucket: { flex: 1, gap: spacing.xs, alignItems: 'center' },
-  barTrack: { height: 64, width: '100%', justifyContent: 'flex-end', backgroundColor: colors.panelSoft, borderRadius: radii.xs, overflow: 'hidden' },
+  voteCount: { color: colors.textMuted, fontSize: 11, fontWeight: '700', fontVariant: ['tabular-nums'], textAlign: 'center', width: '100%' },
+  barTrack: { height: 88, width: '100%', justifyContent: 'flex-end', backgroundColor: colors.panelSoft, borderRadius: radii.xs, overflow: 'hidden' },
   bar: { width: '100%', backgroundColor: colors.rating, borderRadius: radii.xs },
-  axis: { color: colors.textSubtle, fontSize: 10 },
+  axis: { color: colors.textSubtle, fontSize: 9 },
   toggle: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   rail: { gap: spacing.md, alignItems: 'stretch' },
   card: { flex: 1, padding: spacing.md, gap: spacing.sm, backgroundColor: colors.panelElevated, borderWidth: 1, borderColor: colors.border, borderRadius: radii.lg },
