@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BookmarkPlus, Plus } from 'lucide-react-native';
+import { upsertTrackingState } from '../api/tracking';
 import {
   addSharedWatchlistItem,
   createSharedWatchlist,
@@ -63,6 +64,8 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   const [isCreating, setIsCreating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [isPlanning, setIsPlanning] = useState(false);
+  const planningRef = useRef(false);
   const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [newWatchlistKind, setNewWatchlistKind] = useState<CreateWatchlistKind>('personal');
   const [newWatchlistName, setNewWatchlistName] = useState('');
@@ -239,6 +242,43 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
 
     void loadOptions(false);
   }, [firebaseIdToken, loadOptions]);
+
+  async function planToWatch() {
+    if (!firebaseIdToken || planningRef.current) return;
+
+    planningRef.current = true;
+    setIsPlanning(true);
+    const ownerKey = optionsOwnerKey;
+    try {
+      const token = await getFirebaseIdToken();
+      if (previewOwnerKeyRef.current !== ownerKey) return;
+      if (!token) throw new Error('Sign in again to plan to watch this title.');
+
+      const state = await upsertTrackingState(token, {
+        contentType,
+        status: 'watchlisted',
+        tmdbId,
+      });
+      if (previewOwnerKeyRef.current !== ownerKey) return;
+      if (currentUser) {
+        await writePersistedCache(
+          getPrivateCacheKey(currentUser.id, `tracking:${contentType}:${tmdbId}`),
+          state,
+        ).catch(() => undefined);
+      }
+      if (previewOwnerKeyRef.current !== ownerKey) return;
+      notifyUserDataChanged('tracking');
+      hapticSuccess();
+      openSheet();
+    } catch (error) {
+      if (previewOwnerKeyRef.current !== ownerKey) return;
+      hapticError();
+      showToast(error instanceof Error ? error.message : 'Could not add this title to Planned.');
+    } finally {
+      planningRef.current = false;
+      setIsPlanning(false);
+    }
+  }
 
   function openSheet() {
     if (!firebaseIdToken) return;
@@ -429,22 +469,23 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   return (
     <>
       <Pressable
-        accessibilityLabel={firebaseIdToken ? 'Add to watchlist' : 'Sign in to add to watchlist'}
+        accessibilityLabel={firebaseIdToken ? 'Plan to watch' : 'Sign in to plan to watch'}
         accessibilityRole="button"
-        accessibilityState={{}}
-        onPress={() => firebaseIdToken ? openSheet() : setIsSignInOpen(true)}
+        accessibilityState={{ busy: isPlanning, disabled: isPlanning }}
+        disabled={isPlanning}
+        onPress={() => firebaseIdToken ? void planToWatch() : setIsSignInOpen(true)}
         style={({ pressed }) => [
           styles.trigger,
           pressed ? styles.pressed : null,
         ]}
       >
         <BookmarkPlus color={colors.accentText} size={16} strokeWidth={2.4} />
-        <Text style={styles.triggerLabel}>Add to watchlist</Text>
+        <Text style={styles.triggerLabel}>{isPlanning ? 'Saving…' : 'Plan to watch'}</Text>
       </Pressable>
 
       <BottomActionSheet onClose={dismissSheet} title="Add to a list" visible={isOpen}>
         <BottomActionSheetScrollView disableScrollViewPanResponder={false} contentContainerStyle={styles.optionSections}>
-          <Text style={styles.sheetSubtitle}>Select one or more lists.</Text>
+          <Text style={styles.sheetSubtitle}>Added to Planned. You can also add it to a watchlist, or close this sheet.</Text>
 
           {(!hasCurrentOptions || (isLoading && options.length === 0)) ? (
             <LoadingState label="Loading your lists" variant="settings" />
@@ -504,9 +545,9 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
         </BottomActionSheetScrollView>
       </BottomActionSheet>
       <SignInSheet
-        body="You need to be signed in to add titles to a watchlist. Sign in here to continue."
+        body="Sign in to add titles to Planned and optionally to a watchlist."
         onClose={() => setIsSignInOpen(false)}
-        title="Sign in to use watchlists"
+        title="Sign in to plan to watch"
         visible={isSignInOpen && !firebaseIdToken}
       />
     </>

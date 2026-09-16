@@ -16,6 +16,8 @@ export function getProfileMediaStatus(
     | 'watchedEpisodeCount'
   >,
 ): ProfileMediaStatus | null {
+  if (item.status === 'watchlisted') return 'planned';
+
   const completedSeries = item.contentType === 'series'
     && item.numberOfEpisodes !== null
     && item.numberOfEpisodes > 0
@@ -31,7 +33,7 @@ export function getProfileMediaStatus(
   ) {
     return 'inProgress';
   }
-  if (item.status === 'watchlisted' || item.favorite || item.hasReleaseAlert) return 'planned';
+  if (item.favorite || item.hasReleaseAlert) return 'planned';
 
   return null;
 }

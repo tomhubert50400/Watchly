@@ -67,6 +67,13 @@ assert.equal(
 );
 assert.equal(getProfileMediaStatus(media('movie:5', { favorite: true })), 'planned');
 assert.equal(getProfileMediaStatus(media('series:6', { hasReleaseAlert: true })), 'planned');
+for (const watchedEpisodeCount of [0, 4, 20]) {
+  assert.equal(
+    getProfileMediaStatus(media('series:7', { status: 'watchlisted', watchedEpisodeCount })),
+    'planned',
+    'explicit planning must appear in Planned regardless of previous episode progress',
+  );
+}
 assert.equal(
   getProfileMediaStatus(media('movie:7', { status: 'watchlisted' })),
   'planned',
