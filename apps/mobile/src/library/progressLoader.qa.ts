@@ -51,6 +51,21 @@ async function main() {
   await loadProgressEntries(sources, { ...options, force: true, onlyKey: sources[35]!.key });
   assert.equal(calls, 1, 'retrying one card must not reload the other 68 series');
   assert.equal(canReuseProgress({ item: { ...result(sources[0]!), remainingEpisodes: undefined }, savedAt: Date.now() }, sources[0]!), false, 'older cache entries must prepare the local episode sequence');
+  const visited: string[] = [];
+  const recent: ProgressItem[] = [];
+  const resumable = (source: LibraryMediaItem) => ({ ...result(source), media: { ...source, watchedEpisodeCount: 1 }, next: { seasonNumber: 1, episodeNumber: 2 } });
+  await loadProgressEntries(sources, {
+    force: false, maxRecentItems: 6, cached: () => undefined, isCurrent: () => true,
+    load: async (source) => { visited.push(source.key); return sources.indexOf(source) < 2 ? result(source) : resumable(source); },
+    onItem: (entry) => { if (entry.next) recent.push(entry); },
+  });
+  assert.ok(recent.length >= 6 && visited.length <= 9, 'Home must pass completed series and stop after six resumable cards, allowing one in-flight request');
+  calls = 0;
+  await loadProgressEntries(sources, {
+    ...options, maxRecentItems: 6,
+    cached: (key) => ({ item: resumable(sources.find((source) => source.key === key)!), savedAt: Date.now() }),
+  });
+  assert.equal(calls, 0, 'Home must reuse Progress cards without duplicate private requests');
   console.log('Progress progressive loading, cancellation and cache QA passed.');
 }
 void main();

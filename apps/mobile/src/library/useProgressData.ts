@@ -16,7 +16,7 @@ import type { LibraryMediaItem } from './useLibraryData';
 
 type ProgressData = { items: ProgressItem[]; loadedAt: number; savedAtByKey?: Record<string, number> };
 
-export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
+export function useProgressData(media: LibraryMediaItem[], enabled: boolean, maxRecentItems?: number) {
   const { currentUser, getFirebaseIdToken } = useAuthSession();
   const { refreshSeries } = useCatalogueCache();
   const ownerId = currentUser?.id;
@@ -37,7 +37,9 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
   const retryKey = useRef<string | undefined>(undefined);
   const [loadError, setLoadError] = useState<{ ownerId: string; message: string } | null>(null);
   const dataRef = useRef<ProgressData | null>(null);
-  dataRef.current = snapshot?.key === key ? snapshot.data : getMemoryResource<ProgressData>(key)?.data ?? null;
+  const cachedData = getMemoryResource<ProgressData>(key)?.data;
+  const snapshotData = snapshot?.key === key ? snapshot.data : null;
+  dataRef.current = cachedData && (!snapshotData || cachedData.loadedAt > snapshotData.loadedAt) ? cachedData : snapshotData ?? cachedData ?? null;
   const [busy, setBusy] = useState<string[]>([]);
   const busyRef = useRef(new Set<string>());
   const [optimistic, setOptimistic] = useState<Record<string, ProgressItem>>({});
@@ -53,6 +55,7 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
     setRefreshing(force && !retryKey.current);
     setLoadError(null);
     const sources = mediaRef.current.filter(isProgressCandidate);
+    if (maxRecentItems) sources.sort((a, b) => (b.lastWatchedAt ?? '').localeCompare(a.lastWatchedAt ?? ''));
     const keep = new Set(sources.map((item) => item.key));
     const publish = (data: ProgressData) => {
       dataRef.current = data;
@@ -70,7 +73,7 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
         publish({ items: (previous?.items ?? []).filter((item) => keep.has(item.media.key)), loadedAt: previous?.loadedAt ?? Date.now(), savedAtByKey: previous?.savedAtByKey ?? Object.fromEntries((previous?.items ?? []).map((item) => [item.media.key, previous!.loadedAt])) });
         let token: string | null = null;
         await loadProgressEntries(sources, {
-          force, isCurrent, onlyKey: force ? retryKey.current : undefined,
+          force, isCurrent, onlyKey: force ? retryKey.current : undefined, maxRecentItems,
           cached: (itemKey) => {
             const data = dataRef.current;
             const item = data?.items.find((entry) => entry.media.key === itemKey);
@@ -112,7 +115,7 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
       }
     })();
     return () => { generation.current++; persist(); };
-  }, [enabled, getFirebaseIdToken, key, ownerId, refreshSeries, retryRevision, signature]);
+  }, [enabled, getFirebaseIdToken, key, maxRecentItems, ownerId, refreshSeries, retryRevision, signature]);
 
   const items = dataRef.current?.items ?? [];
   const itemsRef = useRef(items);
