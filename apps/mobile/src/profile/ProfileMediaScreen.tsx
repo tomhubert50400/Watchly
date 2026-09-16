@@ -64,26 +64,45 @@ export function ProfileMediaScreen() {
         </EmptyState>
       ) : (
         <View style={styles.content}>
-          {route.params.filter !== 'movies' ? (
-            <ScreenReveal delay={50}><ProfileMediaRail
-              emptyLabel="Nothing in progress right now."
-              items={groups.inProgress}
-              onOpen={openItem}
-              title="In progress"
-            /></ScreenReveal>
-          ) : null}
-          <ScreenReveal delay={100}><ProfileMediaRail
-            emptyLabel="No planned titles yet."
-            items={groups.planned}
-            onOpen={openItem}
-            title="Planned"
-          /></ScreenReveal>
-          <ScreenReveal delay={150}><ProfileMediaRail
-            emptyLabel="No completed titles yet."
-            items={groups.completed}
-            onOpen={openItem}
-            title="Completed"
-          /></ScreenReveal>
+          {route.params.filter === 'planned' ? (
+            <>
+              <ScreenReveal delay={50}><ProfileMediaRail
+                emptyLabel="No planned movies yet."
+                items={sourceItems.filter((item) => item.contentType === 'movie')}
+                onOpen={openItem}
+                title="Movies"
+              /></ScreenReveal>
+              <ScreenReveal delay={100}><ProfileMediaRail
+                emptyLabel="No planned series yet."
+                items={sourceItems.filter((item) => item.contentType === 'series')}
+                onOpen={openItem}
+                title="Series"
+              /></ScreenReveal>
+            </>
+          ) : (
+            <>
+              {route.params.filter !== 'movies' ? (
+                <ScreenReveal delay={50}><ProfileMediaRail
+                  emptyLabel="Nothing in progress right now."
+                  items={groups.inProgress}
+                  onOpen={openItem}
+                  title="In progress"
+                /></ScreenReveal>
+              ) : null}
+              <ScreenReveal delay={100}><ProfileMediaRail
+                emptyLabel="No planned titles yet."
+                items={groups.planned}
+                onOpen={openItem}
+                title="Planned"
+              /></ScreenReveal>
+              <ScreenReveal delay={150}><ProfileMediaRail
+                emptyLabel="No completed titles yet."
+                items={groups.completed}
+                onOpen={openItem}
+                title="Completed"
+              /></ScreenReveal>
+            </>
+          )}
         </View>
       )}
     </Screen>

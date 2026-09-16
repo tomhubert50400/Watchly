@@ -1,6 +1,6 @@
 import type { LibraryMediaItem } from '../library/useLibraryData';
 
-export type ProfileMediaFilter = 'favorites' | 'movies' | 'series';
+export type ProfileMediaFilter = 'favorites' | 'movies' | 'series' | 'planned';
 export type ProfileMediaStatus = 'completed' | 'inProgress' | 'planned';
 
 export const PROFILE_MEDIA_PREVIEW_LIMIT = 10;
@@ -52,6 +52,7 @@ export function getProfileMediaItems(
   return [...items]
     .filter((item) => {
       if (getProfileMediaStatus(item) === null) return false;
+      if (filter === 'planned') return getProfileMediaStatus(item) === 'planned';
       if (filter === 'favorites') return item.favorite;
       return item.contentType === (filter === 'movies' ? 'movie' : 'series');
     })
@@ -60,6 +61,7 @@ export function getProfileMediaItems(
 
 export function getProfileMediaPreviews(items: readonly LibraryMediaItem[]) {
   return {
+    planned: getProfileMediaItems(items, 'planned').slice(0, PROFILE_MEDIA_PREVIEW_LIMIT),
     favorites: getProfileMediaItems(items, 'favorites').slice(0, PROFILE_MEDIA_PREVIEW_LIMIT),
     movies: getProfileMediaItems(items, 'movies').slice(0, PROFILE_MEDIA_PREVIEW_LIMIT),
     series: getProfileMediaItems(items, 'series').slice(0, PROFILE_MEDIA_PREVIEW_LIMIT),

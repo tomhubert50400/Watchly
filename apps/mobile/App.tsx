@@ -281,7 +281,9 @@ function AppNavigator() {
                   ? 'Series'
                   : route.params.filter === 'movies'
                     ? 'Movies'
-                    : 'Favorites',
+                    : route.params.filter === 'planned'
+                      ? 'Planned'
+                      : 'Favorites',
               })}
             />
             <Stack.Screen component={LibraryScreen} name="ReleaseAlerts" options={{ title: 'Release alerts' }} />

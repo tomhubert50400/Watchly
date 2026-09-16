@@ -17,6 +17,7 @@ import { ViewingStatsSummaryCard } from './ViewingStatsSummaryCard';
 type HydratedProfileReview = Extract<HydratedProfileOpinion, { body: string }>;
 
 type ProfileMediaPreviews = {
+  planned: readonly LibraryMediaItem[];
   favorites: readonly LibraryMediaItem[];
   movies: readonly LibraryMediaItem[];
   series: readonly LibraryMediaItem[];
@@ -137,6 +138,13 @@ export function ProfileBody({
             onOpen={onOpenMediaItem}
             onViewAll={() => onViewAllMedia('favorites')}
             title="Favorites"
+          /></ScreenReveal>
+          <ScreenReveal delay={200}><ProfileMediaRail
+            emptyLabel="No planned titles yet."
+            items={mediaPreviews.planned}
+            onOpen={onOpenMediaItem}
+            onViewAll={() => onViewAllMedia('planned')}
+            title="Planned"
           /></ScreenReveal>
         </>
       ) : null}

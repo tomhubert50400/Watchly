@@ -129,6 +129,7 @@ export function ProfileScreen() {
     ...previews.series,
     ...previews.movies,
     ...previews.favorites,
+    ...previews.planned,
   ]), [previews]);
   const hydratedPreviewItems = useHydratedProfileMediaItems(previewSources);
   const hydratedPreviewByKey = useMemo(
@@ -136,6 +137,7 @@ export function ProfileScreen() {
     [hydratedPreviewItems],
   );
   const hydratedPreviews = useMemo(() => ({
+    planned: previews.planned.map((item) => hydratedPreviewByKey.get(item.key) ?? item),
     favorites: previews.favorites.map((item) => hydratedPreviewByKey.get(item.key) ?? item),
     movies: previews.movies.map((item) => hydratedPreviewByKey.get(item.key) ?? item),
     series: previews.series.map((item) => hydratedPreviewByKey.get(item.key) ?? item),

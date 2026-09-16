@@ -109,6 +109,20 @@ assert.deepEqual(grouped.completed.map((item) => item.tmdbId), [30]);
 assert.deepEqual(grouped.inProgress.map((item) => item.tmdbId), [33]);
 assert.deepEqual(grouped.planned.map((item) => item.tmdbId), [31, 32]);
 
+const plannedItems = [
+  media('movie:40', { status: 'watchlisted', updatedAt: '2026-09-14T00:00:00.000Z' }),
+  media('series:41', { status: 'watchlisted', updatedAt: '2026-09-16T00:00:00.000Z' }),
+  media('movie:42', { status: 'watched' }),
+  media('series:43', { status: 'watching' }),
+];
+assert.deepEqual(getProfileMediaItems(plannedItems, 'planned').map((item) => item.key), [
+  'series:41', 'movie:40',
+], 'Planned must mix movies and series by recency and exclude watched or in-progress titles');
+assert.deepEqual(getProfileMediaPreviews(plannedItems).planned.map((item) => item.key), [
+  'series:41', 'movie:40',
+]);
+assert.equal(getProfileMediaPreviews(recent).planned.length, 10);
+
 const profileSource = readFileSync(new URL('./ProfileScreen.tsx', import.meta.url), 'utf8');
 const profileBodySource = readFileSync(new URL('./ProfileBody.tsx', import.meta.url), 'utf8');
 const publicProfileSource = readFileSync(
@@ -122,7 +136,7 @@ assert.equal(
   false,
   'the Biggest Obsession card must be removed from Profile',
 );
-for (const title of ['Series', 'Movies', 'Favorites']) {
+for (const title of ['Series', 'Movies', 'Favorites', 'Planned']) {
   assert(
     profileBodySource.includes(`title="${title}"`),
     `the shared Profile body must include the ${title} media rail`,
