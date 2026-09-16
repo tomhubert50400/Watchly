@@ -89,6 +89,7 @@ type TmdbMovieDetailsResponse = {
   title?: string;
   videos?: { results?: TmdbVideo[] };
   vote_average?: number;
+  vote_count?: number;
 };
 
 type TmdbSeriesDetailsResponse = {
@@ -833,7 +834,7 @@ export class TmdbCatalogueService {
     }
 
     return {
-      item: this.toMovieDetails(payload, await this.getMovieDisplayRating(tmdbId, payload.vote_average)),
+      item: this.toMovieDetails(payload, await this.getMovieDisplayRating(tmdbId, payload.vote_average, payload.vote_count)),
       provider: 'tmdb',
     };
   }
@@ -1180,7 +1181,7 @@ export class TmdbCatalogueService {
     };
   }
 
-  private async getMovieDisplayRating(tmdbId: number, tmdbVoteAverage: number | undefined) {
+  private async getMovieDisplayRating(tmdbId: number, tmdbVoteAverage: number | undefined, tmdbVoteCount: number | undefined) {
     const ratingSummary = await this.getMovieRatingSummary(tmdbId);
     const watchlyRatingCount = ratingSummary._count._all;
     const watchlyAverageHalfSteps = ratingSummary._avg.scoreHalfSteps;
@@ -1197,7 +1198,7 @@ export class TmdbCatalogueService {
     if (typeof tmdbVoteAverage === 'number') {
       return {
         average: toRoundedRating(tmdbVoteAverage),
-        count: null,
+        count: tmdbVoteCount ?? null,
         scale: 10,
         source: 'tmdb',
       } satisfies DisplayRating;
