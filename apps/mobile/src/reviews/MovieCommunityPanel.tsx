@@ -39,14 +39,10 @@ export function MovieCommunityPanel({ tmdbId, displayRating, onViewMore }: {
     <View style={styles.section}>
       <Text style={styles.title}>Ratings & reviews</Text>
       {displayRating ? (
-        <View style={styles.summary}>
-          <Text style={styles.score}>{(displayRating.average / (displayRating.scale / 5)).toFixed(1)}<Text style={styles.muted}> / 5</Text></Text>
-          {displayRating.count !== null ? <Text style={styles.muted}>{displayRating.count.toLocaleString()} ratings</Text> : null}
-        </View>
+        <Text style={styles.score}>{(displayRating.average / (displayRating.scale / 5)).toFixed(1)}<Text style={styles.muted}> / 5</Text></Text>
       ) : null}
       {community ? (
         <>
-          <Text style={styles.muted}>Watchly · {community.ratingCount} public {community.ratingCount === 1 ? 'rating' : 'ratings'}</Text>
           {community.ratingCount > 0 ? (
             <View style={styles.histogram}>
               {community.distribution.map((bucket) => (
@@ -56,14 +52,11 @@ export function MovieCommunityPanel({ tmdbId, displayRating, onViewMore }: {
                 </View>
               ))}
             </View>
-          ) : <Text style={styles.muted}>No public ratings yet.</Text>}
-          <Pressable accessibilityRole="button" accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)} style={styles.toggle}>
-            <View style={styles.toggleCopy}>
+          ) : null}
+          {community.reviewCount > 0 ? <Pressable accessibilityRole="button" accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)} style={styles.toggle}>
               <Text style={styles.author}>{expanded ? 'Hide reviews' : `Show reviews (${community.reviewCount})`}</Text>
-              {!expanded ? <Text style={styles.muted}>Written reviews may contain spoilers.</Text> : null}
-            </View>
             {expanded ? <ChevronUp color={colors.textMuted} size={20} /> : <ChevronDown color={colors.textMuted} size={20} />}
-          </Pressable>
+          </Pressable> : null}
           {expanded ? (
             <>
               {community.reviews.length ? (
@@ -74,7 +67,7 @@ export function MovieCommunityPanel({ tmdbId, displayRating, onViewMore }: {
                     </View>
                   ))}
                 </ScrollView>
-              ) : <Text style={styles.muted}>No written reviews yet. Be the first to share yours.</Text>}
+              ) : null}
               {community.reviewCount > 0 ? <Button label="View more" variant="secondary" onPress={onViewMore} /> : null}
             </>
           ) : null}
@@ -113,7 +106,6 @@ export function MovieCommunityReviewCard({ review, compact = false }: {
 const styles = StyleSheet.create({
   section: { gap: spacing.md, paddingVertical: spacing.xl, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   title: { ...typography.title, color: colors.text },
-  summary: { gap: spacing.xs },
   score: { ...typography.heading, color: colors.text },
   muted: { ...typography.meta, color: colors.textSubtle },
   histogram: { flexDirection: 'row', gap: spacing.xs },
@@ -122,7 +114,6 @@ const styles = StyleSheet.create({
   bar: { width: '100%', backgroundColor: colors.rating, borderRadius: radii.xs },
   axis: { color: colors.textSubtle, fontSize: 10 },
   toggle: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  toggleCopy: { flex: 1, gap: spacing.xs },
   rail: { gap: spacing.md, alignItems: 'stretch' },
   card: { flex: 1, padding: spacing.md, gap: spacing.sm, backgroundColor: colors.panelElevated, borderWidth: 1, borderColor: colors.border, borderRadius: radii.lg },
   reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
