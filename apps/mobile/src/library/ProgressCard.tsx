@@ -1,5 +1,5 @@
 import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
-import { ActivityIndicator, Image, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { colors, radii, shadows, spacing } from '../design/tokens';
 import type { ProgressItem } from './progressModel';
@@ -39,8 +39,8 @@ export function ProgressCard({ item, busy, onOpen, onWatched, onRetry, compact =
       </ImageBackground>}
     </Pressable>
     {item.error ? <Pressable accessibilityRole="button" accessibilityLabel={`Retry progress for ${media.title}`} onPress={onRetry} style={[styles.retry, compact && styles.compactAction]}><Text style={styles.retryText}>Retry</Text></Pressable> : next ?
-      <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: busy, disabled: busy, busy }} accessibilityLabel={`Mark ${media.title}, season ${next.seasonNumber}, episode ${next.episodeNumber} as watched`} disabled={busy} onPress={onWatched} style={[styles.checkTarget, compact && styles.compactAction]}>
-        <View style={[styles.circle, busy && styles.checked]}>{busy ? <ActivityIndicator color={colors.textOnAccent} size="small" /> : null}</View>
+      <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: false, disabled: busy, busy }} accessibilityLabel={`Mark ${media.title}, season ${next.seasonNumber}, episode ${next.episodeNumber} as watched`} disabled={busy} onPress={onWatched} style={[styles.checkTarget, compact && styles.compactAction]}>
+        <View style={styles.circle} />
       </Pressable> : <View style={[styles.checkTarget, compact && styles.compactAction]}><ReleaseAlertControl contentType="series" tmdbId={media.tmdbId} /></View>}
   </View>;
 }
@@ -69,7 +69,6 @@ const styles = StyleSheet.create({
   progress: { height: 3, backgroundColor: colors.accent },
   checkTarget: { width: 44, height: 44, position: 'absolute', right: spacing.sm, bottom: spacing.sm, alignItems: 'center', justifyContent: 'center' },
   circle: { width: 30, height: 30, borderRadius: 15, borderWidth: 2, borderColor: colors.text, backgroundColor: 'rgba(9,12,19,0.5)', alignItems: 'center', justifyContent: 'center' },
-  checked: { backgroundColor: colors.accent, borderColor: colors.accent },
   retry: { position: 'absolute', right: spacing.sm, bottom: spacing.sm, minHeight: 44, justifyContent: 'center', paddingHorizontal: spacing.xs },
   retryText: { color: colors.accentText, fontSize: 13, fontWeight: '700' },
   pressed: { opacity: 0.82 },

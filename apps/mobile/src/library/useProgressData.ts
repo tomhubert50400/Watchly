@@ -11,7 +11,7 @@ import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { localViewingDay, toHistoryDraft } from '../viewings/viewingHistoryModel';
 import { loadProgressEntries } from './progressLoader';
-import { isProgressCandidate, ProgressItem, resolveProgressItem, retainProgressOnError } from './progressModel';
+import { advanceProgressItem, isProgressCandidate, ProgressItem, resolveProgressItem, retainProgressOnError } from './progressModel';
 import type { LibraryMediaItem } from './useLibraryData';
 
 type ProgressData = { items: ProgressItem[]; loadedAt: number; savedAtByKey?: Record<string, number> };
@@ -31,6 +31,7 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
   const generation = useRef(0);
   const [snapshot, setSnapshot] = useState<{ key: string; data: ProgressData } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [retryRevision, setRetryRevision] = useState(0);
   const lastRetry = useRef(0);
   const retryKey = useRef<string | undefined>(undefined);
@@ -39,15 +40,17 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
   dataRef.current = snapshot?.key === key ? snapshot.data : getMemoryResource<ProgressData>(key)?.data ?? null;
   const [busy, setBusy] = useState<string[]>([]);
   const busyRef = useRef(new Set<string>());
+  const [optimistic, setOptimistic] = useState<Record<string, ProgressItem>>({});
   const [error, setError] = useState<{ ownerId: string; message: string } | null>(null);
 
   useEffect(() => {
     const version = ++generation.current;
-    if (!enabled || !ownerId) { setLoading(false); return; }
+    if (!enabled || !ownerId) { setLoading(false); setRefreshing(false); return; }
     const isCurrent = () => generation.current === version && enabledRef.current && ownerRef.current === ownerId;
     const force = retryRevision !== lastRetry.current;
     lastRetry.current = retryRevision;
     setLoading(true);
+    setRefreshing(force && !retryKey.current);
     setLoadError(null);
     const sources = mediaRef.current.filter(isProgressCandidate);
     const keep = new Set(sources.map((item) => item.key));
@@ -95,7 +98,7 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
           onItem: (item, startedAt) => {
             const current = dataRef.current!;
             // A background response must not replace an episode saved after it started.
-            if ((current.savedAtByKey?.[item.media.key] ?? 0) > startedAt) return;
+            if (busyRef.current.has(`${ownerId}:${item.media.key}`) || (current.savedAtByKey?.[item.media.key] ?? 0) > startedAt) return;
             const byKey = new Map(current.items.map((entry) => [entry.media.key, entry]));
             byKey.set(item.media.key, retainProgressOnError(byKey.get(item.media.key), item));
             const now = Date.now();
@@ -105,7 +108,7 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
       } catch (cause) {
         if (isCurrent()) setLoadError({ ownerId, message: cause instanceof Error ? cause.message : 'Could not load progress.' });
       } finally {
-        if (isCurrent()) { persist(); setLoading(false); }
+        if (isCurrent()) { persist(); setLoading(false); setRefreshing(false); }
       }
     })();
     return () => { generation.current++; persist(); };
@@ -117,7 +120,7 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
   const resource = {
     data: dataRef.current,
     error: loadError?.ownerId === ownerId ? loadError?.message ?? null : null,
-    isRefreshing: loading && retryRevision > 0,
+    isRefreshing: refreshing,
     isLoadingMore: loading,
     retry: (itemKey?: string) => { retryKey.current = itemKey; setRetryRevision((value) => value + 1); },
   };
@@ -132,6 +135,20 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
     setError(null);
     let saved = false;
     try {
+      const now = new Date().toISOString();
+      const viewingId = randomUUID();
+      let next = advanceProgressItem(item, viewingId, now);
+      if (!next) {
+        // Older persisted cards need their episode sequence prepared once.
+        const prepared = await resolveProgressItem(item, async (season) => (await ensureSeasonDetails(item.media.tmdbId, season)).item);
+        if (prepared.next?.seasonNumber !== episode.seasonNumber || prepared.next?.episodeNumber !== episode.episodeNumber) throw new Error('Your progress changed. Refresh before marking this episode.');
+        next = advanceProgressItem(prepared, viewingId, now);
+      }
+      if (!next) throw new Error('Could not load the next episode.');
+      if (ownerRef.current !== ownerId) return;
+      // Pending display state stays separate from the confirmed, persisted snapshot.
+      setOptimistic((current) => ({ ...current, [mutationKey]: next! }));
+      hapticSuccess();
       const token = await getFirebaseIdToken();
       if (!token) throw new Error('Sign in again to save this episode.');
       if (ownerRef.current !== ownerId) return;
@@ -142,21 +159,9 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
       if (summary.history.length !== expectedViews) throw new Error('Your progress changed. Refresh before marking this episode.');
       const previous = summary.history;
       // Stable entry IDs make retries of the same save safe and preserve existing viewings.
-      const entries = [...toHistoryDraft(previous), { id: randomUUID(), watchedDate: localViewingDay() }];
-      const result = await saveViewingHistory(token, { contentType: 'episode', tmdbId: item.media.tmdbId, ...episode }, previous, entries);
+      const entries = [...toHistoryDraft(previous), { id: viewingId, watchedDate: localViewingDay() }];
+      await saveViewingHistory(token, { contentType: 'episode', tmdbId: item.media.tmdbId, ...episode }, previous, entries);
       saved = true;
-      if (ownerRef.current !== ownerId) return;
-      const now = new Date().toISOString();
-      const matches = (entry: { seasonNumber: number; episodeNumber: number }) => entry.seasonNumber === episode.seasonNumber && entry.episodeNumber === episode.episodeNumber;
-      const watched = [...item.watched.filter((entry) => !matches(entry)), { ...episode, id: result.items[0]!.id, seriesTmdbId: item.media.tmdbId, updatedAt: now, watchedAt: now }];
-      const viewings = [...item.viewings.filter((entry) => !matches(entry)), { ...episode, viewCount: result.items.length, latestLoggedAt: now }];
-      const updated = { ...item, watched, viewings, media: { ...item.media, watchedEpisodeCount: watched.length, lastWatchedAt: now } };
-      let next: ProgressItem;
-      try {
-        next = await resolveProgressItem(updated, async (season) => (await ensureSeasonDetails(item.media.tmdbId, season)).item);
-      } catch {
-        next = { ...updated, next: null, error: 'Episode saved. Refresh to load the next episode.' };
-      }
       if (ownerRef.current !== ownerId) return;
       const savedAt = Date.now();
       const data = { items: (itemsRef.current.length ? itemsRef.current : itemsBefore).map((entry) => entry.media.key === item.media.key ? next : entry), loadedAt: savedAt, savedAtByKey: { ...dataRef.current?.savedAtByKey, [item.media.key]: savedAt } };
@@ -165,7 +170,6 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
       setSnapshot({ key, data });
       setMemoryResource(key, data, now);
       void writePersistedCache(key, data).catch(() => undefined);
-      hapticSuccess();
     } catch (cause) {
       if (ownerRef.current === ownerId) {
         setError({ ownerId, message: cause instanceof Error ? cause.message : 'Could not save this episode.' });
@@ -173,10 +177,11 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
         resource.retry(item.media.key);
       }
     } finally {
+      setOptimistic((current) => { const updated = { ...current }; delete updated[mutationKey]; return updated; });
       if (ownerRef.current === ownerId && saved) notifyUserDataChanged('episodeProgress', 'viewings');
       busyRef.current.delete(mutationKey);
       setBusy([...busyRef.current]);
     }
   }
-  return { ...resource, retry: (itemKey?: string) => { setError(null); resource.retry(itemKey); }, items, markNext, actionError: error && error.ownerId === ownerId ? error.message : null, isBusy: (item: ProgressItem) => busy.includes(`${ownerId}:${item.media.key}`) };
+  return { ...resource, retry: (itemKey?: string) => { setError(null); resource.retry(itemKey); }, items: items.map((item) => optimistic[`${ownerId}:${item.media.key}`] ?? item), markNext, actionError: error && error.ownerId === ownerId ? error.message : null, isBusy: (item: ProgressItem) => busy.includes(`${ownerId}:${item.media.key}`) };
 }
