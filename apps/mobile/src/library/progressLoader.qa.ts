@@ -5,7 +5,7 @@ import type { ProgressItem } from './progressModel';
 import type { LibraryMediaItem } from './useLibraryData';
 
 const sources = Array.from({ length: 69 }, (_, index) => ({ key: `series:${index}`, updatedAt: '2026-09-13T00:00:00Z' } as LibraryMediaItem));
-const result = (media: LibraryMediaItem) => ({ media, error: null } as ProgressItem);
+const result = (media: LibraryMediaItem) => ({ media, error: null, remainingEpisodes: [] } as unknown as ProgressItem);
 
 async function main() {
   let active = true;
@@ -50,6 +50,7 @@ async function main() {
   calls = 0;
   await loadProgressEntries(sources, { ...options, force: true, onlyKey: sources[35]!.key });
   assert.equal(calls, 1, 'retrying one card must not reload the other 68 series');
+  assert.equal(canReuseProgress({ item: { ...result(sources[0]!), remainingEpisodes: undefined }, savedAt: Date.now() }, sources[0]!), false, 'older cache entries must prepare the local episode sequence');
   console.log('Progress progressive loading, cancellation and cache QA passed.');
 }
 void main();

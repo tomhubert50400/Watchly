@@ -1,7 +1,7 @@
 // @ts-expect-error QA runs in Node, outside the Expo type configuration.
 import assert from 'node:assert/strict';
 import type { SeasonDetails } from '../api/catalogue';
-import { isProgressCandidate, ProgressItem, resolveProgressItem, selectRecentProgress, retainProgressOnError } from './progressModel';
+import { advanceProgressItem, isProgressCandidate, ProgressItem, resolveProgressItem, selectRecentProgress, retainProgressOnError } from './progressModel';
 import type { LibraryMediaItem } from './useLibraryData';
 
 const today = '2026-09-13';
@@ -87,6 +87,27 @@ async function main() {
   assert.equal(retainProgressOnError(retained, saved), saved, 'a successful retry clears the error');
   assert.equal(retainProgressOnError(undefined, failed), failed, 'a first-load failure must not invent progress');
   assert.equal(selectRecentProgress([{ ...saved, next: null, error: 'Episode saved. Refresh to load the next episode.' }]).length, 1, 'a saved episode stays visible even when resolving its successor fails');
+  const initial = await resolveProgressItem(item, loadSeason, today);
+  const initialCopy = JSON.stringify(initial);
+  const advanced = advanceProgressItem(initial, 'local-viewing', '2026-09-13T15:00:00Z')!;
+  assert.deepEqual(advanced.next, { seasonNumber: 1, episodeNumber: 2 }, 'advance synchronously without any catalogue or save request');
+  assert.equal(advanced.watchedReleasedEpisodeCount, 1);
+  assert.equal(advanced.media.watchedEpisodeCount, 1);
+  assert.equal(advanced.viewings[0]!.viewCount, 1);
+  assert.equal(JSON.stringify(initial), initialCopy, 'keep the confirmed snapshot intact for rollback');
+  const acrossSeason = advanceProgressItem(advanced, 'local-viewing-2', '2026-09-13T15:01:00Z')!;
+  assert.deepEqual(acrossSeason.next, { seasonNumber: 2, episodeNumber: 1 });
+  const caughtUp = advanceProgressItem(acrossSeason, 'local-viewing-3', '2026-09-13T15:02:00Z')!;
+  assert.equal(caughtUp.next, null, 'optimistic advancement must never propose the unaired episode');
+  assert.equal(caughtUp.state, 'caughtUp');
+  assert.equal(caughtUp.watchedReleasedEpisodeCount, 3);
+  assert.equal(advanceProgressItem({ ...acrossSeason, series: { ...acrossSeason.series, status: 'Ended' } }, 'last', today)!.state, 'completed');
+  const advancedRewatch = advanceProgressItem(rewatch, 'rewatch-viewing', '2026-09-13T15:00:00Z')!;
+  assert.equal(advancedRewatch.watched.length, rewatch.watched.length, 'rewatching must not duplicate episode progress');
+  assert.equal(advancedRewatch.viewings.find((episode) => episode.seasonNumber === 1 && episode.episodeNumber === 2)!.viewCount, 2);
+  assert.equal(advancedRewatch.watchedReleasedEpisodeCount, 2);
+  assert.deepEqual(advancedRewatch.next, { seasonNumber: 2, episodeNumber: 1 });
+  assert.equal(advanceProgressItem({ ...initial, remainingEpisodes: undefined }, 'unknown', today), null, 'old cached cards must not guess an episode sequence');
   console.log('Progress episode sequencing QA passed.');
 }
 void main();

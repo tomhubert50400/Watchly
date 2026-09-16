@@ -5,7 +5,7 @@ export type ProgressCacheEntry = { item: ProgressItem; savedAt: number };
 const PROGRESS_FRESH_MS = 5 * 60 * 1000;
 
 export function canReuseProgress(entry: ProgressCacheEntry | undefined, source: LibraryMediaItem, now = Date.now()) {
-  return Boolean(entry && !entry.item.error && entry.item.media.updatedAt === source.updatedAt && now - entry.savedAt < PROGRESS_FRESH_MS);
+  return Boolean(entry && entry.item.remainingEpisodes && !entry.item.error && entry.item.media.updatedAt === source.updatedAt && now - entry.savedAt < PROGRESS_FRESH_MS);
 }
 
 export async function loadProgressEntries(sources: LibraryMediaItem[], options: {

@@ -22,6 +22,7 @@ export type ProgressItem = {
   watchedReleasedEpisodeCount?: number;
   viewingCycle?: number;
   nextSeasonAirDate?: string | null;
+  remainingEpisodes?: Array<{ seasonNumber: number; episodeNumber: number }>;
 };
 
 export function isProgressCandidate(item: LibraryMediaItem) {
@@ -36,6 +37,25 @@ export function selectRecentProgress(items: ProgressItem[]) {
 
 export function retainProgressOnError(previous: ProgressItem | undefined, incoming: ProgressItem): ProgressItem {
   return incoming.error && previous ? { ...previous, error: incoming.error } : incoming;
+}
+
+export function advanceProgressItem(item: ProgressItem, viewingId: string, now: string): ProgressItem | null {
+  const episode = item.next;
+  const first = item.remainingEpisodes?.[0];
+  if (!episode || !first || first.seasonNumber !== episode.seasonNumber || first.episodeNumber !== episode.episodeNumber) return null;
+  const matches = (entry: { seasonNumber: number; episodeNumber: number }) => entry.seasonNumber === episode.seasonNumber && entry.episodeNumber === episode.episodeNumber;
+  const watched = [...item.watched.filter((entry) => !matches(entry)), { ...episode, id: viewingId, seriesTmdbId: item.media.tmdbId, updatedAt: now, watchedAt: now }];
+  const viewCount = (item.viewings.find(matches)?.viewCount ?? 0) + 1;
+  const viewings = [...item.viewings.filter((entry) => !matches(entry)), { ...episode, viewCount, latestLoggedAt: now }];
+  const remainingEpisodes = item.remainingEpisodes!.slice(1);
+  const next = remainingEpisodes[0] ?? null;
+  const ended = item.series.status === 'Ended' || item.series.status === 'Canceled';
+  return {
+    ...item, watched, viewings, remainingEpisodes, next, error: null,
+    media: { ...item.media, watchedEpisodeCount: watched.length, lastWatchedAt: now },
+    watchedReleasedEpisodeCount: (item.watchedReleasedEpisodeCount ?? 0) + 1,
+    state: next ? 'progress' : ended ? 'completed' : 'caughtUp',
+  };
 }
 
 export async function resolveProgressItem(
@@ -53,6 +73,7 @@ export async function resolveProgressItem(
   const watchedKeys = new Set(watched.map((episode) => `${episode.seasonNumber}:${episode.episodeNumber}`));
   let releasedEpisodeCount = 0;
   let watchedReleasedEpisodeCount = 0;
+  const remainingEpisodes: NonNullable<ProgressItem['remainingEpisodes']> = [];
   const regularSeasons = item.series.seasons.filter((season) => season.seasonNumber > 0);
   for (const season of regularSeasons) {
     if (season.airDate && season.airDate > today) continue;
@@ -64,6 +85,7 @@ export async function resolveProgressItem(
       const beforeAnchor = anchor && (season.seasonNumber < anchor.seasonNumber
         || season.seasonNumber === anchor.seasonNumber && episode.episodeNumber <= anchor.episodeNumber);
       if (beforeAnchor || watchedKeys.has(`${season.seasonNumber}:${episode.episodeNumber}`)) watchedReleasedEpisodeCount++;
+      else if (season.airDate) remainingEpisodes.push({ seasonNumber: season.seasonNumber, episodeNumber: episode.episodeNumber });
     }
   }
   const upcomingSeason = regularSeasons.filter((season) => season.airDate && season.airDate > today)
@@ -77,5 +99,6 @@ export async function resolveProgressItem(
   }
   const next = await findNextSeriesEpisode(item.series.seasons, watched, cachedSeason, today, anchor);
   const ended = item.series.status === 'Ended' || item.series.status === 'Canceled';
-  return { ...item, releasedEpisodeCount, watchedReleasedEpisodeCount, viewingCycle: anchor?.viewCount ?? 1, nextSeasonAirDate, next, state: next ? 'progress' : ended ? 'completed' : 'caughtUp', error: null };
+  remainingEpisodes.sort((a, b) => a.seasonNumber - b.seasonNumber || a.episodeNumber - b.episodeNumber);
+  return { ...item, remainingEpisodes, releasedEpisodeCount, watchedReleasedEpisodeCount, viewingCycle: anchor?.viewCount ?? 1, nextSeasonAirDate, next, state: next ? 'progress' : ended ? 'completed' : 'caughtUp', error: null };
 }
