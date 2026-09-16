@@ -123,7 +123,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: watchlist ? () => (
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch' }}>
           {watchlist.isOwner ? <WatchlistCoverButton key={`${ownerId}:${watchlist.id}`} kind="shared" watchlistId={watchlist.id}
             items={watchlist.items} coverItemIds={watchlist.coverItemIds}
             onSaved={(coverItemIds) => {

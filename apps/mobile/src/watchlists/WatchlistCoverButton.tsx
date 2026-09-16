@@ -141,7 +141,7 @@ function WatchlistCoverSheet({ coverItemIds = [], items, kind, onClose, onSaved,
 }
 
 const styles = StyleSheet.create({
-  headerButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  headerButton: { width: 44, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
   pressed: { opacity: 0.7 },
   content: { padding: spacing.xl, gap: spacing.md },
   preview: { width: '100%', aspectRatio: 278 / 156, overflow: 'hidden', borderRadius: radii.lg, backgroundColor: colors.panelElevated },
