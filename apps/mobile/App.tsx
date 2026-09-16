@@ -23,7 +23,6 @@ import { FeedScreen } from './src/feed/FeedScreen';
 import { HomeScreen } from './src/home/HomeScreen';
 import { ImportDataScreen } from './src/imports/ImportDataScreen';
 import { ImportMatchesScreen } from './src/imports/ImportMatchesScreen';
-import { JournalScreen } from './src/journal/JournalScreen';
 import { AppStartupPreloader } from './src/launch/AppStartupPreloader';
 import { WatchlyLaunchGate } from './src/launch/WatchlyLaunchGate';
 import { LegalDocumentScreen } from './src/legal/LegalDocumentScreen';
@@ -286,7 +285,6 @@ function AppNavigator() {
               })}
             />
             <Stack.Screen component={LibraryScreen} name="ReleaseAlerts" options={{ title: 'Release alerts' }} />
-            <Stack.Screen component={JournalScreen} name="Journal" options={{ title: 'Viewing history' }} />
             <Stack.Screen
               component={LegalDocumentScreen}
               name="LegalDocument"

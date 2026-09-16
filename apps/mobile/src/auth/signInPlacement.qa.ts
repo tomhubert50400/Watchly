@@ -64,7 +64,6 @@ assert.match(
 
 const protectedScreens = [
   '../feed/FeedScreen.tsx',
-  '../journal/JournalScreen.tsx',
   '../library/LibraryScreen.tsx',
   '../notifications/NotificationsScreen.tsx',
   '../notifications/NotificationPreferencesScreen.tsx',

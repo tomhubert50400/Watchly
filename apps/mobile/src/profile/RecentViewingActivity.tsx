@@ -44,7 +44,6 @@ export function RecentViewingActivity({ userId, owner = false, mediaItems = [] }
   return <View style={styles.section}>
     <View style={styles.header}>
       <View style={styles.headingRow}><Text style={styles.heading}>Recent activity</Text>{owner && data ? <Pressable accessibilityRole="button" accessibilityLabel={`Manage viewing history visibility, currently ${data.visibility}`} onPress={() => navigation.navigate('Settings')} style={styles.visibility}>{data.visibility === 'public' ? <Globe color={colors.textSubtle} size={15} /> : <Lock color={colors.textSubtle} size={15} />}</Pressable> : null}</View>
-      {owner || status === 'ready' || status === 'error' ? <Pressable accessibilityRole="button" onPress={() => navigation.navigate('Journal', owner ? undefined : { userId })} style={styles.link}><Text style={styles.linkText}>View history</Text></Pressable> : null}
     </View>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
     {data?.items.map((item) => {
@@ -67,14 +66,14 @@ export function RecentViewingActivity({ userId, owner = false, mediaItems = [] }
       </Pressable>;
     })}
     </ScrollView>
-    {status === 'loading' ? <Text style={styles.meta}>Loading activity…</Text> : status === 'error' ? <Text style={styles.meta}>Activity could not load. Open history to retry.</Text> : data?.items.length === 0 ? <Text style={styles.meta}>{owner ? 'Your next viewing will appear here.' : 'No viewings yet.'}</Text> : null}
+    {status === 'loading' ? <Text style={styles.meta}>Loading activity…</Text> : status === 'error' ? <Text style={styles.meta}>Activity could not load. Try again later.</Text> : data?.items.length === 0 ? <Text style={styles.meta}>{owner ? 'Your next viewing will appear here.' : 'No viewings yet.'}</Text> : null}
   </View>;
 }
 
 const styles = StyleSheet.create({
   section: { gap: spacing.xs }, headingRow: { flexDirection: 'row', alignItems: 'center' }, rail: { gap: spacing.md }, header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  heading: { color: colors.text, fontSize: 22, fontWeight: '700' }, link: { minHeight: 44, justifyContent: 'center', paddingLeft: spacing.md },
-  linkText: { ...typography.meta, color: colors.accentText }, visibility: { width: 36, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  heading: { color: colors.text, fontSize: 22, fontWeight: '700' },
+  visibility: { width: 36, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   row: { width: 210, height: 118, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.panelElevated, overflow: 'hidden' },
   artwork: { flex: 1, justifyContent: 'flex-end' }, copy: { padding: spacing.sm, gap: 4 },
   cardMeta: { fontSize: 11, lineHeight: 15, fontWeight: '600', color: colors.textMuted },
