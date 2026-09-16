@@ -129,7 +129,6 @@ function WatchlistCoverSheet({ coverItemIds = [], items, kind, onClose, onSaved,
               <MediaPoster posterUrl={media?.artworkUrl ?? null} style={styles.poster} />
               {position >= 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{position + 1}</Text></View> : null}
             </View>
-            <Text numberOfLines={2} style={styles.title}>{media?.title ?? 'Loading…'}</Text>
           </Pressable>;
         })}
       </View>
@@ -152,7 +151,6 @@ const styles = StyleSheet.create({
   posterFrame: { borderRadius: radii.md, borderWidth: 2, borderColor: 'transparent', overflow: 'hidden' },
   selected: { borderColor: colors.accent },
   poster: { width: '100%', aspectRatio: 16 / 9 },
-  title: { color: colors.text, fontSize: 12, lineHeight: 17 },
   badge: { position: 'absolute', top: 6, right: 6, width: 26, height: 26, borderRadius: 13, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   badgeText: { color: colors.textOnAccent, fontWeight: '800' },
   dimmed: { opacity: 0.45 },
