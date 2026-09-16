@@ -77,7 +77,7 @@ export function MovieReviewsScreen({ route }: NativeStackScreenProps<RootStackPa
         contentContainerStyle={styles.content}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListHeaderComponent={<View style={styles.header}><Text style={styles.title}>{route.params.title}</Text><Text style={styles.muted}>Watchly reviews · Newest first</Text></View>}
-        renderItem={({ item }) => <MovieCommunityReviewCard review={item} />}
+        renderItem={({ item }) => <MovieCommunityReviewCard review={item} artworkUrl={route.params.artworkUrl} />}
         ListEmptyComponent={<Text style={styles.muted}>{loading ? 'Loading reviews…' : error ? 'Could not load reviews.' : 'No written reviews yet.'}</Text>}
         ListFooterComponent={<View style={styles.footer}>
           {error && items.length > 0 ? <Text style={styles.muted}>Could not load more reviews.</Text> : null}

@@ -1,6 +1,6 @@
-import { ChevronDown, ChevronUp, Flag } from 'lucide-react-native';
+import { ArrowRight, ChevronDown, ChevronUp, Flag, Info } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import type { ReportTarget } from '../api/reports';
 import type { DisplayRating } from '../api/catalogue';
 import { getMovieCommunity, type MovieCommunityResponse } from '../api/reviews';
@@ -15,14 +15,16 @@ import { ReportSheet } from '../reports/ReportSheet';
 import { useUserDataRevision } from '../sync/userDataEvents';
 import { getRatingDistribution } from './ratingDistribution';
 
-export function MovieCommunityPanel({ tmdbId, displayRating, onViewMore }: {
+export function MovieCommunityPanel({ tmdbId, displayRating, artworkUrl, onViewMore }: {
   tmdbId: number;
   displayRating?: DisplayRating | null;
+  artworkUrl?: string | null;
   onViewMore: () => void;
 }) {
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
   const revision = useUserDataRevision('opinions', 'socialGraph', 'profile');
   const [expanded, setExpanded] = useState(false);
+  const [showEstimateInfo, setShowEstimateInfo] = useState(false);
   const [selectedScore, setSelectedScore] = useState<number | null>(null);
   const { width } = useWindowDimensions();
   const load = useCallback(async () => getMovieCommunity(
@@ -40,10 +42,13 @@ export function MovieCommunityPanel({ tmdbId, displayRating, onViewMore }: {
 
   return (
     <View style={styles.section}>
-      <Text style={styles.title}>Ratings & reviews</Text>
+      <View style={styles.headingRow}>
+        <Text style={styles.title}>Ratings & reviews</Text>
+        {community?.estimated ? <Pressable accessibilityRole="button" accessibilityLabel="About the estimated ratings" accessibilityState={{ expanded: showEstimateInfo }} onPress={() => setShowEstimateInfo(!showEstimateInfo)} style={styles.infoButton}><Info size={17} color={colors.textSubtle} /></Pressable> : null}
+      </View>
       {community ? (
         <>
-          {community.estimated ? <Text accessibilityLabel="Estimated distribution based on the average rating and total votes, not individual votes" style={styles.muted}>Estimated distribution</Text> : null}
+          {community.estimated && showEstimateInfo ? <Text style={styles.muted}>These counts are estimated from the average rating and total votes, not individual votes. They will be replaced when enough Watchly ratings are available.</Text> : null}
           <View style={styles.ratingRow}>
             <View style={styles.chart}>
               <View style={styles.histogram}>
@@ -74,7 +79,7 @@ export function MovieCommunityPanel({ tmdbId, displayRating, onViewMore }: {
               style={styles.ratingSummary}
             >
               <Text adjustsFontSizeToFit numberOfLines={1} style={styles.summaryValue}>
-                {selectedBucket ? `${community.estimated ? '≈ ' : ''}${selectedBucket.count.toLocaleString()}` : community.averageScore?.toFixed(1) ?? '-'}
+                {selectedBucket ? selectedBucket.count.toLocaleString() : community.averageScore?.toFixed(1) ?? '-'}
               </Text>
               <StarRatingDisplay rating={selectedBucket?.score ?? community.averageScore ?? 0} size={13} />
             </Pressable>
@@ -89,12 +94,19 @@ export function MovieCommunityPanel({ tmdbId, displayRating, onViewMore }: {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
                   {community.reviews.map((review) => (
                     <View key={review.id} style={{ width: Math.min(320, width - spacing.xl * 2 - spacing.md) }}>
-                      <MovieCommunityReviewCard review={review} compact />
+                      <MovieCommunityReviewCard review={review} artworkUrl={artworkUrl} compact />
                     </View>
                   ))}
+                  <View style={{ width: Math.min(320, width - spacing.xl * 2 - spacing.md) }}>
+                  <Pressable accessibilityRole="button" accessibilityLabel="View all reviews" onPress={onViewMore} style={[styles.card, styles.moreCard]}>
+                    <ReviewArtwork artworkUrl={artworkUrl} />
+                    <Text style={styles.moreTitle}>Want more?</Text>
+                    <Text style={styles.body}>Read all reviews</Text>
+                    <ArrowRight size={26} color={colors.accentText} />
+                  </Pressable>
+                  </View>
                 </ScrollView>
               ) : null}
-              {community.reviewCount > 0 ? <Button label="View more" variant="secondary" onPress={onViewMore} /> : null}
             </>
           ) : null}
         </>
@@ -104,14 +116,23 @@ export function MovieCommunityPanel({ tmdbId, displayRating, onViewMore }: {
   );
 }
 
-export function MovieCommunityReviewCard({ review, compact = false }: {
+function ReviewArtwork({ artworkUrl }: { artworkUrl?: string | null }) {
+  return artworkUrl ? <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+    <Image accessible={false} source={{ uri: artworkUrl }} blurRadius={8} resizeMode="cover" style={StyleSheet.absoluteFill} />
+    <View style={[StyleSheet.absoluteFill, styles.artworkShade]} />
+  </View> : null;
+}
+
+export function MovieCommunityReviewCard({ review, artworkUrl, compact = false }: {
   review: MovieCommunityResponse['reviews'][number];
   compact?: boolean;
+  artworkUrl?: string | null;
 }) {
   const { currentUser } = useAuthSession();
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
   return (
     <View style={styles.card}>
+      <ReviewArtwork artworkUrl={artworkUrl} />
       <View style={styles.reviewHeader}>
         <UserAvatar avatarUrl={review.author.avatarUrl} displayName={review.author.displayName} size={32} />
         <Text numberOfLines={1} style={styles.author}>{review.author.displayName?.trim() || 'Watchly member'}</Text>
@@ -132,6 +153,8 @@ export function MovieCommunityReviewCard({ review, compact = false }: {
 const styles = StyleSheet.create({
   section: { gap: spacing.md, paddingVertical: spacing.xl, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   title: { ...typography.title, color: colors.text },
+  headingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  infoButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   muted: { ...typography.meta, color: colors.textSubtle },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   chart: { flex: 1, minWidth: 0 },
@@ -144,7 +167,10 @@ const styles = StyleSheet.create({
   summaryValue: { color: colors.text, fontSize: 26, lineHeight: 32, fontWeight: '500', fontVariant: ['tabular-nums'], textAlign: 'center', width: '100%' },
   toggle: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   rail: { gap: spacing.md, alignItems: 'stretch' },
-  card: { flex: 1, padding: spacing.md, gap: spacing.sm, backgroundColor: colors.panelElevated, borderWidth: 1, borderColor: colors.border, borderRadius: radii.lg },
+  card: { flex: 1, padding: spacing.md, gap: spacing.sm, backgroundColor: colors.panelElevated, borderWidth: 1, borderColor: colors.border, borderRadius: radii.lg, overflow: 'hidden' },
+  artworkShade: { backgroundColor: 'rgba(9, 12, 19, 0.82)' },
+  moreCard: { justifyContent: 'center', alignItems: 'center', minHeight: 220, gap: spacing.md },
+  moreTitle: { ...typography.title, color: colors.text },
   reviewHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   author: { ...typography.body, color: colors.text, fontWeight: '700', flex: 1 },
   body: { ...typography.body, color: colors.textMuted },

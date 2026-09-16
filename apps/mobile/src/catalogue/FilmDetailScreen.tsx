@@ -91,7 +91,7 @@ export function FilmDetailScreen({ navigation, route }: FilmDetailScreenProps) {
         ) : movie ? (
           <MovieDetailContent
             movie={movie}
-            onViewReviews={() => navigation.push('MovieReviews', { title: movie.title, tmdbId: movie.tmdbId })}
+            onViewReviews={() => navigation.push('MovieReviews', { title: movie.title, tmdbId: movie.tmdbId, artworkUrl: movie.posterUrl ?? movie.backdropUrl })}
             onRatingGestureChange={setIsRatingGestureActive}
             onOpenRelated={(item) => openRelatedMovie(navigation, item)}
           />
@@ -163,7 +163,7 @@ function MovieDetailContent({
             <MovieReviewEditor onRatingGestureChange={onRatingGestureChange} mediaTitle={movie.title} posterUrl={movie.posterUrl} tmdbId={movie.tmdbId} />
           ) : null}
         </View>
-        {isReleased ? <MovieCommunityPanel key={movie.tmdbId} tmdbId={movie.tmdbId} displayRating={movie.displayRating} onViewMore={onViewReviews} /> : null}
+        {isReleased ? <MovieCommunityPanel key={movie.tmdbId} tmdbId={movie.tmdbId} displayRating={movie.displayRating} artworkUrl={movie.posterUrl ?? movie.backdropUrl} onViewMore={onViewReviews} /> : null}
         <DetailFacts items={detailFacts} />
         <CatalogueVideoRail videos={movie.videos ?? []} />
         <StreamingAvailabilityPanel contentType="movie" tmdbId={movie.tmdbId} />
