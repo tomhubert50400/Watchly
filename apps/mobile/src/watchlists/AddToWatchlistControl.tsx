@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { BookmarkPlus, Plus } from 'lucide-react-native';
-import { upsertTrackingState } from '../api/tracking';
+import { BookmarkPlus, Check, Plus } from 'lucide-react-native';
+import { getTrackingState, upsertTrackingState } from '../api/tracking';
 import {
   addSharedWatchlistItem,
   createSharedWatchlist,
@@ -35,7 +35,7 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { useToast } from '../notifications/ToastContext';
-import { notifyUserDataChanged } from '../sync/userDataEvents';
+import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
 import { useWatchlistCache } from './WatchlistCacheContext';
 import { WatchlistOption, WatchlistOptionRow } from './WatchlistOptionRow';
 import { loadProgressively, takeHydrationItems } from './requestBoundaries';
@@ -60,6 +60,9 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   const { refreshMovie, refreshSeries } = useCatalogueCache();
   const { showToast } = useToast();
   const { preloadWatchlists } = useWatchlistCache();
+  const trackingRevision = useUserDataRevision('tracking');
+  const [plannedState, setPlannedState] = useState<{ ownerKey: string; planned: boolean } | null>(null);
+  const trackingLoadVersionRef = useRef(0);
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -87,6 +90,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
     ? getPrivateCacheKey(currentUser.id, `watchlist-options:${contentKey}`)
     : null;
   const previewOwnerKeyRef = useRef(optionsOwnerKey);
+  const isPlanned = Boolean(firebaseIdToken && plannedState?.ownerKey === optionsOwnerKey && plannedState.planned);
   selectedKeysRef.current = selectedKeys;
   optionsRef.current = options;
 
@@ -94,6 +98,31 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
     previewOwnerKeyRef.current = optionsOwnerKey;
     previewVersionRef.current += 1;
   }
+
+  useEffect(() => {
+    const version = ++trackingLoadVersionRef.current;
+    let cancelled = false;
+    if (!firebaseIdToken) {
+      setPlannedState(null);
+      return;
+    }
+
+    void (async () => {
+      try {
+        const token = await getFirebaseIdToken();
+        if (!token || cancelled || trackingLoadVersionRef.current !== version) return;
+        const state = await getTrackingState(token, contentType, tmdbId);
+        if (cancelled || trackingLoadVersionRef.current !== version) return;
+        setPlannedState({ ownerKey: optionsOwnerKey, planned: state?.status === 'watchlisted' });
+      } catch (error) {
+        if (!cancelled && trackingLoadVersionRef.current === version) {
+          showToast(error instanceof Error ? error.message : 'Could not load your planned status.');
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [contentType, firebaseIdToken, getFirebaseIdToken, optionsOwnerKey, showToast, tmdbId, trackingRevision]);
 
   const loadPreviewArtwork = useCallback(async (item: {
     contentType: WatchlistContentType;
@@ -247,6 +276,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
     if (!firebaseIdToken || planningRef.current) return;
 
     planningRef.current = true;
+    trackingLoadVersionRef.current += 1;
     setIsPlanning(true);
     const ownerKey = optionsOwnerKey;
     try {
@@ -260,6 +290,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
         tmdbId,
       });
       if (previewOwnerKeyRef.current !== ownerKey) return;
+      setPlannedState({ ownerKey, planned: state?.status === 'watchlisted' });
       if (currentUser) {
         await writePersistedCache(
           getPrivateCacheKey(currentUser.id, `tracking:${contentType}:${tmdbId}`),
@@ -468,24 +499,43 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
 
   return (
     <>
-      <Pressable
-        accessibilityLabel={firebaseIdToken ? 'Plan to watch' : 'Sign in to plan to watch'}
-        accessibilityRole="button"
-        accessibilityState={{ busy: isPlanning, disabled: isPlanning }}
-        disabled={isPlanning}
-        onPress={() => firebaseIdToken ? void planToWatch() : setIsSignInOpen(true)}
-        style={({ pressed }) => [
-          styles.trigger,
-          pressed ? styles.pressed : null,
-        ]}
-      >
-        <BookmarkPlus color={colors.accentText} size={16} strokeWidth={2.4} />
-        <Text style={styles.triggerLabel}>{isPlanning ? 'Saving…' : 'Plan to watch'}</Text>
-      </Pressable>
+      {isPlanned ? (
+        <View style={[styles.trigger, styles.plannedTrigger]}>
+          <View accessible accessibilityLabel="Planned" style={styles.plannedStatus}>
+            <Check color={colors.accentText} size={16} strokeWidth={2.4} />
+            <Text style={styles.triggerLabel}>Planned</Text>
+          </View>
+          <Pressable
+            accessibilityLabel="Add to watchlist"
+            accessibilityRole="button"
+            onPress={openSheet}
+            style={({ pressed }) => [styles.watchlistTrigger, pressed ? styles.pressed : null]}
+          >
+            <BookmarkPlus color={colors.accentText} size={18} strokeWidth={2.4} />
+          </Pressable>
+        </View>
+      ) : (
+        <Pressable
+          accessibilityLabel={firebaseIdToken ? 'Plan to watch' : 'Sign in to plan to watch'}
+          accessibilityRole="button"
+          accessibilityState={{ busy: isPlanning, disabled: isPlanning }}
+          disabled={isPlanning}
+          onPress={() => firebaseIdToken ? void planToWatch() : setIsSignInOpen(true)}
+          style={({ pressed }) => [
+            styles.trigger,
+            pressed ? styles.pressed : null,
+          ]}
+        >
+          <BookmarkPlus color={colors.accentText} size={16} strokeWidth={2.4} />
+          <Text style={styles.triggerLabel}>{isPlanning ? 'Saving…' : 'Plan to watch'}</Text>
+        </Pressable>
+      )}
 
       <BottomActionSheet onClose={dismissSheet} title="Add to a list" visible={isOpen}>
         <BottomActionSheetScrollView disableScrollViewPanResponder={false} contentContainerStyle={styles.optionSections}>
-          <Text style={styles.sheetSubtitle}>Added to Planned. You can also add it to a watchlist, or close this sheet.</Text>
+          <Text style={styles.sheetSubtitle}>{isPlanned
+            ? 'Added to Planned. You can also add it to a watchlist, or close this sheet.'
+            : 'Select one or more watchlists.'}</Text>
 
           {(!hasCurrentOptions || (isLoading && options.length === 0)) ? (
             <LoadingState label="Loading your lists" variant="settings" />
@@ -708,5 +758,27 @@ const styles = StyleSheet.create({
     color: colors.accentText,
     fontSize: 13,
     fontWeight: '800',
+  },
+  plannedTrigger: {
+    gap: 0,
+    overflow: 'hidden',
+    paddingHorizontal: 0,
+  },
+  plannedStatus: {
+    alignItems: 'center',
+    flex: 2,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  watchlistTrigger: {
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    borderLeftColor: colors.accentBorder,
+    borderLeftWidth: 1,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 44,
   },
 });

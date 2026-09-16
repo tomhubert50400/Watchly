@@ -123,6 +123,15 @@ assert.deepEqual(getProfileMediaPreviews(plannedItems).planned.map((item) => ite
 ]);
 assert.equal(getProfileMediaPreviews(recent).planned.length, 10);
 
+const plannedMovie = media('movie:50', {
+  status: 'watchlisted', favorite: true, hasReleaseAlert: true,
+});
+assert.equal(getProfileMediaItems([plannedMovie], 'planned').length, 1);
+const watchedMovie = { ...plannedMovie, status: 'watched' as const };
+assert.equal(getProfileMediaItems([watchedMovie], 'planned').length, 0,
+  'marking a planned movie watched must remove it even if it remains a favorite or has an alert');
+assert.deepEqual(groupProfileMediaByStatus([watchedMovie]).completed, [watchedMovie]);
+
 const profileSource = readFileSync(new URL('./ProfileScreen.tsx', import.meta.url), 'utf8');
 const profileBodySource = readFileSync(new URL('./ProfileBody.tsx', import.meta.url), 'utf8');
 const publicProfileSource = readFileSync(
