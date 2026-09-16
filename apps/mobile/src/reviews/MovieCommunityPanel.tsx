@@ -1,4 +1,4 @@
-import { ArrowRight, ChevronDown, ChevronUp, Flag, Info } from 'lucide-react-native';
+import { ArrowRight, ChevronDown, ChevronUp, Flag } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import type { ReportTarget } from '../api/reports';
@@ -24,7 +24,6 @@ export function MovieCommunityPanel({ tmdbId, displayRating, artworkUrl, onViewM
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
   const revision = useUserDataRevision('opinions', 'socialGraph', 'profile');
   const [expanded, setExpanded] = useState(false);
-  const [showEstimateInfo, setShowEstimateInfo] = useState(false);
   const [selectedScore, setSelectedScore] = useState<number | null>(null);
   const { width } = useWindowDimensions();
   const load = useCallback(async () => getMovieCommunity(
@@ -42,13 +41,9 @@ export function MovieCommunityPanel({ tmdbId, displayRating, artworkUrl, onViewM
 
   return (
     <View style={styles.section}>
-      <View style={styles.headingRow}>
-        <Text style={styles.title}>Ratings & reviews</Text>
-        {community?.estimated ? <Pressable accessibilityRole="button" accessibilityLabel="About the estimated ratings" accessibilityState={{ expanded: showEstimateInfo }} onPress={() => setShowEstimateInfo(!showEstimateInfo)} style={styles.infoButton}><Info size={17} color={colors.textSubtle} /></Pressable> : null}
-      </View>
+      <Text style={styles.title}>Ratings & reviews</Text>
       {community ? (
         <>
-          {community.estimated && showEstimateInfo ? <Text style={styles.muted}>These counts are estimated from the average rating and total votes, not individual votes. They will be replaced when enough Watchly ratings are available.</Text> : null}
           <View style={styles.ratingRow}>
             <View style={styles.chart}>
               <View style={styles.histogram}>
@@ -153,8 +148,6 @@ export function MovieCommunityReviewCard({ review, artworkUrl, compact = false }
 const styles = StyleSheet.create({
   section: { gap: spacing.md, paddingVertical: spacing.xl, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   title: { ...typography.title, color: colors.text },
-  headingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  infoButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   muted: { ...typography.meta, color: colors.textSubtle },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   chart: { flex: 1, minWidth: 0 },
