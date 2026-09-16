@@ -41,7 +41,7 @@ export function MovieCommunityPanel({ tmdbId, displayRating, onViewMore }: {
       {displayRating ? (
         <View style={styles.summary}>
           <Text style={styles.score}>{(displayRating.average / (displayRating.scale / 5)).toFixed(1)}<Text style={styles.muted}> / 5</Text></Text>
-          <Text style={styles.muted}>{displayRating.source === 'tmdb' ? 'TMDB' : 'Watchly'}{displayRating.count !== null ? ` · ${displayRating.count.toLocaleString()} ratings` : ''}</Text>
+          {displayRating.count !== null ? <Text style={styles.muted}>{displayRating.count.toLocaleString()} ratings</Text> : null}
         </View>
       ) : null}
       {community ? (
