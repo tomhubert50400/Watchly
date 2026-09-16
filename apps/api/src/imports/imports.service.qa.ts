@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { zipSync } from 'fflate';
 import { Prisma } from '../generated/prisma/client';
 import { TrackedContentType, UserContentStatus } from '../generated/prisma/enums';
 import { applyImportSuggestion, commitPreparedItems, ImportsService, reconcileImportedEpisodes } from './imports.service';
 import { verifyBackgroundImports } from './background-imports.qa';
+import { verifyImportWatchlists, watchlistHarness } from './import-watchlists.qa';
 
 async function main() {
 const createdRatings: unknown[] = [];
@@ -106,6 +108,7 @@ const acceptedSuggestion = applyImportSuggestion({
     tmdbId: 1396,
   },
 });
+await verifyImportWatchlists(baseItem);
 assert.equal(acceptedSuggestion.status, 'ready');
 assert.equal(acceptedSuggestion.match?.tmdbId, 1396);
 assert.equal(acceptedSuggestion.suggestion, null);
@@ -251,8 +254,9 @@ async function verifyLargeImport(transaction: Prisma.TransactionClient) {
     },
   };
   const writtenIds = new Set<number>();
+  const watchlists = watchlistHarness();
   const batchTransaction = {
-    ...transaction, dataImport,
+    ...transaction, ...watchlists.transaction, dataImport,
     userContentState: {
       findMany: async () => [],
       create: async ({ data }: { data: { tmdbId: number } }) => {
@@ -268,10 +272,16 @@ async function verifyLargeImport(transaction: Prisma.TransactionClient) {
     $transaction: async <T>(operation: (tx: typeof batchTransaction) => Promise<T>) => {
       const before = structuredClone(record);
       const beforeIds = [...writtenIds];
+      const beforeLists = new Map(watchlists.lists);
+      const beforeMemberships = new Map(watchlists.memberships);
       try { return await operation(batchTransaction); } catch (error) {
         record = before;
         writtenIds.clear();
         beforeIds.forEach((value) => writtenIds.add(value));
+        watchlists.lists.clear();
+        beforeLists.forEach((value, key) => watchlists.lists.set(key, value));
+        watchlists.memberships.clear();
+        beforeMemberships.forEach((value, key) => watchlists.memberships.set(key, value));
         throw error;
       }
     },
@@ -296,7 +306,8 @@ async function verifyLargeImport(transaction: Prisma.TransactionClient) {
   const service = new ImportsService(auth, catalogue, prisma);
   const csv = Buffer.from('Name,Year,Letterboxd URI\n' + Array.from({ length: 1001 }, (_, index) =>
     `Movie ${index + 100},2000,https://boxd.it/test${index}`).join('\n'));
-  let preview = await service.preview(identity, 'letterboxd', { buffer: csv, originalname: 'watched.csv', size: csv.length }, true);
+  const archive = Buffer.from(zipSync({ 'watched.csv': csv, 'watchlist.csv': csv }));
+  let preview = await service.preview(identity, 'letterboxd', { buffer: archive, originalname: 'export.zip', size: archive.length }, true);
   assert.equal(searches, 0, 'upload must return before catalogue lookups');
   assert.equal(preview.preparation.total, 1001);
   await assert.rejects(service.confirm(identity, id, true), /Wait for all titles/);
@@ -319,11 +330,15 @@ async function verifyLargeImport(transaction: Prisma.TransactionClient) {
   failCommit = true;
   await assert.rejects(service.confirm(identity, id, true), /Simulated failed commit/);
   assert.equal(writtenIds.size, 25, 'failed batches must roll back');
+  assert.equal(watchlists.memberships.size, 25, 'failed batches must roll back watchlist membership too');
   failCommit = false;
   const resumed = new ImportsService(auth, catalogue, prisma);
   while (!result.completed) result = await resumed.confirm(identity, id, true);
   assert.equal(result.titlesProcessed, 1001);
   assert.equal(writtenIds.size, 1001);
+  assert.equal(watchlists.lists.size, 1, 'all resumed batches must reuse the same watchlist');
+  assert.equal(watchlists.memberships.size, 1001, 'every matched film must be added, across batch boundaries');
+  assert.equal(result.watchlistsImported, 1);
   assert.equal(metadataCalls, preparedMetadataCalls, 'confirmation must reuse metadata prepared in the import batches');
   assert.equal((await resumed.confirm(identity, id, true)).alreadyCompleted, true);
   const foreignAuth = { getOrCreateUser: async () => ({ id: 'other-user' }) } as unknown as typeof auth;

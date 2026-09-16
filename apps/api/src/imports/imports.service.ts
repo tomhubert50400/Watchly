@@ -22,8 +22,10 @@ import {
 import {
   ImportSourceValue,
   ParsedImportItem,
+  ParsedImportWatchlist,
   parseImportFile,
 } from './import-file.parser';
+import { commitImportWatchlists, ImportedWatchlistIds } from './import-watchlists';
 
 type ImportMatch = {
   contentType: 'movie' | 'series';
@@ -58,6 +60,8 @@ type ImportSummary = {
 };
 
 type ImportResult = {
+  watchlistsImported?: number;
+  watchlistsSkipped?: string[];
   alreadyCompleted?: boolean;
   preservedExisting: number;
   ratingsCreated: number;
@@ -68,6 +72,8 @@ type ImportResult = {
 };
 
 export type StoredImportPreview = {
+  watchlists?: ParsedImportWatchlist[];
+  importedWatchlistIds?: ImportedWatchlistIds;
   pendingItems?: ParsedImportItem[];
   committedCount?: number;
   fileName: string;
@@ -128,6 +134,7 @@ export class ImportsService {
       ...(batched ? { pendingItems: parsed.items } : {}),
       fileName: basename(file.originalname).slice(0, 255),
       ignoredFileCount: parsed.ignoredFileCount,
+      watchlists: parsed.watchlists,
       items,
       source,
       summary: buildImportSummary(items),
@@ -237,8 +244,12 @@ export class ImportsService {
           throw new ConflictException('This import is already being completed.');
         }
 
-        const batchResult = await commitPreparedItems(transaction, user.id, batch);
+        const watchlists = await commitImportWatchlists(transaction, user.id, preview.source,
+          preview.watchlists ?? [], batch, preview.importedWatchlistIds);
+        const batchResult = await commitPreparedItems(transaction, user.id, watchlists.items);
         const result: ImportResult = {
+          watchlistsImported: Object.values(watchlists.ids).filter(Boolean).length,
+          watchlistsSkipped: (preview.watchlists ?? []).filter((list) => watchlists.ids[list.key] === null).map((list) => list.name),
           preservedExisting: (preview.result?.preservedExisting ?? 0) + batchResult.preservedExisting,
           ratingsCreated: (preview.result?.ratingsCreated ?? 0) + batchResult.ratingsCreated,
           reviewsCreated: (preview.result?.reviewsCreated ?? 0) + batchResult.reviewsCreated,
@@ -247,7 +258,7 @@ export class ImportsService {
           viewingEventsCreated: (preview.result?.viewingEventsCreated ?? 0) + batchResult.viewingEventsCreated,
         };
         const completedPreview: StoredImportPreview = {
-          ...preview, committedCount,
+          ...preview, committedCount, importedWatchlistIds: watchlists.ids,
           items: completed ? (record.background ? preview.items.filter((item) => item.status !== 'ready') : []) : preview.items,
           result,
         };
@@ -784,6 +795,11 @@ function toPublicPreview(importId: string, preview: StoredImportPreview) {
   return {
     preparation: { processed: preview.items.length, total: preview.items.length + (preview.pendingItems?.length ?? 0) },
     fileName: preview.fileName,
+    watchlists: (preview.watchlists ?? []).map((list) => ({
+      ...list,
+      total: preview.items.filter((item) => item.watchlistKeys?.includes(list.key)).length,
+      ready: preview.items.filter((item) => item.watchlistKeys?.includes(list.key) && item.status === 'ready').length,
+    })),
     ignoredFileCount: preview.ignoredFileCount,
     importId,
     items: (preview.pendingItems?.length ? [] : preview.items).map((item, itemIndex) => ({

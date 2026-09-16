@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { strToU8, zipSync } from 'fflate';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
@@ -72,6 +73,27 @@ async function main() {
     assert(state?.status === UserContentStatus.WATCHED, 'The movie should be marked watched.');
     assert(viewing?.watchedAt?.toISOString().slice(0, 10) === '2025-01-02', 'The viewing date should be preserved.');
     assert(batch?.status === DataImportStatus.COMPLETED, 'The import batch should be completed.');
+
+    await prisma.personalWatchlist.createMany({ data: [1, 2, 3].map((index) => ({ userId: persistedUserId, name: `Existing ${index}` })) });
+    const listBuffer = Buffer.from(zipSync({
+      'lists/Crime.csv': strToU8('Position,Name,Year,tmdbID\n1,Heat,1995,949\n2,Thief,1981,11524'),
+      'lists/Classics.csv': strToU8('Position,Name,Year,tmdbID\n1,Heat,1995,949'),
+      'lists/Overflow.csv': strToU8('Position,Name,Year,tmdbID\n1,Heat,1995,949'),
+    }));
+    const file = { buffer: listBuffer, originalname: 'lists.zip', size: listBuffer.length };
+    const listPreview = await imports.preview(identity, 'letterboxd', file);
+    assert(listPreview.watchlists.length === 3, 'Every source list must be detected.');
+    const listResult = await imports.confirm(identity, listPreview.importId);
+    assert(listResult.watchlistsImported === 2, 'Only two places are available.');
+    assert(listResult.watchlistsSkipped?.[0] === 'Overflow', 'Overflow must be reported.');
+    const importedLists = await prisma.personalWatchlist.findMany({ where: { userId: persistedUserId }, include: { items: true } });
+    assert(importedLists.length === 5, 'The personal watchlist limit must hold.');
+    assert(importedLists.find((list) => list.name === 'Crime')?.items.length === 2, 'Every movie must be added to Crime.');
+    assert(importedLists.find((list) => list.name === 'Classics')?.items.some((item) => item.tmdbId === 949) === true, 'Already-watched movies must remain in imported lists.');
+    const repeatPreview = await imports.preview(identity, 'letterboxd', file);
+    await imports.confirm(identity, repeatPreview.importId);
+    assert(await prisma.personalWatchlist.count({ where: { userId: persistedUserId } }) === 5, 'Reimport must not create duplicate lists.');
+    assert(await prisma.personalWatchlistItem.count({ where: { watchlist: { userId: persistedUserId } } }) === 3, 'Reimport must not duplicate membership.');
 
     console.log('Import smoke passed.');
   } finally {
