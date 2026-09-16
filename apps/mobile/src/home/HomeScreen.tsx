@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useMemo } from 'react';
-import { CompositeNavigationProp, useFocusEffect, useNavigation } from '@react-navigation/native';
+import { CompositeNavigationProp, useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Bell, CalendarDays } from 'lucide-react-native';
@@ -8,12 +8,10 @@ import {
   CatalogueSearchItem,
   getEpisodeDetails,
   getMovieDetails,
-  getSeasonDetails,
   getSeriesDetails,
 } from '../api/catalogue';
 import { FeedItem, getFeed, setFeedItemLiked } from '../api/feed';
 import { listNotifications } from '../api/notifications';
-import { listSeriesProgressSummaries, SeriesProgressSummary } from '../api/progress';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { BrandWordmark } from '../brand/BrandWordmark';
@@ -39,10 +37,8 @@ import { ensureCatalogueSections } from '../catalogue/catalogueSectionsResource'
 import { CatalogueRating } from '../catalogue/CatalogueRating';
 import {
   buildHomeSections,
-  selectHomeProgress,
   HomeCatalogueData,
   HomeFeedItem,
-  HomeProgressItem,
   HomeResource,
   HomeTrendingItem,
 } from './homeData';
@@ -51,6 +47,8 @@ import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEven
 import { BackgroundImportCards } from '../imports/BackgroundImportCards';
 import { useLibraryData } from '../library/useLibraryData';
 import { HomeWatchlists } from './HomeWatchlists';
+import { useProgressData } from '../library/useProgressData';
+import { selectRecentProgress } from '../library/progressModel';
 
 type HomeNavigation = CompositeNavigationProp<
   BottomTabNavigationProp<RootTabParamList, 'Home'>,
@@ -58,10 +56,6 @@ type HomeNavigation = CompositeNavigationProp<
 >;
 
 export const PUBLIC_HOME_KEY = getPublicCacheKey('home:catalogue:v3');
-
-export function getHomeProgressKey(userId: string) {
-  return getPrivateCacheKey(userId, 'home:progress:v3');
-}
 
 export function getHomeFeedKey(userId: string) {
   return getPrivateCacheKey(userId, 'home:feed:v2');
@@ -80,14 +74,10 @@ export function HomeScreen() {
   } = useAuthSession();
   const feedRevision = useUserDataRevision('feed', 'opinions', 'profile', 'socialGraph');
   const notificationRevision = useUserDataRevision('notifications');
-  const progressRevision = useUserDataRevision('episodeProgress');
+  const isFocused = useIsFocused();
   const isSignedIn = Boolean(currentUser && firebaseIdToken);
   const watchlists = useLibraryData(isSignedIn);
   const loadCatalogue = useCallback(loadHomeCatalogue, []);
-  const loadProgress = useCallback(
-    () => firebaseIdToken ? loadHomeProgress(firebaseIdToken) : Promise.resolve([]),
-    [firebaseIdToken, progressRevision],
-  );
   const loadFeed = useCallback(
     () => firebaseIdToken ? loadHomeFeed(firebaseIdToken) : Promise.resolve([]),
     [feedRevision, firebaseIdToken],
@@ -102,11 +92,8 @@ export function HomeScreen() {
     return loadHomeNotifications(token);
   }, [getFirebaseIdToken, notificationRevision]);
   const catalogue = useCachedResource({ key: PUBLIC_HOME_KEY, load: loadCatalogue });
-  const progress = useCachedResource({
-    enabled: isSignedIn,
-    key: getHomeProgressKey(currentUser?.id ?? 'visitor'),
-    load: loadProgress,
-  });
+  const progress = useProgressData(watchlists.data?.items ?? [], isSignedIn && isFocused && Boolean(watchlists.data), 6);
+  const recentProgress = useMemo(() => selectRecentProgress(progress.items), [progress.items]);
   const feed = useCachedResource({
     enabled: isSignedIn,
     key: getHomeFeedKey(currentUser?.id ?? 'visitor'),
@@ -130,9 +117,9 @@ export function HomeScreen() {
       catalogue: toHomeResource(catalogue.data, catalogue.error),
       feed: toHomeResource(feed.data, feed.error),
       isSignedIn,
-      progress: toHomeResource(progress.data, progress.error),
+      progress: toHomeResource(recentProgress, progress.error),
     }),
-    [catalogue.data, catalogue.error, feed.data, feed.error, isSignedIn, progress.data, progress.error],
+    [catalogue.data, catalogue.error, feed.data, feed.error, isSignedIn, recentProgress, progress.error],
   );
   const isRefreshing = catalogue.isRefreshing || progress.isRefreshing || feed.isRefreshing || notifications.isRefreshing || watchlists.isRefreshing;
   const retryAll = useCallback(() => {
@@ -231,19 +218,18 @@ export function HomeScreen() {
           if (section.kind === 'continueWatching') {
             return (
               <HomeSection delay={130} key="continue" title="Continue watching" onViewAll={() => navigation.navigate('MainTabs', { screen: 'Library', params: { view: 'progress' } })}>
-                {section.error && section.items.length === 0 ? (
-                  <InlineStatusBanner detail={section.error} onRetry={progress.retry} tone="error" />
+                {progress.actionError || (section.error && section.items.length === 0) ? (
+                  <InlineStatusBanner detail={progress.actionError ?? section.error!} onRetry={progress.retry} tone="error" />
                 ) : null}
                 {section.items.length > 0 ? (
                   <ContinueWatchingRail
                     items={section.items}
-                    onOpen={(item) => navigation.navigate('EpisodeDetail', {
-                      episodeNumber: item.episodeNumber,
-                      seasonNumber: item.seasonNumber,
-                      seriesTitle: item.seriesTitle,
-                      title: item.episodeTitle,
-                      tmdbId: item.seriesTmdbId,
-                    })}
+                    isBusy={progress.isBusy}
+                    onWatched={(item) => void progress.markNext(item)}
+                    onRetry={(item) => progress.retry(item.media.key)}
+                    onOpen={(item) => item.next
+                      ? navigation.navigate('EpisodeDetail', { ...item.next, seriesTitle: item.media.title, title: item.media.title, tmdbId: item.media.tmdbId })
+                      : navigation.navigate('SeriesDetail', { title: item.media.title, tmdbId: item.media.tmdbId })}
                   />
                 ) : null}
               </HomeSection>
@@ -385,46 +371,6 @@ export async function loadHomeCatalogue(): Promise<HomeCatalogueData> {
   };
 }
 
-export async function loadHomeProgress(token: string): Promise<HomeProgressItem[]> {
-  const summaries = (await listSeriesProgressSummaries(token)).items;
-  return selectHomeProgress(summaries, hydrateProgressItem);
-}
-
-async function hydrateProgressItem(summary: SeriesProgressSummary): Promise<HomeProgressItem | null> {
-  const [seriesResponse, currentSeasonResponse] = await Promise.all([
-    getSeriesDetails(summary.seriesTmdbId),
-    getSeasonDetails(summary.seriesTmdbId, summary.latestSeasonNumber),
-  ]);
-  let nextEpisode = currentSeasonResponse.item.episodes.find(
-    (episode) => episode.episodeNumber > summary.latestEpisodeNumber && isReleased(episode.airDate),
-  );
-
-  if (!nextEpisode) {
-    const nextSeason = seriesResponse.item.seasons
-      .filter((season) => season.seasonNumber > summary.latestSeasonNumber && season.seasonNumber > 0)
-      .sort((left, right) => left.seasonNumber - right.seasonNumber)[0];
-
-    if (nextSeason) {
-      const nextSeasonResponse = await getSeasonDetails(summary.seriesTmdbId, nextSeason.seasonNumber);
-      nextEpisode = nextSeasonResponse.item.episodes.find((episode) => isReleased(episode.airDate));
-    }
-  }
-
-  if (!nextEpisode) {
-    return null;
-  }
-
-  return {
-    backdropUrl: seriesResponse.item.backdropUrl,
-    episodeNumber: nextEpisode.episodeNumber,
-    episodeTitle: nextEpisode.title,
-    seasonNumber: nextEpisode.seasonNumber,
-    seriesTitle: seriesResponse.item.title,
-    seriesTmdbId: summary.seriesTmdbId,
-    watchedEpisodeCount: summary.watchedEpisodeCount,
-  };
-}
-
 export async function loadHomeFeed(token: string): Promise<HomeFeedItem[]> {
   const rawItems = (await getFeed(token)).items.slice(0, 10);
   const hydrated = await Promise.allSettled(rawItems.map(hydrateFeedItem));
@@ -527,10 +473,6 @@ function toTrendingItem(item: CatalogueSearchItem): HomeTrendingItem {
 
 function toHomeResource<T>(data: T | null, error: string | null): HomeResource<T> {
   return { data, error };
-}
-
-function isReleased(airDate: string | null) {
-  return airDate !== null && airDate <= new Date().toISOString().slice(0, 10);
 }
 
 function TrendingMetadata({ item }: { item: HomeTrendingItem }) {

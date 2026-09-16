@@ -16,14 +16,12 @@ import {
 import {
   getHomeFeedKey,
   getHomeNotificationsKey,
-  getHomeProgressKey,
   loadHomeCatalogue,
   loadHomeFeed,
   loadHomeNotifications,
-  loadHomeProgress,
   PUBLIC_HOME_KEY,
 } from '../home/HomeScreen';
-import type { HomeCatalogueData, HomeFeedItem, HomeProgressItem } from '../home/homeData';
+import type { HomeCatalogueData, HomeFeedItem } from '../home/homeData';
 import {
   getLibraryResourceKey,
   type LibraryData,
@@ -85,7 +83,6 @@ export function AppStartupPreloader() {
         );
       }
 
-      let progress: HomeProgressItem[] | undefined;
       let feed: HomeFeedItem[] | undefined;
       let communityFeed: HydratedFeedItem[] | undefined;
       let library: LibraryData | undefined;
@@ -102,10 +99,6 @@ export function AppStartupPreloader() {
         if (token) {
           const userId = currentUser.id;
           const privateResults = await Promise.allSettled([
-            preloadCachedResource<HomeProgressItem[]>({
-              key: getHomeProgressKey(userId),
-              load: () => loadHomeProgress(token),
-            }),
             preloadCachedResource<HomeFeedItem[]>({
               key: getHomeFeedKey(userId),
               load: () => loadHomeFeed(token),
@@ -137,11 +130,10 @@ export function AppStartupPreloader() {
             preloadWatchlists(),
           ] as const);
 
-          progress = fulfilledValue(privateResults[0]);
-          feed = fulfilledValue(privateResults[1]);
-          communityFeed = fulfilledValue(privateResults[3]);
-          library = fulfilledValue(privateResults[4]);
-          profile = fulfilledValue(privateResults[5]);
+          feed = fulfilledValue(privateResults[0]);
+          communityFeed = fulfilledValue(privateResults[2]);
+          library = fulfilledValue(privateResults[3]);
+          profile = fulfilledValue(privateResults[4]);
         }
       }
 
@@ -152,7 +144,6 @@ export function AppStartupPreloader() {
         home,
         library,
         profile,
-        progress,
       });
     })();
   }, [
@@ -181,7 +172,6 @@ async function prefetchStartupImages({
   home,
   library,
   profile,
-  progress,
 }: {
   catalogueSections?: CatalogueMovieSectionsResponse;
   communityFeed?: HydratedFeedItem[];
@@ -189,7 +179,6 @@ async function prefetchStartupImages({
   home?: HomeCatalogueData;
   library?: LibraryData;
   profile?: CachedProfile;
-  progress?: HomeProgressItem[];
 }) {
   const groups: Array<Array<string | null | undefined>> = [
     [home?.hero?.backdropUrl, home?.hero?.logoUrl, home?.hero?.posterUrl],
@@ -209,7 +198,6 @@ async function prefetchStartupImages({
       ...(profile?.opinions.slice(0, 4).map((item) => item.contentImageUrl) ?? []),
     ],
     [
-      ...(progress?.slice(0, 4).map((item) => item.backdropUrl) ?? []),
       ...(feed?.slice(0, 4).map((item) => item.contentImageUrl) ?? []),
       ...(home?.trending.slice(0, 6).map((item) => item.posterUrl) ?? []),
     ],

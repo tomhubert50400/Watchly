@@ -1,28 +1,4 @@
-import type { SeriesProgressSummary } from '../api/progress';
-
-export async function selectHomeProgress(
-  summaries: SeriesProgressSummary[],
-  hydrate: (summary: SeriesProgressSummary) => Promise<HomeProgressItem | null>,
-): Promise<HomeProgressItem[]> {
-  const items: HomeProgressItem[] = [];
-  let fulfilledCount = 0;
-  let offset = 0;
-  while (offset < summaries.length && items.length < 8) {
-    const batch = summaries.slice(offset, offset + 8 - items.length);
-    offset += batch.length;
-    const hydrated = await Promise.allSettled(batch.map(hydrate));
-    for (const result of hydrated) {
-      if (result.status === 'fulfilled') {
-        fulfilledCount += 1;
-        if (result.value) items.push(result.value);
-      }
-    }
-  }
-  if (summaries.length > 0 && fulfilledCount === 0) {
-    throw new Error('Could not update continue watching.');
-  }
-  return items;
-}
+import type { ProgressItem } from '../library/progressModel';
 
 export type HomeHeroItem = {
   backdropUrl: string | null;
@@ -48,16 +24,6 @@ export type HomeTrendingItem = {
 export type HomeCatalogueData = {
   hero: HomeHeroItem | null;
   trending: HomeTrendingItem[];
-};
-
-export type HomeProgressItem = {
-  backdropUrl: string | null;
-  episodeNumber: number;
-  episodeTitle: string;
-  seasonNumber: number;
-  seriesTitle: string;
-  seriesTmdbId: number;
-  watchedEpisodeCount: number;
 };
 
 export type HomeFeedTarget =
@@ -95,12 +61,12 @@ export type HomeCompositionInput = {
   catalogue: HomeResource<HomeCatalogueData>;
   feed: HomeResource<HomeFeedItem[]>;
   isSignedIn: boolean;
-  progress: HomeResource<HomeProgressItem[]>;
+  progress: HomeResource<ProgressItem[]>;
 };
 
 export type HomeSection =
   | { item: HomeHeroItem; kind: 'hero' }
-  | { error: string | null; items: HomeProgressItem[]; kind: 'continueWatching' }
+  | { error: string | null; items: ProgressItem[]; kind: 'continueWatching' }
   | { error: string | null; items: HomeFeedItem[]; kind: 'socialActivity' }
   | { error: string | null; items: HomeTrendingItem[]; kind: 'trending' };
 

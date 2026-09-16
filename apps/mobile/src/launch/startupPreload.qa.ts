@@ -23,7 +23,6 @@ assert.match(
 for (const requiredResource of [
   'PUBLIC_HOME_KEY',
   'PUBLIC_CATALOGUE_SECTIONS_KEY',
-  'getHomeProgressKey',
   'getHomeFeedKey',
   'getHomeNotificationsKey',
   'getCommunityFeedKey',
