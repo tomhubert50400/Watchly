@@ -1,7 +1,7 @@
 // @ts-expect-error QA runs in Node, outside the Expo type configuration.
 import assert from 'node:assert/strict';
 import type { SeasonDetails } from '../api/catalogue';
-import { isProgressCandidate, ProgressItem, resolveProgressItem, selectRecentProgress } from './progressModel';
+import { isProgressCandidate, ProgressItem, resolveProgressItem, selectRecentProgress, retainProgressOnError } from './progressModel';
 import type { LibraryMediaItem } from './useLibraryData';
 
 const today = '2026-09-13';
@@ -73,10 +73,20 @@ async function main() {
   await assert.rejects(resolveProgressItem(item, async () => { throw new Error('offline'); }, today), /offline/, 'a catalogue failure must not become Up to date');
   assert.equal(item.watched.length, 0, 'resolution must not mutate cached input');
   const recentItems = Array.from({ length: 9 }, (_, index) => ({ ...rewatch, media: { ...media, key: String(index), watchedEpisodeCount: 2, lastWatchedAt: `2026-09-${String(index + 1).padStart(2, '0')}T12:00:00Z` } }));
-  const recent = selectRecentProgress([...recentItems, { ...recentItems[8]!, next: null }, { ...recentItems[8]!, error: 'offline' }]);
+  const recent = selectRecentProgress([...recentItems, { ...recentItems[8]!, next: null }]);
   assert.deepEqual(recent.map((entry) => entry.media.key), ['8', '7', '6', '5', '4', '3'], 'feature exactly six recent series that have an available next episode');
   assert.equal(recentItems[0]!.media.key, '0', 'selecting recent series must not reorder the main list');
   assert.equal(selectRecentProgress([{ ...recentItems[0]!, media: { ...media, watchedEpisodeCount: 0 } }]).length, 0, 'unstarted series do not belong in the resume rail');
+  const saved = { ...recentItems[8]!, watched: [watched(1, 1), watched(1, 2)], watchedReleasedEpisodeCount: 2 };
+  const failed = { ...saved, watched: [], viewings: [], next: null, releasedEpisodeCount: undefined, watchedReleasedEpisodeCount: undefined, error: 'Could not load the next episode.' };
+  const retained = retainProgressOnError(saved, failed);
+  assert.deepEqual(retained.watched, saved.watched, 'a failed refresh must retain the saved episode');
+  assert.equal(retained.watchedReleasedEpisodeCount, 2, 'a failed refresh must retain the progress counter');
+  assert.deepEqual(retained.next, saved.next);
+  assert.deepEqual(selectRecentProgress([retained]), [retained], 'a refresh failure must not remove the resume card');
+  assert.equal(retainProgressOnError(retained, saved), saved, 'a successful retry clears the error');
+  assert.equal(retainProgressOnError(undefined, failed), failed, 'a first-load failure must not invent progress');
+  assert.equal(selectRecentProgress([{ ...saved, next: null, error: 'Episode saved. Refresh to load the next episode.' }]).length, 1, 'a saved episode stays visible even when resolving its successor fails');
   console.log('Progress episode sequencing QA passed.');
 }
 void main();

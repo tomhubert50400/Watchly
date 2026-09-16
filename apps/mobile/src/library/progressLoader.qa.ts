@@ -47,6 +47,9 @@ async function main() {
   calls = 0;
   await loadProgressEntries(sources.slice(0, 2), { ...options, force: true });
   assert.equal(calls, 2, 'explicit refresh must bypass fresh entries');
+  calls = 0;
+  await loadProgressEntries(sources, { ...options, force: true, onlyKey: sources[35]!.key });
+  assert.equal(calls, 1, 'retrying one card must not reload the other 68 series');
   console.log('Progress progressive loading, cancellation and cache QA passed.');
 }
 void main();

@@ -184,12 +184,12 @@ export function WatchlistsScreen() {
             {recentProgress.length > 0 ? <View style={styles.progressSection}>
               <Text style={styles.progressHeading}>Pick up where you left off</Text>
               <ScrollView horizontal accessibilityLabel="Recently watched series" showsHorizontalScrollIndicator={false} style={{ marginRight: width < 360 ? -spacing.md : -spacing.xl }} contentContainerStyle={[styles.recentRail, { paddingRight: width < 360 ? spacing.md : spacing.xl }]}>
-                {recentProgress.map((item) => <View key={item.media.key} style={{ width: Math.min(278, width - 64) }}><ProgressCard item={item} busy={progress.isBusy(item)} onRetry={progress.retry} onWatched={() => void progress.markNext(item)} onOpen={() => openProgress(item)} /></View>)}
+                {recentProgress.map((item) => <View key={item.media.key} style={{ width: Math.min(278, width - 64) }}><ProgressCard item={item} busy={progress.isBusy(item)} onRetry={() => progress.retry(item.media.key)} onWatched={() => void progress.markNext(item)} onOpen={() => openProgress(item)} /></View>)}
               </ScrollView>
             </View> : null}
             <View style={styles.progressSection}>
               <View style={styles.progressSectionHeader}><Text style={styles.progressHeading}>{normalizedQuery ? 'Search results' : 'All my series'}</Text><Text style={styles.progressCount}>{visibleProgress.length}</Text></View>
-              <View style={styles.progressGroup}>{visibleProgress.map((item, index) => <View key={item.media.key} style={index < visibleProgress.length - 1 ? styles.progressDivider : undefined}><ProgressCard compact item={item} busy={progress.isBusy(item)} onRetry={progress.retry} onWatched={() => void progress.markNext(item)} onOpen={() => openProgress(item)} /></View>)}</View>
+              <View style={styles.progressGroup}>{visibleProgress.map((item, index) => <View key={item.media.key} style={index < visibleProgress.length - 1 ? styles.progressDivider : undefined}><ProgressCard compact item={item} busy={progress.isBusy(item)} onRetry={() => progress.retry(item.media.key)} onWatched={() => void progress.markNext(item)} onOpen={() => openProgress(item)} /></View>)}</View>
             </View>
           </>}
         </View> : <View style={styles.content}>

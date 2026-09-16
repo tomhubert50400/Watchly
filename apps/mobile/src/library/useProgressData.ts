@@ -11,7 +11,7 @@ import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { localViewingDay, toHistoryDraft } from '../viewings/viewingHistoryModel';
 import { loadProgressEntries } from './progressLoader';
-import { isProgressCandidate, ProgressItem, resolveProgressItem } from './progressModel';
+import { isProgressCandidate, ProgressItem, resolveProgressItem, retainProgressOnError } from './progressModel';
 import type { LibraryMediaItem } from './useLibraryData';
 
 type ProgressData = { items: ProgressItem[]; loadedAt: number; savedAtByKey?: Record<string, number> };
@@ -33,6 +33,7 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
   const [loading, setLoading] = useState(false);
   const [retryRevision, setRetryRevision] = useState(0);
   const lastRetry = useRef(0);
+  const retryKey = useRef<string | undefined>(undefined);
   const [loadError, setLoadError] = useState<{ ownerId: string; message: string } | null>(null);
   const dataRef = useRef<ProgressData | null>(null);
   dataRef.current = snapshot?.key === key ? snapshot.data : getMemoryResource<ProgressData>(key)?.data ?? null;
@@ -66,7 +67,7 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
         publish({ items: (previous?.items ?? []).filter((item) => keep.has(item.media.key)), loadedAt: previous?.loadedAt ?? Date.now(), savedAtByKey: previous?.savedAtByKey ?? Object.fromEntries((previous?.items ?? []).map((item) => [item.media.key, previous!.loadedAt])) });
         let token: string | null = null;
         await loadProgressEntries(sources, {
-          force, isCurrent,
+          force, isCurrent, onlyKey: force ? retryKey.current : undefined,
           cached: (itemKey) => {
             const data = dataRef.current;
             const item = data?.items.find((entry) => entry.media.key === itemKey);
@@ -96,7 +97,7 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
             // A background response must not replace an episode saved after it started.
             if ((current.savedAtByKey?.[item.media.key] ?? 0) > startedAt) return;
             const byKey = new Map(current.items.map((entry) => [entry.media.key, entry]));
-            byKey.set(item.media.key, item);
+            byKey.set(item.media.key, retainProgressOnError(byKey.get(item.media.key), item));
             const now = Date.now();
             publish({ items: sources.flatMap((source) => byKey.has(source.key) ? [byKey.get(source.key)!] : []), loadedAt: now, savedAtByKey: { ...current.savedAtByKey, [item.media.key]: now } });
           },
@@ -118,8 +119,7 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
     error: loadError?.ownerId === ownerId ? loadError?.message ?? null : null,
     isRefreshing: loading && retryRevision > 0,
     isLoadingMore: loading,
-    retry: () => setRetryRevision((value) => value + 1),
-    revalidate: () => setRetryRevision((value) => value + 1),
+    retry: (itemKey?: string) => { retryKey.current = itemKey; setRetryRevision((value) => value + 1); },
   };
 
   async function markNext(item: ProgressItem) {
@@ -170,7 +170,7 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
       if (ownerRef.current === ownerId) {
         setError({ ownerId, message: cause instanceof Error ? cause.message : 'Could not save this episode.' });
         hapticError();
-        resource.revalidate();
+        resource.retry(item.media.key);
       }
     } finally {
       if (ownerRef.current === ownerId && saved) notifyUserDataChanged('episodeProgress', 'viewings');
@@ -178,5 +178,5 @@ export function useProgressData(media: LibraryMediaItem[], enabled: boolean) {
       setBusy([...busyRef.current]);
     }
   }
-  return { ...resource, retry: () => { setError(null); resource.retry(); }, items, markNext, actionError: error && error.ownerId === ownerId ? error.message : null, isBusy: (item: ProgressItem) => busy.includes(`${ownerId}:${item.media.key}`) };
+  return { ...resource, retry: (itemKey?: string) => { setError(null); resource.retry(itemKey); }, items, markNext, actionError: error && error.ownerId === ownerId ? error.message : null, isBusy: (item: ProgressItem) => busy.includes(`${ownerId}:${item.media.key}`) };
 }

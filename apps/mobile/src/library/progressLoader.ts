@@ -11,6 +11,7 @@ export function canReuseProgress(entry: ProgressCacheEntry | undefined, source: 
 export async function loadProgressEntries(sources: LibraryMediaItem[], options: {
   cached: (key: string) => ProgressCacheEntry | undefined;
   force: boolean;
+  onlyKey?: string;
   isCurrent: () => boolean;
   load: (source: LibraryMediaItem) => Promise<ProgressItem>;
   onItem: (item: ProgressItem, startedAt: number) => void;
@@ -19,6 +20,7 @@ export async function loadProgressEntries(sources: LibraryMediaItem[], options: 
   await Promise.all(Array.from({ length: Math.min(2, sources.length) }, async () => {
     while (options.isCurrent() && cursor < sources.length) {
       const source = sources[cursor++]!;
+      if (options.onlyKey && source.key !== options.onlyKey) continue;
       if (!options.force && canReuseProgress(options.cached(source.key), source)) continue;
       const startedAt = Date.now();
       const item = await options.load(source);

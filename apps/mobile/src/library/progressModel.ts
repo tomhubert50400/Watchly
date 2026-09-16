@@ -29,9 +29,13 @@ export function isProgressCandidate(item: LibraryMediaItem) {
 }
 
 export function selectRecentProgress(items: ProgressItem[]) {
-  return items.filter((item) => item.next && !item.error && item.media.watchedEpisodeCount > 0)
+  return items.filter((item) => (item.next || (item.error && item.state === 'progress')) && item.media.watchedEpisodeCount > 0)
     .sort((a, b) => (b.media.lastWatchedAt ?? '').localeCompare(a.media.lastWatchedAt ?? ''))
     .slice(0, 6);
+}
+
+export function retainProgressOnError(previous: ProgressItem | undefined, incoming: ProgressItem): ProgressItem {
+  return incoming.error && previous ? { ...previous, error: incoming.error } : incoming;
 }
 
 export async function resolveProgressItem(

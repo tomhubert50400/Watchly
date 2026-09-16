@@ -24,7 +24,7 @@ export function ProgressCard({ item, busy, onOpen, onWatched, onRetry, compact =
         <View style={styles.compactCopy}>
           <Text numberOfLines={2} style={styles.compactTitle}>{media.title}</Text>
           <View style={styles.captionRow}><Text style={[styles.compactMeta, styles.caption]}>{caption}</Text>{cycleBadge}</View>
-          {!item.error ? <><View style={styles.track}><View style={[styles.progress, { width: `${ratio * 100}%` }]} /></View><Text style={styles.compactCount}>{watchedCount} / {total} episodes</Text></> : null}
+          {item.releasedEpisodeCount !== undefined ? <><View style={styles.track}><View style={[styles.progress, { width: `${ratio * 100}%` }]} /></View><Text style={styles.compactCount}>{watchedCount} / {total} episodes</Text></> : null}
         </View>
       </> : <ImageBackground source={media.backdropUrl || media.posterUrl ? { uri: media.backdropUrl ?? media.posterUrl! } : undefined} style={styles.background}>
         <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width="100%" height="100%">
@@ -34,7 +34,7 @@ export function ProgressCard({ item, busy, onOpen, onWatched, onRetry, compact =
         <View style={styles.copy}>
           <Text numberOfLines={2} style={styles.title}>{media.title}</Text>
           <View style={styles.captionRow}><Text style={[styles.meta, styles.caption]}>{caption}</Text>{cycleBadge}</View>
-          {!item.error ? <><View style={styles.track}><View style={[styles.progress, { width: `${ratio * 100}%` }]} /></View><Text style={styles.count}>{watchedCount} / {total} episodes watched</Text></> : null}
+          {item.releasedEpisodeCount !== undefined ? <><View style={styles.track}><View style={[styles.progress, { width: `${ratio * 100}%` }]} /></View><Text style={styles.count}>{watchedCount} / {total} episodes watched</Text></> : null}
         </View>
       </ImageBackground>}
     </Pressable>
