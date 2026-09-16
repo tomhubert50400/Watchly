@@ -10,9 +10,11 @@ import {
   isMemoryResourceFresh,
   setMemoryResource,
 } from '../cache/memoryResourceCache';
-import { getPublicCacheKey } from '../cache/persistedCache';
+import { getPublicCacheKey, readPersistedCache, writePersistedCache } from '../cache/persistedCache';
 
 const CATALOGUE_DETAIL_STALE_TIME_MS = 6 * 60 * 60 * 1000;
+let seasonRequestSlot = Promise.resolve();
+let lastSeasonRequestAt = 0;
 
 export function getSeasonResourceKey(tmdbId: number, seasonNumber: number) {
   assertPositiveInteger(tmdbId, 'TMDB ID');
@@ -33,7 +35,17 @@ export function ensureSeasonDetails(tmdbId: number, seasonNumber: number) {
   const key = getSeasonResourceKey(tmdbId, seasonNumber);
   return ensureCatalogueResource<SeasonDetailsResponse>(
     key,
-    () => getSeasonDetails(tmdbId, seasonNumber),
+    async () => {
+      // Leave headroom under the season route's 100 requests/minute limit.
+      const slot = seasonRequestSlot.then(async () => {
+        const delay = 750 - (Date.now() - lastSeasonRequestAt);
+        if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+        lastSeasonRequestAt = Date.now();
+      });
+      seasonRequestSlot = slot;
+      await slot;
+      return getSeasonDetails(tmdbId, seasonNumber);
+    },
   );
 }
 
@@ -51,9 +63,18 @@ async function ensureCatalogueResource<T>(key: string, load: () => Promise<T>) {
     return existing.data;
   }
 
-  const data = await getOrCreateResourceRequest(key, load);
-  setMemoryResource(key, data, new Date().toISOString());
-  return data;
+  return getOrCreateResourceRequest(key, async () => {
+    const persisted = await readPersistedCache<T>(key).catch(() => null);
+    if (persisted && isMemoryResourceFresh(persisted.savedAt, CATALOGUE_DETAIL_STALE_TIME_MS)) {
+      setMemoryResource(key, persisted.data, persisted.savedAt);
+      return persisted.data;
+    }
+    const data = await load();
+    const savedAt = new Date().toISOString();
+    setMemoryResource(key, data, savedAt);
+    await writePersistedCache(key, data, undefined, savedAt).catch(() => undefined);
+    return data;
+  });
 }
 
 function assertPositiveInteger(value: number, label: string) {
