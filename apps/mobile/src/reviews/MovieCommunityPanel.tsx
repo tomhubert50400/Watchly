@@ -20,6 +20,7 @@ export function MovieCommunityPanel({ tmdbId, onViewMore }: {
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
   const revision = useUserDataRevision('opinions', 'socialGraph', 'profile');
   const [expanded, setExpanded] = useState(false);
+  const [selectedScore, setSelectedScore] = useState<number | null>(null);
   const { width } = useWindowDimensions();
   const load = useCallback(async () => getMovieCommunity(
     firebaseIdToken ? await getFirebaseIdToken() : null, tmdbId,
@@ -32,20 +33,47 @@ export function MovieCommunityPanel({ tmdbId, onViewMore }: {
   });
   const community = resource.data;
   const maxCount = Math.max(1, ...community?.distribution.map((bucket) => bucket.count) ?? []);
+  const selectedBucket = community?.distribution.find((bucket) => bucket.score === selectedScore);
 
   return (
     <View style={styles.section}>
       <Text style={styles.title}>Ratings & reviews</Text>
       {community ? (
         <>
-          <View style={styles.histogram}>
-            {community.distribution.map((bucket) => (
-              <View key={bucket.score} accessible accessibilityLabel={`${bucket.score} stars: ${bucket.count} ratings`} style={styles.bucket}>
-                <Text adjustsFontSizeToFit numberOfLines={1} style={styles.voteCount}>{bucket.count.toLocaleString()}</Text>
-                <View style={styles.barTrack}><View style={[styles.bar, { height: `${bucket.count / maxCount * 100}%` }]} /></View>
-                <Text style={styles.axis}>{bucket.score}★</Text>
+          <View style={styles.ratingRow}>
+            <View style={styles.chart}>
+              <View style={styles.histogram}>
+                {community.distribution.map((bucket) => (
+                  <Pressable
+                    key={bucket.score}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${bucket.score} stars: ${bucket.count} ratings`}
+                    accessibilityState={{ selected: selectedScore === bucket.score }}
+                    onPress={() => setSelectedScore((current) => current === bucket.score ? null : bucket.score)}
+                    style={styles.bucket}
+                  >
+                    <View style={[styles.bar, {
+                      height: bucket.count > 0 ? Math.max(3, bucket.count / maxCount * 56) : 1,
+                      backgroundColor: selectedScore === bucket.score ? colors.accentText : bucket.count > 0 ? colors.rating : colors.ratingBorder,
+                      opacity: selectedScore !== null && selectedScore !== bucket.score ? 0.5 : 1,
+                    }]} />
+                  </Pressable>
+                ))}
               </View>
-            ))}
+              <View style={styles.axis}><Text style={styles.axisLabel}>½★</Text><Text style={styles.axisLabel}>5★</Text></View>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={selectedBucket ? `${selectedBucket.count} ratings of ${selectedBucket.score} stars. Show average rating` : `Watchly average: ${community.averageScore ?? 'no ratings'}`}
+              accessibilityLiveRegion="polite"
+              onPress={() => setSelectedScore(null)}
+              style={styles.ratingSummary}
+            >
+              <Text adjustsFontSizeToFit numberOfLines={1} style={styles.summaryValue}>
+                {selectedBucket ? selectedBucket.count.toLocaleString() : community.averageScore?.toFixed(1) ?? '-'}
+              </Text>
+              <StarRatingDisplay rating={selectedBucket?.score ?? community.averageScore ?? 0} size={13} />
+            </Pressable>
           </View>
           {community.reviewCount > 0 ? <Pressable accessibilityRole="button" accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)} style={styles.toggle}>
               <Text style={styles.author}>{expanded ? 'Hide reviews' : `Show reviews (${community.reviewCount})`}</Text>
@@ -101,12 +129,15 @@ const styles = StyleSheet.create({
   section: { gap: spacing.md, paddingVertical: spacing.xl, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
   title: { ...typography.title, color: colors.text },
   muted: { ...typography.meta, color: colors.textSubtle },
-  histogram: { flexDirection: 'row', gap: spacing.xs },
-  bucket: { flex: 1, gap: spacing.xs, alignItems: 'center' },
-  voteCount: { color: colors.textMuted, fontSize: 11, fontWeight: '700', fontVariant: ['tabular-nums'], textAlign: 'center', width: '100%' },
-  barTrack: { height: 88, width: '100%', justifyContent: 'flex-end', backgroundColor: colors.panelSoft, borderRadius: radii.xs, overflow: 'hidden' },
-  bar: { width: '100%', backgroundColor: colors.rating, borderRadius: radii.xs },
-  axis: { color: colors.textSubtle, fontSize: 9 },
+  ratingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  chart: { flex: 1, minWidth: 0 },
+  histogram: { flexDirection: 'row', height: 60, gap: 2, alignItems: 'flex-end' },
+  bucket: { flex: 1, height: '100%', justifyContent: 'flex-end' },
+  bar: { width: '100%', borderTopLeftRadius: 2, borderTopRightRadius: 2 },
+  axis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },
+  axisLabel: { color: colors.textSubtle, fontSize: 10 },
+  ratingSummary: { width: 82, minHeight: 60, justifyContent: 'center', alignItems: 'center', gap: 3 },
+  summaryValue: { color: colors.text, fontSize: 26, lineHeight: 32, fontWeight: '500', fontVariant: ['tabular-nums'], textAlign: 'center', width: '100%' },
   toggle: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   rail: { gap: spacing.md, alignItems: 'stretch' },
   card: { flex: 1, padding: spacing.md, gap: spacing.sm, backgroundColor: colors.panelElevated, borderWidth: 1, borderColor: colors.border, borderRadius: radii.lg },
