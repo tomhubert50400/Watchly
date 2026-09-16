@@ -1,3 +1,4 @@
+import { getWatchlistCoverItems } from './watchlistCover';
 import { getSharedWatchlist } from '../api/sharedWatchlists';
 import { getWatchlist, WatchlistContentType } from '../api/watchlists';
 
@@ -19,22 +20,22 @@ export async function loadWatchlistPreviewUrls({
 }: {
   fallback: Array<string | null>;
   list: PreviewList;
-  loadArtwork: (item: PreviewItem, index: number) => Promise<string | null>;
+  loadArtwork: (item: PreviewItem, index: number, customCover: boolean) => Promise<string | null>;
   token: string;
 }) {
   try {
     const details = list.kind === 'personal'
       ? await getWatchlist(token, list.id)
       : await getSharedWatchlist(token, list.id);
-    const urls = await Promise.all(details.items.slice(0, 4).map(async (item, index) => {
+    const urls = await Promise.all(getWatchlistCoverItems<PreviewItem & { id: string }>(details.items, details.coverItemIds).map(async (item, index) => {
       try {
-        return await loadArtwork(item, index);
+        return await loadArtwork(item, index, Boolean(details.coverItemIds?.length));
       } catch {
         return null;
       }
     }));
 
-    return urls.length ? urls : fallback;
+    return urls;
   } catch {
     return fallback;
   }

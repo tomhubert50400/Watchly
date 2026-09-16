@@ -21,6 +21,7 @@ export type PersonalWatchlistItem = {
 };
 
 export type PersonalWatchlist = {
+  coverItemIds?: string[];
   createdAt: string;
   id: string;
   items: PersonalWatchlistItem[];

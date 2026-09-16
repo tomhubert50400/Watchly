@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Text } from 'react-native';
+import { WatchlistCoverButton } from './WatchlistCoverButton';
 import { PersonalWatchlist } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
@@ -111,6 +112,19 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     setStateScope(resourceScope);
     void loadWatchlist();
   }, [loadWatchlist, resourceScope, watchlistId]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: visibleWatchlist ? () => (
+        <WatchlistCoverButton key={resourceScope} kind="personal" watchlistId={watchlistId}
+          items={visibleWatchlist.items} coverItemIds={visibleWatchlist.coverItemIds}
+          onSaved={(coverItemIds) => {
+            setWatchlist((current) => current ? { ...current, coverItemIds } : current);
+            void loadWatchlist();
+          }} />
+      ) : undefined,
+    });
+  }, [navigation, visibleWatchlist, resourceScope, watchlistId, loadWatchlist]);
 
   function openItem(item: WatchlistDisplayItem) {
     const title = item.title ?? (item.contentType === 'movie' ? 'Film' : 'Series');

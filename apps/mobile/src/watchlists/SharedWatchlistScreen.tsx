@@ -11,6 +11,7 @@ import {
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey, writePersistedCache } from '../cache/persistedCache';
+import { setMemoryResource } from '../cache/memoryResourceCache';
 import { useCachedResource } from '../cache/useCachedResource';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
 import {
@@ -28,6 +29,7 @@ import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { RootStackParamList } from '../navigation/types';
 import { notifyUserDataChanged } from '../sync/userDataEvents';
+import { WatchlistCoverButton } from './WatchlistCoverButton';
 import { getVoteLifecycle, getVoteLeaders, getVoteRemainingLabel } from './sharedVoteModel';
 import { takeHydrationItems } from './requestBoundaries';
 import {
@@ -121,20 +123,32 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: watchlist ? () => (
-        <Pressable
-          accessibilityLabel={`Open members, ${watchlist.memberCount} ${watchlist.memberCount === 1 ? 'member' : 'members'}`}
-          accessibilityRole="button"
-          onPress={() => setIsMembersSheetOpen(true)}
-          style={({ pressed }) => [
-            styles.headerMembersButton,
-            pressed ? styles.headerMembersButtonPressed : null,
-          ]}
-        >
-          <Users color={colors.text} size={20} strokeWidth={2} />
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {watchlist.isOwner ? <WatchlistCoverButton key={`${ownerId}:${watchlist.id}`} kind="shared" watchlistId={watchlist.id}
+            items={watchlist.items} coverItemIds={watchlist.coverItemIds}
+            onSaved={(coverItemIds) => {
+              const snapshot = ownedDetailsRef.current;
+              if (ownerId && snapshot.ownerId === ownerId && snapshot.data) {
+                const next = { ...snapshot.data, watchlist: { ...snapshot.data.watchlist, coverItemIds } };
+                setMemoryResource(cacheKey, next, new Date().toISOString());
+                commitDetails(ownerId, next);
+              }
+            }} /> : null}
+          <Pressable
+            accessibilityLabel={`Open members, ${watchlist.memberCount} ${watchlist.memberCount === 1 ? 'member' : 'members'}`}
+            accessibilityRole="button"
+            onPress={() => setIsMembersSheetOpen(true)}
+            style={({ pressed }) => [
+              styles.headerMembersButton,
+              pressed ? styles.headerMembersButtonPressed : null,
+            ]}
+          >
+            <Users color={colors.text} size={20} strokeWidth={2} />
+          </Pressable>
+        </View>
       ) : undefined,
     });
-  }, [navigation, watchlist?.memberCount]);
+  }, [navigation, watchlist, ownerId]);
 
   const commitDetails = useCallback((expectedOwnerId: string, next: SharedListDetails) => {
     if (ownerIdRef.current !== expectedOwnerId) return;

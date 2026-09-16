@@ -42,6 +42,7 @@ export type SharedVotingSession = {
 };
 
 export type SharedWatchlist = {
+  coverItemIds?: string[];
   createdAt: string;
   id: string;
   isOwner: boolean;

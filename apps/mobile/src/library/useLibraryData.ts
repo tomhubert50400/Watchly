@@ -128,10 +128,10 @@ export async function loadLibraryData(
         ? await loadWatchlistPreviewUrls({
             fallback,
             list,
-            loadArtwork: async (item, index) => {
+            loadArtwork: async (item, index, customCover) => {
               const media = await loadPoster(`${item.contentType}:${item.tmdbId}`);
               previewItems[index] = { contentType: media.contentType, tmdbId: media.tmdbId, title: media.title, posterUrl: media.posterUrl };
-              return media.artworkUrl;
+              return customCover ? media.posterUrl : media.artworkUrl;
             },
             token,
           })

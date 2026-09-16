@@ -86,7 +86,7 @@ const watchlistPreviewSource = readFileSync(
 );
 assert.match(
   watchlistPreviewSource,
-  /details\.items\.slice\(0, 4\)/,
+  /getWatchlistCoverItems/,
   'watchlist previews must hydrate up to four titles',
 );
 assert.match(
