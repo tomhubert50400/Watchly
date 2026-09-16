@@ -21,7 +21,7 @@ type Props = {
   onSaved: (ids: string[]) => void;
   watchlistId: string;
 };
-type Artwork = { backdropUrl?: string | null; posterUrl: string | null; title: string };
+type Artwork = { artworkUrl: string | null; title: string };
 
 export function WatchlistCoverButton(props: Props) {
   const [open, setOpen] = useState(false);
@@ -64,9 +64,9 @@ function WatchlistCoverSheet({ coverItemIds = [], items, kind, onClose, onSaved,
         const results = await Promise.all(candidates.slice(index, index + 6).map(async (item) => {
           try {
             const media = item.contentType === 'movie' ? await refreshMovie(item.tmdbId) : await refreshSeries(item.tmdbId);
-            return [item.id, { posterUrl: media.posterUrl, backdropUrl: media.backdropUrl, title: media.title }] as const;
+            return [item.id, { artworkUrl: media.backdropUrl ?? media.posterUrl, title: media.title }] as const;
           } catch {
-            return [item.id, { posterUrl: null, title: 'Title unavailable' }] as const;
+            return [item.id, { artworkUrl: null, title: 'Title unavailable' }] as const;
           }
         }));
         if (cancelled) return;
@@ -104,7 +104,7 @@ function WatchlistCoverSheet({ coverItemIds = [], items, kind, onClose, onSaved,
     }
   }
 
-  const preview = getWatchlistCoverItems(items, selected).map((item) => selected.length ? artwork[item.id]?.posterUrl ?? null : artwork[item.id]?.backdropUrl ?? artwork[item.id]?.posterUrl ?? null);
+  const preview = getWatchlistCoverItems(items, selected).map((item) => artwork[item.id]?.artworkUrl ?? null);
   const unavailable = items.slice(0, visibleCount).some((item) => artwork[item.id]?.title === 'Title unavailable');
   return <BottomActionSheet visible title="Watchlist cover" onClose={onClose}
     footer={<Button fullWidth label="Save cover" loading={saving} onPress={() => void save()} />}>
@@ -112,7 +112,7 @@ function WatchlistCoverSheet({ coverItemIds = [], items, kind, onClose, onSaved,
       <View accessibilityLabel="Cover preview" style={styles.preview}>
         <BlendedArtwork blendId={`cover-preview-${watchlistId}`} urls={preview} />
       </View>
-      <Text style={styles.copy}>Choose up to 4 posters. {selected.length}/4 selected.</Text>
+      <Text style={styles.copy}>Choose up to 4 images. {selected.length}/4 selected.</Text>
       {selected.length === 4 ? <Text style={styles.copy}>Deselect a title to choose another.</Text> : null}
       {error ? <InlineStatusBanner detail={error} tone="error" /> : null}
       {items.length === 0 ? <Text style={styles.copy}>Add films or series to this watchlist to choose its cover.</Text> : null}
@@ -120,20 +120,20 @@ function WatchlistCoverSheet({ coverItemIds = [], items, kind, onClose, onSaved,
         {items.slice(0, visibleCount).map((item) => {
           const media = artwork[item.id];
           const position = selected.indexOf(item.id);
-          const disabled = saving || (position < 0 && (selected.length === 4 || !media?.posterUrl));
+          const disabled = saving || (position < 0 && (selected.length === 4 || !media?.artworkUrl));
           return <Pressable key={item.id} accessibilityRole="checkbox"
             accessibilityLabel={media?.title ?? 'Loading title'} accessibilityState={{ checked: position >= 0, disabled }}
             disabled={disabled} onPress={() => setSelected((previous) => toggleWatchlistCoverItem(previous, item.id))}
             style={[styles.tile, disabled && position < 0 && styles.dimmed]}>
             <View style={[styles.posterFrame, position >= 0 && styles.selected]}>
-              <MediaPoster posterUrl={media?.posterUrl ?? null} style={styles.poster} />
+              <MediaPoster posterUrl={media?.artworkUrl ?? null} style={styles.poster} />
               {position >= 0 ? <View style={styles.badge}><Text style={styles.badgeText}>{position + 1}</Text></View> : null}
             </View>
             <Text numberOfLines={2} style={styles.title}>{media?.title ?? 'Loading…'}</Text>
           </Pressable>;
         })}
       </View>
-      {loading ? <Text style={styles.copy}>Loading posters…</Text> : null}
+      {loading ? <Text style={styles.copy}>Loading images…</Text> : null}
       {unavailable && !loading ? <Button label="Retry unavailable titles" variant="ghost" onPress={() => setRetry((value) => value + 1)} /> : null}
       {visibleCount < items.length ? <Button label="Show more titles" variant="secondary" disabled={loading} onPress={() => setVisibleCount((count) => count + 24)} /> : null}
       <Button label="Use automatic cover" variant="ghost" disabled={saving || selected.length === 0} onPress={() => setSelected([])} />
@@ -148,10 +148,10 @@ const styles = StyleSheet.create({
   preview: { width: '100%', aspectRatio: 278 / 156, overflow: 'hidden', borderRadius: radii.lg, backgroundColor: colors.panelElevated },
   copy: { ...typography.body, color: colors.textMuted },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  tile: { width: '31%', gap: spacing.xs },
+  tile: { width: '48%', gap: spacing.xs },
   posterFrame: { borderRadius: radii.md, borderWidth: 2, borderColor: 'transparent', overflow: 'hidden' },
   selected: { borderColor: colors.accent },
-  poster: { width: '100%', aspectRatio: 2 / 3 },
+  poster: { width: '100%', aspectRatio: 16 / 9 },
   title: { color: colors.text, fontSize: 12, lineHeight: 17 },
   badge: { position: 'absolute', top: 6, right: 6, width: 26, height: 26, borderRadius: 13, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' },
   badgeText: { color: colors.textOnAccent, fontWeight: '800' },
