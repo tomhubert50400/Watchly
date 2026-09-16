@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
   arrow: { width: 44, height: 44, borderRadius: 22, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.interactiveSurface, alignItems: 'center', justifyContent: 'center' },
   disabled: { opacity: 0.35 }, hero: { borderRadius: radii.lg, borderWidth: 1, borderColor: colors.border, overflow: 'hidden' },
   artwork: { height: 200, justifyContent: 'flex-end' }, scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.28)' },
-  copy: { padding: spacing.md, backgroundColor: 'rgba(9,12,19,0.22)' }, title: { fontSize: 28, lineHeight: 33, fontWeight: '800', color: colors.text },
+  copy: { flex: 1, justifyContent: 'flex-end', padding: spacing.md, backgroundColor: 'rgba(9,12,19,0.22)' }, title: { fontSize: 28, lineHeight: 33, fontWeight: '800', color: colors.text },
   logo: { height: 49, maxWidth: '85%' }, meta: { ...typography.meta, color: colors.textMuted, marginTop: spacing.xs },
   reason: { fontSize: 12, lineHeight: 18, color: colors.accentText, marginTop: spacing.sm },
   dots: { flexDirection: 'row', justifyContent: 'center' }, dotTarget: { width: 38, height: 44, justifyContent: 'center', alignItems: 'center' },
