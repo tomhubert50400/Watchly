@@ -48,6 +48,13 @@ type BottomActionSheetScrollViewProps = PropsWithChildren<ScrollViewProps>;
 
 const SheetScrollGestureContext = createContext<{ current: number } | null>(null);
 
+// Keep unclaimed touches below Modal's responder so the sheet can capture a later drag.
+// Bubble after controls and yield to the sheet or native scrolling when requested.
+const sheetGestureSurfaceHandlers = {
+  onStartShouldSetResponder: () => true,
+  onResponderTerminationRequest: () => true,
+};
+
 export function BottomActionSheetScrollView({
   automaticallyAdjustKeyboardInsets = false,
   children,
@@ -110,8 +117,8 @@ export function BottomActionSheetScrollView({
       showsVerticalScrollIndicator={false}
     >
       <View
-        onResponderTerminationRequest={() => true}
-        onStartShouldSetResponder={() => disableScrollViewPanResponder}
+        {...sheetGestureSurfaceHandlers}
+        onStartShouldSetResponder={() => disableScrollViewPanResponder || gestureScrollOffset !== null}
         style={[styles.scrollGestureSurface, contentContainerStyle]}
       >
         {children}
@@ -260,11 +267,11 @@ export function BottomActionSheet({ children, dragFromHandleOnly = false, footer
             },
           ]}
         >
-          <View style={[styles.keyboardFrame, { bottom: keyboardInset }]}>
+          <View {...(dragFromHandleOnly ? {} : sheetGestureSurfaceHandlers)} style={[styles.keyboardFrame, { bottom: keyboardInset }]}>
             <SafeAreaView edges={keyboardInset > 0 ? [] : ['bottom']} style={styles.safeContent}>
               <View {...(dragFromHandleOnly ? panResponder.panHandlers : {})}>
-                <View style={styles.handle} />
-                <View style={styles.header}>
+                <View {...sheetGestureSurfaceHandlers} style={styles.handle} />
+                <View {...sheetGestureSurfaceHandlers} style={styles.header}>
                   <Text accessibilityRole="header" style={styles.title}>{title}</Text>
                   <Pressable
                     accessibilityLabel="Close"
@@ -277,7 +284,7 @@ export function BottomActionSheet({ children, dragFromHandleOnly = false, footer
                   </Pressable>
                 </View>
               </View>
-              <SheetScrollGestureContext.Provider value={gestureScrollOffset}>
+              <SheetScrollGestureContext.Provider value={dragFromHandleOnly ? null : gestureScrollOffset}>
                 <View style={styles.body}>{children}</View>
               </SheetScrollGestureContext.Provider>
               {footer ? <View style={styles.footer}>{footer}</View> : null}

@@ -50,9 +50,22 @@ assert.match(
 );
 assert.match(
   sheetSource,
-  /onResponderTerminationRequest=\{\(\) => true\}[\s\S]*onStartShouldSetResponder=\{\(\) => disableScrollViewPanResponder\}/,
-  'native scrolling must be able to opt out of the passive gesture surface',
+  /const sheetGestureSurfaceHandlers = \{\s*onStartShouldSetResponder: \(\) => true,\s*onResponderTerminationRequest: \(\) => true,/,
+  'unclaimed touches must stay below the native Modal responder and yield when the sheet or scroll view claims them',
 );
+assert.match(
+  sheetSource,
+  /<View\s+\{\.\.\.sheetGestureSurfaceHandlers\}\s+onStartShouldSetResponder=\{\(\) => disableScrollViewPanResponder \|\| gestureScrollOffset !== null\}/,
+  'the passive body responder must live inside the scroll view, including when native scrolling is enabled',
+);
+assert.match(
+  sheetSource,
+  /<View \{\.\.\.\(dragFromHandleOnly \? \{\} : sheetGestureSurfaceHandlers\)\} style=\{\[styles.keyboardFrame/,
+  'blank sheet space must keep touches below the sheet pan responder without claiming the year wheel',
+);
+assert.match(sheetSource, /<View \{\.\.\.sheetGestureSurfaceHandlers\} style=\{styles.handle\}/, 'the handle must retain initial touches even in handle-only mode');
+assert.match(sheetSource, /<View \{\.\.\.sheetGestureSurfaceHandlers\} style=\{styles.header\}/, 'the title must retain initial touches while letting the close button receive presses first');
+assert.match(sheetSource, /SheetScrollGestureContext.Provider value=\{dragFromHandleOnly \? null : gestureScrollOffset\}/, 'the year wheel must remain outside body drag arbitration');
 assert.match(sheetSource, /dragFromHandleOnly = false/, 'other sheets retain full-surface dragging by default');
 const historySource = readFileSync(new URL('../viewings/ViewingHistorySheet.tsx', import.meta.url), 'utf8');
 assert.match(historySource, /<BottomActionSheet dragFromHandleOnly=\{monthPickerOpen\}/, 'the year wheel must not drag the sheet');
