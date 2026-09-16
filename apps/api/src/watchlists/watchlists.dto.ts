@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsString, MaxLength, Min, MinLength } from 'class-validator';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsUUID, IsIn, IsInt, IsString, MaxLength, Min, MinLength } from 'class-validator';
 
 export const watchlistContentTypes = ['movie', 'series'] as const;
 export const watchlistVisibilities = ['public', 'private'] as const;
@@ -25,4 +25,12 @@ export class WatchlistItemDto {
 export class UpdateWatchlistVisibilityDto {
   @IsIn(watchlistVisibilities)
   visibility!: WatchlistVisibility;
+}
+
+export class UpdateWatchlistCoverDto {
+  @IsArray()
+  @ArrayMaxSize(4)
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  itemIds!: string[];
 }

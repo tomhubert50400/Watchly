@@ -115,6 +115,7 @@ export class WatchlistsService {
       createdAt: watchlist.createdAt.toISOString(),
       id: watchlist.id,
       items: watchlist.items.map(toItem),
+      coverItemIds: watchlist.coverItemIds.filter((id) => watchlist.items.some((item) => item.id === id)),
       name: watchlist.name,
       updatedAt: watchlist.updatedAt.toISOString(),
       visibility: fromPrivacyVisibility(watchlist.visibility),
@@ -211,6 +212,28 @@ export class WatchlistsService {
     );
 
     await this.touchWatchlist(watchlistId);
+  }
+
+  async updateCover(identity: AuthenticatedIdentity, watchlistId: string, itemIds: string[]) {
+    if (itemIds.length > 4 || new Set(itemIds).size !== itemIds.length) {
+      throw new BadRequestException('Choose up to 4 different titles.');
+    }
+    const userId = await this.getUserId(identity);
+    return this.withConnectionRetry(() => this.prisma.$transaction(async (transaction) => {
+      const watchlist = await transaction.personalWatchlist.findFirst({
+        where: { id: watchlistId, userId },
+        include: { items: { select: { id: true } } },
+      });
+      if (!watchlist) throw new NotFoundException('Watchlist not found.');
+      if (itemIds.some((id) => !watchlist.items.some((item) => item.id === id))) {
+        throw new BadRequestException('Cover titles must belong to this watchlist.');
+      }
+      await transaction.personalWatchlist.update({
+        where: { id: watchlistId },
+        data: { coverItemIds: itemIds },
+      });
+      return { coverItemIds: itemIds };
+    }));
   }
 
   private async getUserId(identity: AuthenticatedIdentity) {

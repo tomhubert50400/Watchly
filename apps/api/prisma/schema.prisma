@@ -519,6 +519,7 @@ model UserFollow {
 }
 
 model PersonalWatchlist {
+  coverItemIds String[] @default([]) @db.Uuid
   id         String                  @id @default(uuid()) @db.Uuid
   userId     String                  @db.Uuid
   name       String                  @db.VarChar(80)
@@ -546,6 +547,7 @@ model PersonalWatchlistItem {
 }
 
 model SharedWatchlist {
+  coverItemIds String[] @default([]) @db.Uuid
   id             String                  @id @default(uuid()) @db.Uuid
   ownerId        String                  @db.Uuid
   name           String                  @db.VarChar(80)

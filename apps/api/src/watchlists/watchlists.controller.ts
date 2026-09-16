@@ -18,6 +18,7 @@ import { AuthenticatedRequest } from '../auth/auth.types';
 import {
   CreateWatchlistDto,
   UpdateWatchlistVisibilityDto,
+  UpdateWatchlistCoverDto,
   WatchlistContentType,
   watchlistContentTypes,
   WatchlistItemDto,
@@ -71,6 +72,15 @@ export class WatchlistsController {
       parseWatchlistId(watchlistId),
       body.visibility,
     );
+  }
+
+  @Put(':watchlistId/cover')
+  async updateCover(
+    @Req() request: AuthenticatedRequest,
+    @Param('watchlistId') watchlistId: string,
+    @Body() body: UpdateWatchlistCoverDto,
+  ) {
+    return this.watchlists.updateCover(getIdentity(request), parseWatchlistId(watchlistId), body.itemIds);
   }
 
   @Delete(':watchlistId')

@@ -163,6 +163,7 @@ export class SharedWatchlistsService {
       id: watchlist.id,
       isOwner: watchlist.ownerId === userId,
       items: watchlist.items.map(toItem),
+      coverItemIds: watchlist.coverItemIds.filter((id) => watchlist.items.some((item) => item.id === id)),
       memberCount: watchlist.members.length,
       members: watchlist.members.map((member) => ({
         displayName: member.user.displayName,
@@ -870,6 +871,28 @@ export class SharedWatchlistsService {
         }),
       ),
     );
+  }
+
+  async updateCover(identity: AuthenticatedIdentity, watchlistId: string, itemIds: string[]) {
+    if (itemIds.length > 4 || new Set(itemIds).size !== itemIds.length) {
+      throw new BadRequestException('Choose up to 4 different titles.');
+    }
+    const userId = await this.getUserId(identity);
+    return this.withConnectionRetry(() => this.prisma.$transaction(async (transaction) => {
+      const watchlist = await transaction.sharedWatchlist.findFirst({
+        where: { id: watchlistId, ownerId: userId },
+        include: { items: { select: { id: true } } },
+      });
+      if (!watchlist) throw new NotFoundException('Watchlist not found.');
+      if (itemIds.some((id) => !watchlist.items.some((item) => item.id === id))) {
+        throw new BadRequestException('Cover titles must belong to this watchlist.');
+      }
+      await transaction.sharedWatchlist.update({
+        where: { id: watchlistId },
+        data: { coverItemIds: itemIds },
+      });
+      return { coverItemIds: itemIds };
+    }));
   }
 
   private async getUserId(identity: AuthenticatedIdentity) {
