@@ -16,7 +16,7 @@ import { getWatchlistCoverItems, toggleWatchlistCoverItem } from './watchlistCov
 
 type Props = {
   coverItemIds?: string[];
-  items: PersonalWatchlistItem[];
+  items: Pick<PersonalWatchlistItem, 'contentType' | 'id' | 'tmdbId'>[];
   kind: 'personal' | 'shared';
   onSaved: (ids: string[]) => void;
   watchlistId: string;

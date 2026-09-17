@@ -1,6 +1,7 @@
 import { PropsWithChildren, ReactNode, useRef } from 'react';
 import {
   KeyboardAvoidingView,
+  GestureResponderEvent,
   Pressable,
   Platform,
   RefreshControl,
@@ -20,6 +21,7 @@ export type WatchlistDisplayItem = {
   contentType: 'movie' | 'series';
   id: string;
   posterUrl: string | null;
+  sectionId?: string | null;
   tmdbId: number;
   title: string | null;
 };
@@ -28,10 +30,16 @@ type WatchlistPageProps = PropsWithChildren<{
   footer?: ReactNode;
   isRefreshing?: boolean;
   onRefresh?: () => void;
+  overlay?: ReactNode;
+  scrollEnabled?: boolean;
 }>;
 
 type WatchlistPosterGridProps = {
   items: WatchlistDisplayItem[];
+  movingItemId?: string | null;
+  onMove?: (item: WatchlistDisplayItem, event: GestureResponderEvent) => void;
+  onMoveEnd?: (item: WatchlistDisplayItem, event: GestureResponderEvent) => void;
+  onMoveStart?: (item: WatchlistDisplayItem, event: GestureResponderEvent) => void;
   onOpen: (item: WatchlistDisplayItem) => void;
 };
 
@@ -42,6 +50,8 @@ export function WatchlistPage({
   footer,
   isRefreshing = false,
   onRefresh,
+  overlay,
+  scrollEnabled = true,
 }: WatchlistPageProps) {
   const scrollRef = useRef<ScrollView>(null);
   const visibility = useFocusedFieldVisibility(scrollRef);
@@ -57,6 +67,7 @@ export function WatchlistPage({
         contentContainerStyle={styles.page}
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         keyboardShouldPersistTaps="handled"
+        scrollEnabled={scrollEnabled}
         refreshControl={onRefresh ? (
           <RefreshControl
             onRefresh={onRefresh}
@@ -68,6 +79,7 @@ export function WatchlistPage({
       >
         {children}
       </ScrollView>
+      {overlay}
       {footer ? (
         <SafeAreaView edges={['bottom']} style={styles.footer}>
           {footer}
@@ -77,8 +89,16 @@ export function WatchlistPage({
   );
 }
 
-export function WatchlistPosterGrid({ items, onOpen }: WatchlistPosterGridProps) {
+export function WatchlistPosterGrid({
+  items,
+  movingItemId = null,
+  onMove,
+  onMoveEnd,
+  onMoveStart,
+  onOpen,
+}: WatchlistPosterGridProps) {
   const { fontScale, width } = useWindowDimensions();
+  const longPressedItemRef = useRef<string | null>(null);
   const availableWidth = Math.max(width - spacing.xl * 2, 0);
   const columnCount = resolveColumnCount(availableWidth, fontScale);
   const itemWidth = Math.floor(
@@ -94,11 +114,31 @@ export function WatchlistPosterGrid({ items, onOpen }: WatchlistPosterGridProps)
           <Pressable
             accessibilityLabel={`Open ${title}`}
             accessibilityRole="button"
+            delayLongPress={350}
             key={item.id}
-            onPress={() => onOpen(item)}
+            onLongPress={(event) => {
+              if (!onMoveStart) return;
+              longPressedItemRef.current = item.id;
+              onMoveStart(item, event);
+            }}
+            onPress={() => {
+              if (longPressedItemRef.current !== item.id) onOpen(item);
+            }}
+            onPressOut={(event) => {
+              if (longPressedItemRef.current === item.id) {
+                onMoveEnd?.(item, event);
+                setTimeout(() => {
+                  if (longPressedItemRef.current === item.id) longPressedItemRef.current = null;
+                }, 0);
+              }
+            }}
+            onTouchMove={(event) => {
+              if (longPressedItemRef.current === item.id) onMove?.(item, event);
+            }}
             style={({ pressed }) => [
               styles.tile,
               { width: itemWidth },
+              movingItemId === item.id ? styles.moving : null,
               pressed ? styles.pressed : null,
             ]}
           >
@@ -144,6 +184,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     lineHeight: 17,
     marginTop: spacing.xs,
+  },
+  moving: {
+    opacity: 0.18,
   },
   footer: {
     backgroundColor: colors.background,

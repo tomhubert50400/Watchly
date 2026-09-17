@@ -17,7 +17,16 @@ export type PersonalWatchlistItem = {
   contentType: WatchlistContentType;
   createdAt: string;
   id: string;
+  sectionId: string | null;
   tmdbId: number;
+};
+
+export type PersonalWatchlistSection = {
+  createdAt: string;
+  id: string;
+  name: string;
+  position: number;
+  updatedAt: string;
 };
 
 export type PersonalWatchlist = {
@@ -26,6 +35,7 @@ export type PersonalWatchlist = {
   id: string;
   items: PersonalWatchlistItem[];
   name: string;
+  sections: PersonalWatchlistSection[];
   updatedAt: string;
   visibility: PersonalWatchlistVisibility;
 };
@@ -91,4 +101,38 @@ export function removeWatchlistItem(
   return apiDelete<{ deleted: true }>(`/watchlists/${watchlistId}/items?${params.toString()}`, {
     token,
   });
+}
+
+export function createWatchlistSection(token: string, watchlistId: string, name: string) {
+  return apiPost<PersonalWatchlistSection>(`/watchlists/${watchlistId}/sections`, { name }, { token });
+}
+
+export function updateWatchlistSection(
+  token: string,
+  watchlistId: string,
+  sectionId: string,
+  name: string,
+) {
+  return apiPut<PersonalWatchlistSection>(
+    `/watchlists/${watchlistId}/sections/${sectionId}`,
+    { name },
+    { token },
+  );
+}
+
+export function deleteWatchlistSection(token: string, watchlistId: string, sectionId: string) {
+  return apiDelete<{ deleted: true }>(`/watchlists/${watchlistId}/sections/${sectionId}`, { token });
+}
+
+export function moveWatchlistItemToSection(
+  token: string,
+  watchlistId: string,
+  itemId: string,
+  sectionId: string | null,
+) {
+  return apiPut<PersonalWatchlistItem>(
+    `/watchlists/${watchlistId}/items/${itemId}/section`,
+    { sectionId },
+    { token },
+  );
 }
