@@ -274,7 +274,7 @@ assert(
 );
 for (const title of ['In progress', 'Planned', 'Completed']) {
   assert(
-    mediaScreenSource.includes(`title="${title}"`),
+    mediaScreenSource.includes(`label: '${title}'`),
     `Profile media pages must include the ${title} section`,
   );
 }

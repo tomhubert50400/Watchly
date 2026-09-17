@@ -64,12 +64,14 @@ export function ProfileMediaRail({
   );
 }
 
-const ProfileMediaPoster = memo(function ProfileMediaPoster({
+export const ProfileMediaPoster = memo(function ProfileMediaPoster({
   item,
   onOpen,
+  width = PROFILE_MEDIA_CARD_WIDTH,
 }: {
   item: LibraryMediaItem;
   onOpen: (item: LibraryMediaItem) => void;
+  width?: number;
 }) {
   const hydratedItem = useHydratedProfileMediaItem(item);
   const meta = getMediaMeta(hydratedItem);
@@ -80,12 +82,12 @@ const ProfileMediaPoster = memo(function ProfileMediaPoster({
       accessibilityLabel={`Open ${title}, ${meta}`}
       accessibilityRole="button"
       onPress={() => onOpen(hydratedItem)}
-      style={({ pressed }) => [styles.card, pressed ? styles.cardPressed : null]}
+      style={({ pressed }) => [{ width }, pressed ? styles.cardPressed : null]}
     >
       <MediaPoster
         accessibilityLabel={`${title} poster`}
         posterUrl={hydratedItem.posterUrl}
-        style={styles.poster}
+        style={{ width, height: width * 1.5 }}
       />
       <Text numberOfLines={1} style={styles.title}>{title}</Text>
       <Text numberOfLines={1} style={styles.meta}>{meta}</Text>
@@ -116,9 +118,6 @@ function getMediaMeta(item: LibraryMediaItem) {
 }
 
 const styles = StyleSheet.create({
-  card: {
-    width: PROFILE_MEDIA_CARD_WIDTH,
-  },
   cardPressed: {
     opacity: 0.78,
     transform: [{ scale: 0.98 }],
@@ -132,10 +131,6 @@ const styles = StyleSheet.create({
     ...typography.meta,
     color: colors.textSubtle,
     marginTop: 2,
-  },
-  poster: {
-    height: 156,
-    width: PROFILE_MEDIA_CARD_WIDTH,
   },
   rail: {
     paddingRight: spacing.xl,
