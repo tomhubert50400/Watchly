@@ -3,6 +3,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ChevronDown, ChevronRight, Ellipsis, Plus } from 'lucide-react-native';
 import {
   Alert,
+  Animated,
   GestureResponderEvent,
   LayoutChangeEvent,
   NativeScrollEvent,
@@ -53,6 +54,7 @@ type PersonalWatchlistScreenProps = NativeStackScreenProps<RootStackParamList, '
 type SectionEditor = { mode: 'create' } | { mode: 'rename'; section: PersonalWatchlistSection };
 type ScreenPoint = { x: number; y: number };
 type ScreenRect = ScreenPoint & { height: number; width: number };
+type MovingTitle = { item: WatchlistDisplayItem; point: ScreenPoint; width: number };
 
 export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlistScreenProps) {
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
@@ -70,15 +72,18 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   );
   const [isLoading, setIsLoading] = useState(() => !initialCached);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [moving, setMoving] = useState<{ item: WatchlistDisplayItem; point: ScreenPoint } | null>(null);
+  const [moving, setMoving] = useState<MovingTitle | null>(null);
   const [savingSection, setSavingSection] = useState(false);
   const [sectionError, setSectionError] = useState<string | null>(null);
   const [sectionName, setSectionName] = useState('');
   const [stateScope, setStateScope] = useState(resourceScope);
   const [watchlist, setWatchlist] = useState<PersonalWatchlist | null>(() => initialCached?.watchlist ?? null);
   const autoScrollFrameRef = useRef<number | null>(null);
+  const dragScale = useRef(new Animated.Value(1)).current;
+  const dragTilt = useRef(new Animated.Value(0)).current;
+  const dragTiltResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const measureFrameRef = useRef<number | null>(null);
-  const movingRef = useRef<{ item: WatchlistDisplayItem; point: ScreenPoint } | null>(null);
+  const movingRef = useRef<MovingTitle | null>(null);
   const overlayOriginRef = useRef<ScreenPoint>({ x: 0, y: 0 });
   const overlayRef = useRef<View>(null);
   const requestRef = useRef({ scope: resourceScope, version: 0 });
@@ -171,6 +176,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
 
   useEffect(() => () => {
     if (autoScrollFrameRef.current !== null) cancelAnimationFrame(autoScrollFrameRef.current);
+    if (dragTiltResetRef.current !== null) clearTimeout(dragTiltResetRef.current);
     if (measureFrameRef.current !== null) cancelAnimationFrame(measureFrameRef.current);
   }, []);
 
@@ -353,13 +359,22 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     return null;
   }
 
-  function beginMove(item: WatchlistDisplayItem, event: GestureResponderEvent) {
+  function beginMove(item: WatchlistDisplayItem, event: GestureResponderEvent, width: number) {
     const point = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
     targetRectsRef.current.clear();
     setHoveredGroupId(null);
-    const nextMoving = { item, point };
+    const nextMoving = { item, point, width };
     movingRef.current = nextMoving;
     setMoving(nextMoving);
+    dragTilt.setValue(0);
+    dragScale.setValue(0.96);
+    Animated.spring(dragScale, {
+      damping: 12,
+      mass: 0.55,
+      stiffness: 220,
+      toValue: 1.04,
+      useNativeDriver: true,
+    }).start();
     hapticSelection();
     requestAnimationFrame(measureMoveTargets);
   }
@@ -367,9 +382,12 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   function updateMove(item: WatchlistDisplayItem, event: GestureResponderEvent) {
     if (movingRef.current?.item.id !== item.id) return;
     const point = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
-    const nextMoving = { item, point };
+    const activeMove = movingRef.current;
+    const horizontalDelta = point.x - activeMove.point.x;
+    const nextMoving = { ...activeMove, point };
     movingRef.current = nextMoving;
     setMoving(nextMoving);
+    animateDragTilt(horizontalDelta);
     setHoveredGroupId(findMoveTarget(point));
     startAutoScroll();
   }
@@ -378,6 +396,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     if (movingRef.current?.item.id !== item.id) return;
     const point = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
     const destinationGroupId = findMoveTarget(point);
+    resetDragAnimation();
     stopAutoScroll();
     movingRef.current = null;
     setMoving(null);
@@ -391,11 +410,47 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
 
   function cancelMove(item: WatchlistDisplayItem) {
     if (movingRef.current?.item.id !== item.id) return;
+    resetDragAnimation();
     stopAutoScroll();
     movingRef.current = null;
     setMoving(null);
     setHoveredGroupId(null);
     targetRectsRef.current.clear();
+  }
+
+  function animateDragTilt(horizontalDelta: number) {
+    const targetTilt = Math.max(-11, Math.min(11, horizontalDelta * 0.9));
+    dragTilt.stopAnimation();
+    Animated.spring(dragTilt, {
+      damping: 10,
+      mass: 0.45,
+      stiffness: 180,
+      toValue: targetTilt,
+      useNativeDriver: true,
+    }).start();
+
+    if (dragTiltResetRef.current !== null) clearTimeout(dragTiltResetRef.current);
+    dragTiltResetRef.current = setTimeout(() => {
+      dragTiltResetRef.current = null;
+      Animated.spring(dragTilt, {
+        damping: 9,
+        mass: 0.65,
+        stiffness: 130,
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
+    }, 80);
+  }
+
+  function resetDragAnimation() {
+    if (dragTiltResetRef.current !== null) {
+      clearTimeout(dragTiltResetRef.current);
+      dragTiltResetRef.current = null;
+    }
+    dragScale.stopAnimation();
+    dragTilt.stopAnimation();
+    dragScale.setValue(1);
+    dragTilt.setValue(0);
   }
 
   async function moveItem(item: WatchlistDisplayItem, sectionId: string | null) {
@@ -452,6 +507,8 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
         scrollRef={scrollRef}
         overlay={moving ? (
           <WatchlistMoveOverlay
+            dragScale={dragScale}
+            dragTilt={dragTilt}
             moving={moving}
             onLayout={measureMoveTargets}
             overlayOrigin={overlayOriginRef.current}
@@ -585,17 +642,24 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
 }
 
 function WatchlistMoveOverlay({
+  dragScale,
+  dragTilt,
   moving,
   onLayout,
   overlayOrigin,
   overlayRef,
 }: {
-  moving: { item: WatchlistDisplayItem; point: ScreenPoint };
+  dragScale: Animated.Value;
+  dragTilt: Animated.Value;
+  moving: MovingTitle;
   onLayout: () => void;
   overlayOrigin: ScreenPoint;
   overlayRef: React.RefObject<View | null>;
 }) {
-  const ghostWidth = 68;
+  const rotation = dragTilt.interpolate({
+    inputRange: [-11, 0, 11],
+    outputRange: ['-11deg', '0deg', '11deg'],
+  });
 
   return (
     <View
@@ -604,12 +668,13 @@ function WatchlistMoveOverlay({
       onLayout={onLayout}
       style={styles.moveOverlay}
     >
-      <View style={[
+      <Animated.View style={[
         styles.draggedPoster,
         {
-          left: moving.point.x - overlayOrigin.x - ghostWidth / 2,
-          top: moving.point.y - overlayOrigin.y - 82,
-          width: ghostWidth,
+          left: moving.point.x - overlayOrigin.x - moving.width / 2,
+          top: moving.point.y - overlayOrigin.y - moving.width * 1.2,
+          transform: [{ rotate: rotation }, { scale: dragScale }],
+          width: moving.width,
         },
       ]}>
         <MediaPoster
@@ -617,7 +682,7 @@ function WatchlistMoveOverlay({
           posterUrl={moving.item.posterUrl}
           style={styles.draggedPosterImage}
         />
-      </View>
+      </Animated.View>
     </View>
   );
 }

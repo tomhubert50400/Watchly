@@ -47,7 +47,7 @@ type WatchlistPosterGridProps = {
   onMove?: (item: WatchlistDisplayItem, event: GestureResponderEvent) => void;
   onMoveCancel?: (item: WatchlistDisplayItem) => void;
   onMoveEnd?: (item: WatchlistDisplayItem, event: GestureResponderEvent) => void;
-  onMoveStart?: (item: WatchlistDisplayItem, event: GestureResponderEvent) => void;
+  onMoveStart?: (item: WatchlistDisplayItem, event: GestureResponderEvent, width: number) => void;
   onOpen: (item: WatchlistDisplayItem) => void;
 };
 
@@ -147,7 +147,7 @@ export function WatchlistPosterGrid({
             onLongPress={(event) => {
               if (!onMoveStart) return;
               longPressedItemRef.current = item.id;
-              onMoveStart(item, event);
+              onMoveStart(item, event, itemWidth);
             }}
             onPress={() => {
               if (longPressedItemRef.current !== item.id) onOpen(item);
