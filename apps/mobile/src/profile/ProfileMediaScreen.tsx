@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Check, ChevronDown } from 'lucide-react-native';
+import { Check, Funnel } from 'lucide-react-native';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenReveal } from '../components/ScreenReveal';
@@ -74,8 +74,7 @@ export function ProfileMediaScreen() {
         <Pressable accessibilityRole="button" accessibilityLabel={`Filter by genre: ${selectedGenre ?? 'All genres'}`}
           onPress={() => { setGenresEnabled(true); setGenreSheetOpen(true); }}
           style={({ pressed }) => [styles.genreButton, pressed && styles.pressed]}>
-          <Text numberOfLines={1} style={[styles.genreButtonText, selectedGenre && styles.selectedGenre]}>{selectedGenre ?? 'Genre'}</Text>
-          <ChevronDown size={16} color={selectedGenre ? colors.accentText : colors.text} />
+          <Funnel size={20} color={selectedGenre ? colors.accentText : colors.text} />
         </Pressable>
       ),
     });
@@ -139,9 +138,7 @@ const styles = StyleSheet.create({
   selector: { marginHorizontal: spacing.xl, marginBottom: spacing.lg },
   grid: { paddingHorizontal: spacing.xl, gap: spacing.lg, flexGrow: 1 },
   row: { gap: spacing.sm },
-  genreButton: { height: 44, flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', gap: spacing.xs, maxWidth: 130 },
-  genreButtonText: { color: colors.text, fontSize: 14, fontWeight: '600', flexShrink: 1 },
-  selectedGenre: { color: colors.accentText },
+  genreButton: { height: 44, width: 44, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
   genreRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, paddingVertical: spacing.sm },
   genreLabel: { ...typography.body, color: colors.text, flex: 1 },
   genreLoading: { padding: spacing.lg },
