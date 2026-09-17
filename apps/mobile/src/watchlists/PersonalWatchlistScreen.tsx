@@ -45,6 +45,7 @@ import { HydratedPersonalWatchlistItem, useWatchlistCache } from './WatchlistCac
 import {
   groupPersonalWatchlistItems,
   MAX_PERSONAL_WATCHLIST_SECTIONS,
+  resolveCarriedPosterTilt,
   resolveDestinationSectionId,
   resolveWatchlistAutoScrollDelta,
   SECTION_PREVIEW_ITEM_COUNT,
@@ -54,7 +55,13 @@ type PersonalWatchlistScreenProps = NativeStackScreenProps<RootStackParamList, '
 type SectionEditor = { mode: 'create' } | { mode: 'rename'; section: PersonalWatchlistSection };
 type ScreenPoint = { x: number; y: number };
 type ScreenRect = ScreenPoint & { height: number; width: number };
-type MovingTitle = { item: WatchlistDisplayItem; point: ScreenPoint; width: number };
+type MovingTitle = {
+  gripX: number;
+  gripY: number;
+  item: WatchlistDisplayItem;
+  point: ScreenPoint;
+  width: number;
+};
 
 export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlistScreenProps) {
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
@@ -359,20 +366,24 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     return null;
   }
 
-  function beginMove(item: WatchlistDisplayItem, event: GestureResponderEvent, width: number) {
+  function beginMove(
+    item: WatchlistDisplayItem,
+    event: GestureResponderEvent,
+    geometry: { gripX: number; gripY: number; width: number },
+  ) {
     const point = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
     targetRectsRef.current.clear();
     setHoveredGroupId(null);
-    const nextMoving = { item, point, width };
+    const nextMoving = { item, point, ...geometry };
     movingRef.current = nextMoving;
     setMoving(nextMoving);
     dragTilt.setValue(0);
-    dragScale.setValue(0.96);
+    dragScale.setValue(0.98);
     Animated.spring(dragScale, {
-      damping: 12,
-      mass: 0.55,
-      stiffness: 220,
-      toValue: 1.04,
+      damping: 14,
+      mass: 0.5,
+      stiffness: 240,
+      toValue: 1,
       useNativeDriver: true,
     }).start();
     hapticSelection();
@@ -419,27 +430,27 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   }
 
   function animateDragTilt(horizontalDelta: number) {
-    const targetTilt = Math.max(-11, Math.min(11, horizontalDelta * 0.9));
-    dragTilt.stopAnimation();
+    const targetTilt = resolveCarriedPosterTilt(horizontalDelta);
     Animated.spring(dragTilt, {
-      damping: 10,
-      mass: 0.45,
-      stiffness: 180,
+      damping: 7,
+      mass: 0.8,
+      stiffness: 95,
       toValue: targetTilt,
       useNativeDriver: true,
+      velocity: horizontalDelta * -1.2,
     }).start();
 
     if (dragTiltResetRef.current !== null) clearTimeout(dragTiltResetRef.current);
     dragTiltResetRef.current = setTimeout(() => {
       dragTiltResetRef.current = null;
       Animated.spring(dragTilt, {
-        damping: 9,
-        mass: 0.65,
-        stiffness: 130,
+        damping: 6,
+        mass: 0.9,
+        stiffness: 85,
         toValue: 0,
         useNativeDriver: true,
       }).start();
-    }, 80);
+    }, 55);
   }
 
   function resetDragAnimation() {
@@ -657,8 +668,8 @@ function WatchlistMoveOverlay({
   overlayRef: React.RefObject<View | null>;
 }) {
   const rotation = dragTilt.interpolate({
-    inputRange: [-11, 0, 11],
-    outputRange: ['-11deg', '0deg', '11deg'],
+    inputRange: [-16, 0, 16],
+    outputRange: ['-16deg', '0deg', '16deg'],
   });
 
   return (
@@ -671,9 +682,10 @@ function WatchlistMoveOverlay({
       <Animated.View style={[
         styles.draggedPoster,
         {
-          left: moving.point.x - overlayOrigin.x - moving.width / 2,
-          top: moving.point.y - overlayOrigin.y - moving.width * 1.2,
+          left: moving.point.x - overlayOrigin.x - moving.gripX,
+          top: moving.point.y - overlayOrigin.y - moving.gripY,
           transform: [{ rotate: rotation }, { scale: dragScale }],
+          transformOrigin: [moving.gripX, moving.gripY, 0],
           width: moving.width,
         },
       ]}>
