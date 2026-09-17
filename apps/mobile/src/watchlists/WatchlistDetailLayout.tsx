@@ -38,6 +38,7 @@ type WatchlistPosterGridProps = {
   items: WatchlistDisplayItem[];
   movingItemId?: string | null;
   onMove?: (item: WatchlistDisplayItem, event: GestureResponderEvent) => void;
+  onMoveCancel?: (item: WatchlistDisplayItem) => void;
   onMoveEnd?: (item: WatchlistDisplayItem, event: GestureResponderEvent) => void;
   onMoveStart?: (item: WatchlistDisplayItem, event: GestureResponderEvent) => void;
   onOpen: (item: WatchlistDisplayItem) => void;
@@ -93,6 +94,7 @@ export function WatchlistPosterGrid({
   items,
   movingItemId = null,
   onMove,
+  onMoveCancel,
   onMoveEnd,
   onMoveStart,
   onOpen,
@@ -124,7 +126,15 @@ export function WatchlistPosterGrid({
             onPress={() => {
               if (longPressedItemRef.current !== item.id) onOpen(item);
             }}
-            onPressOut={(event) => {
+            onTouchCancel={() => {
+              if (longPressedItemRef.current === item.id) {
+                onMoveCancel?.(item);
+                setTimeout(() => {
+                  if (longPressedItemRef.current === item.id) longPressedItemRef.current = null;
+                }, 0);
+              }
+            }}
+            onTouchEnd={(event) => {
               if (longPressedItemRef.current === item.id) {
                 onMoveEnd?.(item, event);
                 setTimeout(() => {
@@ -135,6 +145,7 @@ export function WatchlistPosterGrid({
             onTouchMove={(event) => {
               if (longPressedItemRef.current === item.id) onMove?.(item, event);
             }}
+            pressRetentionOffset={{ bottom: 1000, left: 1000, right: 1000, top: 1000 }}
             style={({ pressed }) => [
               styles.tile,
               { width: itemWidth },
@@ -186,7 +197,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   moving: {
-    opacity: 0.18,
+    opacity: 0.45,
   },
   footer: {
     backgroundColor: colors.background,

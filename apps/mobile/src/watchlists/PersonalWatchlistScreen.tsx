@@ -73,6 +73,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   const [sectionName, setSectionName] = useState('');
   const [stateScope, setStateScope] = useState(resourceScope);
   const [watchlist, setWatchlist] = useState<PersonalWatchlist | null>(() => initialCached?.watchlist ?? null);
+  const movingRef = useRef<{ item: WatchlistDisplayItem; point: ScreenPoint } | null>(null);
   const overlayOriginRef = useRef<ScreenPoint>({ x: 0, y: 0 });
   const overlayRef = useRef<View>(null);
   const requestRef = useRef({ scope: resourceScope, version: 0 });
@@ -285,22 +286,27 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     const point = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
     targetRectsRef.current.clear();
     setHoveredGroupId(null);
-    setMoving({ item, point });
+    const nextMoving = { item, point };
+    movingRef.current = nextMoving;
+    setMoving(nextMoving);
     hapticSelection();
     requestAnimationFrame(measureMoveTargets);
   }
 
   function updateMove(item: WatchlistDisplayItem, event: GestureResponderEvent) {
-    if (moving?.item.id !== item.id) return;
+    if (movingRef.current?.item.id !== item.id) return;
     const point = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
-    setMoving({ item, point });
+    const nextMoving = { item, point };
+    movingRef.current = nextMoving;
+    setMoving(nextMoving);
     setHoveredGroupId(findMoveTarget(point));
   }
 
   function endMove(item: WatchlistDisplayItem, event: GestureResponderEvent) {
-    if (moving?.item.id !== item.id) return;
+    if (movingRef.current?.item.id !== item.id) return;
     const point = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
     const destinationGroupId = findMoveTarget(point);
+    movingRef.current = null;
     setMoving(null);
     setHoveredGroupId(null);
     targetRectsRef.current.clear();
@@ -308,6 +314,14 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     const sectionId = resolveDestinationSectionId(destinationGroupId);
     if ((item.sectionId ?? null) === sectionId) return;
     void moveItem(item, sectionId);
+  }
+
+  function cancelMove(item: WatchlistDisplayItem) {
+    if (movingRef.current?.item.id !== item.id) return;
+    movingRef.current = null;
+    setMoving(null);
+    setHoveredGroupId(null);
+    targetRectsRef.current.clear();
   }
 
   async function moveItem(item: WatchlistDisplayItem, sectionId: string | null) {
@@ -433,6 +447,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
                           items={shownItems}
                           movingItemId={moving?.item.id}
                           onMove={canMoveItems ? updateMove : undefined}
+                          onMoveCancel={canMoveItems ? cancelMove : undefined}
                           onMoveEnd={canMoveItems ? endMove : undefined}
                           onMoveStart={canMoveItems ? beginMove : undefined}
                           onOpen={openItem}
@@ -501,7 +516,7 @@ function WatchlistMoveOverlay({
   targetViews: Map<string, View>;
 }) {
   const { width } = useWindowDimensions();
-  const targetWidth = Math.floor((width - spacing.xl * 2 - spacing.sm) / 2);
+  const targetWidth = Math.floor((width - spacing.lg * 2 - spacing.sm * 2) / 3);
   const ghostWidth = 68;
 
   return (
@@ -511,27 +526,31 @@ function WatchlistMoveOverlay({
       onLayout={onLayout}
       style={styles.moveOverlay}
     >
-      <Text accessibilityRole="header" style={styles.moveTitle}>Move “{moving.item.title ?? 'title'}”</Text>
-      <Text style={styles.moveHint}>Drop it into a section</Text>
-      <View style={styles.moveTargets}>
-        {groups.map((group) => (
-          <View
-            key={group.id}
-            ref={(view) => {
-              if (view) targetViews.set(group.id, view);
-              else targetViews.delete(group.id);
-            }}
-            onLayout={onLayout}
-            style={[
-              styles.moveTarget,
-              { width: targetWidth },
-              hoveredGroupId === group.id ? styles.moveTargetHovered : null,
-            ]}
-          >
-            <Text numberOfLines={1} style={styles.moveTargetName}>{group.name}</Text>
-            <Text style={styles.moveTargetCount}>{group.items.length} titles</Text>
-          </View>
-        ))}
+      <View style={styles.movePanel}>
+        <Text accessibilityRole="header" numberOfLines={1} style={styles.moveTitle}>
+          Move “{moving.item.title ?? 'title'}”
+        </Text>
+        <Text style={styles.moveHint}>Drop into a section</Text>
+        <View style={styles.moveTargets}>
+          {groups.map((group) => (
+            <View
+              key={group.id}
+              ref={(view) => {
+                if (view) targetViews.set(group.id, view);
+                else targetViews.delete(group.id);
+              }}
+              onLayout={onLayout}
+              style={[
+                styles.moveTarget,
+                { width: targetWidth },
+                hoveredGroupId === group.id ? styles.moveTargetHovered : null,
+              ]}
+            >
+              <Text numberOfLines={1} style={styles.moveTargetName}>{group.name}</Text>
+              <Text style={styles.moveTargetCount}>{group.items.length}</Text>
+            </View>
+          ))}
+        </View>
       </View>
       <View style={[
         styles.draggedPoster,
@@ -619,17 +638,28 @@ const styles = StyleSheet.create({
     minWidth: touchTargets.min,
   },
   moveHint: {
-    ...typography.body,
+    ...typography.meta,
     color: colors.textMuted,
-    marginTop: spacing.xs,
-    textAlign: 'center',
+    marginTop: 2,
   },
   moveOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.background,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl,
+    justifyContent: 'flex-end',
     zIndex: 20,
+  },
+  movePanel: {
+    backgroundColor: colors.panel,
+    borderColor: colors.border,
+    borderTopLeftRadius: radii.xl,
+    borderTopRightRadius: radii.xl,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingBottom: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    shadowColor: '#02040A',
+    shadowOffset: { height: -8, width: 0 },
+    shadowOpacity: 0.32,
+    shadowRadius: 18,
   },
   moveTarget: {
     backgroundColor: colors.panelElevated,
@@ -637,9 +667,9 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 1,
     justifyContent: 'center',
-    minHeight: 56,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    minHeight: 50,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   moveTargetCount: {
     ...typography.meta,
@@ -659,12 +689,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-    marginTop: spacing.xl,
+    marginTop: spacing.md,
   },
   moveTitle: {
-    ...typography.title,
     color: colors.text,
-    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '800',
   },
   pressed: {
     opacity: 0.72,

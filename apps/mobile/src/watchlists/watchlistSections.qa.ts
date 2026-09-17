@@ -41,7 +41,10 @@ const screen = readFileSync(new URL('./PersonalWatchlistScreen.tsx', import.meta
 const grid = readFileSync(new URL('./WatchlistDetailLayout.tsx', import.meta.url), 'utf8');
 assert.match(grid, /onPress=\{\(\) => \{[\s\S]*onOpen\(item\)/, 'a normal press must keep opening the title');
 assert.match(grid, /onLongPress=\{\(event\) => \{[\s\S]*onMoveStart\(item, event\)/, 'a long press must start moving');
+assert.match(grid, /onTouchEnd=\{\(event\) => \{[\s\S]*onMoveEnd\?\.\(item, event\)/, 'moving must finish when the finger lifts');
+assert.doesNotMatch(grid, /onPressOut=\{[\s\S]*onMoveEnd/, 'leaving the original poster must not stop an active move');
 assert.match(screen, /WatchlistMoveOverlay/, 'moving must use compact section targets');
+assert.match(screen, /style=\{styles\.movePanel\}/, 'move targets must float above the visible watchlist');
 assert.match(screen, /SECTION_PREVIEW_ITEM_COUNT/, 'large sections must start with a bounded grid');
 
 console.log('Watchlist section QA passed: grouping, fallback, bounded grids, title press and compact long-press move mode.');
