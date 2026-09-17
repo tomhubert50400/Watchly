@@ -4,10 +4,13 @@ import { ChevronDown, ChevronRight, Ellipsis, Plus } from 'lucide-react-native';
 import {
   Alert,
   GestureResponderEvent,
+  LayoutChangeEvent,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import {
@@ -41,8 +44,8 @@ import { HydratedPersonalWatchlistItem, useWatchlistCache } from './WatchlistCac
 import {
   groupPersonalWatchlistItems,
   MAX_PERSONAL_WATCHLIST_SECTIONS,
-  PersonalWatchlistItemGroup,
   resolveDestinationSectionId,
+  resolveWatchlistAutoScrollDelta,
   SECTION_PREVIEW_ITEM_COUNT,
 } from './watchlistSections';
 
@@ -73,10 +76,15 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   const [sectionName, setSectionName] = useState('');
   const [stateScope, setStateScope] = useState(resourceScope);
   const [watchlist, setWatchlist] = useState<PersonalWatchlist | null>(() => initialCached?.watchlist ?? null);
+  const autoScrollFrameRef = useRef<number | null>(null);
+  const measureFrameRef = useRef<number | null>(null);
   const movingRef = useRef<{ item: WatchlistDisplayItem; point: ScreenPoint } | null>(null);
   const overlayOriginRef = useRef<ScreenPoint>({ x: 0, y: 0 });
   const overlayRef = useRef<View>(null);
   const requestRef = useRef({ scope: resourceScope, version: 0 });
+  const scrollMetricsRef = useRef({ contentHeight: 0, offsetY: 0, viewportHeight: 0 });
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollViewportRef = useRef({ bottom: 0, top: 0 });
   const targetRectsRef = useRef(new Map<string, ScreenRect>());
   const targetViewsRef = useRef(new Map<string, View>());
   const visibleStateRef = useRef({ scope: stateScope, watchlist });
@@ -160,6 +168,11 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     setStateScope(resourceScope);
     void loadWatchlist();
   }, [loadWatchlist, resourceScope, watchlistId]);
+
+  useEffect(() => () => {
+    if (autoScrollFrameRef.current !== null) cancelAnimationFrame(autoScrollFrameRef.current);
+    if (measureFrameRef.current !== null) cancelAnimationFrame(measureFrameRef.current);
+  }, []);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -260,17 +273,75 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   }
 
   const measureMoveTargets = useCallback(() => {
-    requestAnimationFrame(() => {
+    if (measureFrameRef.current !== null) cancelAnimationFrame(measureFrameRef.current);
+    measureFrameRef.current = requestAnimationFrame(() => {
+      measureFrameRef.current = null;
       overlayRef.current?.measureInWindow((x, y) => {
         overlayOriginRef.current = { x, y };
+      });
+      scrollRef.current?.getNativeScrollRef()?.measureInWindow((_x, y, _width, height) => {
+        scrollViewportRef.current = { bottom: y + height, top: y };
       });
       targetViewsRef.current.forEach((view, groupId) => {
         view.measureInWindow((x, y, width, height) => {
           targetRectsRef.current.set(groupId, { height, width, x, y });
+          const activeMove = movingRef.current;
+          if (activeMove) setHoveredGroupId(findMoveTarget(activeMove.point));
         });
       });
     });
   }, []);
+
+  function stopAutoScroll() {
+    if (autoScrollFrameRef.current === null) return;
+    cancelAnimationFrame(autoScrollFrameRef.current);
+    autoScrollFrameRef.current = null;
+  }
+
+  function startAutoScroll() {
+    if (autoScrollFrameRef.current !== null) return;
+
+    const tick = () => {
+      autoScrollFrameRef.current = null;
+      const activeMove = movingRef.current;
+      if (!activeMove) return;
+
+      const { bottom, top } = scrollViewportRef.current;
+      if (bottom <= top) return;
+      const delta = resolveWatchlistAutoScrollDelta(activeMove.point.y, top, bottom);
+      if (delta === 0) return;
+
+      const metrics = scrollMetricsRef.current;
+      const maxOffset = Math.max(0, metrics.contentHeight - metrics.viewportHeight);
+      const nextOffset = Math.max(0, Math.min(maxOffset, metrics.offsetY + delta));
+      if (nextOffset === metrics.offsetY) return;
+
+      metrics.offsetY = nextOffset;
+      scrollRef.current?.scrollTo({ animated: false, y: nextOffset });
+      autoScrollFrameRef.current = requestAnimationFrame(tick);
+    };
+
+    autoScrollFrameRef.current = requestAnimationFrame(tick);
+  }
+
+  function handleContentSizeChange(_width: number, height: number) {
+    scrollMetricsRef.current.contentHeight = height;
+  }
+
+  function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    scrollMetricsRef.current = {
+      contentHeight: contentSize.height,
+      offsetY: contentOffset.y,
+      viewportHeight: layoutMeasurement.height,
+    };
+    if (movingRef.current) measureMoveTargets();
+  }
+
+  function handleScrollLayout(event: LayoutChangeEvent) {
+    scrollMetricsRef.current.viewportHeight = event.nativeEvent.layout.height;
+    measureMoveTargets();
+  }
 
   function findMoveTarget(point: ScreenPoint) {
     for (const [groupId, rect] of targetRectsRef.current) {
@@ -300,12 +371,14 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     movingRef.current = nextMoving;
     setMoving(nextMoving);
     setHoveredGroupId(findMoveTarget(point));
+    startAutoScroll();
   }
 
   function endMove(item: WatchlistDisplayItem, event: GestureResponderEvent) {
     if (movingRef.current?.item.id !== item.id) return;
     const point = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
     const destinationGroupId = findMoveTarget(point);
+    stopAutoScroll();
     movingRef.current = null;
     setMoving(null);
     setHoveredGroupId(null);
@@ -318,6 +391,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
 
   function cancelMove(item: WatchlistDisplayItem) {
     if (movingRef.current?.item.id !== item.id) return;
+    stopAutoScroll();
     movingRef.current = null;
     setMoving(null);
     setHoveredGroupId(null);
@@ -370,17 +444,18 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     <>
       <WatchlistPage
         isRefreshing={isRefreshing}
+        onContentSizeChange={handleContentSizeChange}
+        onLayout={handleScrollLayout}
         onRefresh={refreshWatchlist}
+        onScroll={handleScroll}
         scrollEnabled={!moving}
+        scrollRef={scrollRef}
         overlay={moving ? (
           <WatchlistMoveOverlay
-            groups={groups}
-            hoveredGroupId={hoveredGroupId}
             moving={moving}
             onLayout={measureMoveTargets}
             overlayOrigin={overlayOriginRef.current}
             overlayRef={overlayRef}
-            targetViews={targetViewsRef.current}
           />
         ) : null}
       >
@@ -412,7 +487,18 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
               const expanded = expandedGroups.has(group.id);
               const shownItems = expanded ? group.items : group.items.slice(0, SECTION_PREVIEW_ITEM_COUNT);
               return (
-                <View key={group.id} style={styles.group}>
+                <View
+                  key={group.id}
+                  ref={(view) => {
+                    if (view) targetViewsRef.current.set(group.id, view);
+                    else targetViewsRef.current.delete(group.id);
+                  }}
+                  onLayout={moving ? measureMoveTargets : undefined}
+                  style={[
+                    styles.group,
+                    hoveredGroupId === group.id ? styles.groupDropTarget : null,
+                  ]}
+                >
                   <View style={styles.groupHeader}>
                     <Pressable
                       accessibilityRole="button"
@@ -499,24 +585,16 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
 }
 
 function WatchlistMoveOverlay({
-  groups,
-  hoveredGroupId,
   moving,
   onLayout,
   overlayOrigin,
   overlayRef,
-  targetViews,
 }: {
-  groups: PersonalWatchlistItemGroup[];
-  hoveredGroupId: string | null;
   moving: { item: WatchlistDisplayItem; point: ScreenPoint };
   onLayout: () => void;
   overlayOrigin: ScreenPoint;
   overlayRef: React.RefObject<View | null>;
-  targetViews: Map<string, View>;
 }) {
-  const { width } = useWindowDimensions();
-  const targetWidth = Math.floor((width - spacing.lg * 2 - spacing.sm * 2) / 3);
   const ghostWidth = 68;
 
   return (
@@ -526,32 +604,6 @@ function WatchlistMoveOverlay({
       onLayout={onLayout}
       style={styles.moveOverlay}
     >
-      <View style={styles.movePanel}>
-        <Text accessibilityRole="header" numberOfLines={1} style={styles.moveTitle}>
-          Move “{moving.item.title ?? 'title'}”
-        </Text>
-        <Text style={styles.moveHint}>Drop into a section</Text>
-        <View style={styles.moveTargets}>
-          {groups.map((group) => (
-            <View
-              key={group.id}
-              ref={(view) => {
-                if (view) targetViews.set(group.id, view);
-                else targetViews.delete(group.id);
-              }}
-              onLayout={onLayout}
-              style={[
-                styles.moveTarget,
-                { width: targetWidth },
-                hoveredGroupId === group.id ? styles.moveTargetHovered : null,
-              ]}
-            >
-              <Text numberOfLines={1} style={styles.moveTargetName}>{group.name}</Text>
-              <Text style={styles.moveTargetCount}>{group.items.length}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
       <View style={[
         styles.draggedPoster,
         {
@@ -610,6 +662,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingTop: spacing.sm,
   },
+  groupDropTarget: {
+    backgroundColor: colors.accentSoft,
+    borderRadius: radii.lg,
+  },
   groupCount: {
     ...typography.meta,
     color: colors.textSubtle,
@@ -637,64 +693,9 @@ const styles = StyleSheet.create({
     minHeight: touchTargets.min,
     minWidth: touchTargets.min,
   },
-  moveHint: {
-    ...typography.meta,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
   moveOverlay: {
     ...StyleSheet.absoluteFillObject,
-    justifyContent: 'flex-end',
     zIndex: 20,
-  },
-  movePanel: {
-    backgroundColor: colors.panel,
-    borderColor: colors.border,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingBottom: spacing.xl,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    shadowColor: '#02040A',
-    shadowOffset: { height: -8, width: 0 },
-    shadowOpacity: 0.32,
-    shadowRadius: 18,
-  },
-  moveTarget: {
-    backgroundColor: colors.panelElevated,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    justifyContent: 'center',
-    minHeight: 50,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  moveTargetCount: {
-    ...typography.meta,
-    color: colors.textSubtle,
-    marginTop: 2,
-  },
-  moveTargetHovered: {
-    backgroundColor: colors.accentSoft,
-    borderColor: colors.accent,
-  },
-  moveTargetName: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  moveTargets: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  moveTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '800',
   },
   pressed: {
     opacity: 0.72,

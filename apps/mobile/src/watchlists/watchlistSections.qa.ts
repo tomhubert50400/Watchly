@@ -4,6 +4,7 @@ import { normalizePersonalWatchlist } from '../api/watchlists';
 import {
   groupPersonalWatchlistItems,
   resolveDestinationSectionId,
+  resolveWatchlistAutoScrollDelta,
   SECTION_PREVIEW_ITEM_COUNT,
   UNSECTIONED_SECTION_ID,
 } from './watchlistSections';
@@ -25,6 +26,9 @@ assert.deepEqual(groups[2].items.map((item) => item.id), ['b', 'c']);
 assert.equal(resolveDestinationSectionId(UNSECTIONED_SECTION_ID), null);
 assert.equal(resolveDestinationSectionId('horror'), 'horror');
 assert.equal(SECTION_PREVIEW_ITEM_COUNT, 6);
+assert(resolveWatchlistAutoScrollDelta(20, 0, 800) < 0, 'dragging near the top must scroll upward');
+assert.equal(resolveWatchlistAutoScrollDelta(400, 0, 800), 0, 'dragging in the middle must not scroll');
+assert(resolveWatchlistAutoScrollDelta(780, 0, 800) > 0, 'dragging near the bottom must scroll downward');
 
 const legacyWatchlist = normalizePersonalWatchlist({
   createdAt: '',
@@ -43,8 +47,10 @@ assert.match(grid, /onPress=\{\(\) => \{[\s\S]*onOpen\(item\)/, 'a normal press 
 assert.match(grid, /onLongPress=\{\(event\) => \{[\s\S]*onMoveStart\(item, event\)/, 'a long press must start moving');
 assert.match(grid, /onTouchEnd=\{\(event\) => \{[\s\S]*onMoveEnd\?\.\(item, event\)/, 'moving must finish when the finger lifts');
 assert.doesNotMatch(grid, /onPressOut=\{[\s\S]*onMoveEnd/, 'leaving the original poster must not stop an active move');
-assert.match(screen, /WatchlistMoveOverlay/, 'moving must use compact section targets');
-assert.match(screen, /style=\{styles\.movePanel\}/, 'move targets must float above the visible watchlist');
+assert.match(screen, /WatchlistMoveOverlay/, 'moving must keep a poster preview under the finger');
+assert.match(screen, /targetViewsRef\.current\.set\(group\.id, view\)/, 'the visible sections must be the drop targets');
+assert.match(screen, /resolveWatchlistAutoScrollDelta/, 'dragging near an edge must keep scrolling the watchlist');
+assert.doesNotMatch(screen, /style=\{styles\.movePanel\}/, 'moving must not replace the watchlist with a destination panel');
 assert.match(screen, /SECTION_PREVIEW_ITEM_COUNT/, 'large sections must start with a bounded grid');
 
-console.log('Watchlist section QA passed: grouping, fallback, bounded grids, title press and compact long-press move mode.');
+console.log('Watchlist section QA passed: grouping, fallback, bounded grids, title press and direct long-press section moves.');

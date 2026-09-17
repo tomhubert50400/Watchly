@@ -1,7 +1,10 @@
-import { PropsWithChildren, ReactNode, useRef } from 'react';
+import { PropsWithChildren, ReactNode, RefObject, useRef } from 'react';
 import {
   KeyboardAvoidingView,
   GestureResponderEvent,
+  LayoutChangeEvent,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Pressable,
   Platform,
   RefreshControl,
@@ -30,7 +33,11 @@ type WatchlistPageProps = PropsWithChildren<{
   footer?: ReactNode;
   isRefreshing?: boolean;
   onRefresh?: () => void;
+  onContentSizeChange?: (width: number, height: number) => void;
+  onLayout?: (event: LayoutChangeEvent) => void;
+  onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   overlay?: ReactNode;
+  scrollRef?: RefObject<ScrollView | null>;
   scrollEnabled?: boolean;
 }>;
 
@@ -50,11 +57,16 @@ export function WatchlistPage({
   children,
   footer,
   isRefreshing = false,
+  onContentSizeChange,
+  onLayout,
   onRefresh,
+  onScroll,
   overlay,
+  scrollRef: providedScrollRef,
   scrollEnabled = true,
 }: WatchlistPageProps) {
-  const scrollRef = useRef<ScrollView>(null);
+  const internalScrollRef = useRef<ScrollView>(null);
+  const scrollRef = providedScrollRef ?? internalScrollRef;
   const visibility = useFocusedFieldVisibility(scrollRef);
   return (
     <KeyboardAvoidingView
@@ -63,12 +75,26 @@ export function WatchlistPage({
     >
       <ScrollView
         ref={scrollRef}
-        {...visibility}
         automaticallyAdjustKeyboardInsets={false}
         contentContainerStyle={styles.page}
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         keyboardShouldPersistTaps="handled"
+        onBlur={visibility.onBlur}
+        onContentSizeChange={(width, height) => {
+          visibility.onContentSizeChange();
+          onContentSizeChange?.(width, height);
+        }}
+        onFocus={visibility.onFocus}
+        onLayout={(event) => {
+          visibility.onLayout();
+          onLayout?.(event);
+        }}
+        onScroll={(event) => {
+          visibility.onScroll(event);
+          onScroll?.(event);
+        }}
         scrollEnabled={scrollEnabled}
+        scrollEventThrottle={16}
         refreshControl={onRefresh ? (
           <RefreshControl
             onRefresh={onRefresh}
