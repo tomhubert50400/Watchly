@@ -62,6 +62,7 @@ assert.doesNotMatch(screen, /style=\{styles\.movePanel\}/, 'moving must not repl
 assert.match(screen, /ActionSheetIOS\.showActionSheetWithOptions/, 'the add button must use the native iOS action sheet');
 assert.match(screen, /options: \['Add a title', 'Create a section', 'Cancel'\]/, 'the add sheet must expose both actions');
 assert.doesNotMatch(screen, /<Button compact label="Add titles"/, 'separate add-title and section buttons must be removed');
+assert.match(screen, /headerRight:[\s\S]*?onPress=\{showAddActions\}[\s\S]*?<WatchlistCoverButton/, 'the add button must sit before the cover button in the navigation header');
 assert.match(screen, /SECTION_PREVIEW_ITEM_COUNT/, 'large sections must start with a bounded grid');
 
 console.log('Watchlist section QA passed: grouping, fallback, bounded grids, title press and direct long-press section moves.');

@@ -194,15 +194,26 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: visibleWatchlist ? () => (
-        <WatchlistCoverButton key={resourceScope} kind="personal" watchlistId={watchlistId}
-          items={visibleWatchlist.items} coverItemIds={visibleWatchlist.coverItemIds}
-          onSaved={(coverItemIds) => {
-            setWatchlist((current) => current ? { ...current, coverItemIds } : current);
-            void loadWatchlist();
-          }} />
+        <View style={styles.headerActions}>
+          <Pressable
+            accessibilityHint="Choose whether to add a title or create a section"
+            accessibilityLabel="Add to watchlist"
+            accessibilityRole="button"
+            onPress={showAddActions}
+            style={({ pressed }) => [styles.headerButton, pressed ? styles.pressed : null]}
+          >
+            <Plus color={colors.text} size={20} strokeWidth={2} />
+          </Pressable>
+          <WatchlistCoverButton key={resourceScope} kind="personal" watchlistId={watchlistId}
+            items={visibleWatchlist.items} coverItemIds={visibleWatchlist.coverItemIds}
+            onSaved={(coverItemIds) => {
+              setWatchlist((current) => current ? { ...current, coverItemIds } : current);
+              void loadWatchlist();
+            }} />
+        </View>
       ) : undefined,
     });
-  }, [navigation, visibleWatchlist, resourceScope, watchlistId, loadWatchlist]);
+  }, [navigation, visibleWatchlist, resourceScope, watchlistId, loadWatchlist, visibleSections.length]);
 
   function openItem(item: WatchlistDisplayItem) {
     const title = item.title ?? (item.contentType === 'movie' ? 'Film' : 'Series');
@@ -571,18 +582,6 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
         ) : visibleWatchlist ? (
           <WatchlistSection>
             <SectionHeader title="Titles" subtitle={`${visibleItems.length} saved`} />
-            <View style={styles.topActions}>
-              <Pressable
-                accessibilityHint="Choose whether to add a title or create a section"
-                accessibilityLabel="Add to watchlist"
-                accessibilityRole="button"
-                hitSlop={4}
-                onPress={showAddActions}
-                style={({ pressed }) => [styles.addButton, pressed ? styles.pressed : null]}
-              >
-                <Plus color={colors.textOnAccent} size={22} />
-              </Pressable>
-            </View>
             {visibleItems.length === 0 && visibleSections.length === 0 ? (
               <Text style={styles.emptyCopy}>
                 Add films or series from detail pages, or create a section to start shaping this list.
@@ -744,13 +743,15 @@ function toggleSetValue(current: Set<string>, value: string) {
 }
 
 const styles = StyleSheet.create({
-  addButton: {
+  headerActions: {
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+  },
+  headerButton: {
     alignItems: 'center',
-    backgroundColor: colors.accent,
-    borderRadius: radii.md,
-    height: touchTargets.min,
+    alignSelf: 'stretch',
     justifyContent: 'center',
-    width: touchTargets.min,
+    width: 44,
   },
   draggedPoster: {
     position: 'absolute',
@@ -824,10 +825,5 @@ const styles = StyleSheet.create({
   },
   sheetContent: {
     paddingBottom: spacing.md,
-  },
-  topActions: {
-    alignItems: 'flex-end',
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
   },
 });
