@@ -88,9 +88,10 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   const isStateCurrent = stateScope === resourceScope;
   const visibleWatchlist = isStateCurrent ? watchlist : null;
   const visibleItems = isStateCurrent ? hydratedItems : [];
+  const visibleSections = visibleWatchlist?.sections ?? [];
   const groups = useMemo(
-    () => groupPersonalWatchlistItems(visibleWatchlist?.sections ?? [], visibleItems),
-    [visibleItems, visibleWatchlist?.sections],
+    () => groupPersonalWatchlistItems(visibleSections, visibleItems),
+    [visibleItems, visibleSections],
   );
 
   const loadWatchlist = useCallback(async () => {
@@ -198,12 +199,12 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
       if (!token) throw new Error('Sign in again to update this watchlist.');
       if (editor.mode === 'create') {
         const section = await createWatchlistSection(token, watchlistId, sectionName.trim());
-        setWatchlist((current) => current ? { ...current, sections: [...current.sections, section] } : current);
+        setWatchlist((current) => current ? { ...current, sections: [...(current.sections ?? []), section] } : current);
       } else {
         const section = await updateWatchlistSection(token, watchlistId, editor.section.id, sectionName.trim());
         setWatchlist((current) => current ? {
           ...current,
-          sections: current.sections.map((candidate) => candidate.id === section.id ? section : candidate),
+          sections: (current.sections ?? []).map((candidate) => candidate.id === section.id ? section : candidate),
         } : current);
       }
       hapticSuccess();
@@ -247,7 +248,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
       setWatchlist((current) => current ? {
         ...current,
         items: current.items.map((item) => item.sectionId === section.id ? { ...item, sectionId: null } : item),
-        sections: current.sections.filter((candidate) => candidate.id !== section.id),
+        sections: (current.sections ?? []).filter((candidate) => candidate.id !== section.id),
       } : current);
       hapticSuccess();
       void loadWatchlist();
@@ -350,7 +351,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     );
   }
 
-  const canMoveItems = Boolean(visibleWatchlist?.sections.length);
+  const canMoveItems = visibleSections.length > 0;
   return (
     <>
       <WatchlistPage
@@ -382,13 +383,13 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
               <Button compact label="Add titles" variant="secondary" onPress={() => navigation.navigate('MainTabs', { screen: 'Explore' })} />
               <Button
                 compact
-                disabled={visibleWatchlist.sections.length >= MAX_PERSONAL_WATCHLIST_SECTIONS}
+                disabled={visibleSections.length >= MAX_PERSONAL_WATCHLIST_SECTIONS}
                 icon={<Plus color={colors.textOnAccent} size={18} />}
                 label="Section"
                 onPress={() => openSectionEditor({ mode: 'create' })}
               />
             </View>
-            {visibleItems.length === 0 && visibleWatchlist.sections.length === 0 ? (
+            {visibleItems.length === 0 && visibleSections.length === 0 ? (
               <Text style={styles.emptyCopy}>
                 Add films or series from detail pages, or create a section to start shaping this list.
               </Text>

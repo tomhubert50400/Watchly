@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { normalizePersonalWatchlist } from '../api/watchlists';
 import {
   groupPersonalWatchlistItems,
   resolveDestinationSectionId,
@@ -24,6 +25,17 @@ assert.deepEqual(groups[2].items.map((item) => item.id), ['b', 'c']);
 assert.equal(resolveDestinationSectionId(UNSECTIONED_SECTION_ID), null);
 assert.equal(resolveDestinationSectionId('horror'), 'horror');
 assert.equal(SECTION_PREVIEW_ITEM_COUNT, 6);
+
+const legacyWatchlist = normalizePersonalWatchlist({
+  createdAt: '',
+  id: 'legacy',
+  items: [{ contentType: 'movie', createdAt: '', id: 'legacy-item', tmdbId: 1 }],
+  name: 'Legacy',
+  updatedAt: '',
+  visibility: 'private',
+});
+assert.deepEqual(legacyWatchlist.sections, []);
+assert.equal(legacyWatchlist.items[0]?.sectionId, null);
 
 const screen = readFileSync(new URL('./PersonalWatchlistScreen.tsx', import.meta.url), 'utf8');
 const grid = readFileSync(new URL('./WatchlistDetailLayout.tsx', import.meta.url), 'utf8');

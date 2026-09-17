@@ -40,6 +40,19 @@ export type PersonalWatchlist = {
   visibility: PersonalWatchlistVisibility;
 };
 
+type PersonalWatchlistPayload = Omit<PersonalWatchlist, 'items' | 'sections'> & {
+  items: Array<Omit<PersonalWatchlistItem, 'sectionId'> & { sectionId?: string | null }>;
+  sections?: PersonalWatchlistSection[];
+};
+
+export function normalizePersonalWatchlist(watchlist: PersonalWatchlistPayload): PersonalWatchlist {
+  return {
+    ...watchlist,
+    items: watchlist.items.map((item) => ({ ...item, sectionId: item.sectionId ?? null })),
+    sections: watchlist.sections ?? [],
+  };
+}
+
 export function listWatchlists(
   token: string,
   content?: { contentType: WatchlistContentType; tmdbId: number },
@@ -62,8 +75,10 @@ export function createWatchlist(token: string, name: string) {
   return apiPost<PersonalWatchlistSummary>('/watchlists', { name }, { token });
 }
 
-export function getWatchlist(token: string, watchlistId: string) {
-  return apiGet<PersonalWatchlist>(`/watchlists/${watchlistId}`, { token });
+export async function getWatchlist(token: string, watchlistId: string) {
+  const watchlist = await apiGet<PersonalWatchlistPayload>(`/watchlists/${watchlistId}`, { token });
+
+  return normalizePersonalWatchlist(watchlist);
 }
 
 export function deleteWatchlist(token: string, watchlistId: string) {
