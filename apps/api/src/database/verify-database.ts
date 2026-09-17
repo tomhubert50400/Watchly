@@ -30,6 +30,7 @@ async function main() {
     await prisma.userFollow.count();
     await prisma.personalWatchlist.count();
     await prisma.personalWatchlistItem.count();
+    await prisma.personalWatchlistSection.count();
     await prisma.sharedWatchlist.count();
     await prisma.sharedWatchlistMember.count();
     await prisma.sharedWatchlistItem.count();

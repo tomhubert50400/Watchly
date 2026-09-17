@@ -12,7 +12,7 @@
     "dev:prepare-ui-review": "tsx src/dev/prepare-ui-review-data.ts",
     "dev:prepare-blocked-users-review": "tsx src/dev/prepare-blocked-users-review.ts",
     "prisma:generate": "prisma generate",
-    "pretest": "tsx src/security/api-environment.qa.ts && tsx src/security/external-oauth.qa.ts && tsx src/security/microsoft-id-token.qa.ts && tsx src/security/auth-provider-readiness.qa.ts",
+    "pretest": "tsx src/watchlists/watchlist-sections.qa.ts && tsx src/security/api-environment.qa.ts && tsx src/security/external-oauth.qa.ts && tsx src/security/microsoft-id-token.qa.ts && tsx src/security/auth-provider-readiness.qa.ts",
     "security:audit-smoke": "tsx src/security/audit-log-smoke.ts",
     "security:auth-provider-readiness": "tsx src/security/auth-provider-readiness.ts",
     "security:account-deletion-smoke": "tsx src/security/account-deletion-smoke.ts",

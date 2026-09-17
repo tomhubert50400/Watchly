@@ -17,6 +17,9 @@ import { AuthGuard } from '../auth/auth.guard';
 import { AuthenticatedRequest } from '../auth/auth.types';
 import {
   CreateWatchlistDto,
+  CreateWatchlistSectionDto,
+  MoveWatchlistItemDto,
+  UpdateWatchlistSectionDto,
   UpdateWatchlistVisibilityDto,
   UpdateWatchlistCoverDto,
   WatchlistContentType,
@@ -99,6 +102,59 @@ export class WatchlistsController {
     return this.watchlists.addItem(getIdentity(request), parseWatchlistId(watchlistId), body);
   }
 
+  @Post(':watchlistId/sections')
+  async createSection(
+    @Req() request: AuthenticatedRequest,
+    @Param('watchlistId') watchlistId: string,
+    @Body() body: CreateWatchlistSectionDto,
+  ) {
+    return this.watchlists.createSection(getIdentity(request), parseWatchlistId(watchlistId), body.name);
+  }
+
+  @Put(':watchlistId/sections/:sectionId')
+  async updateSection(
+    @Req() request: AuthenticatedRequest,
+    @Param('watchlistId') watchlistId: string,
+    @Param('sectionId') sectionId: string,
+    @Body() body: UpdateWatchlistSectionDto,
+  ) {
+    return this.watchlists.updateSection(
+      getIdentity(request),
+      parseWatchlistId(watchlistId),
+      parseUuid(sectionId, 'sectionId'),
+      body.name,
+    );
+  }
+
+  @Delete(':watchlistId/sections/:sectionId')
+  async deleteSection(
+    @Req() request: AuthenticatedRequest,
+    @Param('watchlistId') watchlistId: string,
+    @Param('sectionId') sectionId: string,
+  ) {
+    await this.watchlists.deleteSection(
+      getIdentity(request),
+      parseWatchlistId(watchlistId),
+      parseUuid(sectionId, 'sectionId'),
+    );
+    return { deleted: true };
+  }
+
+  @Put(':watchlistId/items/:itemId/section')
+  async moveItemToSection(
+    @Req() request: AuthenticatedRequest,
+    @Param('watchlistId') watchlistId: string,
+    @Param('itemId') itemId: string,
+    @Body() body: MoveWatchlistItemDto,
+  ) {
+    return this.watchlists.moveItemToSection(
+      getIdentity(request),
+      parseWatchlistId(watchlistId),
+      parseUuid(itemId, 'itemId'),
+      body.sectionId ?? null,
+    );
+  }
+
   @Delete(':watchlistId/items')
   async removeItem(
     @Req() request: AuthenticatedRequest,
@@ -130,10 +186,14 @@ function getIdentity(request: AuthenticatedRequest) {
 }
 
 function parseWatchlistId(value: string) {
+  return parseUuid(value, 'watchlistId');
+}
+
+function parseUuid(value: string, name: string) {
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
   if (!uuidPattern.test(value)) {
-    throw new BadRequestException('watchlistId must be a valid UUID.');
+    throw new BadRequestException(`${name} must be a valid UUID.`);
   }
 
   return value;

@@ -527,6 +527,7 @@ model PersonalWatchlist {
   createdAt  DateTime                @default(now())
   updatedAt  DateTime                @updatedAt
   items      PersonalWatchlistItem[]
+  sections   PersonalWatchlistSection[]
   user       User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -536,14 +537,32 @@ model PersonalWatchlist {
 model PersonalWatchlistItem {
   id          String             @id @default(uuid()) @db.Uuid
   watchlistId String             @db.Uuid
+  sectionId   String?            @db.Uuid
   contentType TrackedContentType
   tmdbId      Int
   createdAt   DateTime           @default(now())
+  section     PersonalWatchlistSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
   watchlist   PersonalWatchlist  @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
 
   @@unique([watchlistId, contentType, tmdbId])
+  @@index([sectionId])
   @@index([contentType, tmdbId])
   @@map("personal_watchlist_items")
+}
+
+model PersonalWatchlistSection {
+  id          String                  @id @default(uuid()) @db.Uuid
+  watchlistId String                  @db.Uuid
+  name        String                  @db.VarChar(40)
+  position    Int
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  items       PersonalWatchlistItem[]
+  watchlist   PersonalWatchlist       @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+
+  @@unique([watchlistId, name])
+  @@unique([watchlistId, position])
+  @@map("personal_watchlist_sections")
 }
 
 model SharedWatchlist {

@@ -5,6 +5,8 @@ import { PrismaService } from '../database/prisma.service';
 import { PrivacyVisibility, TrackedContentType } from '../generated/prisma/enums';
 import { WatchlistContentType, WatchlistItemDto, WatchlistVisibility } from './watchlists.dto';
 
+const MAX_PERSONAL_WATCHLIST_SECTIONS = 12;
+
 @Injectable()
 export class WatchlistsService {
   constructor(
@@ -99,6 +101,11 @@ export class WatchlistsService {
             createdAt: 'desc',
           },
         },
+        sections: {
+          orderBy: {
+            position: 'asc',
+          },
+        },
       },
       where: {
         id: watchlistId,
@@ -117,6 +124,7 @@ export class WatchlistsService {
       items: watchlist.items.map(toItem),
       coverItemIds: watchlist.coverItemIds.filter((id) => watchlist.items.some((item) => item.id === id)),
       name: watchlist.name,
+      sections: watchlist.sections.map(toSection),
       updatedAt: watchlist.updatedAt.toISOString(),
       visibility: fromPrivacyVisibility(watchlist.visibility),
     };
@@ -214,6 +222,120 @@ export class WatchlistsService {
     await this.touchWatchlist(watchlistId);
   }
 
+  async createSection(identity: AuthenticatedIdentity, watchlistId: string, name: string) {
+    const cleanName = cleanSectionName(name);
+    const userId = await this.getUserId(identity);
+
+    return this.withConnectionRetry(() => this.prisma.$transaction(async (transaction) => {
+      await lockOwnedWatchlist(transaction, userId, watchlistId);
+      const sectionCount = await transaction.personalWatchlistSection.count({ where: { watchlistId } });
+      if (sectionCount >= MAX_PERSONAL_WATCHLIST_SECTIONS) {
+        throw new BadRequestException(`You can create up to ${MAX_PERSONAL_WATCHLIST_SECTIONS} sections in a watchlist.`);
+      }
+      const duplicate = await transaction.personalWatchlistSection.findFirst({
+        where: { watchlistId, name: { equals: cleanName, mode: 'insensitive' } },
+      });
+      if (duplicate) throw new BadRequestException('A section with this name already exists.');
+      const lastSection = await transaction.personalWatchlistSection.findFirst({
+        orderBy: { position: 'desc' },
+        select: { position: true },
+        where: { watchlistId },
+      });
+      const section = await transaction.personalWatchlistSection.create({
+        data: { name: cleanName, position: (lastSection?.position ?? -1) + 1, watchlistId },
+      });
+      await transaction.personalWatchlist.update({
+        data: { updatedAt: new Date() },
+        where: { id: watchlistId },
+      });
+      return toSection(section);
+    }));
+  }
+
+  async updateSection(
+    identity: AuthenticatedIdentity,
+    watchlistId: string,
+    sectionId: string,
+    name: string,
+  ) {
+    const cleanName = cleanSectionName(name);
+    const userId = await this.getUserId(identity);
+
+    return this.withConnectionRetry(() => this.prisma.$transaction(async (transaction) => {
+      await lockOwnedWatchlist(transaction, userId, watchlistId);
+      const section = await transaction.personalWatchlistSection.findFirst({
+        where: { id: sectionId, watchlistId },
+      });
+      if (!section) throw new NotFoundException('Watchlist section not found.');
+      const duplicate = await transaction.personalWatchlistSection.findFirst({
+        where: {
+          id: { not: sectionId },
+          name: { equals: cleanName, mode: 'insensitive' },
+          watchlistId,
+        },
+      });
+      if (duplicate) throw new BadRequestException('A section with this name already exists.');
+      const updated = await transaction.personalWatchlistSection.update({
+        data: { name: cleanName },
+        where: { id: sectionId },
+      });
+      await transaction.personalWatchlist.update({
+        data: { updatedAt: new Date() },
+        where: { id: watchlistId },
+      });
+      return toSection(updated);
+    }));
+  }
+
+  async deleteSection(identity: AuthenticatedIdentity, watchlistId: string, sectionId: string) {
+    const userId = await this.getUserId(identity);
+
+    await this.withConnectionRetry(() => this.prisma.$transaction(async (transaction) => {
+      await lockOwnedWatchlist(transaction, userId, watchlistId);
+      const deleted = await transaction.personalWatchlistSection.deleteMany({
+        where: { id: sectionId, watchlistId },
+      });
+      if (deleted.count === 0) throw new NotFoundException('Watchlist section not found.');
+      await transaction.personalWatchlist.update({
+        data: { updatedAt: new Date() },
+        where: { id: watchlistId },
+      });
+    }));
+  }
+
+  async moveItemToSection(
+    identity: AuthenticatedIdentity,
+    watchlistId: string,
+    itemId: string,
+    sectionId: string | null,
+  ) {
+    const userId = await this.getUserId(identity);
+
+    return this.withConnectionRetry(() => this.prisma.$transaction(async (transaction) => {
+      await lockOwnedWatchlist(transaction, userId, watchlistId);
+      const item = await transaction.personalWatchlistItem.findFirst({
+        where: { id: itemId, watchlistId },
+      });
+      if (!item) throw new NotFoundException('Watchlist item not found.');
+      if (sectionId) {
+        const section = await transaction.personalWatchlistSection.findFirst({
+          select: { id: true },
+          where: { id: sectionId, watchlistId },
+        });
+        if (!section) throw new BadRequestException('The destination section does not belong to this watchlist.');
+      }
+      const updated = await transaction.personalWatchlistItem.update({
+        data: { sectionId },
+        where: { id: itemId },
+      });
+      await transaction.personalWatchlist.update({
+        data: { updatedAt: new Date() },
+        where: { id: watchlistId },
+      });
+      return toItem(updated);
+    }));
+  }
+
   async updateCover(identity: AuthenticatedIdentity, watchlistId: string, itemIds: string[]) {
     if (itemIds.length > 4 || new Set(itemIds).size !== itemIds.length) {
       throw new BadRequestException('Choose up to 4 different titles.');
@@ -296,7 +418,16 @@ type WatchlistItemRecord = {
   contentType: TrackedContentType;
   createdAt: Date;
   id: string;
+  sectionId: string | null;
   tmdbId: number;
+};
+
+type WatchlistSectionRecord = {
+  createdAt: Date;
+  id: string;
+  name: string;
+  position: number;
+  updatedAt: Date;
 };
 
 function toSummary(watchlist: WatchlistSummaryRecord, includeContainsTitle = false) {
@@ -316,8 +447,38 @@ function toItem(item: WatchlistItemRecord) {
     contentType: fromTrackedContentType(item.contentType),
     createdAt: item.createdAt.toISOString(),
     id: item.id,
+    sectionId: item.sectionId,
     tmdbId: item.tmdbId,
   };
+}
+
+function toSection(section: WatchlistSectionRecord) {
+  return {
+    createdAt: section.createdAt.toISOString(),
+    id: section.id,
+    name: section.name,
+    position: section.position,
+    updatedAt: section.updatedAt.toISOString(),
+  };
+}
+
+function cleanSectionName(name: string) {
+  const cleanName = name.trim();
+  if (cleanName.length === 0) throw new BadRequestException('name must not be empty.');
+  return cleanName;
+}
+
+async function lockOwnedWatchlist(
+  transaction: Pick<PrismaService, '$queryRaw'>,
+  userId: string,
+  watchlistId: string,
+) {
+  const rows = await transaction.$queryRaw<{ id: string }[]>`
+    SELECT id FROM "personal_watchlists"
+    WHERE id = ${watchlistId}::uuid AND "userId" = ${userId}::uuid
+    FOR UPDATE
+  `;
+  if (rows.length === 0) throw new NotFoundException('Watchlist not found.');
 }
 
 function toTrackedContentType(contentType: WatchlistContentType): TrackedContentType {

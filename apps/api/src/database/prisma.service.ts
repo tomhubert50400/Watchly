@@ -61,6 +61,10 @@ export class PrismaService implements OnModuleDestroy {
     return this.client.personalWatchlistItem;
   }
 
+  get personalWatchlistSection() {
+    return this.client.personalWatchlistSection;
+  }
+
   get privacySettings() {
     return this.client.privacySettings;
   }
