@@ -119,7 +119,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     [visibleItems, visibleSections],
   );
   const backgroundItem = visibleItems.find((item) => item.id === visibleWatchlist?.backgroundItemId);
-  const backgroundUrl = backgroundItem?.backdropUrl ?? backgroundItem?.posterUrl ?? null;
+  const backgroundUrl = backgroundItem?.posterUrl ?? backgroundItem?.backdropUrl ?? null;
 
   const loadWatchlist = useCallback(async () => {
     const requestScope = resourceScope;

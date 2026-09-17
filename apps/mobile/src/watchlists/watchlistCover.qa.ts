@@ -19,8 +19,14 @@ selected = toggleWatchlistCoverItem(selected, '2');
 assert.deepEqual(toggleWatchlistCoverItem(selected, '5'), ['1', '3', '4', '5']);
 
 const artworkButton = readFileSync(new URL('./WatchlistCoverButton.tsx', import.meta.url), 'utf8');
-assert.match(artworkButton, /label="Change cover"/, 'The artwork modal must offer cover editing');
-assert.match(artworkButton, /label="Change background"/, 'The artwork modal must offer background editing');
+const personalScreen = readFileSync(new URL('./PersonalWatchlistScreen.tsx', import.meta.url), 'utf8');
+const sharedScreen = readFileSync(new URL('./SharedWatchlistScreen.tsx', import.meta.url), 'utf8');
+assert.match(artworkButton, /<SegmentedControl[\s\S]*label: 'Change cover'[\s\S]*label: 'Change background'/, 'The artwork modal must switch modes with the shared segmented control');
+assert.match(artworkButton, /mode === 'cover'[\s\S]*media\.backdropUrl \?\? media\.posterUrl[\s\S]*media\.posterUrl \?\? media\.backdropUrl/, 'Cover choices must prefer landscape artwork and background choices must prefer portraits');
+assert.match(artworkButton, /mode === 'cover' \? styles\.coverArtwork : styles\.backgroundArtwork/, 'Cover and background choices must use landscape and portrait aspect ratios');
 assert.match(artworkButton, /\/background[\s\S]*itemId: selected\[0\] \?\? null/, 'Background selection must persist one title or no title');
+for (const screen of [personalScreen, sharedScreen]) {
+  assert.match(screen, /backgroundItem\?\.posterUrl \?\? backgroundItem\?\.backdropUrl/, 'The saved background must render the selected portrait artwork');
+}
 
 console.log('Watchlist cover and background selection QA passed.');

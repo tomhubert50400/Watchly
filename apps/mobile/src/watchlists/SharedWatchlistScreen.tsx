@@ -136,7 +136,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
   const details = ownedDetails.ownerId === ownerId ? ownedDetails.data : null;
   const watchlist = details?.watchlist ?? null;
   const backgroundItem = details?.hydratedItems.find((item) => item.id === watchlist?.backgroundItemId);
-  const backgroundUrl = backgroundItem?.backdropUrl ?? backgroundItem?.posterUrl ?? null;
+  const backgroundUrl = backgroundItem?.posterUrl ?? backgroundItem?.backdropUrl ?? null;
 
   useLayoutEffect(() => {
     navigation.setOptions({
