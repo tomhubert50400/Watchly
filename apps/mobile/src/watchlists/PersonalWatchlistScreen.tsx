@@ -89,6 +89,8 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   const dragScale = useRef(new Animated.Value(1)).current;
   const dragTilt = useRef(new Animated.Value(0)).current;
   const dragTiltResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dragTiltValueRef = useRef(0);
+  const lastMoveTimeRef = useRef(0);
   const measureFrameRef = useRef<number | null>(null);
   const movingRef = useRef<MovingTitle | null>(null);
   const overlayOriginRef = useRef<ScreenPoint>({ x: 0, y: 0 });
@@ -377,6 +379,8 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     const nextMoving = { item, point, ...geometry };
     movingRef.current = nextMoving;
     setMoving(nextMoving);
+    dragTiltValueRef.current = 0;
+    lastMoveTimeRef.current = Date.now();
     dragTilt.setValue(0);
     dragScale.setValue(0.98);
     Animated.spring(dragScale, {
@@ -394,11 +398,15 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     if (movingRef.current?.item.id !== item.id) return;
     const point = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
     const activeMove = movingRef.current;
+    const now = Date.now();
+    const elapsedMs = Math.max(8, Math.min(64, now - lastMoveTimeRef.current));
     const horizontalDelta = point.x - activeMove.point.x;
+    const horizontalVelocity = horizontalDelta / elapsedMs * 1000;
+    lastMoveTimeRef.current = now;
     const nextMoving = { ...activeMove, point };
     movingRef.current = nextMoving;
     setMoving(nextMoving);
-    animateDragTilt(horizontalDelta);
+    animateDragTilt(horizontalVelocity);
     setHoveredGroupId(findMoveTarget(point));
     startAutoScroll();
   }
@@ -429,28 +437,26 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     targetRectsRef.current.clear();
   }
 
-  function animateDragTilt(horizontalDelta: number) {
-    const targetTilt = resolveCarriedPosterTilt(horizontalDelta);
-    Animated.spring(dragTilt, {
-      damping: 7,
-      mass: 0.8,
-      stiffness: 95,
-      toValue: targetTilt,
-      useNativeDriver: true,
-      velocity: horizontalDelta * -1.2,
-    }).start();
+  function animateDragTilt(horizontalVelocity: number) {
+    const targetTilt = resolveCarriedPosterTilt(horizontalVelocity);
+    const visibleTilt = dragTiltValueRef.current * 0.35 + targetTilt * 0.65;
+    dragTilt.stopAnimation();
+    dragTiltValueRef.current = visibleTilt;
+    dragTilt.setValue(visibleTilt);
 
     if (dragTiltResetRef.current !== null) clearTimeout(dragTiltResetRef.current);
     dragTiltResetRef.current = setTimeout(() => {
       dragTiltResetRef.current = null;
       Animated.spring(dragTilt, {
-        damping: 6,
-        mass: 0.9,
-        stiffness: 85,
+        damping: 5,
+        mass: 1.05,
+        stiffness: 62,
         toValue: 0,
-        useNativeDriver: true,
-      }).start();
-    }, 55);
+        useNativeDriver: false,
+      }).start(({ finished }) => {
+        if (finished) dragTiltValueRef.current = 0;
+      });
+    }, 120);
   }
 
   function resetDragAnimation() {
@@ -460,6 +466,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     }
     dragScale.stopAnimation();
     dragTilt.stopAnimation();
+    dragTiltValueRef.current = 0;
     dragScale.setValue(1);
     dragTilt.setValue(0);
   }
@@ -668,8 +675,8 @@ function WatchlistMoveOverlay({
   overlayRef: React.RefObject<View | null>;
 }) {
   const rotation = dragTilt.interpolate({
-    inputRange: [-16, 0, 16],
-    outputRange: ['-16deg', '0deg', '16deg'],
+    inputRange: [-24, 0, 24],
+    outputRange: ['-24deg', '0deg', '24deg'],
   });
 
   return (

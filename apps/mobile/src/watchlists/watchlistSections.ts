@@ -40,8 +40,8 @@ export function resolveDestinationSectionId(groupId: string) {
   return groupId === UNSECTIONED_SECTION_ID ? null : groupId;
 }
 
-export function resolveCarriedPosterTilt(horizontalDelta: number) {
-  return Math.max(-16, Math.min(16, horizontalDelta * -1.4));
+export function resolveCarriedPosterTilt(horizontalVelocity: number) {
+  return Math.max(-24, Math.min(24, horizontalVelocity * -0.045));
 }
 
 export function resolveWatchlistAutoScrollDelta(pointY: number, viewportTop: number, viewportBottom: number) {
