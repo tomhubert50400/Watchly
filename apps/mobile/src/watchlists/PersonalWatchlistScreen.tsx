@@ -4,10 +4,12 @@ import { ChevronDown, ChevronRight, Ellipsis, Plus } from 'lucide-react-native';
 import {
   Alert,
   Animated,
+  ActionSheetIOS,
   GestureResponderEvent,
   LayoutChangeEvent,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -217,6 +219,32 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     setSectionError(null);
     setSectionName(nextEditor.mode === 'rename' ? nextEditor.section.name : '');
     setEditor(nextEditor);
+  }
+
+  function showAddActions() {
+    const addTitle = () => navigation.navigate('MainTabs', { screen: 'Explore' });
+    const addSection = () => openSectionEditor({ mode: 'create' });
+    const sectionLimitReached = visibleSections.length >= MAX_PERSONAL_WATCHLIST_SECTIONS;
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions({
+        cancelButtonIndex: 2,
+        disabledButtonIndices: sectionLimitReached ? [1] : undefined,
+        message: 'What would you like to add?',
+        options: ['Add a title', 'Create a section', 'Cancel'],
+        title: 'Add to watchlist',
+      }, (buttonIndex) => {
+        if (buttonIndex === 0) addTitle();
+        if (buttonIndex === 1 && !sectionLimitReached) addSection();
+      });
+      return;
+    }
+
+    Alert.alert('Add to watchlist', 'What would you like to add?', [
+      { text: 'Add a title', onPress: addTitle },
+      ...(!sectionLimitReached ? [{ text: 'Create a section', onPress: addSection }] : []),
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   }
 
   async function saveSection() {
@@ -544,14 +572,16 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
           <WatchlistSection>
             <SectionHeader title="Titles" subtitle={`${visibleItems.length} saved`} />
             <View style={styles.topActions}>
-              <Button compact label="Add titles" variant="secondary" onPress={() => navigation.navigate('MainTabs', { screen: 'Explore' })} />
-              <Button
-                compact
-                disabled={visibleSections.length >= MAX_PERSONAL_WATCHLIST_SECTIONS}
-                icon={<Plus color={colors.textOnAccent} size={18} />}
-                label="Section"
-                onPress={() => openSectionEditor({ mode: 'create' })}
-              />
+              <Pressable
+                accessibilityHint="Choose whether to add a title or create a section"
+                accessibilityLabel="Add to watchlist"
+                accessibilityRole="button"
+                hitSlop={4}
+                onPress={showAddActions}
+                style={({ pressed }) => [styles.addButton, pressed ? styles.pressed : null]}
+              >
+                <Plus color={colors.textOnAccent} size={22} />
+              </Pressable>
             </View>
             {visibleItems.length === 0 && visibleSections.length === 0 ? (
               <Text style={styles.emptyCopy}>
@@ -714,6 +744,14 @@ function toggleSetValue(current: Set<string>, value: string) {
 }
 
 const styles = StyleSheet.create({
+  addButton: {
+    alignItems: 'center',
+    backgroundColor: colors.accent,
+    borderRadius: radii.md,
+    height: touchTargets.min,
+    justifyContent: 'center',
+    width: touchTargets.min,
+  },
   draggedPoster: {
     position: 'absolute',
     shadowColor: '#02040A',
@@ -788,8 +826,8 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   topActions: {
+    alignItems: 'flex-end',
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
+    justifyContent: 'flex-end',
   },
 });
