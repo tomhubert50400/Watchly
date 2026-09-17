@@ -178,6 +178,22 @@ async function main() {
       throttledError.message === 'Watchly is catching up. Try again in a moment.',
       'Rate limits must never expose the server exception name.',
     );
+
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      message: 'Cannot POST /watchlists/example/sections',
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 404,
+    })) as typeof fetch;
+    const missingRouteError = await apiGet('/qa-missing-route').then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+    assert(missingRouteError instanceof ApiError);
+    assert(
+      missingRouteError.message === 'Something went wrong on the server. Try again.',
+      'Missing API routes must not expose framework messages.',
+    );
     await verifyImportBatches();
     await verifyImportAnalysis();
   } finally {

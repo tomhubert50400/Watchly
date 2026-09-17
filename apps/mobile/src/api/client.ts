@@ -162,6 +162,7 @@ function sanitizeServerMessage(message: string | undefined, status: number) {
 
 function isTechnicalServerMessage(message: string) {
   return (
+    /^Cannot (?:GET|POST|PUT|PATCH|DELETE) \//.test(message) ||
     message.includes('Invalid `') ||
     message.includes('Prisma') ||
     message.includes('C:\\') ||
