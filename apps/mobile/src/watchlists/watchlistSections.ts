@@ -41,7 +41,7 @@ export function resolveDestinationSectionId(groupId: string) {
 }
 
 export function resolveCarriedPosterTilt(horizontalVelocity: number) {
-  return Math.max(-24, Math.min(24, horizontalVelocity * -0.045));
+  return Math.max(-24, Math.min(24, horizontalVelocity * 0.045));
 }
 
 export function resolveWatchlistAutoScrollDelta(pointY: number, viewportTop: number, viewportBottom: number) {

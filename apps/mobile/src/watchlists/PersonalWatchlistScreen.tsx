@@ -388,7 +388,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
       mass: 0.5,
       stiffness: 240,
       toValue: 1,
-      useNativeDriver: true,
+      useNativeDriver: false,
     }).start();
     hapticSelection();
     requestAnimationFrame(measureMoveTargets);
