@@ -18,6 +18,7 @@ import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 import { MovieReviewEditor } from '../reviews/MovieReviewEditor';
 import { MovieCommunityPanel } from '../reviews/MovieCommunityPanel';
 import { TrackingControls } from '../tracking/TrackingControls';
+import { FavoriteControl } from '../tracking/FavoriteControl';
 import { ViewingCountControl } from '../viewings/ViewingCountControl';
 import { AddToWatchlistControl } from '../watchlists/AddToWatchlistControl';
 import {
@@ -63,12 +64,13 @@ export function FilmDetailScreen({ navigation, route }: FilmDetailScreenProps) {
 
   useLayoutEffect(() => {
     navigation.setOptions({
+      headerRight: () => <FavoriteControl contentType="movie" tmdbId={tmdbId} />,
       headerStyle: { backgroundColor: 'transparent' },
       headerTintColor: colors.text,
       headerTitle: '',
       headerTransparent: true,
     });
-  }, [navigation]);
+  }, [navigation, tmdbId]);
 
   return (
     <SafeAreaView edges={[]} style={styles.safeArea}>

@@ -19,6 +19,7 @@ import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 import { SeriesProgressSummary } from '../tracking/SeriesProgressSummary';
 import { SeriesRatingControl } from '../tracking/SeriesRatingControl';
 import { TrackingControls } from '../tracking/TrackingControls';
+import { FavoriteControl } from '../tracking/FavoriteControl';
 import { ViewingCountControl } from '../viewings/ViewingCountControl';
 import { AddToWatchlistControl } from '../watchlists/AddToWatchlistControl';
 import {
@@ -62,12 +63,13 @@ export function SeriesDetailScreen({ navigation, route }: Props) {
 
   useLayoutEffect(() => {
     navigation.setOptions({
+      headerRight: () => <FavoriteControl contentType="series" tmdbId={tmdbId} />,
       headerStyle: { backgroundColor: 'transparent' },
       headerTintColor: colors.text,
       headerTitle: '',
       headerTransparent: true,
     });
-  }, [navigation]);
+  }, [navigation, tmdbId]);
 
   useEffect(() => {
     const firstSeason = series?.seasons
