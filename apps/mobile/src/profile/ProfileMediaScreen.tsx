@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
   selector: { marginHorizontal: spacing.xl, marginBottom: spacing.lg },
   grid: { paddingHorizontal: spacing.xl, gap: spacing.lg, flexGrow: 1 },
   row: { gap: spacing.sm },
-  genreButton: { height: 44, width: 44, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
+  genreButton: { width: 44, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
   genreRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, paddingVertical: spacing.sm },
   genreLabel: { ...typography.body, color: colors.text, flex: 1 },
   genreLoading: { padding: spacing.lg },
