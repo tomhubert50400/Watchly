@@ -31,7 +31,6 @@ import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
 import { MediaPoster } from '../components/MediaPoster';
-import { SectionHeader } from '../components/SectionHeader';
 import { TextInput } from '../components/TextInput';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
 import { hapticError, hapticSelection, hapticSuccess } from '../feedback/haptics';
@@ -193,6 +192,16 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
 
   useLayoutEffect(() => {
     navigation.setOptions({
+      headerTitle: () => (
+        <View style={styles.headerTitle}>
+          <Text accessibilityRole="header" numberOfLines={1} style={styles.headerTitleText}>
+            {route.params.title}
+          </Text>
+          <Text numberOfLines={1} style={styles.headerSubtitle}>
+            {visibleItems.length} {visibleItems.length === 1 ? 'title' : 'titles'}
+          </Text>
+        </View>
+      ),
       headerRight: visibleWatchlist ? () => (
         <View style={styles.headerActions}>
           <Pressable
@@ -213,7 +222,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
         </View>
       ) : undefined,
     });
-  }, [navigation, visibleWatchlist, resourceScope, watchlistId, loadWatchlist, visibleSections.length]);
+  }, [navigation, visibleWatchlist, resourceScope, route.params.title, watchlistId, loadWatchlist, visibleItems.length, visibleSections.length]);
 
   function openItem(item: WatchlistDisplayItem) {
     const title = item.title ?? (item.contentType === 'movie' ? 'Film' : 'Series');
@@ -581,7 +590,6 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
           </EmptyState>
         ) : visibleWatchlist ? (
           <WatchlistSection>
-            <SectionHeader title="Titles" subtitle={`${visibleItems.length} saved`} />
             {visibleItems.length === 0 && visibleSections.length === 0 ? (
               <Text style={styles.emptyCopy}>
                 Add films or series from detail pages, or create a section to start shaping this list.
@@ -752,6 +760,24 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     justifyContent: 'center',
     width: 44,
+  },
+  headerSubtitle: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '500',
+    lineHeight: 13,
+    textAlign: 'center',
+  },
+  headerTitle: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitleText: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '800',
+    lineHeight: 20,
+    textAlign: 'center',
   },
   draggedPoster: {
     position: 'absolute',
