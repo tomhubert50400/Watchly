@@ -195,6 +195,8 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
 
   useLayoutEffect(() => {
     navigation.setOptions({
+      headerStyle: { backgroundColor: backgroundUrl ? 'transparent' : colors.background },
+      headerTransparent: Boolean(backgroundUrl),
       headerTitle: () => (
         <View style={styles.headerTitle}>
           <Text accessibilityRole="header" numberOfLines={1} style={styles.headerTitleText}>
@@ -231,7 +233,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
         </View>
       ) : undefined,
     });
-  }, [navigation, visibleWatchlist, resourceScope, route.params.title, watchlistId, loadWatchlist, visibleItems.length, visibleSections.length]);
+  }, [backgroundUrl, navigation, visibleWatchlist, resourceScope, route.params.title, watchlistId, loadWatchlist, visibleItems.length, visibleSections.length]);
 
   function openItem(item: WatchlistDisplayItem) {
     const title = item.title ?? (item.contentType === 'movie' ? 'Film' : 'Series');

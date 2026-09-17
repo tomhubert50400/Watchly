@@ -27,6 +27,7 @@ assert.match(artworkButton, /mode === 'cover' \? styles\.coverArtwork : styles\.
 assert.match(artworkButton, /\/background[\s\S]*itemId: selected\[0\] \?\? null/, 'Background selection must persist one title or no title');
 for (const screen of [personalScreen, sharedScreen]) {
   assert.match(screen, /backgroundItem\?\.posterUrl \?\? backgroundItem\?\.backdropUrl/, 'The saved background must render the selected portrait artwork');
+  assert.match(screen, /headerTransparent: Boolean\(backgroundUrl\)/, 'The selected background must extend behind the native header');
 }
 
 console.log('Watchlist cover and background selection QA passed.');

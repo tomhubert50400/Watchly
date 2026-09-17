@@ -83,6 +83,7 @@ export function WatchlistPage({
       <ScrollView
         ref={scrollRef}
         automaticallyAdjustKeyboardInsets={false}
+        contentInsetAdjustmentBehavior={background ? 'automatic' : 'never'}
         contentContainerStyle={[styles.page, background ? styles.pageWithBackground : null]}
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         keyboardShouldPersistTaps="handled"

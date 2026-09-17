@@ -140,6 +140,8 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
 
   useLayoutEffect(() => {
     navigation.setOptions({
+      headerStyle: { backgroundColor: backgroundUrl ? 'transparent' : colors.background },
+      headerTransparent: Boolean(backgroundUrl),
       headerRight: watchlist ? () => (
         <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch' }}>
           {watchlist.isOwner ? <WatchlistCoverButton key={`${ownerId}:${watchlist.id}`} kind="shared" watchlistId={watchlist.id}
@@ -177,7 +179,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
         </View>
       ) : undefined,
     });
-  }, [navigation, watchlist, ownerId]);
+  }, [backgroundUrl, navigation, watchlist, ownerId]);
 
   const commitDetails = useCallback((expectedOwnerId: string, next: SharedListDetails) => {
     if (ownerIdRef.current !== expectedOwnerId) return;
