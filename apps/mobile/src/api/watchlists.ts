@@ -30,6 +30,7 @@ export type PersonalWatchlistSection = {
 };
 
 export type PersonalWatchlist = {
+  backgroundItemId?: string | null;
   coverItemIds?: string[];
   createdAt: string;
   id: string;

@@ -30,6 +30,7 @@ export type WatchlistDisplayItem = {
 };
 
 type WatchlistPageProps = PropsWithChildren<{
+  background?: ReactNode;
   footer?: ReactNode;
   isRefreshing?: boolean;
   onRefresh?: () => void;
@@ -58,6 +59,7 @@ type WatchlistPosterGridProps = {
 type WatchlistSectionProps = PropsWithChildren<{ delay?: number }>;
 
 export function WatchlistPage({
+  background,
   children,
   footer,
   isRefreshing = false,
@@ -77,10 +79,11 @@ export function WatchlistPage({
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.keyboardAvoider}
     >
+      {background ? <View pointerEvents="none" style={styles.background}>{background}</View> : null}
       <ScrollView
         ref={scrollRef}
         automaticallyAdjustKeyboardInsets={false}
-        contentContainerStyle={styles.page}
+        contentContainerStyle={[styles.page, background ? styles.pageWithBackground : null]}
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         keyboardShouldPersistTaps="handled"
         onBlur={visibility.onBlur}
@@ -213,6 +216,9 @@ function resolveColumnCount(availableWidth: number, fontScale: number) {
 }
 
 const styles = StyleSheet.create({
+  background: {
+    ...StyleSheet.absoluteFillObject,
+  },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -250,6 +256,9 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xxxl,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xl,
+  },
+  pageWithBackground: {
+    backgroundColor: 'transparent',
   },
   poster: {
     aspectRatio: 2 / 3,

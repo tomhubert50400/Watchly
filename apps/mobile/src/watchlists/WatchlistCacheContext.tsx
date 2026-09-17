@@ -20,11 +20,13 @@ import { takeHydrationItems } from './requestBoundaries';
 const MAX_WATCHLIST_ITEM_HYDRATIONS = 12;
 
 export type HydratedPersonalWatchlistItem = PersonalWatchlistItem & {
+  backdropUrl: string | null;
   posterUrl: string | null;
   title: string;
 };
 
 export type HydratedSharedWatchlistItem = SharedWatchlistItem & {
+  backdropUrl: string | null;
   posterUrl: string | null;
   title: string;
 };
@@ -105,11 +107,15 @@ export function WatchlistCacheProvider({ children }: PropsWithChildren) {
     assertCurrentRequest(isCurrent);
     const watchlist = await getWatchlist(token, watchlistId);
     assertCurrentRequest(isCurrent);
-    const hydratedItems = await Promise.all(
-      takeHydrationItems(watchlist.items, MAX_WATCHLIST_ITEM_HYDRATIONS)
-        .map((item) => hydratePersonalItem(item, refreshMovie, refreshSeries)),
-    );
-    hydratedItems.push(...watchlist.items.slice(MAX_WATCHLIST_ITEM_HYDRATIONS).map(toPersonalFallback));
+    const hydrationItems = takeHydrationItems(watchlist.items, MAX_WATCHLIST_ITEM_HYDRATIONS);
+    const backgroundItem = watchlist.items.find((item) => item.id === watchlist.backgroundItemId);
+    if (backgroundItem && !hydrationItems.some((item) => item.id === backgroundItem.id)) {
+      hydrationItems.push(backgroundItem);
+    }
+    const hydratedById = new Map((await Promise.all(
+      hydrationItems.map((item) => hydratePersonalItem(item, refreshMovie, refreshSeries)),
+    )).map((item) => [item.id, item]));
+    const hydratedItems = watchlist.items.map((item) => hydratedById.get(item.id) ?? toPersonalFallback(item));
     assertCurrentRequest(isCurrent);
     const cached = { hydratedItems, watchlist };
 
@@ -259,24 +265,24 @@ async function getRequiredToken(getFirebaseIdToken: () => Promise<string | null>
 
 async function hydratePersonalItem(
   item: PersonalWatchlistItem,
-  refreshMovie: (tmdbId: number) => Promise<{ posterUrl: string | null; title: string }>,
-  refreshSeries: (tmdbId: number) => Promise<{ posterUrl: string | null; title: string }>,
+  refreshMovie: (tmdbId: number) => Promise<{ backdropUrl: string | null; posterUrl: string | null; title: string }>,
+  refreshSeries: (tmdbId: number) => Promise<{ backdropUrl: string | null; posterUrl: string | null; title: string }>,
 ): Promise<HydratedPersonalWatchlistItem> {
   return hydrateItem(item, refreshMovie, refreshSeries);
 }
 
 async function hydrateSharedItem(
   item: SharedWatchlistItem,
-  refreshMovie: (tmdbId: number) => Promise<{ posterUrl: string | null; title: string }>,
-  refreshSeries: (tmdbId: number) => Promise<{ posterUrl: string | null; title: string }>,
+  refreshMovie: (tmdbId: number) => Promise<{ backdropUrl: string | null; posterUrl: string | null; title: string }>,
+  refreshSeries: (tmdbId: number) => Promise<{ backdropUrl: string | null; posterUrl: string | null; title: string }>,
 ): Promise<HydratedSharedWatchlistItem> {
   return hydrateItem(item, refreshMovie, refreshSeries);
 }
 
 async function hydrateItem<T extends PersonalWatchlistItem | SharedWatchlistItem>(
   item: T,
-  refreshMovie: (tmdbId: number) => Promise<{ posterUrl: string | null; title: string }>,
-  refreshSeries: (tmdbId: number) => Promise<{ posterUrl: string | null; title: string }>,
+  refreshMovie: (tmdbId: number) => Promise<{ backdropUrl: string | null; posterUrl: string | null; title: string }>,
+  refreshSeries: (tmdbId: number) => Promise<{ backdropUrl: string | null; posterUrl: string | null; title: string }>,
 ) {
   try {
     if (item.contentType === 'movie') {
@@ -284,6 +290,7 @@ async function hydrateItem<T extends PersonalWatchlistItem | SharedWatchlistItem
 
       return {
         ...item,
+        backdropUrl: movie.backdropUrl,
         posterUrl: movie.posterUrl,
         title: movie.title,
       };
@@ -293,12 +300,14 @@ async function hydrateItem<T extends PersonalWatchlistItem | SharedWatchlistItem
 
     return {
       ...item,
+      backdropUrl: series.backdropUrl,
       posterUrl: series.posterUrl,
       title: series.title,
     };
   } catch {
     return {
       ...item,
+      backdropUrl: null,
       posterUrl: null,
       title: `TMDB ${item.tmdbId}`,
     };
@@ -306,11 +315,11 @@ async function hydrateItem<T extends PersonalWatchlistItem | SharedWatchlistItem
 }
 
 function toPersonalFallback(item: PersonalWatchlistItem): HydratedPersonalWatchlistItem {
-  return { ...item, posterUrl: null, title: `TMDB ${item.tmdbId}` };
+  return { ...item, backdropUrl: null, posterUrl: null, title: `TMDB ${item.tmdbId}` };
 }
 
 function toSharedFallback(item: SharedWatchlistItem): HydratedSharedWatchlistItem {
-  return { ...item, posterUrl: null, title: `TMDB ${item.tmdbId}` };
+  return { ...item, backdropUrl: null, posterUrl: null, title: `TMDB ${item.tmdbId}` };
 }
 
 function removeKey<T>(record: Record<string, T>, key: string) {

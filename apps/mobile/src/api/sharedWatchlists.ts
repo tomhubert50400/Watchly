@@ -42,6 +42,7 @@ export type SharedVotingSession = {
 };
 
 export type SharedWatchlist = {
+  backgroundItemId?: string | null;
   coverItemIds?: string[];
   createdAt: string;
   id: string;

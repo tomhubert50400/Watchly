@@ -31,6 +31,7 @@ import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
 import { MediaPoster } from '../components/MediaPoster';
+import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { TextInput } from '../components/TextInput';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
 import { hapticError, hapticSelection, hapticSuccess } from '../feedback/haptics';
@@ -117,6 +118,8 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     () => groupPersonalWatchlistItems(visibleSections, visibleItems),
     [visibleItems, visibleSections],
   );
+  const backgroundItem = visibleItems.find((item) => item.id === visibleWatchlist?.backgroundItemId);
+  const backgroundUrl = backgroundItem?.backdropUrl ?? backgroundItem?.posterUrl ?? null;
 
   const loadWatchlist = useCallback(async () => {
     const requestScope = resourceScope;
@@ -214,8 +217,14 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
             <Plus color={colors.text} size={20} strokeWidth={2} />
           </Pressable>
           <WatchlistCoverButton key={resourceScope} kind="personal" watchlistId={watchlistId}
-            items={visibleWatchlist.items} coverItemIds={visibleWatchlist.coverItemIds}
-            onSaved={(coverItemIds) => {
+            items={visibleWatchlist.items}
+            backgroundItemId={visibleWatchlist.backgroundItemId}
+            coverItemIds={visibleWatchlist.coverItemIds}
+            onBackgroundSaved={(backgroundItemId) => {
+              setWatchlist((current) => current ? { ...current, backgroundItemId } : current);
+              void loadWatchlist();
+            }}
+            onCoverSaved={(coverItemIds) => {
               setWatchlist((current) => current ? { ...current, coverItemIds } : current);
               void loadWatchlist();
             }} />
@@ -564,6 +573,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   return (
     <>
       <WatchlistPage
+        background={backgroundUrl ? <SpotlightAtmosphere imageUrl={backgroundUrl} /> : null}
         isRefreshing={isRefreshing}
         onContentSizeChange={handleContentSizeChange}
         onLayout={handleScrollLayout}

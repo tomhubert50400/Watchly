@@ -24,6 +24,7 @@ import { EmptyState } from '../components/EmptyState';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { LoadingState } from '../components/LoadingState';
 import { SectionHeader } from '../components/SectionHeader';
+import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { TextInput } from '../components/TextInput';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
@@ -40,7 +41,11 @@ import {
 } from './WatchlistDetailLayout';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SharedWatchlist'>;
-type HydratedItem = SharedWatchlist['items'][number] & { posterUrl: string | null; title: string | null };
+type HydratedItem = SharedWatchlist['items'][number] & {
+  backdropUrl: string | null;
+  posterUrl: string | null;
+  title: string | null;
+};
 type SharedListDetails = { hydratedItems: HydratedItem[]; watchlist: SharedWatchlist };
 type OwnedDetails = { data: SharedListDetails | null; ownerId: string | null };
 const MAX_SHARED_WATCHLIST_HYDRATIONS = 12;
@@ -67,18 +72,29 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
     const hydrationIds = new Set(
       takeHydrationItems(watchlist.items, MAX_SHARED_WATCHLIST_HYDRATIONS).map((item) => item.id),
     );
+    if (watchlist.backgroundItemId) hydrationIds.add(watchlist.backgroundItemId);
     const hydratedItems = await Promise.all(watchlist.items.map(async (item): Promise<HydratedItem> => {
       const previous = cached?.hydratedItems.find((candidate) => candidate.id === item.id);
       if (!hydrationIds.has(item.id)) {
-        return { ...item, posterUrl: previous?.posterUrl ?? null, title: previous?.title ?? null };
+        return {
+          ...item,
+          backdropUrl: previous?.backdropUrl ?? null,
+          posterUrl: previous?.posterUrl ?? null,
+          title: previous?.title ?? null,
+        };
       }
       try {
         const media = item.contentType === 'movie'
           ? await refreshMovie(item.tmdbId)
           : await refreshSeries(item.tmdbId);
-        return { ...item, posterUrl: media.posterUrl, title: media.title };
+        return { ...item, backdropUrl: media.backdropUrl, posterUrl: media.posterUrl, title: media.title };
       } catch {
-        return { ...item, posterUrl: previous?.posterUrl ?? null, title: previous?.title ?? null };
+        return {
+          ...item,
+          backdropUrl: previous?.backdropUrl ?? null,
+          posterUrl: previous?.posterUrl ?? null,
+          title: previous?.title ?? null,
+        };
       }
     }));
 
@@ -119,14 +135,27 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
 
   const details = ownedDetails.ownerId === ownerId ? ownedDetails.data : null;
   const watchlist = details?.watchlist ?? null;
+  const backgroundItem = details?.hydratedItems.find((item) => item.id === watchlist?.backgroundItemId);
+  const backgroundUrl = backgroundItem?.backdropUrl ?? backgroundItem?.posterUrl ?? null;
 
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: watchlist ? () => (
         <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch' }}>
           {watchlist.isOwner ? <WatchlistCoverButton key={`${ownerId}:${watchlist.id}`} kind="shared" watchlistId={watchlist.id}
-            items={watchlist.items} coverItemIds={watchlist.coverItemIds}
-            onSaved={(coverItemIds) => {
+            items={watchlist.items}
+            backgroundItemId={watchlist.backgroundItemId}
+            coverItemIds={watchlist.coverItemIds}
+            onBackgroundSaved={(backgroundItemId) => {
+              const snapshot = ownedDetailsRef.current;
+              if (ownerId && snapshot.ownerId === ownerId && snapshot.data) {
+                const next = { ...snapshot.data, watchlist: { ...snapshot.data.watchlist, backgroundItemId } };
+                setMemoryResource(cacheKey, next, new Date().toISOString());
+                commitDetails(ownerId, next);
+                resource.revalidate();
+              }
+            }}
+            onCoverSaved={(coverItemIds) => {
               const snapshot = ownedDetailsRef.current;
               if (ownerId && snapshot.ownerId === ownerId && snapshot.data) {
                 const next = { ...snapshot.data, watchlist: { ...snapshot.data.watchlist, coverItemIds } };
@@ -288,6 +317,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
   return (
     <>
       <WatchlistPage
+        background={backgroundUrl ? <SpotlightAtmosphere imageUrl={backgroundUrl} /> : null}
         footer={isVoteComposerOpen ? (
           <Button
             disabled={!sessionTitle.trim() || details.hydratedItems.length === 0}

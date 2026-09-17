@@ -1,5 +1,6 @@
 // @ts-expect-error QA executes under tsx/Node.
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { getWatchlistCoverItems, toggleWatchlistCoverItem } from './watchlistCover';
 
 const items = Array.from({ length: 20 }, (_, index) => ({ id: String(index), contentType: index % 2 ? 'series' : 'movie' }));
@@ -16,4 +17,10 @@ for (const id of ['1', '2', '3', '4', '5']) selected = toggleWatchlistCoverItem(
 assert.deepEqual(selected, ['1', '2', '3', '4']);
 selected = toggleWatchlistCoverItem(selected, '2');
 assert.deepEqual(toggleWatchlistCoverItem(selected, '5'), ['1', '3', '4', '5']);
-console.log('Watchlist cover selection QA passed.');
+
+const artworkButton = readFileSync(new URL('./WatchlistCoverButton.tsx', import.meta.url), 'utf8');
+assert.match(artworkButton, /label="Change cover"/, 'The artwork modal must offer cover editing');
+assert.match(artworkButton, /label="Change background"/, 'The artwork modal must offer background editing');
+assert.match(artworkButton, /\/background[\s\S]*itemId: selected\[0\] \?\? null/, 'Background selection must persist one title or no title');
+
+console.log('Watchlist cover and background selection QA passed.');
