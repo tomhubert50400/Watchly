@@ -86,6 +86,7 @@ function FavoriteButton({ contentType, tmdbId }: Props) {
       accessibilityRole="button"
       accessibilityState={{ busy: loading || saving, disabled: loading || saving, selected: favorite }}
       disabled={loading || saving}
+      hitSlop={{ top: 8, bottom: 8 }}
       onPress={() => void toggle()}
       style={({ pressed }) => [styles.button, (pressed || loading) && styles.dimmed]}
     >
@@ -97,9 +98,7 @@ function FavoriteButton({ contentType, tmdbId }: Props) {
 const styles = StyleSheet.create({
   button: {
     alignItems: 'center',
-    backgroundColor: colors.interactiveSurface,
-    borderRadius: touchTargets.min / 2,
-    height: touchTargets.min,
+    alignSelf: 'stretch',
     justifyContent: 'center',
     width: touchTargets.min,
   },
