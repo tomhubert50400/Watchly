@@ -4,7 +4,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { validate } from 'class-validator';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { SharedWatchlistsService } from '../shared-watchlists/shared-watchlists.service';
-import { UpdateWatchlistCoverDto } from './watchlists.dto';
+import { UpdateWatchlistBackgroundDto, UpdateWatchlistCoverDto } from './watchlists.dto';
 import { WatchlistsService } from './watchlists.service';
 
 async function run() {
@@ -15,6 +15,12 @@ async function run() {
   }
   for (const itemIds of [[], ids.slice(0, 1), ids.slice(0, 4)]) {
     assert.equal((await validate(Object.assign(new UpdateWatchlistCoverDto(), { itemIds }))).length, 0);
+  }
+  for (const itemId of ['invalid', undefined, ids]) {
+    assert.ok((await validate(Object.assign(new UpdateWatchlistBackgroundDto(), { itemId }))).length, 'Invalid background payload must be rejected');
+  }
+  for (const itemId of [null, ids[0]]) {
+    assert.equal((await validate(Object.assign(new UpdateWatchlistBackgroundDto(), { itemId }))).length, 0);
   }
   for (const kind of ['personal', 'shared'] as const) {
     let saved: string[] = [];
@@ -52,6 +58,34 @@ async function run() {
     await service.updateCover(identity, 'list', []);
     assert.deepEqual(saved, [], 'Automatic cover must be restorable');
   }
-  console.log('Watchlist cover API QA passed.');
+  for (const kind of ['personal', 'shared'] as const) {
+    let saved: string | null | undefined;
+    let owned = true;
+    const model = {
+      findFirst: async () => owned ? { items: ids.slice(0, 4).map((id) => ({ id })) } : null,
+      update: async ({ data }: { data: { backgroundItemId: string | null } }) => {
+        saved = data.backgroundItemId;
+      },
+    };
+    const transaction = { personalWatchlist: model, sharedWatchlist: model };
+    const prisma = {
+      withConnectionRetry: <T>(operation: () => Promise<T>) => operation(),
+      $transaction: <T>(operation: (tx: typeof transaction) => Promise<T>) => operation(transaction),
+    };
+    const auth = { getOrCreateUser: async () => ({ id: 'owner' }) };
+    const Service = kind === 'personal' ? WatchlistsService : SharedWatchlistsService;
+    const service = new Service(auth as never, prisma as never);
+    const identity = {} as AuthenticatedIdentity;
+    assert.deepEqual(await service.updateBackground(identity, 'list', ids[2]), { backgroundItemId: ids[2] });
+    assert.equal(saved, ids[2]);
+    await assert.rejects(service.updateBackground(identity, 'list', ids[4]), BadRequestException);
+    assert.equal(saved, ids[2], 'Rejected writes must preserve the background');
+    owned = false;
+    await assert.rejects(service.updateBackground(identity, 'list', ids[0]), NotFoundException);
+    owned = true;
+    assert.deepEqual(await service.updateBackground(identity, 'list', null), { backgroundItemId: null });
+    assert.equal(saved, null, 'The background must be removable');
+  }
+  console.log('Watchlist cover and background API QA passed.');
 }
 void run();

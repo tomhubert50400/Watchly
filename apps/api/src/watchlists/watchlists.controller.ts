@@ -21,6 +21,7 @@ import {
   MoveWatchlistItemDto,
   UpdateWatchlistSectionDto,
   UpdateWatchlistVisibilityDto,
+  UpdateWatchlistBackgroundDto,
   UpdateWatchlistCoverDto,
   WatchlistContentType,
   watchlistContentTypes,
@@ -84,6 +85,15 @@ export class WatchlistsController {
     @Body() body: UpdateWatchlistCoverDto,
   ) {
     return this.watchlists.updateCover(getIdentity(request), parseWatchlistId(watchlistId), body.itemIds);
+  }
+
+  @Put(':watchlistId/background')
+  async updateBackground(
+    @Req() request: AuthenticatedRequest,
+    @Param('watchlistId') watchlistId: string,
+    @Body() body: UpdateWatchlistBackgroundDto,
+  ) {
+    return this.watchlists.updateBackground(getIdentity(request), parseWatchlistId(watchlistId), body.itemId);
   }
 
   @Delete(':watchlistId')

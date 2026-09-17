@@ -119,6 +119,9 @@ export class WatchlistsService {
     }
 
     return {
+      backgroundItemId: watchlist.items.some((item) => item.id === watchlist.backgroundItemId)
+        ? watchlist.backgroundItemId
+        : null,
       createdAt: watchlist.createdAt.toISOString(),
       id: watchlist.id,
       items: watchlist.items.map(toItem),
@@ -355,6 +358,25 @@ export class WatchlistsService {
         data: { coverItemIds: itemIds },
       });
       return { coverItemIds: itemIds };
+    }));
+  }
+
+  async updateBackground(identity: AuthenticatedIdentity, watchlistId: string, itemId: string | null) {
+    const userId = await this.getUserId(identity);
+    return this.withConnectionRetry(() => this.prisma.$transaction(async (transaction) => {
+      const watchlist = await transaction.personalWatchlist.findFirst({
+        where: { id: watchlistId, userId },
+        include: { items: { select: { id: true } } },
+      });
+      if (!watchlist) throw new NotFoundException('Watchlist not found.');
+      if (itemId && !watchlist.items.some((item) => item.id === itemId)) {
+        throw new BadRequestException('The background title must belong to this watchlist.');
+      }
+      await transaction.personalWatchlist.update({
+        where: { id: watchlistId },
+        data: { backgroundItemId: itemId },
+      });
+      return { backgroundItemId: itemId };
     }));
   }
 

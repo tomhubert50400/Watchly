@@ -49,3 +49,9 @@ export class UpdateWatchlistCoverDto {
   @IsUUID('4', { each: true })
   itemIds!: string[];
 }
+
+export class UpdateWatchlistBackgroundDto {
+  @ValidateIf((_object, value) => value !== null)
+  @IsUUID('4')
+  itemId!: string | null;
+}

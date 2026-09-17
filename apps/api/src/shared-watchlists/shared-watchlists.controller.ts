@@ -1,4 +1,4 @@
-import { UpdateWatchlistCoverDto } from '../watchlists/watchlists.dto';
+import { UpdateWatchlistBackgroundDto, UpdateWatchlistCoverDto } from '../watchlists/watchlists.dto';
 import {
   BadRequestException,
   Body,
@@ -69,6 +69,15 @@ export class SharedWatchlistsController {
     @Body() body: UpdateWatchlistCoverDto,
   ) {
     return this.watchlists.updateCover(getIdentity(request), parseUuid(watchlistId, 'watchlistId'), body.itemIds);
+  }
+
+  @Put(':watchlistId/background')
+  async updateBackground(
+    @Req() request: AuthenticatedRequest,
+    @Param('watchlistId') watchlistId: string,
+    @Body() body: UpdateWatchlistBackgroundDto,
+  ) {
+    return this.watchlists.updateBackground(getIdentity(request), parseUuid(watchlistId, 'watchlistId'), body.itemId);
   }
 
   @Delete(':watchlistId')
