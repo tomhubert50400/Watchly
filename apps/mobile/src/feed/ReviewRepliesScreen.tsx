@@ -27,9 +27,9 @@ import {
 import type { ReportTarget } from '../api/reports';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
+import { SynopsisPanel } from '../catalogue/SynopsisPanel';
 import { Button } from '../components/Button';
 import { SocialReviewPost } from '../components/SocialReviewPost';
-import { SpoilerGuard } from '../components/SpoilerGuard';
 import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { UserAvatar } from '../components/UserAvatar';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
@@ -265,8 +265,17 @@ export function ReviewRepliesScreen({ navigation, route }: Props) {
             const author = item.author.displayName?.trim() || 'Watchly member';
             const visualDepth = Math.min(row.depth, 4);
             return <View style={styles.threadedReply}>
-              {visualDepth > 0 ? <View style={[styles.threadRails, { width: visualDepth * 14 }]}>
-                {Array.from({ length: visualDepth }, (_, index) => <View key={index} style={styles.threadLineSlot}><View style={styles.threadLine} /></View>)}
+              {visualDepth > 0 ? <View style={[styles.threadRails, { width: visualDepth * 18 }]}>
+                {row.ancestorHasNextSibling.slice(0, Math.max(0, visualDepth - 1)).map((continues, index) => (
+                  <View key={index} style={styles.threadLineSlot}>
+                    {continues ? <View style={styles.threadLine} /> : null}
+                  </View>
+                ))}
+                <View style={styles.threadElbowSlot}>
+                  <View style={styles.threadElbowTop} />
+                  {!row.isLastChild ? <View style={styles.threadElbowBottom} /> : null}
+                  <View style={styles.threadElbowArm} />
+                </View>
               </View> : null}
               <View style={styles.reply}>
                 <View style={styles.replyHeader}>
@@ -286,9 +295,14 @@ export function ReviewRepliesScreen({ navigation, route }: Props) {
                     {item.ownedByViewer ? <Trash2 color={colors.danger} size={17} /> : <Flag color={colors.textMuted} size={17} />}
                   </Pressable>
                 </View>
-                <SpoilerGuard contextLabel={`Reply by ${author}`} reason={item.containsSpoilers ? 'This reply contains spoilers' : null} revealKey={item.id}>
-                  <Text style={styles.replyBody}>{item.body}</Text>
-                </SpoilerGuard>
+                {item.containsSpoilers ? <SynopsisPanel
+                  accessibilityLabel={`Reveal reply by ${author}`}
+                  overview={item.body}
+                  revealLabel="Reveal reply"
+                  spoilerProtected
+                  title={null}
+                  variant="inline"
+                /> : <Text style={styles.replyBody}>{item.body}</Text>}
                 <Pressable
                   accessibilityLabel={`Reply to ${author}`}
                   accessibilityRole="button"
@@ -441,7 +455,11 @@ const styles = StyleSheet.create({
   threadGuardTitle: { ...typography.title, color: colors.text, textAlign: 'center' },
   threadHeader: { gap: spacing.md },
   threadedReply: { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row' },
+  threadElbowArm: { backgroundColor: colors.borderStrong, height: StyleSheet.hairlineWidth, left: 9, position: 'absolute', right: 0, top: '50%' },
+  threadElbowBottom: { backgroundColor: colors.borderStrong, bottom: 0, left: 9, position: 'absolute', top: '50%', width: StyleSheet.hairlineWidth },
+  threadElbowSlot: { position: 'relative', width: 18 },
+  threadElbowTop: { backgroundColor: colors.borderStrong, bottom: '50%', left: 9, position: 'absolute', top: 0, width: StyleSheet.hairlineWidth },
   threadLine: { backgroundColor: colors.borderStrong, flex: 1, width: StyleSheet.hairlineWidth },
-  threadLineSlot: { alignItems: 'center', width: 14 },
+  threadLineSlot: { alignItems: 'center', width: 18 },
   threadRails: { alignSelf: 'stretch', flexDirection: 'row' },
 });

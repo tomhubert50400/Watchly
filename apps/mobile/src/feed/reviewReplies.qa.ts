@@ -21,7 +21,7 @@ assert.match(screen, /<SocialReviewPost[\s\S]*<Text style=\{styles\.repliesTitle
 assert.match(screen, /<SpotlightAtmosphere blurRadius=\{24\} imageUrl=\{review\.backgroundUrl\}/);
 assert.match(screen, /maxLength=\{1000\}/);
 assert.match(screen, /accessibilityLabel=\{containsSpoilers \? 'Remove spoiler warning' : 'Mark reply as containing spoilers'\}/);
-assert.match(screen, /This reply contains spoilers/);
+assert.match(screen, /<SynopsisPanel[\s\S]*revealLabel="Reveal reply"[\s\S]*variant="inline"/);
 assert.match(screen, /Spoiler-protected discussion/);
 assert.match(screen, /Alert\.alert\('Delete reply\?'/);
 assert.match(screen, /type: 'reviewReply'/);
@@ -30,7 +30,7 @@ assert.match(screen, /styles\.composer/);
 assert.doesNotMatch(screen, /BottomActionSheet/);
 assert.match(screen, /Replying to \{replyingTo\.author\}/);
 assert.match(screen, /Math\.min\(row\.depth, 4\)/);
-assert.match(screen, /styles\.threadLine/);
+assert.match(screen, /ancestorHasNextSibling[\s\S]*styles\.threadLine[\s\S]*styles\.threadElbowArm/);
 assert.match(screen, />Spoiler<\/Text>/);
 assert.doesNotMatch(screen, /backgroundColor: 'rgba\(15, 19, 29, 0\.72\)'/);
 
@@ -46,11 +46,19 @@ const reply = (id: string, parentReplyId: string | null) => ({
 const threaded = flattenReviewReplies([
   reply('root', null),
   reply('child', 'root'),
+  reply('sibling', 'root'),
   reply('other', null),
   reply('grandchild', 'child'),
 ]);
 assert.deepEqual(threaded.map((item) => [item.reply.id, item.depth]), [
-  ['root', 0], ['child', 1], ['grandchild', 2], ['other', 0],
+  ['root', 0], ['child', 1], ['grandchild', 2], ['sibling', 1], ['other', 0],
+]);
+assert.deepEqual(threaded.map((item) => [item.reply.id, item.ancestorHasNextSibling, item.isLastChild]), [
+  ['root', [], false],
+  ['child', [], false],
+  ['grandchild', [true], true],
+  ['sibling', [], true],
+  ['other', [], true],
 ]);
 
-console.log('Review replies mobile QA passed: dedicated thread screen, composer, spoilers, moderation and pagination.');
+console.log('Review replies mobile QA passed: branched threads, synopsis spoiler blur, composer, moderation and pagination.');

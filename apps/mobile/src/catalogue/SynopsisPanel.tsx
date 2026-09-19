@@ -14,14 +14,20 @@ import { colors, radii, spacing, touchTargets, typography } from '../design/toke
 const collapsedLineCount = 5;
 
 type SynopsisPanelProps = {
+  accessibilityLabel?: string;
   overview: string | null;
+  revealLabel?: string;
   spoilerProtected?: boolean;
-  variant?: 'card' | 'section';
+  title?: string | null;
+  variant?: 'card' | 'inline' | 'section';
 };
 
 export function SynopsisPanel({
+  accessibilityLabel = 'Reveal episode synopsis',
   overview,
+  revealLabel = 'Reveal synopsis',
   spoilerProtected = false,
+  title = 'Synopsis',
   variant = 'section',
 }: SynopsisPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -44,11 +50,12 @@ export function SynopsisPanel({
       style={[
         styles.panel,
         variant === 'card' && styles.card,
+        variant === 'inline' && styles.inline,
         variant === 'card' && spoilerProtected && !isSpoilerRevealed && styles.cardBlurred,
       ]}
     >
-      <Text style={[styles.sectionTitle, variant === 'card' && styles.cardTitle]}>Synopsis</Text>
-      <View style={styles.synopsisContent}>
+      {title ? <Text style={[styles.sectionTitle, variant === 'card' && styles.cardTitle]}>{title}</Text> : null}
+      <View style={[styles.synopsisContent, variant === 'inline' && styles.inlineContent]}>
         <View
           accessibilityElementsHidden={spoilerProtected && !isSpoilerRevealed}
           importantForAccessibility={spoilerProtected && !isSpoilerRevealed ? 'no-hide-descendants' : 'auto'}
@@ -69,21 +76,22 @@ export function SynopsisPanel({
           pointerEvents="none"
           style={[
             styles.spoilerOverlay,
-            !isSpoilerRevealed && styles.spoilerOverlayHidden,
+            variant === 'inline' && styles.spoilerOverlayInline,
+            !isSpoilerRevealed && variant !== 'inline' && styles.spoilerOverlayHidden,
           ]}
           tint="dark"
         />
       ) : null}
       {spoilerProtected && !isSpoilerRevealed ? (
-        <View pointerEvents="box-none" style={styles.revealOverlay}>
+        <View pointerEvents="box-none" style={[styles.revealOverlay, variant === 'inline' && styles.revealOverlayInline]}>
           <Pressable
-            accessibilityLabel="Reveal episode synopsis"
+            accessibilityLabel={accessibilityLabel}
             accessibilityRole="button"
             onPress={() => setRevealedSynopsis(synopsis)}
             style={({ pressed }) => [styles.revealButton, pressed && styles.expandButtonPressed]}
           >
             <EyeOff color={colors.accentText} size={18} strokeWidth={2.2} />
-            <Text style={styles.revealLabel}>Reveal synopsis</Text>
+            <Text style={styles.revealLabel}>{revealLabel}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -122,6 +130,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0,
+  },
+  inline: {
+    borderBottomWidth: 0,
+    paddingVertical: 0,
+  },
+  inlineContent: {
+    marginTop: 0,
+    minHeight: 64,
   },
   card: {
     backgroundColor: colors.panelElevated,
@@ -178,6 +194,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xxl,
     zIndex: 2,
   },
+  revealOverlayInline: {
+    paddingTop: 0,
+  },
   spoilerOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent',
@@ -189,6 +208,9 @@ const styles = StyleSheet.create({
   spoilerOverlayHidden: {
     borderColor: colors.border,
     borderWidth: 1,
+  },
+  spoilerOverlayInline: {
+    borderRadius: 0,
   },
   synopsisContent: {
     marginTop: spacing.sm,

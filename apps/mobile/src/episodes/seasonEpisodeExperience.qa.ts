@@ -106,12 +106,12 @@ assert.match(
 );
 assert.match(
   synopsisSource,
-  /spoilerProtected && !isSpoilerRevealed[\s\S]*Reveal synopsis/,
+  /revealLabel = 'Reveal synopsis'[\s\S]*spoilerProtected && !isSpoilerRevealed[\s\S]*\{revealLabel\}/,
   'protected synopsis text must require an explicit reveal',
 );
 assert.match(
   synopsisSource,
-  /style=\{styles\.synopsisContent\}[\s\S]*numberOfLines=\{isExpanded \? undefined : collapsedLineCount\}[\s\S]*\{synopsis\}[\s\S]*<BlurView/,
+  /style=\{\[styles\.synopsisContent[\s\S]*numberOfLines=\{isExpanded \? undefined : collapsedLineCount\}[\s\S]*\{synopsis\}[\s\S]*<BlurView/,
   'the protected synopsis must render the real text in flow before its blur overlay',
 );
 assert.match(
