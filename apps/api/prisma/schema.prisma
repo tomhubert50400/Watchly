@@ -394,6 +394,7 @@ model ReviewReply {
   userId             String             @db.Uuid
   movieReviewId      String?            @db.Uuid
   episodeReviewId    String?            @db.Uuid
+  parentReplyId      String?            @db.Uuid
   body               String             @db.VarChar(1000)
   containsSpoilers   Boolean            @default(false)
   moderationHiddenAt DateTime?
@@ -402,9 +403,12 @@ model ReviewReply {
   user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   movieReview        UserMovieReview?   @relation(fields: [movieReviewId], references: [id], onDelete: Cascade)
   episodeReview      UserEpisodeReview? @relation(fields: [episodeReviewId], references: [id], onDelete: Cascade)
+  parentReply        ReviewReply?       @relation("ReviewReplyChildren", fields: [parentReplyId], references: [id], onDelete: SetNull)
+  childReplies       ReviewReply[]      @relation("ReviewReplyChildren")
 
   @@index([movieReviewId, createdAt])
   @@index([episodeReviewId, createdAt])
+  @@index([parentReplyId, createdAt])
   @@index([userId])
   @@map("review_replies")
 }

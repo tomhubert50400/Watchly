@@ -338,12 +338,36 @@ export class FeedService {
 
     return this.prisma.withConnectionRetry(async () => {
       const review = await this.getVisibleReview(viewer.id, reviewType, reviewId);
+      const parentReply = input.parentReplyId
+        ? await this.prisma.reviewReply.findFirst({
+            select: { id: true, userId: true },
+            where: {
+              id: input.parentReplyId,
+              moderationHiddenAt: null,
+              ...(reviewType === 'movieReview' ? { movieReviewId: reviewId } : { episodeReviewId: reviewId }),
+              user: activeAccountWhere(),
+            },
+          })
+        : null;
+      if (input.parentReplyId && !parentReply) throw new NotFoundException('Parent reply not found.');
+      if (parentReply) {
+        const parentBlock = await this.prisma.userBlock.findFirst({
+          where: {
+            OR: [
+              { blockedUserId: viewer.id, blockerId: parentReply.userId },
+              { blockedUserId: parentReply.userId, blockerId: viewer.id },
+            ],
+          },
+        });
+        if (parentBlock) throw new NotFoundException('Parent reply not found.');
+      }
       const reply = await this.prisma.$transaction(async (transaction) => {
         const created = await transaction.reviewReply.create({
           data: {
             body,
             containsSpoilers: input.containsSpoilers ?? false,
             ...(reviewType === 'movieReview' ? { movieReviewId: reviewId } : { episodeReviewId: reviewId }),
+            ...(parentReply ? { parentReplyId: parentReply.id } : {}),
             userId: viewer.id,
           },
           include: {
@@ -353,7 +377,8 @@ export class FeedService {
           },
         });
 
-        if (review.userId !== viewer.id) {
+        const recipientId = parentReply?.userId ?? review.userId;
+        if (recipientId !== viewer.id) {
           const actorName = viewer.displayName?.trim() || 'A Watchly member';
           await transaction.notification.create({
             data: {
@@ -362,8 +387,8 @@ export class FeedService {
               dedupeKey: `review-reply:${created.id}`,
               kind: NotificationKind.REVIEW_REPLY,
               routeMetadata: { route: 'ReviewReplies', reviewId, reviewType },
-              title: `${actorName.slice(0, 100)} replied to your review`,
-              userId: review.userId,
+              title: `${actorName.slice(0, 100)} replied to your ${parentReply ? 'reply' : 'review'}`,
+              userId: recipientId,
             },
           });
         }
@@ -520,6 +545,7 @@ export class FeedService {
     containsSpoilers: boolean;
     createdAt: Date;
     id: string;
+    parentReplyId: string | null;
     user: FeedAuthor;
     userId: string;
   }, viewerId: string) {
@@ -530,6 +556,7 @@ export class FeedService {
       createdAt: reply.createdAt.toISOString(),
       id: reply.id,
       ownedByViewer: reply.userId === viewerId,
+      parentReplyId: reply.parentReplyId,
     };
   }
 

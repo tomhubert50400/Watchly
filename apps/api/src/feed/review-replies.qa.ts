@@ -7,6 +7,8 @@ const AUTHOR_ID = '22222222-2222-4222-8222-222222222222';
 const REVIEW_ID = '33333333-3333-4333-8333-333333333333';
 const REPLY_ID = '44444444-4444-4444-8444-444444444444';
 const BLOCKED_ID = '55555555-5555-4555-8555-555555555555';
+const PARENT_REPLY_ID = '66666666-6666-4666-8666-666666666666';
+const PARENT_AUTHOR_ID = '77777777-7777-4777-8777-777777777777';
 const createdAt = new Date('2026-09-19T12:00:00Z');
 let blocked = false;
 let createdData: Record<string, unknown> | null = null;
@@ -20,6 +22,7 @@ const reply = (index = 0) => ({
   containsSpoilers: index === 0,
   createdAt,
   id: index === 0 ? REPLY_ID : `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+  parentReplyId: index === 0 ? PARENT_REPLY_ID : null,
   user: { avatarObjectKey: null, displayName: 'Viewer', id: VIEWER_ID },
   userId: VIEWER_ID,
 });
@@ -51,7 +54,9 @@ const prisma: any = {
   reviewReply: {
     create: async ({ data }: any) => { createdData = data; return reply(); },
     delete: async ({ where }: any) => { deletedReplyId = where.id; return reply(); },
-    findFirst: async ({ where }: any) => where.userId === VIEWER_ID ? { id: REPLY_ID } : null,
+    findFirst: async ({ where }: any) => where.id === PARENT_REPLY_ID
+      ? { id: PARENT_REPLY_ID, userId: PARENT_AUTHOR_ID }
+      : where.userId === VIEWER_ID ? { id: REPLY_ID } : null,
     findMany: async (args: any) => { listArgs = args; return Array.from({ length: 31 }, (_, index) => reply(index)); },
   },
   userEpisodeRating: { findUnique: async () => null },
@@ -75,16 +80,19 @@ async function run() {
   const created = await service.createReviewReply(identity, 'movieReview', REVIEW_ID, {
     body: '  A thoughtful reply  ',
     containsSpoilers: true,
+    parentReplyId: PARENT_REPLY_ID,
   });
   assert.equal(created.body, 'Reply 0');
   assert.deepEqual(createdData, {
     body: 'A thoughtful reply',
     containsSpoilers: true,
     movieReviewId: REVIEW_ID,
+    parentReplyId: PARENT_REPLY_ID,
     userId: VIEWER_ID,
   });
-  assert.equal(notificationData?.userId, AUTHOR_ID);
+  assert.equal(notificationData?.userId, PARENT_AUTHOR_ID);
   assert.equal(notificationData?.actorUserId, VIEWER_ID);
+  assert.equal(notificationData?.title, 'Viewer replied to your reply');
   assert.deepEqual(notificationData?.routeMetadata, {
     route: 'ReviewReplies', reviewId: REVIEW_ID, reviewType: 'movieReview',
   });
@@ -98,6 +106,7 @@ async function run() {
   assert.equal(page.items.length, 30);
   assert.equal(page.nextCursor, page.items.at(-1)?.id);
   assert.equal(page.items[0].ownedByViewer, true);
+  assert.equal(page.items[0].parentReplyId, PARENT_REPLY_ID);
   assert.deepEqual(page.review.content, { contentType: 'movie', tmdbId: 550 });
   assert.equal(page.review.likeCount, 3);
   assert.equal(page.review.likedByViewer, true);

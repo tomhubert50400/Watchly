@@ -1,4 +1,4 @@
-import { IsBoolean, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 export class CreateReviewReplyDto {
   @IsString()
@@ -9,4 +9,8 @@ export class CreateReviewReplyDto {
   @IsBoolean()
   @IsOptional()
   containsSpoilers?: boolean;
+
+  @IsOptional()
+  @IsUUID()
+  parentReplyId?: string;
 }
