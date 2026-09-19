@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { Flag, Heart } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
+import { colors, radii, shadows, spacing, touchTargets, typography } from '../design/tokens';
 import { hapticError } from '../feedback/haptics';
 import {
   applyLikeMutation,
@@ -34,6 +34,7 @@ type SocialReviewPostProps = {
   canReveal?: boolean;
   rating: number | null;
   updatedAt: string;
+  variant?: 'community' | 'default';
 };
 
 export const SocialReviewPost = memo(function SocialReviewPost({
@@ -55,6 +56,7 @@ export const SocialReviewPost = memo(function SocialReviewPost({
   canReveal,
   rating,
   updatedAt,
+  variant = 'default',
 }: SocialReviewPostProps) {
   const visibleAuthor = authorDisplayName?.trim() || 'Watchly member';
   const { showToast } = useToast();
@@ -106,7 +108,7 @@ export const SocialReviewPost = memo(function SocialReviewPost({
   };
 
   return (
-    <View style={styles.post}>
+    <View style={[styles.post, variant === 'community' ? styles.communityPost : null]}>
       <View style={styles.byline}>
         {onOpenAuthor ? <Pressable accessibilityRole="button" accessibilityLabel={`Open ${visibleAuthor}'s profile`} onPress={onOpenAuthor} style={styles.authorLink}>
           <UserAvatar avatarUrl={authorAvatarUrl} displayName={visibleAuthor} size={42} />
@@ -122,20 +124,40 @@ export const SocialReviewPost = memo(function SocialReviewPost({
           accessibilityLabel={`Open ${contentTitle}`}
           accessibilityRole="button"
           onPress={onOpenContent}
-          style={({ pressed }) => [styles.mediaLink, pressed ? styles.mediaLinkPressed : null]}
+          style={({ pressed }) => [
+            styles.mediaLink,
+            variant === 'community' ? styles.communityMediaLink : null,
+            pressed ? styles.mediaLinkPressed : null,
+          ]}
         >
-          <MediaPoster
-            accessibilityLabel={`${contentTitle} artwork`}
-            posterUrl={contentImageUrl}
-            style={styles.poster}
-          />
+          {variant !== 'community' ? (
+            <MediaPoster
+              accessibilityLabel={`${contentTitle} artwork`}
+              posterUrl={contentImageUrl}
+              style={styles.poster}
+            />
+          ) : null}
           <View style={styles.mediaCopy}>
             <Text style={styles.mediaMeta}>{contentMeta}</Text>
             <Text numberOfLines={2} style={styles.mediaTitle}>{contentTitle}</Text>
-            <Text style={styles.openLabel}>Open content</Text>
+            {variant === 'community' && rating !== null ? (
+              <View style={styles.communityRating}>
+                <StarRatingDisplay rating={rating} showValue size={17} />
+              </View>
+            ) : null}
+            {variant !== 'community' ? (
+              <Text style={styles.openLabel}>Open content</Text>
+            ) : null}
           </View>
+          {variant === 'community' ? (
+            <MediaPoster
+              accessibilityLabel={`${contentTitle} artwork`}
+              posterUrl={contentImageUrl}
+              style={styles.communityPoster}
+            />
+          ) : null}
         </Pressable>
-        {rating !== null ? (
+        {variant !== 'community' && rating !== null ? (
           <View style={styles.rating}>
             <StarRatingDisplay rating={rating} showValue size={17} />
           </View>
@@ -235,6 +257,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.sm,
+  },
+  communityMediaLink: {
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  communityPost: {
+    ...shadows.panel,
+    backgroundColor: 'rgba(15, 19, 29, 0.86)',
+    borderBottomWidth: 0,
+    borderColor: colors.borderStrong,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+  },
+  communityPoster: {
+    height: 126,
+    width: 84,
+  },
+  communityRating: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.sm,
   },
   date: {
     ...typography.meta,

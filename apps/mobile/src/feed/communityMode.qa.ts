@@ -7,12 +7,17 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 
 const source = readFileSync(new URL('./FeedScreen.tsx', import.meta.url), 'utf8');
+const socialPostSource = readFileSync(new URL('../components/SocialReviewPost.tsx', import.meta.url), 'utf8');
 const keySource = source.slice(source.indexOf('export function getCommunityFeedKey'), source.indexOf('export async function loadCommunityFeed'));
 const exported: Record<string, any> = {};
 runInNewContext(ts.transpileModule(keySource, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { exports: exported });
 assert.notEqual(exported.getCommunityFeedKey('a', 'for-you'), exported.getCommunityFeedKey('a', 'following'));
 assert.notEqual(exported.getCommunityFeedKey('a', 'following'), exported.getCommunityFeedKey('b', 'following'));
 assert.equal(exported.getCommunityFeedKey('a'), exported.getCommunityFeedKey('a', 'for-you'));
+assert.match(source, /background=\{atmosphereUrl \? <SpotlightAtmosphere imageUrl=\{atmosphereUrl\} \/> : null\}/);
+assert.match(source, /variant="community"/);
+assert.doesNotMatch(source.slice(source.indexOf('function communityLabel')), /Discover|Following/);
+assert.match(socialPostSource, /variant !== 'community' \? \(\s*<Text style=\{styles\.openLabel\}>Open content<\/Text>/);
 const pagination = source.slice(source.indexOf('  async function loadMore()'), source.indexOf('  const openContent'));
 async function run() {
   for (const fail of [false, true]) {

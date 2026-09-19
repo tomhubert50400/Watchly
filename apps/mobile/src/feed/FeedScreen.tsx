@@ -18,7 +18,10 @@ import { IconButton } from '../components/IconButton';
 import { LoadingState } from '../components/LoadingState';
 import { Screen } from '../components/Screen';
 import { SocialReviewPost } from '../components/SocialReviewPost';
+import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { colors, spacing, typography } from '../design/tokens';
+import { loadHomeCatalogue, PUBLIC_HOME_KEY } from '../home/HomeScreen';
+import type { HomeCatalogueData } from '../home/homeData';
 import { RootStackParamList } from '../navigation/types';
 import { ReportSheet } from '../reports/ReportSheet';
 import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
@@ -90,6 +93,10 @@ export function FeedScreen() {
   const resource = useCachedResource<HydratedFeedItem[]>({
     enabled: Boolean(currentUser && firebaseIdToken), key: resourceKey, load: loadFeed,
   });
+  const homeCatalogue = useCachedResource<HomeCatalogueData>({
+    key: PUBLIC_HOME_KEY,
+    load: loadHomeCatalogue,
+  });
   const [extra, setExtra] = useState<{ base: HydratedFeedItem[] | null; items: HydratedFeedItem[]; cursor: string | null }>({ base: null, items: [], cursor: null });
   const [pageError, setPageError] = useState<string | null>(null);
   const [loadingPage, setLoadingPage] = useState(false);
@@ -104,6 +111,7 @@ export function FeedScreen() {
   const extraItems = extra.base === resource.data ? extra.items : [];
   const items = [...(resource.data ?? []), ...extraItems];
   const nextCursor = extra.base === resource.data ? extra.cursor : resource.data?.at(-1)?.nextCursor;
+  const atmosphereUrl = homeCatalogue.data?.hero?.posterUrl ?? homeCatalogue.data?.hero?.backdropUrl ?? null;
 
   async function loadMore() {
     if (!firebaseIdToken || !nextCursor || pagePending.current) return;
@@ -144,6 +152,7 @@ export function FeedScreen() {
 
   return (
     <Screen contentReady={!resource.isInitialLoading || items.length > 0}
+      background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null}
       refreshControl={firebaseIdToken ? <RefreshControl colors={[colors.accent]} onRefresh={resource.revalidate} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined}
       title="Community"
       trailing={firebaseIdToken ? (
@@ -212,6 +221,7 @@ export function FeedScreen() {
               }) : undefined}
               rating={item.score}
               updatedAt={item.updatedAt}
+              variant="community"
             />;
           })}
           {pageError ? <Text accessibilityRole="alert" style={styles.feedIntroBody}>{pageError}</Text> : null}
@@ -255,10 +265,9 @@ async function hydrateFeedItem(
 }
 
 function communityLabel(item: CommunityItem) {
-  const source = item.followed ? 'Following' : 'Discover';
   const action = item.type === 'viewing' ? item.content.contentType === 'series' ? 'Watched an episode' : 'Watched' : item.type.endsWith('Review') ? 'Review' : 'Rating';
   const episode = item.content.contentType === 'episode' ? ` / S${item.content.seasonNumber} E${item.content.episodeNumber}` : '';
-  return `${source} / ${action}${episode}`;
+  return `${action}${episode}`;
 }
 
 const styles = StyleSheet.create({
@@ -268,5 +277,5 @@ const styles = StyleSheet.create({
   feedTabMuted: { color: colors.textMuted },
   feedIntroBody: { ...typography.body, color: colors.muted },
   feedIntroTitle: { ...typography.title, color: colors.text },
-  list: { gap: 0 },
+  list: { gap: spacing.md },
 });
