@@ -56,7 +56,8 @@ assert.deepEqual(grouped.map((group) => [group.label, group.items.map((item) => 
 const releases = notification({ id: 'release' });
 const invite = notification({ id: 'invite', kind: 'shared_list_invite', type: 'shared_list_invite' });
 const vote = notification({ id: 'vote', kind: 'shared_vote_update', type: 'shared_vote_update' });
-assert.deepEqual(filterNotifications([releases, invite, vote], 'all').map((item) => item.id), ['release', 'invite', 'vote']);
+const reply = notification({ id: 'reply', kind: 'review_reply', type: 'review_reply' });
+assert.deepEqual(filterNotifications([releases, invite, vote, reply], 'all').map((item) => item.id), ['release', 'invite', 'vote', 'reply']);
 assert.deepEqual(filterNotifications([releases, invite, vote], 'releases').map((item) => item.id), ['release']);
 assert.deepEqual(filterNotifications([releases, invite, vote], 'lists').map((item) => item.id), ['invite', 'vote']);
 assert.equal(countUnreadNotifications([releases, notification({ id: 'read', readAt: NOW.toISOString() })]), 1);
@@ -113,6 +114,24 @@ assert.deepEqual(mapNotificationTarget(notification({
     sessionId: SESSION_ID,
     title: 'Shared vote update',
     watchlistId: WATCHLIST_ID,
+  },
+});
+assert.deepEqual(mapNotificationTarget(notification({
+  kind: 'review_reply',
+  routeMetadata: {
+    route: 'ReviewReplies',
+    reviewId: '44444444-4444-4444-8444-444444444444',
+    reviewType: 'movieReview',
+  },
+  type: 'review_reply',
+})), {
+  name: 'MainTabs',
+  params: {
+    screen: 'Community',
+    params: {
+      replyTarget: { id: '44444444-4444-4444-8444-444444444444', type: 'movieReview' },
+      requestKey: '33333333-3333-4333-8333-333333333333',
+    },
   },
 });
 

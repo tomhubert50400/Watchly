@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
-import { Flag, Heart } from 'lucide-react-native';
+import { Flag, Heart, MessageCircle } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radii, shadows, spacing, touchTargets, typography } from '../design/tokens';
 import { hapticError } from '../feedback/haptics';
@@ -26,6 +26,7 @@ type SocialReviewPostProps = {
   likeCount: number;
   likedByViewer: boolean;
   onOpenContent: () => void;
+  onOpenReplies?: () => void;
   onReport?: () => void;
   onSetLiked?: (liked: boolean) => Promise<FeedLikeState>;
   onOpenAuthor?: () => void;
@@ -34,6 +35,7 @@ type SocialReviewPostProps = {
   spoilerContextLabel?: string;
   canReveal?: boolean;
   rating: number | null;
+  replyCount?: number;
   updatedAt: string;
   variant?: 'community' | 'default';
 };
@@ -49,6 +51,7 @@ export const SocialReviewPost = memo(function SocialReviewPost({
   likeCount,
   likedByViewer,
   onOpenContent,
+  onOpenReplies,
   onReport,
   onSetLiked,
   onOpenAuthor,
@@ -57,6 +60,7 @@ export const SocialReviewPost = memo(function SocialReviewPost({
   spoilerContextLabel,
   canReveal,
   rating,
+  replyCount = 0,
   updatedAt,
   variant = 'default',
 }: SocialReviewPostProps) {
@@ -194,6 +198,15 @@ export const SocialReviewPost = memo(function SocialReviewPost({
             </Text>
           ) : null}
           {reportButton}
+          {onOpenReplies ? <Pressable
+            accessibilityLabel={`Open ${replyCount} ${replyCount === 1 ? 'reply' : 'replies'} to ${visibleAuthor}'s review`}
+            accessibilityRole="button"
+            onPress={onOpenReplies}
+            style={({ pressed }) => [styles.likeButton, pressed ? styles.likeButtonPressed : null]}
+          >
+            {replyCount > 0 ? <Text style={styles.likeCount}>{replyCount}</Text> : null}
+            <MessageCircle color={colors.textMuted} size={19} strokeWidth={2.2} />
+          </Pressable> : null}
           {onSetLiked ? <Pressable
             accessibilityLabel={`${likeState.likedByViewer ? 'Unlike' : 'Like'} ${visibleAuthor}'s review, ${likeState.likeCount} ${likeState.likeCount === 1 ? 'like' : 'likes'}`}
             accessibilityRole="button"

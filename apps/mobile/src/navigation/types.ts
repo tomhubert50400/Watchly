@@ -8,7 +8,10 @@ import type { DiscoverMood } from '../api/discover';
 import type { CatalogueSearchType } from '../api/catalogue';
 
 export type RootTabParamList = {
-  Community: undefined;
+  Community: {
+    replyTarget?: { id: string; type: 'episodeReview' | 'movieReview' };
+    requestKey?: string;
+  } | undefined;
   Explore: undefined;
   Home: undefined;
   Library: { view?: 'watchlists' | 'progress' } | undefined;

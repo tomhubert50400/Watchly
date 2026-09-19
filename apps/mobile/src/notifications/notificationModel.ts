@@ -1,4 +1,4 @@
-export type NotificationKind = 'release' | 'shared_list_invite' | 'shared_vote_update';
+export type NotificationKind = 'release' | 'shared_list_invite' | 'shared_vote_update' | 'review_reply';
 export type NotificationFilter = 'all' | 'releases' | 'lists';
 
 export type NotificationItem = {
@@ -30,6 +30,16 @@ export type NotificationTarget =
   | { name: 'FilmDetail'; params: { title: string; tmdbId: number } }
   | { name: 'SeriesDetail'; params: { title: string; tmdbId: number } }
   | { name: 'SharedWatchlist'; params: { title: string; watchlistId: string } }
+  | {
+      name: 'MainTabs';
+      params: {
+        screen: 'Community';
+        params: {
+          replyTarget: { id: string; type: 'episodeReview' | 'movieReview' };
+          requestKey: string;
+        };
+      };
+    }
   | {
       name: 'SharedVotingSession';
       params: { sessionId: string; title: string; watchlistId: string };
@@ -141,6 +151,24 @@ export function mapNotificationTarget(item: NotificationItem): NotificationTarge
 
   const metadata = asRecord(item.routeMetadata);
 
+  if (
+    item.kind === 'review_reply' &&
+    metadata?.route === 'ReviewReplies' &&
+    isUuidValue(metadata.reviewId) &&
+    (metadata.reviewType === 'movieReview' || metadata.reviewType === 'episodeReview')
+  ) {
+    return {
+      name: 'MainTabs',
+      params: {
+        screen: 'Community',
+        params: {
+          replyTarget: { id: metadata.reviewId, type: metadata.reviewType },
+          requestKey: item.id,
+        },
+      },
+    };
+  }
+
   if (item.kind === 'shared_list_invite') {
     if (
       !isUuid(item.sharedWatchlistId) ||
@@ -212,5 +240,9 @@ function isPositiveInteger(value: number | null): value is number {
 }
 
 function isUuid(value: string | null): value is string {
+  return typeof value === 'string' && UUID_PATTERN.test(value);
+}
+
+function isUuidValue(value: unknown): value is string {
   return typeof value === 'string' && UUID_PATTERN.test(value);
 }

@@ -1,6 +1,6 @@
 import { apiPost } from './client';
 
-export type ReportTargetType = 'profile' | 'movieReview' | 'episodeReview';
+export type ReportTargetType = 'profile' | 'movieReview' | 'episodeReview' | 'reviewReply';
 export type ReportReason =
   | 'spam'
   | 'harassment'

@@ -1,6 +1,7 @@
 import { EyeOff } from 'lucide-react-native';
-import { useCallback, useRef, useState } from 'react';
-import { useNavigation } from '@react-navigation/native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { CompositeNavigationProp, RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import type { MovieDetails, SeriesDetails } from '../api/catalogue';
@@ -22,14 +23,19 @@ import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { colors, spacing, typography } from '../design/tokens';
 import { loadHomeCatalogue, PUBLIC_HOME_KEY } from '../home/HomeScreen';
 import type { HomeCatalogueData } from '../home/homeData';
-import { RootStackParamList } from '../navigation/types';
+import { RootStackParamList, RootTabParamList } from '../navigation/types';
 import { ReportSheet } from '../reports/ReportSheet';
 import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
 import { SpoilerSettingsSheet } from './SpoilerSettingsSheet';
+import { ReviewRepliesSheet, ReviewRepliesTarget } from './ReviewRepliesSheet';
 import { spoilerReason } from './spoilerModel';
 import { useSpoilerPreferences } from './useSpoilerPreferences';
 
-type FeedNavigation = NativeStackNavigationProp<RootStackParamList>;
+type FeedNavigation = CompositeNavigationProp<
+  BottomTabNavigationProp<RootTabParamList, 'Community'>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
+type FeedRoute = RouteProp<RootTabParamList, 'Community'>;
 export type HydratedFeedItem = CommunityItem & {
   contentImageUrl: string | null;
   contentSubtitle: string;
@@ -80,10 +86,13 @@ export async function loadCommunityFeed(
 
 export function FeedScreen() {
   const navigation = useNavigation<FeedNavigation>();
+  const route = useRoute<FeedRoute>();
   const { currentUser, firebaseIdToken } = useAuthSession();
   const feedRevision = useUserDataRevision('feed', 'opinions', 'profile', 'socialGraph', 'tracking', 'viewings', 'episodeProgress', 'watchlists', 'releaseAlerts');
   const { refreshMovie, refreshSeries } = useCatalogueCache();
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
+  const [repliesTarget, setRepliesTarget] = useState<ReviewRepliesTarget | null>(null);
+  const handledReplyRequest = useRef<string | null>(null);
   const [spoilerSettingsOpen, setSpoilerSettingsOpen] = useState(false);
   const protection = useSpoilerPreferences(currentUser?.id ?? 'signed-out');
   const [mode, setMode] = useState<CommunityMode>('for-you');
@@ -116,6 +125,20 @@ export function FeedScreen() {
   const items = [...(resource.data ?? []), ...extraItems];
   const nextCursor = extra.base === resource.data ? extra.cursor : resource.data?.at(-1)?.nextCursor;
   const atmosphereUrl = homeCatalogue.data?.hero?.posterUrl ?? homeCatalogue.data?.hero?.backdropUrl ?? null;
+
+  useEffect(() => {
+    const requestKey = route.params?.requestKey;
+    const target = route.params?.replyTarget;
+    if (!requestKey || !target || handledReplyRequest.current === requestKey) return;
+    handledReplyRequest.current = requestKey;
+    setRepliesTarget({
+      ...target,
+      authorDisplayName: 'review author',
+      contentTitle: 'Review discussion',
+      spoilerReason: null,
+    });
+    navigation.setParams({ replyTarget: undefined, requestKey: undefined });
+  }, [navigation, route.params?.replyTarget, route.params?.requestKey]);
 
   async function loadMore() {
     if (!firebaseIdToken || !nextCursor || pagePending.current) return;
@@ -223,6 +246,13 @@ export function FeedScreen() {
               canReveal={protection.loaded}
               onOpenAuthor={() => navigation.navigate('PublicProfile', { userId: item.author.id })}
               onOpenContent={() => openContent(item)}
+              onOpenReplies={reviewType ? () => setRepliesTarget({
+                authorDisplayName: item.author.displayName?.trim() || 'Watchly member',
+                contentTitle: item.contentTitle,
+                id: item.id,
+                spoilerReason: protection.loaded ? spoilerReason(protection.preferences, item) : 'Loading spoiler protection',
+                type: reviewType,
+              }) : undefined}
               onReport={currentUser?.id === item.author.id || !reviewType ? undefined : () => setReportTarget({
                 id: item.id, label: `Review by ${item.author.displayName?.trim() || 'Watchly member'}`, type: reviewType,
               })}
@@ -231,6 +261,7 @@ export function FeedScreen() {
                 return result;
               }) : undefined}
               rating={item.score}
+              replyCount={item.replyCount}
               updatedAt={item.updatedAt}
               variant="community"
             />;
@@ -243,6 +274,21 @@ export function FeedScreen() {
           ) : null}
         </ScreenReveal>}
       </>}
+      <ReviewRepliesSheet
+        onClose={() => {
+          setRepliesTarget(null);
+          resource.revalidate();
+        }}
+        onOpenAuthor={(userId) => {
+          setRepliesTarget(null);
+          navigation.navigate('PublicProfile', { userId });
+        }}
+        onReport={(target) => {
+          setRepliesTarget(null);
+          setReportTarget(target);
+        }}
+        target={repliesTarget}
+      />
       <ReportSheet onClose={() => setReportTarget(null)} target={reportTarget} />
       <SpoilerSettingsSheet userId={currentUser?.id ?? 'signed-out'} visible={spoilerSettingsOpen} onClose={() => setSpoilerSettingsOpen(false)} />
     </Screen>

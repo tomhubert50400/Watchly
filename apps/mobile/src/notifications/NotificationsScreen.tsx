@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { BellRing, CalendarDays, ListPlus, Vote } from 'lucide-react-native';
+import { BellRing, CalendarDays, ListPlus, MessageCircle, Vote } from 'lucide-react-native';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import {
   acceptFollowRequest,
@@ -344,8 +344,10 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
       navigation.navigate(target.name, target.params);
     } else if (target.name === 'SharedWatchlist') {
       navigation.navigate(target.name, target.params);
-    } else {
+    } else if (target.name === 'SharedVotingSession') {
       navigation.navigate(target.name, target.params);
+    } else {
+      navigation.navigate('MainTabs', target.params);
     }
   }, [navigation]);
 
@@ -498,7 +500,9 @@ function NotificationRow({
       ? ListPlus
       : item.kind === 'shared_vote_update'
         ? Vote
-        : BellRing;
+        : item.kind === 'review_reply'
+          ? MessageCircle
+          : BellRing;
 
   return (
     <Pressable

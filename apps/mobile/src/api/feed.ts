@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPut } from './client';
+import { apiDelete, apiGet, apiPost, apiPut } from './client';
 
 export type FeedLikeState = {
   likeCount: number;
@@ -26,6 +26,7 @@ type FeedMovieReviewItem = {
   id: string;
   likeCount: number;
   likedByViewer: boolean;
+  replyCount: number;
   score: number | null;
   type: 'movieReview';
   updatedAt: string;
@@ -43,6 +44,7 @@ type FeedEpisodeReviewItem = {
   id: string;
   likeCount: number;
   likedByViewer: boolean;
+  replyCount: number;
   score: number | null;
   type: 'episodeReview';
   updatedAt: string;
@@ -63,6 +65,26 @@ export type CommunityItem = Omit<FeedItem, 'content' | 'type'> & {
 };
 
 export type CommunityMode = 'for-you' | 'following';
+
+export type ReviewReply = {
+  author: FeedAuthor;
+  body: string;
+  containsSpoilers: boolean;
+  createdAt: string;
+  id: string;
+  ownedByViewer: boolean;
+};
+
+export type ReviewRepliesResponse = {
+  items: ReviewReply[];
+  nextCursor: string | null;
+  review: {
+    author: FeedAuthor;
+    body: string;
+    id: string;
+    type: FeedReviewTarget['type'];
+  };
+};
 
 export function getCommunityFeed(token: string, cursor?: string, mode: CommunityMode = 'for-you') {
   return apiGet<{ items: CommunityItem[]; nextCursor: string | null }>(
@@ -87,4 +109,33 @@ export function setFeedItemLiked(
   return liked
     ? apiPut<FeedLikeState>(path, {}, { token: firebaseIdToken })
     : apiDelete<FeedLikeState>(path, { token: firebaseIdToken });
+}
+
+export function listReviewReplies(token: string, target: FeedReviewTarget, cursor?: string) {
+  const collection = getReviewCollection(target.type);
+  return apiGet<ReviewRepliesResponse>(
+    `/feed/${collection}/${encodeURIComponent(target.id)}/replies${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+    { token },
+  );
+}
+
+export function createReviewReply(
+  token: string,
+  target: FeedReviewTarget,
+  body: string,
+  containsSpoilers: boolean,
+) {
+  return apiPost<ReviewReply>(
+    `/feed/${getReviewCollection(target.type)}/${encodeURIComponent(target.id)}/replies`,
+    { body, containsSpoilers },
+    { token },
+  );
+}
+
+export function deleteReviewReply(token: string, replyId: string) {
+  return apiDelete<{ deleted: true }>(`/feed/review-replies/${encodeURIComponent(replyId)}`, { token });
+}
+
+function getReviewCollection(type: FeedReviewTarget['type']) {
+  return type === 'movieReview' ? 'movie-reviews' : 'episode-reviews';
 }
