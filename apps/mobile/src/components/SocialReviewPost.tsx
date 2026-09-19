@@ -37,7 +37,7 @@ type SocialReviewPostProps = {
   rating: number | null;
   replyCount?: number;
   updatedAt: string;
-  variant?: 'community' | 'default';
+  variant?: 'community' | 'default' | 'thread';
 };
 
 export const SocialReviewPost = memo(function SocialReviewPost({
@@ -66,6 +66,7 @@ export const SocialReviewPost = memo(function SocialReviewPost({
 }: SocialReviewPostProps) {
   const visibleAuthor = authorDisplayName?.trim() || 'Watchly member';
   const visibleContentLabel = contentContext ? `${contentContext}, ${contentTitle}` : contentTitle;
+  const usesCommunityLayout = variant === 'community' || variant === 'thread';
   const { showToast } = useToast();
   const [likeState, setLikeState] = useState<FeedLikeState>({ likeCount, likedByViewer });
   const confirmedLikeStateRef = useRef(likeState);
@@ -138,7 +139,7 @@ export const SocialReviewPost = memo(function SocialReviewPost({
           <UserAvatar avatarUrl={authorAvatarUrl} displayName={visibleAuthor} size={42} />
           <Text numberOfLines={1} style={styles.author}>{visibleAuthor}</Text>
         </>}
-        {variant !== 'community' ? <Text style={styles.date}>{formatDate(updatedAt)}</Text> : null}
+        {!usesCommunityLayout ? <Text style={styles.date}>{formatDate(updatedAt)}</Text> : null}
       </View>
       <SpoilerGuard reason={spoilerReason} contextLabel={spoilerContextLabel} revealKey={`${spoilerKey ?? ''}:${body}:${visibleContentLabel}`} canReveal={canReveal}>
         <Pressable
@@ -147,35 +148,35 @@ export const SocialReviewPost = memo(function SocialReviewPost({
           onPress={onOpenContent}
           style={({ pressed }) => [
             styles.mediaLink,
-            variant === 'community' ? styles.communityMediaLink : null,
+            usesCommunityLayout ? styles.communityMediaLink : null,
             pressed ? styles.mediaLinkPressed : null,
           ]}
         >
-          {variant !== 'community' ? (
+          {!usesCommunityLayout ? (
             <MediaPoster
               accessibilityLabel={`${contentTitle} artwork`}
               posterUrl={contentImageUrl}
               style={styles.poster}
             />
           ) : null}
-          <View style={[styles.mediaCopy, variant === 'community' ? styles.communityMediaCopy : null]}>
+          <View style={[styles.mediaCopy, usesCommunityLayout ? styles.communityMediaCopy : null]}>
             <View>
-              {variant !== 'community' ? (
+              {!usesCommunityLayout ? (
                 <Text style={styles.mediaMeta}>{contentMeta}</Text>
               ) : null}
               {contentContext ? <Text numberOfLines={2} style={styles.mediaContext}>{contentContext}</Text> : null}
               <Text numberOfLines={2} style={[styles.mediaTitle, contentContext ? styles.episodeTitle : null]}>{contentTitle}</Text>
-              {variant !== 'community' ? (
+              {!usesCommunityLayout ? (
                 <Text style={styles.openLabel}>Open content</Text>
               ) : null}
             </View>
-            {variant === 'community' && rating !== null ? (
+            {usesCommunityLayout && rating !== null ? (
               <View style={styles.communityRating}>
                 <StarRatingDisplay rating={rating} showValue size={22} />
               </View>
             ) : null}
           </View>
-          {variant === 'community' ? (
+          {usesCommunityLayout ? (
             <MediaPoster
               accessibilityLabel={`${contentTitle} artwork`}
               posterUrl={contentImageUrl}
@@ -183,7 +184,7 @@ export const SocialReviewPost = memo(function SocialReviewPost({
             />
           ) : null}
         </Pressable>
-        {variant !== 'community' && rating !== null ? (
+        {!usesCommunityLayout && rating !== null ? (
           <View style={styles.rating}>
             <StarRatingDisplay rating={rating} showValue size={17} />
           </View>
@@ -191,12 +192,12 @@ export const SocialReviewPost = memo(function SocialReviewPost({
         {body ? <ExpandableReviewText
           body={body}
           onPress={variant === 'community' ? onOpenReplies : undefined}
-          style={[styles.review, variant === 'community' ? styles.communityReview : null]}
+          style={[styles.review, usesCommunityLayout ? styles.communityReview : null]}
         /> : null}
       </SpoilerGuard>
-      {variant === 'community' || onReport || onSetLiked ? (
-        <View style={[styles.actions, variant === 'community' ? styles.communityActions : null]}>
-          {variant === 'community' ? (
+      {usesCommunityLayout || onReport || onSetLiked ? (
+        <View style={[styles.actions, usesCommunityLayout ? styles.communityActions : null]}>
+          {usesCommunityLayout ? (
             <Text style={styles.communityFooterMeta}>
               {formatDate(updatedAt)} · {contentMeta}
             </Text>

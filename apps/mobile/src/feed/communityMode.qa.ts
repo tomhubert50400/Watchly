@@ -29,14 +29,14 @@ assert.match(source, /contentContext=\{item\.content\.contentType === 'episode' 
 assert.match(source, /const media = item\.content\.contentType === 'movie' \? 'Movie' : 'Series'/);
 assert.match(source, /return media;/);
 assert.doesNotMatch(source.slice(source.indexOf('function communityLabel')), /Review|Rating/);
-assert.match(socialPostSource, /variant !== 'community' \? \(\s*<Text style=\{styles\.openLabel\}>Open content<\/Text>/);
+assert.match(socialPostSource, /!usesCommunityLayout \? \(\s*<Text style=\{styles\.openLabel\}>Open content<\/Text>/);
 assert.match(socialPostSource, /backgroundColor: 'rgba\(15, 19, 29, 0\.62\)'/);
 assert.match(socialPostSource, /StarRatingDisplay rating=\{rating\} showValue size=\{22\}/);
 assert.match(socialPostSource, /communityRating: \{[\s\S]*?alignItems: 'flex-start',[\s\S]*?alignSelf: 'stretch'/);
 assert.match(socialPostSource, /communityPoster: \{\s*height: 112,\s*width: 75,/);
-assert.match(socialPostSource, /styles\.actions,\s*variant === 'community' \? styles\.communityActions : null/);
-assert.match(socialPostSource, /variant !== 'community' \? <Text style=\{styles\.date\}>\{formatDate\(updatedAt\)\}<\/Text> : null/);
-assert.match(socialPostSource, /variant !== 'community' \? \(\s*<Text style=\{styles\.mediaMeta\}>\{contentMeta\}<\/Text>/);
+assert.match(socialPostSource, /styles\.actions,\s*usesCommunityLayout \? styles\.communityActions : null/);
+assert.match(socialPostSource, /!usesCommunityLayout \? <Text style=\{styles\.date\}>\{formatDate\(updatedAt\)\}<\/Text> : null/);
+assert.match(socialPostSource, /!usesCommunityLayout \? \(\s*<Text style=\{styles\.mediaMeta\}>\{contentMeta\}<\/Text>/);
 assert.match(socialPostSource, /<Text style=\{styles\.communityFooterMeta\}>\s*\{formatDate\(updatedAt\)\} · \{contentMeta\}\s*<\/Text>[\s\S]*?\{reportButton\}/);
 assert.doesNotMatch(socialPostSource, /Like this review|You liked this review|communityHeaderMeta|communityReportButton/);
 assert.match(socialPostSource, /communityActions: \{[\s\S]*?justifyContent: 'space-between',[\s\S]*?marginTop: spacing\.xs,/);

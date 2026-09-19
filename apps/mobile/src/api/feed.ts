@@ -73,6 +73,7 @@ export type ReviewReply = {
   createdAt: string;
   id: string;
   ownedByViewer: boolean;
+  parentReplyId: string | null;
 };
 
 export type ReviewThreadReview = {
@@ -140,10 +141,11 @@ export function createReviewReply(
   target: FeedReviewTarget,
   body: string,
   containsSpoilers: boolean,
+  parentReplyId?: string,
 ) {
   return apiPost<ReviewReply>(
     `/feed/${getReviewCollection(target.type)}/${encodeURIComponent(target.id)}/replies`,
-    { body, containsSpoilers },
+    { body, containsSpoilers, parentReplyId },
     { token },
   );
 }

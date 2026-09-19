@@ -1,6 +1,6 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { EyeOff, Flag, Send, Trash2 } from 'lucide-react-native';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -38,6 +38,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { useToast } from '../notifications/ToastContext';
 import { ReportSheet } from '../reports/ReportSheet';
 import { notifyUserDataChanged } from '../sync/userDataEvents';
+import { flattenReviewReplies, ThreadedReply } from './reviewThreadModel';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ReviewReplies'>;
 
@@ -46,7 +47,8 @@ export function ReviewRepliesScreen({ navigation, route }: Props) {
   const { refreshMovie, refreshSeries } = useCatalogueCache();
   const { showToast } = useToast();
   const insets = useSafeAreaInsets();
-  const listRef = useRef<FlatList<ReviewReply>>(null);
+  const inputRef = useRef<TextInput>(null);
+  const listRef = useRef<FlatList<ThreadedReply>>(null);
   const requestVersion = useRef(0);
   const pagePending = useRef(false);
   const [body, setBody] = useState('');
@@ -58,6 +60,7 @@ export function ReviewRepliesScreen({ navigation, route }: Props) {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [reloadVersion, setReloadVersion] = useState(0);
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
+  const [replyingTo, setReplyingTo] = useState<{ author: string; id: string } | null>(null);
   const [review, setReview] = useState<ReviewThreadPreview | null>(route.params.preview ?? null);
   const [sending, setSending] = useState(false);
   const [threadRevealed, setThreadRevealed] = useState(!route.params.preview?.spoilerReason);
@@ -81,6 +84,7 @@ export function ReviewRepliesScreen({ navigation, route }: Props) {
     setLoading(true);
     setNextCursor(null);
     setReview(route.params.preview ?? null);
+    setReplyingTo(null);
     setSending(false);
     setThreadRevealed(!route.params.preview?.spoilerReason);
 
@@ -140,10 +144,11 @@ export function ReviewRepliesScreen({ navigation, route }: Props) {
     try {
       const token = await getFirebaseIdToken();
       if (!token) throw new Error('Sign in again before replying.');
-      const reply = await createReviewReply(token, route.params.target, normalized, containsSpoilers);
+      const reply = await createReviewReply(token, route.params.target, normalized, containsSpoilers, replyingTo?.id);
       setItems((current) => [...current, reply]);
       setBody('');
       setContainsSpoilers(false);
+      setReplyingTo(null);
       notifyUserDataChanged('feed');
       hapticSuccess();
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
@@ -193,6 +198,7 @@ export function ReviewRepliesScreen({ navigation, route }: Props) {
 
   const discussionVisible = Boolean(review && (!review.spoilerReason || threadRevealed));
   const reviewAuthor = review?.author.displayName?.trim() || 'Watchly member';
+  const threadedReplies = useMemo(() => flattenReviewReplies(items), [items]);
 
   return (
     <SafeAreaView edges={['bottom']} style={styles.safeArea}>
@@ -200,10 +206,10 @@ export function ReviewRepliesScreen({ navigation, route }: Props) {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.layout}>
         <FlatList
           contentContainerStyle={[styles.content, { paddingTop: insets.top + 58 }]}
-          data={discussionVisible ? items : []}
+          data={discussionVisible ? threadedReplies : []}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.reply.id}
           ListEmptyComponent={discussionVisible && !loading && !error ? <Text style={styles.empty}>Start the conversation.</Text> : null}
           ListFooterComponent={discussionVisible ? <>
             {loadingMore ? <ActivityIndicator accessibilityLabel="Loading more replies" color={colors.accent} style={styles.loader} /> : null}
@@ -246,7 +252,7 @@ export function ReviewRepliesScreen({ navigation, route }: Props) {
                 })}
                 rating={review.score}
                 updatedAt={review.updatedAt}
-                variant="community"
+                variant="thread"
               />
               <Text style={styles.repliesTitle}>Replies</Text>
             </> : null}
@@ -254,64 +260,90 @@ export function ReviewRepliesScreen({ navigation, route }: Props) {
           onEndReached={() => { if (!error) void loadMore(); }}
           onEndReachedThreshold={0.8}
           ref={listRef}
-          renderItem={({ item }) => {
+          renderItem={({ item: row }) => {
+            const { reply: item } = row;
             const author = item.author.displayName?.trim() || 'Watchly member';
-            return <View style={styles.reply}>
-              <View style={styles.replyHeader}>
-                <Pressable accessibilityRole="button" onPress={() => navigation.navigate('PublicProfile', { userId: item.author.id })} style={styles.authorButton}>
-                  <UserAvatar avatarUrl={item.author.avatarUrl} displayName={author} size={38} />
-                  <View style={styles.authorCopy}>
-                    <Text numberOfLines={1} style={styles.author}>{author}</Text>
-                    <Text style={styles.date}>{formatReplyDate(item.createdAt)}</Text>
-                  </View>
-                </Pressable>
+            const visualDepth = Math.min(row.depth, 4);
+            return <View style={styles.threadedReply}>
+              {visualDepth > 0 ? <View style={[styles.threadRails, { width: visualDepth * 14 }]}>
+                {Array.from({ length: visualDepth }, (_, index) => <View key={index} style={styles.threadLineSlot}><View style={styles.threadLine} /></View>)}
+              </View> : null}
+              <View style={styles.reply}>
+                <View style={styles.replyHeader}>
+                  <Pressable accessibilityRole="button" onPress={() => navigation.navigate('PublicProfile', { userId: item.author.id })} style={styles.authorButton}>
+                    <UserAvatar avatarUrl={item.author.avatarUrl} displayName={author} size={38} />
+                    <View style={styles.authorCopy}>
+                      <Text numberOfLines={1} style={styles.author}>{author}</Text>
+                      <Text style={styles.date}>{formatReplyDate(item.createdAt)}</Text>
+                    </View>
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel={item.ownedByViewer ? 'Delete your reply' : `Report ${author}'s reply`}
+                    accessibilityRole="button"
+                    onPress={() => item.ownedByViewer ? confirmDelete(item) : setReportTarget({ id: item.id, label: `Reply by ${author}`, type: 'reviewReply' })}
+                    style={styles.iconButton}
+                  >
+                    {item.ownedByViewer ? <Trash2 color={colors.danger} size={17} /> : <Flag color={colors.textMuted} size={17} />}
+                  </Pressable>
+                </View>
+                <SpoilerGuard contextLabel={`Reply by ${author}`} reason={item.containsSpoilers ? 'This reply contains spoilers' : null} revealKey={item.id}>
+                  <Text style={styles.replyBody}>{item.body}</Text>
+                </SpoilerGuard>
                 <Pressable
-                  accessibilityLabel={item.ownedByViewer ? 'Delete your reply' : `Report ${author}'s reply`}
+                  accessibilityLabel={`Reply to ${author}`}
                   accessibilityRole="button"
-                  onPress={() => item.ownedByViewer ? confirmDelete(item) : setReportTarget({ id: item.id, label: `Reply by ${author}`, type: 'reviewReply' })}
-                  style={styles.iconButton}
+                  onPress={() => {
+                    setReplyingTo({ author, id: item.id });
+                    requestAnimationFrame(() => inputRef.current?.focus());
+                  }}
+                  style={styles.replyAction}
                 >
-                  {item.ownedByViewer ? <Trash2 color={colors.danger} size={17} /> : <Flag color={colors.textMuted} size={17} />}
+                  <Text style={styles.replyActionLabel}>Reply</Text>
                 </Pressable>
               </View>
-              <SpoilerGuard contextLabel={`Reply by ${author}`} reason={item.containsSpoilers ? 'This reply contains spoilers' : null} revealKey={item.id}>
-                <Text style={styles.replyBody}>{item.body}</Text>
-              </SpoilerGuard>
             </View>;
           }}
           showsVerticalScrollIndicator={false}
         />
         {discussionVisible ? <View style={styles.composer}>
-          <Pressable
-            accessibilityLabel={containsSpoilers ? 'Remove spoiler warning' : 'Mark reply as containing spoilers'}
-            accessibilityRole="button"
-            accessibilityState={{ selected: containsSpoilers }}
-            disabled={sending}
-            onPress={() => setContainsSpoilers((current) => !current)}
-            style={[styles.composerIcon, containsSpoilers ? styles.composerIconSelected : null]}
-          >
-            <EyeOff color={containsSpoilers ? colors.accentText : colors.textMuted} size={19} />
-          </Pressable>
-          <TextInput
-            accessibilityLabel="Write a reply"
-            editable={!sending}
-            maxLength={1000}
-            multiline
-            onChangeText={setBody}
-            placeholder={`Reply to ${reviewAuthor}`}
-            placeholderTextColor={colors.textSubtle}
-            style={styles.input}
-            value={body}
-          />
-          <Pressable
-            accessibilityLabel="Send reply"
-            accessibilityRole="button"
-            disabled={!body.trim() || sending}
-            onPress={() => void sendReply()}
-            style={({ pressed }) => [styles.sendButton, (!body.trim() || sending) ? styles.sendButtonDisabled : null, pressed ? styles.sendButtonPressed : null]}
-          >
-            {sending ? <ActivityIndicator color={colors.textOnAccent} size="small" /> : <Send color={colors.textOnAccent} size={18} />}
-          </Pressable>
+          {replyingTo ? <View style={styles.replyingTo}>
+            <Text numberOfLines={1} style={styles.replyingToLabel}>Replying to {replyingTo.author}</Text>
+            <Pressable accessibilityRole="button" onPress={() => setReplyingTo(null)}><Text style={styles.cancelReply}>Cancel</Text></Pressable>
+          </View> : null}
+          <View style={styles.composerRow}>
+            <Pressable
+              accessibilityLabel={containsSpoilers ? 'Remove spoiler warning' : 'Mark reply as containing spoilers'}
+              accessibilityRole="button"
+              accessibilityState={{ selected: containsSpoilers }}
+              disabled={sending}
+              onPress={() => setContainsSpoilers((current) => !current)}
+              style={[styles.composerIcon, containsSpoilers ? styles.composerIconSelected : null]}
+            >
+              <EyeOff color={containsSpoilers ? colors.accentText : colors.textMuted} size={18} />
+              <Text style={[styles.spoilerLabel, containsSpoilers ? styles.spoilerLabelSelected : null]}>Spoiler</Text>
+            </Pressable>
+            <TextInput
+              accessibilityLabel="Write a reply"
+              editable={!sending}
+              maxLength={1000}
+              multiline
+              onChangeText={setBody}
+              placeholder={`Reply to ${replyingTo?.author ?? reviewAuthor}`}
+              placeholderTextColor={colors.textSubtle}
+              ref={inputRef}
+              style={styles.input}
+              value={body}
+            />
+            <Pressable
+              accessibilityLabel="Send reply"
+              accessibilityRole="button"
+              disabled={!body.trim() || sending}
+              onPress={() => void sendReply()}
+              style={({ pressed }) => [styles.sendButton, (!body.trim() || sending) ? styles.sendButtonDisabled : null, pressed ? styles.sendButtonPressed : null]}
+            >
+              {sending ? <ActivityIndicator color={colors.textOnAccent} size="small" /> : <Send color={colors.textOnAccent} size={18} />}
+            </Pressable>
+          </View>
         </View> : null}
       </KeyboardAvoidingView>
       <ReportSheet onClose={() => setReportTarget(null)} target={reportTarget} />
@@ -376,9 +408,11 @@ const styles = StyleSheet.create({
   author: { color: colors.text, fontSize: 14, fontWeight: '800' },
   authorButton: { alignItems: 'center', flex: 1, flexDirection: 'row', gap: spacing.sm, minHeight: touchTargets.min },
   authorCopy: { flex: 1 },
-  composer: { alignItems: 'flex-end', backgroundColor: 'rgba(9, 12, 19, 0.92)', borderTopColor: colors.borderStrong, borderTopWidth: StyleSheet.hairlineWidth, flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  composerIcon: { alignItems: 'center', borderRadius: 22, height: touchTargets.min, justifyContent: 'center', width: touchTargets.min },
+  cancelReply: { ...typography.meta, color: colors.accentText },
+  composer: { backgroundColor: 'rgba(9, 12, 19, 0.92)', borderTopColor: colors.borderStrong, borderTopWidth: StyleSheet.hairlineWidth, gap: spacing.xs, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  composerIcon: { alignItems: 'center', borderRadius: radii.md, flexDirection: 'row', gap: 4, height: touchTargets.min, justifyContent: 'center', paddingHorizontal: spacing.sm },
   composerIconSelected: { backgroundColor: colors.accentSoft },
+  composerRow: { alignItems: 'flex-end', flexDirection: 'row', gap: spacing.sm },
   content: { flexGrow: 1, paddingBottom: spacing.xl, paddingHorizontal: spacing.md },
   date: { ...typography.meta, color: colors.textSubtle },
   empty: { ...typography.body, color: colors.textMuted, paddingVertical: spacing.xl, textAlign: 'center' },
@@ -389,15 +423,25 @@ const styles = StyleSheet.create({
   layout: { flex: 1 },
   loader: { marginVertical: spacing.lg },
   repliesTitle: { ...typography.title, borderBottomColor: colors.borderStrong, borderBottomWidth: StyleSheet.hairlineWidth, color: colors.text, paddingBottom: spacing.md, paddingTop: spacing.xl },
-  reply: { backgroundColor: 'rgba(15, 19, 29, 0.72)', borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.md },
+  reply: { flex: 1, gap: spacing.sm, minWidth: 0, paddingVertical: spacing.md },
+  replyAction: { alignItems: 'flex-start', alignSelf: 'flex-start', justifyContent: 'center', minHeight: 32, paddingRight: spacing.md },
+  replyActionLabel: { ...typography.meta, color: colors.textMuted },
   replyBody: { ...typography.body, color: colors.text },
   replyHeader: { alignItems: 'center', flexDirection: 'row' },
+  replyingTo: { alignItems: 'center', flexDirection: 'row', gap: spacing.sm, justifyContent: 'space-between' },
+  replyingToLabel: { ...typography.meta, color: colors.textMuted, flex: 1 },
   safeArea: { backgroundColor: colors.background, flex: 1 },
   sendButton: { alignItems: 'center', backgroundColor: colors.accent, borderRadius: 22, height: touchTargets.min, justifyContent: 'center', width: touchTargets.min },
   sendButtonDisabled: { opacity: 0.4 },
   sendButtonPressed: { backgroundColor: colors.accentPressed, transform: [{ scale: 0.96 }] },
-  threadGuard: { alignItems: 'center', backgroundColor: 'rgba(15, 19, 29, 0.74)', borderColor: colors.borderStrong, borderRadius: radii.lg, borderWidth: 1, gap: spacing.sm, marginTop: spacing.md, padding: spacing.xl },
+  spoilerLabel: { ...typography.meta, color: colors.textMuted },
+  spoilerLabelSelected: { color: colors.accentText },
+  threadGuard: { alignItems: 'center', borderBottomColor: colors.borderStrong, borderBottomWidth: StyleSheet.hairlineWidth, gap: spacing.sm, marginTop: spacing.md, padding: spacing.xl },
   threadGuardBody: { ...typography.body, color: colors.textMuted, textAlign: 'center' },
   threadGuardTitle: { ...typography.title, color: colors.text, textAlign: 'center' },
   threadHeader: { gap: spacing.md },
+  threadedReply: { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: 'row' },
+  threadLine: { backgroundColor: colors.borderStrong, flex: 1, width: StyleSheet.hairlineWidth },
+  threadLineSlot: { alignItems: 'center', width: 14 },
+  threadRails: { alignSelf: 'stretch', flexDirection: 'row' },
 });

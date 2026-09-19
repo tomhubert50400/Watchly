@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-expect-error QA runs under Node, outside the Expo runtime types.
 import { readFileSync } from 'node:fs';
+import { flattenReviewReplies } from './reviewThreadModel';
 
 const api = readFileSync(new URL('../api/feed.ts', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../../App.tsx', import.meta.url), 'utf8');
@@ -27,5 +28,29 @@ assert.match(screen, /type: 'reviewReply'/);
 assert.match(screen, /onEndReachedThreshold=\{0\.8\}/);
 assert.match(screen, /styles\.composer/);
 assert.doesNotMatch(screen, /BottomActionSheet/);
+assert.match(screen, /Replying to \{replyingTo\.author\}/);
+assert.match(screen, /Math\.min\(row\.depth, 4\)/);
+assert.match(screen, /styles\.threadLine/);
+assert.match(screen, />Spoiler<\/Text>/);
+assert.doesNotMatch(screen, /backgroundColor: 'rgba\(15, 19, 29, 0\.72\)'/);
+
+const reply = (id: string, parentReplyId: string | null) => ({
+  author: { avatarUrl: null, displayName: id, id },
+  body: id,
+  containsSpoilers: false,
+  createdAt: '2026-09-19T00:00:00.000Z',
+  id,
+  ownedByViewer: false,
+  parentReplyId,
+});
+const threaded = flattenReviewReplies([
+  reply('root', null),
+  reply('child', 'root'),
+  reply('other', null),
+  reply('grandchild', 'child'),
+]);
+assert.deepEqual(threaded.map((item) => [item.reply.id, item.depth]), [
+  ['root', 0], ['child', 1], ['grandchild', 2], ['other', 0],
+]);
 
 console.log('Review replies mobile QA passed: dedicated thread screen, composer, spoilers, moderation and pagination.');
