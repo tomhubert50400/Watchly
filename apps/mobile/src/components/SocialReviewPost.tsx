@@ -171,7 +171,7 @@ export const SocialReviewPost = memo(function SocialReviewPost({
         {body ? <ExpandableReviewText body={body} style={[styles.review, variant === 'community' ? styles.communityReview : null]} /> : null}
       </SpoilerGuard>
       {onReport || onSetLiked ? (
-        <View style={styles.actions}>
+        <View style={[styles.actions, variant === 'community' ? styles.communityActions : null]}>
           {onReport ? (
             <Pressable
               accessibilityLabel={`Report ${visibleAuthor}'s review`}
@@ -268,6 +268,9 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.md,
   },
+  communityActions: {
+    marginTop: spacing.xs,
+  },
   communityMediaCopy: {
     alignSelf: 'stretch',
     justifyContent: 'center',
@@ -279,6 +282,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
     borderRadius: radii.lg,
     borderWidth: 1,
+    paddingBottom: spacing.xs,
     paddingHorizontal: spacing.md,
   },
   communityPoster: {
