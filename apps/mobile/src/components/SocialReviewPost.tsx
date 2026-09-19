@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
     width: 75,
   },
   communityRating: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     alignSelf: 'stretch',
     marginTop: spacing.xs,
   },

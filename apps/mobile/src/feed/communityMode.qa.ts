@@ -24,7 +24,7 @@ assert.doesNotMatch(source.slice(source.indexOf('function communityLabel')), /Re
 assert.match(socialPostSource, /variant !== 'community' \? \(\s*<Text style=\{styles\.openLabel\}>Open content<\/Text>/);
 assert.match(socialPostSource, /backgroundColor: 'rgba\(15, 19, 29, 0\.62\)'/);
 assert.match(socialPostSource, /StarRatingDisplay rating=\{rating\} showValue size=\{22\}/);
-assert.match(socialPostSource, /communityRating: \{[\s\S]*?alignItems: 'center',[\s\S]*?alignSelf: 'stretch'/);
+assert.match(socialPostSource, /communityRating: \{[\s\S]*?alignItems: 'flex-start',[\s\S]*?alignSelf: 'stretch'/);
 assert.match(socialPostSource, /communityPoster: \{\s*height: 112,\s*width: 75,/);
 const pagination = source.slice(source.indexOf('  async function loadMore()'), source.indexOf('  const openContent'));
 async function run() {
