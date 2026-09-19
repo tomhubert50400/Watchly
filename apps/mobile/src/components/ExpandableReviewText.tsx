@@ -16,11 +16,12 @@ const collapsedLineCount = 5;
 
 type ExpandableReviewTextProps = {
   body: string;
+  onPress?: () => void;
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
 };
 
-export function ExpandableReviewText({ body, style, textStyle }: ExpandableReviewTextProps) {
+export function ExpandableReviewText({ body, onPress, style, textStyle }: ExpandableReviewTextProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [canExpand, setCanExpand] = useState(false);
 
@@ -44,22 +45,28 @@ export function ExpandableReviewText({ body, style, textStyle }: ExpandableRevie
       >
         {body}
       </Text>
-      <Text
-        numberOfLines={isExpanded ? undefined : collapsedLineCount}
-        style={[styles.body, textStyle]}
-      >
-        {body}
-      </Text>
+      {onPress ? (
+        <Pressable
+          accessibilityLabel="Open review discussion"
+          accessibilityRole="button"
+          onPress={onPress}
+          style={({ pressed }) => pressed ? styles.reviewPressed : null}
+        >
+          <Text numberOfLines={collapsedLineCount} style={[styles.body, textStyle]}>{body}</Text>
+        </Pressable>
+      ) : (
+        <Text numberOfLines={isExpanded ? undefined : collapsedLineCount} style={[styles.body, textStyle]}>{body}</Text>
+      )}
       {canExpand ? (
         <Pressable
-          accessibilityLabel={isExpanded ? 'Collapse review' : 'Expand full review'}
+          accessibilityLabel={onPress ? 'Open review discussion' : isExpanded ? 'Collapse review' : 'Expand full review'}
           accessibilityRole="button"
-          accessibilityState={{ expanded: isExpanded }}
+          accessibilityState={onPress ? undefined : { expanded: isExpanded }}
           hitSlop={8}
-          onPress={() => setIsExpanded((current) => !current)}
+          onPress={onPress ?? (() => setIsExpanded((current) => !current))}
           style={({ pressed }) => [styles.toggle, pressed ? styles.togglePressed : null]}
         >
-          <Text style={styles.toggleLabel}>{isExpanded ? 'Show less' : 'Read more'}</Text>
+          <Text style={styles.toggleLabel}>{onPress ? 'Open discussion' : isExpanded ? 'Show less' : 'Read more'}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -76,6 +83,9 @@ const styles = StyleSheet.create({
     opacity: 0,
     position: 'absolute',
     right: 0,
+  },
+  reviewPressed: {
+    opacity: 0.72,
   },
   toggle: {
     alignItems: 'flex-start',

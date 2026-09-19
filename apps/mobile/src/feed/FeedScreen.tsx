@@ -1,12 +1,12 @@
 import { EyeOff } from 'lucide-react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { CompositeNavigationProp, RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { useCallback, useRef, useState } from 'react';
+import { CompositeNavigationProp, useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import type { MovieDetails, SeriesDetails } from '../api/catalogue';
 import { getEpisodeDetails } from '../api/catalogue';
-import { CommunityItem, CommunityMode, getCommunityFeed, setFeedItemLiked } from '../api/feed';
+import { CommunityItem, CommunityMode, FeedItem, getCommunityFeed, setFeedItemLiked } from '../api/feed';
 import type { ReportTarget } from '../api/reports';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
@@ -27,7 +27,6 @@ import { RootStackParamList, RootTabParamList } from '../navigation/types';
 import { ReportSheet } from '../reports/ReportSheet';
 import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
 import { SpoilerSettingsSheet } from './SpoilerSettingsSheet';
-import { ReviewRepliesSheet, ReviewRepliesTarget } from './ReviewRepliesSheet';
 import { spoilerReason } from './spoilerModel';
 import { useSpoilerPreferences } from './useSpoilerPreferences';
 
@@ -35,8 +34,8 @@ type FeedNavigation = CompositeNavigationProp<
   BottomTabNavigationProp<RootTabParamList, 'Community'>,
   NativeStackNavigationProp<RootStackParamList>
 >;
-type FeedRoute = RouteProp<RootTabParamList, 'Community'>;
 export type HydratedFeedItem = CommunityItem & {
+  contentBackgroundUrl: string | null;
   contentImageUrl: string | null;
   contentSubtitle: string;
   contentTitle: string;
@@ -86,13 +85,10 @@ export async function loadCommunityFeed(
 
 export function FeedScreen() {
   const navigation = useNavigation<FeedNavigation>();
-  const route = useRoute<FeedRoute>();
   const { currentUser, firebaseIdToken } = useAuthSession();
   const feedRevision = useUserDataRevision('feed', 'opinions', 'profile', 'socialGraph', 'tracking', 'viewings', 'episodeProgress', 'watchlists', 'releaseAlerts');
   const { refreshMovie, refreshSeries } = useCatalogueCache();
   const [reportTarget, setReportTarget] = useState<ReportTarget | null>(null);
-  const [repliesTarget, setRepliesTarget] = useState<ReviewRepliesTarget | null>(null);
-  const handledReplyRequest = useRef<string | null>(null);
   const [spoilerSettingsOpen, setSpoilerSettingsOpen] = useState(false);
   const protection = useSpoilerPreferences(currentUser?.id ?? 'signed-out');
   const [mode, setMode] = useState<CommunityMode>('for-you');
@@ -125,20 +121,6 @@ export function FeedScreen() {
   const items = [...(resource.data ?? []), ...extraItems];
   const nextCursor = extra.base === resource.data ? extra.cursor : resource.data?.at(-1)?.nextCursor;
   const atmosphereUrl = homeCatalogue.data?.hero?.posterUrl ?? homeCatalogue.data?.hero?.backdropUrl ?? null;
-
-  useEffect(() => {
-    const requestKey = route.params?.requestKey;
-    const target = route.params?.replyTarget;
-    if (!requestKey || !target || handledReplyRequest.current === requestKey) return;
-    handledReplyRequest.current = requestKey;
-    setRepliesTarget({
-      ...target,
-      authorDisplayName: 'review author',
-      contentTitle: 'Review discussion',
-      spoilerReason: null,
-    });
-    navigation.setParams({ replyTarget: undefined, requestKey: undefined });
-  }, [navigation, route.params?.replyTarget, route.params?.requestKey]);
 
   async function loadMore() {
     if (!firebaseIdToken || !nextCursor || pagePending.current) return;
@@ -229,6 +211,7 @@ export function FeedScreen() {
         ) : <ScreenReveal delay={100} style={styles.list}>
           {items.map((item) => {
             const reviewType = item.type === 'movieReview' || item.type === 'episodeReview' ? item.type : null;
+            const reviewSpoilerReason = protection.loaded ? spoilerReason(protection.preferences, item) : 'Loading spoiler protection';
             return <SocialReviewPost
               authorAvatarUrl={item.author.avatarUrl}
               authorDisplayName={item.author.displayName}
@@ -240,18 +223,33 @@ export function FeedScreen() {
               key={item.id}
               likeCount={item.likeCount}
               likedByViewer={item.likedByViewer}
-              spoilerReason={protection.loaded ? spoilerReason(protection.preferences, item) : 'Loading spoiler protection'}
+              spoilerReason={reviewSpoilerReason}
               spoilerKey={`${currentUser?.id}:${item.id}:${JSON.stringify(protection.preferences)}`}
               spoilerContextLabel={item.content.contentType === 'episode' ? `${item.seriesTitle ?? 'Episode'} / S${item.content.seasonNumber} E${item.content.episodeNumber}` : item.contentTitle}
               canReveal={protection.loaded}
               onOpenAuthor={() => navigation.navigate('PublicProfile', { userId: item.author.id })}
               onOpenContent={() => openContent(item)}
-              onOpenReplies={reviewType ? () => setRepliesTarget({
-                authorDisplayName: item.author.displayName?.trim() || 'Watchly member',
-                contentTitle: item.contentTitle,
-                id: item.id,
-                spoilerReason: protection.loaded ? spoilerReason(protection.preferences, item) : 'Loading spoiler protection',
-                type: reviewType,
+              onOpenReplies={reviewType ? () => navigation.navigate('ReviewReplies', {
+                preview: {
+                  author: item.author,
+                  backgroundUrl: item.contentBackgroundUrl,
+                  body: item.body,
+                  content: item.content as FeedItem['content'],
+                  contentContext: item.content.contentType === 'episode' && item.seriesTitle
+                    ? `${item.seriesTitle} · S${item.content.seasonNumber} E${item.content.episodeNumber}`
+                    : null,
+                  contentImageUrl: item.contentImageUrl,
+                  contentMeta: item.contentSubtitle,
+                  contentTitle: item.contentTitle,
+                  id: item.id,
+                  likeCount: item.likeCount,
+                  likedByViewer: item.likedByViewer,
+                  score: item.score,
+                  spoilerReason: reviewSpoilerReason,
+                  type: reviewType,
+                  updatedAt: item.updatedAt,
+                },
+                target: { id: item.id, type: reviewType },
               }) : undefined}
               onReport={currentUser?.id === item.author.id || !reviewType ? undefined : () => setReportTarget({
                 id: item.id, label: `Review by ${item.author.displayName?.trim() || 'Watchly member'}`, type: reviewType,
@@ -274,21 +272,6 @@ export function FeedScreen() {
           ) : null}
         </ScreenReveal>}
       </>}
-      <ReviewRepliesSheet
-        onClose={() => {
-          setRepliesTarget(null);
-          resource.revalidate();
-        }}
-        onOpenAuthor={(userId) => {
-          setRepliesTarget(null);
-          navigation.navigate('PublicProfile', { userId });
-        }}
-        onReport={(target) => {
-          setRepliesTarget(null);
-          setReportTarget(target);
-        }}
-        target={repliesTarget}
-      />
       <ReportSheet onClose={() => setReportTarget(null)} target={reportTarget} />
       <SpoilerSettingsSheet userId={currentUser?.id ?? 'signed-out'} visible={spoilerSettingsOpen} onClose={() => setSpoilerSettingsOpen(false)} />
     </Screen>
@@ -306,20 +289,20 @@ async function hydrateFeedItem(
   try {
     if (item.content.contentType === 'movie') {
       const movie = await loadMovie(item.content.tmdbId);
-      return { ...base, contentImageUrl: movie.posterUrl, contentTitle: movie.title, releaseDate: movie.releaseDate, seriesTitle: null };
+      return { ...base, contentBackgroundUrl: movie.backdropUrl ?? movie.posterUrl, contentImageUrl: movie.posterUrl, contentTitle: movie.title, releaseDate: movie.releaseDate, seriesTitle: null };
     }
     if (item.content.contentType === 'series') {
       const series = await loadSeries(item.content.seriesTmdbId);
-      return { ...base, contentImageUrl: series.posterUrl, contentTitle: series.title, releaseDate: series.firstAirDate, seriesTitle: series.title };
+      return { ...base, contentBackgroundUrl: series.backdropUrl ?? series.posterUrl, contentImageUrl: series.posterUrl, contentTitle: series.title, releaseDate: series.firstAirDate, seriesTitle: series.title };
     }
     const [episodeResponse, series] = await Promise.all([
       getEpisodeDetails(item.content.seriesTmdbId, item.content.seasonNumber, item.content.episodeNumber),
       loadSeries(item.content.seriesTmdbId),
     ]);
-    return { ...base, contentImageUrl: episodeResponse.item.stillUrl, contentTitle: episodeResponse.item.title, releaseDate: episodeResponse.item.airDate, seriesTitle: series.title };
+    return { ...base, contentBackgroundUrl: series.backdropUrl ?? episodeResponse.item.stillUrl ?? series.posterUrl, contentImageUrl: episodeResponse.item.stillUrl, contentTitle: episodeResponse.item.title, releaseDate: episodeResponse.item.airDate, seriesTitle: series.title };
   } catch {
     return previous ? { ...previous, ...base } : {
-      ...base, contentImageUrl: null, contentTitle: item.content.contentType === 'movie' ? `Movie TMDB ${item.content.tmdbId}` : 'Series',
+      ...base, contentBackgroundUrl: null, contentImageUrl: null, contentTitle: item.content.contentType === 'movie' ? `Movie TMDB ${item.content.tmdbId}` : 'Series',
       releaseDate: null, seriesTitle: null,
     };
   }

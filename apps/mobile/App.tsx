@@ -20,6 +20,7 @@ import { ActorDetailScreen } from './src/catalogue/ActorDetailScreen';
 import { SeriesDetailScreen } from './src/catalogue/SeriesDetailScreen';
 import { colors } from './src/design/tokens';
 import { FeedScreen } from './src/feed/FeedScreen';
+import { ReviewRepliesScreen } from './src/feed/ReviewRepliesScreen';
 import { HomeScreen } from './src/home/HomeScreen';
 import { ImportDataScreen } from './src/imports/ImportDataScreen';
 import { ImportMatchesScreen } from './src/imports/ImportMatchesScreen';
@@ -322,6 +323,7 @@ function AppNavigator() {
             />
             <Stack.Screen component={FilmDetailScreen} name="FilmDetail" options={{ title: '' }} />
             <Stack.Screen component={MovieReviewsScreen} name="MovieReviews" options={{ title: 'Reviews' }} />
+            <Stack.Screen component={ReviewRepliesScreen} name="ReviewReplies" options={{ title: 'Discussion' }} />
             <Stack.Screen component={ActorDetailScreen} name="ActorDetail" getId={({ params }) => String(params.tmdbId)} options={{ title: '' }} />
             <Stack.Screen
               component={PersonalWatchlistScreen}

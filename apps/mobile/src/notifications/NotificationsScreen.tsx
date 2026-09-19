@@ -347,7 +347,7 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
     } else if (target.name === 'SharedVotingSession') {
       navigation.navigate(target.name, target.params);
     } else {
-      navigation.navigate('MainTabs', target.params);
+      navigation.navigate('ReviewReplies', target.params);
     }
   }, [navigation]);
 

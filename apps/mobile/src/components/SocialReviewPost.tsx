@@ -188,7 +188,11 @@ export const SocialReviewPost = memo(function SocialReviewPost({
             <StarRatingDisplay rating={rating} showValue size={17} />
           </View>
         ) : null}
-        {body ? <ExpandableReviewText body={body} style={[styles.review, variant === 'community' ? styles.communityReview : null]} /> : null}
+        {body ? <ExpandableReviewText
+          body={body}
+          onPress={variant === 'community' ? onOpenReplies : undefined}
+          style={[styles.review, variant === 'community' ? styles.communityReview : null]}
+        /> : null}
       </SpoilerGuard>
       {variant === 'community' || onReport || onSetLiked ? (
         <View style={[styles.actions, variant === 'community' ? styles.communityActions : null]}>

@@ -75,15 +75,31 @@ export type ReviewReply = {
   ownedByViewer: boolean;
 };
 
+export type ReviewThreadReview = {
+  author: FeedAuthor;
+  body: string;
+  content: FeedItem['content'];
+  id: string;
+  likeCount: number;
+  likedByViewer: boolean;
+  score: number | null;
+  type: FeedReviewTarget['type'];
+  updatedAt: string;
+};
+
+export type ReviewThreadPreview = ReviewThreadReview & {
+  backgroundUrl: string | null;
+  contentContext: string | null;
+  contentImageUrl: string | null;
+  contentMeta: string;
+  contentTitle: string;
+  spoilerReason: string | null;
+};
+
 export type ReviewRepliesResponse = {
   items: ReviewReply[];
   nextCursor: string | null;
-  review: {
-    author: FeedAuthor;
-    body: string;
-    id: string;
-    type: FeedReviewTarget['type'];
-  };
+  review: ReviewThreadReview;
 };
 
 export function getCommunityFeed(token: string, cursor?: string, mode: CommunityMode = 'for-you') {

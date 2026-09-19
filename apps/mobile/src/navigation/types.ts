@@ -6,12 +6,10 @@ import type { LibraryMediaItem } from '../library/useLibraryData';
 import type { ProfileMediaFilter } from '../profile/profileMediaModel';
 import type { DiscoverMood } from '../api/discover';
 import type { CatalogueSearchType } from '../api/catalogue';
+import type { FeedReviewTarget, ReviewThreadPreview } from '../api/feed';
 
 export type RootTabParamList = {
-  Community: {
-    replyTarget?: { id: string; type: 'episodeReview' | 'movieReview' };
-    requestKey?: string;
-  } | undefined;
+  Community: undefined;
   Explore: undefined;
   Home: undefined;
   Library: { view?: 'watchlists' | 'progress' } | undefined;
@@ -43,6 +41,7 @@ export type RootStackParamList = {
     tmdbId: number;
   };
   MovieReviews: { title: string; tmdbId: number; artworkUrl?: string | null };
+  ReviewReplies: { preview?: ReviewThreadPreview; target: FeedReviewTarget };
   ImportData: undefined;
   ImportMatches: {
     matchedItems: ImportReviewMatch[];

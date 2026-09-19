@@ -30,16 +30,7 @@ export type NotificationTarget =
   | { name: 'FilmDetail'; params: { title: string; tmdbId: number } }
   | { name: 'SeriesDetail'; params: { title: string; tmdbId: number } }
   | { name: 'SharedWatchlist'; params: { title: string; watchlistId: string } }
-  | {
-      name: 'MainTabs';
-      params: {
-        screen: 'Community';
-        params: {
-          replyTarget: { id: string; type: 'episodeReview' | 'movieReview' };
-          requestKey: string;
-        };
-      };
-    }
+  | { name: 'ReviewReplies'; params: { target: { id: string; type: 'episodeReview' | 'movieReview' } } }
   | {
       name: 'SharedVotingSession';
       params: { sessionId: string; title: string; watchlistId: string };
@@ -158,13 +149,9 @@ export function mapNotificationTarget(item: NotificationItem): NotificationTarge
     (metadata.reviewType === 'movieReview' || metadata.reviewType === 'episodeReview')
   ) {
     return {
-      name: 'MainTabs',
+      name: 'ReviewReplies',
       params: {
-        screen: 'Community',
-        params: {
-          replyTarget: { id: metadata.reviewId, type: metadata.reviewType },
-          requestKey: item.id,
-        },
+        target: { id: metadata.reviewId, type: metadata.reviewType },
       },
     };
   }
