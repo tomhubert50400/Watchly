@@ -24,7 +24,7 @@ assert.deepEqual(getStarFillRatios(0), [0, 0, 0, 0, 0]);
 assert.deepEqual(getStarFillRatios(5), [1, 1, 1, 1, 1]);
 assert.match(
   starRatingSource,
-  /fillClip, \{ height: size, width: size \* fill \}/,
+  /const glyphHeight = Math\.ceil\(size \* 1\.4\);[\s\S]*fillClip, \{ height: glyphHeight, width: size \* fill \}/,
   'pink rating fill must have visible height',
 );
 assert.match(
