@@ -14,6 +14,14 @@ runInNewContext(ts.transpileModule(keySource, { compilerOptions: { module: ts.Mo
 assert.notEqual(exported.getCommunityFeedKey('a', 'for-you'), exported.getCommunityFeedKey('a', 'following'));
 assert.notEqual(exported.getCommunityFeedKey('a', 'following'), exported.getCommunityFeedKey('b', 'following'));
 assert.equal(exported.getCommunityFeedKey('a'), exported.getCommunityFeedKey('a', 'for-you'));
+assert.equal(exported.isCommunityFeedNearEnd(4_001, 1_000, 1_000), false, 'three screens remaining must not preload yet');
+assert.equal(exported.isCommunityFeedNearEnd(4_000, 1_000, 1_000), true, 'two screens remaining must preload');
+assert.equal(exported.isCommunityFeedNearEnd(1_000, 0, 0), false, 'an unmeasured viewport must not preload');
+assert.match(source, /onScroll=\{\(\{ nativeEvent \}\) => \{[\s\S]*?isCommunityFeedNearEnd\([\s\S]*?void loadMore\(\)/);
+assert.match(source, /scrollEventThrottle=\{100\}/);
+assert.match(source, /ActivityIndicator accessibilityLabel="Loading more posts"/);
+assert.match(source, /<Button label="Retry" onPress=\{\(\) => void loadMore\(\)\}/);
+assert.doesNotMatch(source, /<Button label="Load more"/);
 assert.match(source, /background=\{atmosphereUrl \? <SpotlightAtmosphere imageUrl=\{atmosphereUrl\} \/> : null\}/);
 assert.match(source, /variant="community"/);
 assert.doesNotMatch(source.slice(source.indexOf('function communityLabel')), /Discover|Following/);

@@ -25,9 +25,11 @@ type ScreenProps = PropsWithChildren<{
   horizontalPadding?: boolean | number;
   leading?: ReactNode;
   nativeKeyboardInsetsOnly?: boolean;
+  onScroll?: ScrollViewProps['onScroll'];
   refreshControl?: ScrollViewProps['refreshControl'];
   safeAreaEdges?: ('top' | 'right' | 'bottom' | 'left')[];
   scrollViewRef?: RefObject<ScrollView | null>;
+  scrollEventThrottle?: number;
   statusBanner?: ReactNode;
   tabBarPadding?: boolean | number;
   title: string;
@@ -45,9 +47,11 @@ export function Screen({
   horizontalPadding = true,
   leading,
   nativeKeyboardInsetsOnly = false,
+  onScroll,
   refreshControl,
   safeAreaEdges = ['top'],
   scrollViewRef: providedScrollViewRef,
+  scrollEventThrottle,
   statusBanner,
   tabBarPadding = false,
   title,
@@ -93,8 +97,10 @@ export function Screen({
           ]}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
+          onScroll={onScroll}
           refreshControl={refreshControl}
           ref={scrollViewRef}
+          scrollEventThrottle={scrollEventThrottle}
           showsVerticalScrollIndicator={false}
           stickyHeaderIndices={headerMode === 'sticky' && hasHeader ? [0] : undefined}
           style={styles.container}

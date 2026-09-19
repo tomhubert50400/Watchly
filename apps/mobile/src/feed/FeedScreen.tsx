@@ -2,7 +2,7 @@ import { EyeOff } from 'lucide-react-native';
 import { useCallback, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import type { MovieDetails, SeriesDetails } from '../api/catalogue';
 import { getEpisodeDetails } from '../api/catalogue';
 import { CommunityItem, CommunityMode, getCommunityFeed, setFeedItemLiked } from '../api/feed';
@@ -41,6 +41,10 @@ export type HydratedFeedItem = CommunityItem & {
 
 export function getCommunityFeedKey(userId: string, mode: CommunityMode = 'for-you') {
   return `watchly:user:${userId}:community-feed:v3:${mode}`;
+}
+
+export function isCommunityFeedNearEnd(contentHeight: number, offsetY: number, viewportHeight: number) {
+  return viewportHeight > 0 && contentHeight - offsetY - viewportHeight <= viewportHeight * 2;
 }
 
 export async function loadCommunityFeed(
@@ -153,7 +157,13 @@ export function FeedScreen() {
   return (
     <Screen contentReady={!resource.isInitialLoading || items.length > 0}
       background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null}
+      onScroll={({ nativeEvent }) => {
+        if (!pageError && isCommunityFeedNearEnd(nativeEvent.contentSize.height, nativeEvent.contentOffset.y, nativeEvent.layoutMeasurement.height)) {
+          void loadMore();
+        }
+      }}
       refreshControl={firebaseIdToken ? <RefreshControl colors={[colors.accent]} onRefresh={resource.revalidate} refreshing={resource.isRefreshing} tintColor={colors.accent} /> : undefined}
+      scrollEventThrottle={100}
       title="Community"
       trailing={firebaseIdToken ? (
         <IconButton
@@ -225,8 +235,12 @@ export function FeedScreen() {
               variant="community"
             />;
           })}
-          {pageError ? <Text accessibilityRole="alert" style={styles.feedIntroBody}>{pageError}</Text> : null}
-          {nextCursor ? <Button label={pageError ? 'Retry loading more' : 'Load more'} loading={loadingPage} onPress={() => void loadMore()} variant="secondary" /> : null}
+          {pageError ? <View style={styles.paginationStatus}>
+            <Text accessibilityRole="alert" style={styles.feedIntroBody}>{pageError}</Text>
+            <Button label="Retry" onPress={() => void loadMore()} variant="secondary" />
+          </View> : loadingPage ? (
+            <ActivityIndicator accessibilityLabel="Loading more posts" color={colors.accent} size="small" style={styles.paginationLoader} />
+          ) : null}
         </ScreenReveal>}
       </>}
       <ReportSheet onClose={() => setReportTarget(null)} target={reportTarget} />
@@ -278,4 +292,6 @@ const styles = StyleSheet.create({
   feedIntroBody: { ...typography.body, color: colors.muted },
   feedIntroTitle: { ...typography.title, color: colors.text },
   list: { gap: spacing.md },
+  paginationLoader: { marginVertical: spacing.md },
+  paginationStatus: { gap: spacing.sm },
 });
