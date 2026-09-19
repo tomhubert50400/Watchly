@@ -114,10 +114,9 @@ export const SocialReviewPost = memo(function SocialReviewPost({
     <Pressable
       accessibilityLabel={`Report ${visibleAuthor}'s review`}
       accessibilityRole="button"
-      hitSlop={variant === 'community' ? 8 : undefined}
       onPress={onReport}
       style={({ pressed }) => [
-        variant === 'community' ? styles.communityReportButton : styles.actionButton,
+        styles.actionButton,
         pressed ? styles.actionButtonPressed : null,
       ]}
     >
@@ -135,12 +134,7 @@ export const SocialReviewPost = memo(function SocialReviewPost({
           <UserAvatar avatarUrl={authorAvatarUrl} displayName={visibleAuthor} size={42} />
           <Text numberOfLines={1} style={styles.author}>{visibleAuthor}</Text>
         </>}
-        {variant === 'community' ? (
-          <View style={styles.communityHeaderMeta}>
-            {reportButton}
-            <Text style={styles.date}>{formatDate(updatedAt)}</Text>
-          </View>
-        ) : <Text style={styles.date}>{formatDate(updatedAt)}</Text>}
+        {variant !== 'community' ? <Text style={styles.date}>{formatDate(updatedAt)}</Text> : null}
       </View>
       <SpoilerGuard reason={spoilerReason} contextLabel={spoilerContextLabel} revealKey={`${spoilerKey ?? ''}:${body}:${visibleContentLabel}`} canReveal={canReveal}>
         <Pressable
@@ -162,7 +156,9 @@ export const SocialReviewPost = memo(function SocialReviewPost({
           ) : null}
           <View style={[styles.mediaCopy, variant === 'community' ? styles.communityMediaCopy : null]}>
             <View>
-              <Text style={styles.mediaMeta}>{contentMeta}</Text>
+              {variant !== 'community' ? (
+                <Text style={styles.mediaMeta}>{contentMeta}</Text>
+              ) : null}
               {contentContext ? <Text numberOfLines={2} style={styles.mediaContext}>{contentContext}</Text> : null}
               <Text numberOfLines={2} style={[styles.mediaTitle, contentContext ? styles.episodeTitle : null]}>{contentTitle}</Text>
               {variant !== 'community' ? (
@@ -190,14 +186,14 @@ export const SocialReviewPost = memo(function SocialReviewPost({
         ) : null}
         {body ? <ExpandableReviewText body={body} style={[styles.review, variant === 'community' ? styles.communityReview : null]} /> : null}
       </SpoilerGuard>
-      {onSetLiked || (variant !== 'community' && onReport) ? (
+      {variant === 'community' || onReport || onSetLiked ? (
         <View style={[styles.actions, variant === 'community' ? styles.communityActions : null]}>
-          {variant === 'community' && onSetLiked ? (
-            <Text style={styles.communityLikePrompt}>
-              {likeState.likedByViewer ? 'You liked this review' : 'Like this review'}
+          {variant === 'community' ? (
+            <Text style={styles.communityFooterMeta}>
+              {formatDate(updatedAt)} · {contentMeta}
             </Text>
           ) : null}
-          {variant !== 'community' ? reportButton : null}
+          {reportButton}
           {onSetLiked ? <Pressable
             accessibilityLabel={`${likeState.likedByViewer ? 'Unlike' : 'Like'} ${visibleAuthor}'s review, ${likeState.likeCount} ${likeState.likeCount === 1 ? 'like' : 'likes'}`}
             accessibilityRole="button"
@@ -288,12 +284,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: spacing.xs,
   },
-  communityHeaderMeta: {
-    alignItems: 'flex-end',
-  },
-  communityLikePrompt: {
+  communityFooterMeta: {
     ...typography.meta,
-    color: colors.textMuted,
+    color: colors.textSubtle,
     flex: 1,
   },
   communityMediaCopy: {
@@ -318,12 +311,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     alignSelf: 'stretch',
     marginTop: spacing.xs,
-  },
-  communityReportButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 28,
-    minWidth: touchTargets.min,
   },
   communityReview: {
     marginTop: spacing.xs,
