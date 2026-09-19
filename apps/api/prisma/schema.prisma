@@ -58,6 +58,7 @@ enum ReportTargetType {
   PROFILE
   MOVIE_REVIEW
   EPISODE_REVIEW
+  REVIEW_REPLY
 }
 
 enum ReportReason {
@@ -88,6 +89,7 @@ enum NotificationKind {
   RELEASE
   SHARED_LIST_INVITE
   SHARED_VOTE_UPDATE
+  REVIEW_REPLY
 }
 
 enum ReleaseDatePrecision {
@@ -172,6 +174,7 @@ model User {
   movieRatings               UserMovieRating[]
   movieReviewLikes           MovieReviewLike[]
   movieReviews               UserMovieReview[]
+  reviewReplies              ReviewReply[]
   seriesRatings              UserSeriesRating[]
   reportsReceived            ContentReport[]            @relation("ReportedUser")
   reportsSubmitted           ContentReport[]            @relation("ReportReporter")
@@ -331,6 +334,7 @@ model UserMovieReview {
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
   likes              MovieReviewLike[]
+  replies            ReviewReply[]
   user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, tmdbId])
@@ -363,6 +367,7 @@ model UserEpisodeReview {
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   likes              EpisodeReviewLike[]
+  replies            ReviewReply[]
   user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, seriesTmdbId, seasonNumber, episodeNumber])
@@ -382,6 +387,26 @@ model EpisodeReviewLike {
   @@unique([userId, reviewId])
   @@index([reviewId])
   @@map("episode_review_likes")
+}
+
+model ReviewReply {
+  id                 String             @id @default(uuid()) @db.Uuid
+  userId             String             @db.Uuid
+  movieReviewId      String?            @db.Uuid
+  episodeReviewId    String?            @db.Uuid
+  body               String             @db.VarChar(1000)
+  containsSpoilers   Boolean            @default(false)
+  moderationHiddenAt DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  movieReview        UserMovieReview?   @relation(fields: [movieReviewId], references: [id], onDelete: Cascade)
+  episodeReview      UserEpisodeReview? @relation(fields: [episodeReviewId], references: [id], onDelete: Cascade)
+
+  @@index([movieReviewId, createdAt])
+  @@index([episodeReviewId, createdAt])
+  @@index([userId])
+  @@map("review_replies")
 }
 
 model UserEpisodeProgress {

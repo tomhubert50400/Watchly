@@ -471,18 +471,16 @@ export class AdminService {
     }
 
     const target = report.targetType === ReportTargetType.MOVIE_REVIEW
-      ? await this.prisma.withConnectionRetry(() =>
-          this.prisma.userMovieReview.findUnique({
-            select: { moderationHiddenAt: true },
-            where: { id: report.targetId },
-          }),
-        )
-      : await this.prisma.withConnectionRetry(() =>
-          this.prisma.userEpisodeReview.findUnique({
-            select: { moderationHiddenAt: true },
-            where: { id: report.targetId },
-          }),
-        );
+      ? await this.prisma.withConnectionRetry(() => this.prisma.userMovieReview.findUnique({
+          select: { moderationHiddenAt: true }, where: { id: report.targetId },
+        }))
+      : report.targetType === ReportTargetType.EPISODE_REVIEW
+        ? await this.prisma.withConnectionRetry(() => this.prisma.userEpisodeReview.findUnique({
+            select: { moderationHiddenAt: true }, where: { id: report.targetId },
+          }))
+        : await this.prisma.withConnectionRetry(() => this.prisma.reviewReply.findUnique({
+            select: { moderationHiddenAt: true }, where: { id: report.targetId },
+          }));
 
     if (!target) return 'unavailable';
     return target.moderationHiddenAt ? 'hidden' : 'visible';
@@ -657,6 +655,7 @@ function toApiTargetType(targetType: ReportTargetType): AdminReportTargetType {
     [ReportTargetType.EPISODE_REVIEW]: 'episodeReview',
     [ReportTargetType.MOVIE_REVIEW]: 'movieReview',
     [ReportTargetType.PROFILE]: 'profile',
+    [ReportTargetType.REVIEW_REPLY]: 'reviewReply',
   };
 
   return targetTypes[targetType];
@@ -667,6 +666,7 @@ function toPrismaTargetType(targetType: AdminReportTargetType): ReportTargetType
     episodeReview: ReportTargetType.EPISODE_REVIEW,
     movieReview: ReportTargetType.MOVIE_REVIEW,
     profile: ReportTargetType.PROFILE,
+    reviewReply: ReportTargetType.REVIEW_REPLY,
   };
 
   return targetTypes[targetType];
@@ -878,13 +878,15 @@ async function updateReportedContent(
 
   const target = report.targetType === ReportTargetType.MOVIE_REVIEW
     ? await transaction.userMovieReview.findUnique({
-        select: { moderationHiddenAt: true, userId: true },
-        where: { id: report.targetId },
+        select: { moderationHiddenAt: true, userId: true }, where: { id: report.targetId },
       })
-    : await transaction.userEpisodeReview.findUnique({
-        select: { moderationHiddenAt: true, userId: true },
-        where: { id: report.targetId },
-      });
+    : report.targetType === ReportTargetType.EPISODE_REVIEW
+      ? await transaction.userEpisodeReview.findUnique({
+          select: { moderationHiddenAt: true, userId: true }, where: { id: report.targetId },
+        })
+      : await transaction.reviewReply.findUnique({
+          select: { moderationHiddenAt: true, userId: true }, where: { id: report.targetId },
+        });
 
   if (!target || target.userId !== report.reportedUser.id) {
     throw new NotFoundException('Reported content not found.');
@@ -899,8 +901,13 @@ async function updateReportedContent(
       data: { moderationHiddenAt: hidden ? new Date() : null },
       where: { id: report.targetId },
     });
-  } else {
+  } else if (report.targetType === ReportTargetType.EPISODE_REVIEW) {
     await transaction.userEpisodeReview.update({
+      data: { moderationHiddenAt: hidden ? new Date() : null },
+      where: { id: report.targetId },
+    });
+  } else {
+    await transaction.reviewReply.update({
       data: { moderationHiddenAt: hidden ? new Date() : null },
       where: { id: report.targetId },
     });

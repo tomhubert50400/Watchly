@@ -771,9 +771,9 @@ function fromNotificationKind(kind: NotificationKind) {
     return 'release';
   }
 
-  return kind === NotificationKind.SHARED_LIST_INVITE
-    ? 'shared_list_invite'
-    : 'shared_vote_update';
+  if (kind === NotificationKind.SHARED_LIST_INVITE) return 'shared_list_invite';
+  if (kind === NotificationKind.SHARED_VOTE_UPDATE) return 'shared_vote_update';
+  return 'review_reply';
 }
 
 function toTrackedContentType(contentType: ReleaseAlertContentType) {

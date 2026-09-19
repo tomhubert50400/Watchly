@@ -1,12 +1,15 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
-import { FollowStatus, PrivacyVisibility } from '../generated/prisma/enums';
+import { FollowStatus, NotificationKind, PrivacyVisibility } from '../generated/prisma/enums';
 import { AvatarStorageService } from '../media/avatar-storage.service';
-import { isAccountSuspended } from '../moderation/account-suspension';
+import { activeAccountWhere, isAccountSuspended } from '../moderation/account-suspension';
 import type { CommunityMode } from './community-ranking';
 import { communityFeed } from './community-feed';
+import { CreateReviewReplyDto } from './feed.dto';
+
+export type FeedReviewType = 'episodeReview' | 'movieReview';
 
 type FeedAuthor = {
   avatarObjectKey: string | null;
@@ -17,6 +20,7 @@ type FeedAuthor = {
 type FeedMovieReview = {
   _count: {
     likes: number;
+    replies: number;
   };
   body: string;
   id: string;
@@ -30,6 +34,7 @@ type FeedMovieReview = {
 type FeedEpisodeReview = {
   _count: {
     likes: number;
+    replies: number;
   };
   body: string;
   episodeNumber: number;
@@ -98,6 +103,7 @@ export class FeedService {
             _count: {
               select: {
                 likes: true,
+                replies: { where: { moderationHiddenAt: null } },
               },
             },
             likes: {
@@ -132,6 +138,7 @@ export class FeedService {
             _count: {
               select: {
                 likes: true,
+                replies: { where: { moderationHiddenAt: null } },
               },
             },
             likes: {
@@ -233,6 +240,129 @@ export class FeedService {
 
   async unlikeEpisodeReview(identity: AuthenticatedIdentity, reviewId: string) {
     return this.setEpisodeReviewLike(identity, reviewId, false);
+  }
+
+  async listReviewReplies(
+    identity: AuthenticatedIdentity,
+    reviewType: FeedReviewType,
+    reviewId: string,
+    cursor?: string,
+  ) {
+    const viewer = await this.authService.getOrCreateUser(identity);
+
+    return this.prisma.withConnectionRetry(async () => {
+      const review = await this.getVisibleReview(viewer.id, reviewType, reviewId);
+      const blocks = await this.prisma.userBlock.findMany({
+        where: { OR: [{ blockerId: viewer.id }, { blockedUserId: viewer.id }] },
+      });
+      const blockedUserIds = blocks.map((block) =>
+        block.blockerId === viewer.id ? block.blockedUserId : block.blockerId,
+      );
+      const common = {
+        include: {
+          user: {
+            select: { avatarObjectKey: true, displayName: true, id: true },
+          },
+        },
+        orderBy: [{ createdAt: 'asc' as const }, { id: 'asc' as const }],
+        skip: cursor ? 1 : 0,
+        take: REVIEW_REPLY_PAGE_SIZE + 1,
+        ...(cursor ? { cursor: { id: cursor } } : {}),
+      };
+      const visibility = {
+        moderationHiddenAt: null,
+        user: activeAccountWhere(),
+        userId: { notIn: blockedUserIds },
+      };
+      const rows = reviewType === 'movieReview'
+        ? await this.prisma.reviewReply.findMany({
+            ...common,
+            where: { ...visibility, movieReviewId: reviewId },
+          })
+        : await this.prisma.reviewReply.findMany({
+            ...common,
+            where: { ...visibility, episodeReviewId: reviewId },
+          });
+      const items = rows.slice(0, REVIEW_REPLY_PAGE_SIZE);
+
+      return {
+        items: items.map((reply) => this.toReviewReply(reply, viewer.id)),
+        nextCursor: rows.length > REVIEW_REPLY_PAGE_SIZE ? items.at(-1)?.id ?? null : null,
+        review: {
+          author: toAuthor(review.user, this.avatarStorage),
+          body: review.body,
+          id: review.id,
+          type: reviewType,
+        },
+      };
+    });
+  }
+
+  async createReviewReply(
+    identity: AuthenticatedIdentity,
+    reviewType: FeedReviewType,
+    reviewId: string,
+    input: CreateReviewReplyDto,
+  ) {
+    const viewer = await this.authService.getOrCreateUser(identity);
+    const body = input.body.trim();
+    if (!body) throw new BadRequestException('Reply cannot be empty.');
+
+    return this.prisma.withConnectionRetry(async () => {
+      const review = await this.getVisibleReview(viewer.id, reviewType, reviewId);
+      const reply = await this.prisma.$transaction(async (transaction) => {
+        const created = await transaction.reviewReply.create({
+          data: {
+            body,
+            containsSpoilers: input.containsSpoilers ?? false,
+            ...(reviewType === 'movieReview' ? { movieReviewId: reviewId } : { episodeReviewId: reviewId }),
+            userId: viewer.id,
+          },
+          include: {
+            user: {
+              select: { avatarObjectKey: true, displayName: true, id: true },
+            },
+          },
+        });
+
+        if (review.userId !== viewer.id) {
+          const actorName = viewer.displayName?.trim() || 'A Watchly member';
+          await transaction.notification.create({
+            data: {
+              actorUserId: viewer.id,
+              body: body.slice(0, 500),
+              dedupeKey: `review-reply:${created.id}`,
+              kind: NotificationKind.REVIEW_REPLY,
+              routeMetadata: { route: 'ReviewReplies', reviewId, reviewType },
+              title: `${actorName.slice(0, 100)} replied to your review`,
+              userId: review.userId,
+            },
+          });
+        }
+
+        return created;
+      });
+
+      return this.toReviewReply(reply, viewer.id);
+    });
+  }
+
+  async deleteReviewReply(identity: AuthenticatedIdentity, replyId: string) {
+    const viewer = await this.authService.getOrCreateUser(identity);
+
+    return this.prisma.withConnectionRetry(async () => {
+      const reply = await this.prisma.reviewReply.findFirst({
+        select: { id: true },
+        where: { id: replyId, userId: viewer.id },
+      });
+      if (!reply) throw new NotFoundException('Reply not found.');
+
+      await this.prisma.$transaction([
+        this.prisma.notification.deleteMany({ where: { dedupeKey: `review-reply:${replyId}` } }),
+        this.prisma.reviewReply.delete({ where: { id: replyId } }),
+      ]);
+      return { deleted: true };
+    });
   }
 
   private async setMovieReviewLike(
@@ -344,6 +474,33 @@ export class FeedService {
     }
   }
 
+  private async getVisibleReview(viewerId: string, reviewType: FeedReviewType, reviewId: string) {
+    const include = { user: { include: { privacySettings: true } } } as const;
+    const review = reviewType === 'movieReview'
+      ? await this.prisma.userMovieReview.findUnique({ include, where: { id: reviewId } })
+      : await this.prisma.userEpisodeReview.findUnique({ include, where: { id: reviewId } });
+    await this.assertReviewVisible(viewerId, review);
+    return review!;
+  }
+
+  private toReviewReply(reply: {
+    body: string;
+    containsSpoilers: boolean;
+    createdAt: Date;
+    id: string;
+    user: FeedAuthor;
+    userId: string;
+  }, viewerId: string) {
+    return {
+      author: toAuthor(reply.user, this.avatarStorage),
+      body: reply.body,
+      containsSpoilers: reply.containsSpoilers,
+      createdAt: reply.createdAt.toISOString(),
+      id: reply.id,
+      ownedByViewer: reply.userId === viewerId,
+    };
+  }
+
   private async getVisibleFollowedAuthorIds(viewerId: string) {
     const [follows, blocks] = await Promise.all([
       this.prisma.userFollow.findMany({
@@ -389,6 +546,7 @@ export class FeedService {
 }
 
 const FEED_LIMIT = 30;
+const REVIEW_REPLY_PAGE_SIZE = 30;
 
 function toMovieFeedItem(
   review: FeedMovieReview,
@@ -405,6 +563,7 @@ function toMovieFeedItem(
     id: review.id,
     likeCount: review._count.likes,
     likedByViewer: review.likes.length > 0,
+    replyCount: review._count.replies,
     score,
     type: 'movieReview' as const,
     updatedAt: review.updatedAt.toISOString(),
@@ -428,6 +587,7 @@ function toEpisodeFeedItem(
     id: review.id,
     likeCount: review._count.likes,
     likedByViewer: review.likes.length > 0,
+    replyCount: review._count.replies,
     score,
     type: 'episodeReview' as const,
     updatedAt: review.updatedAt.toISOString(),

@@ -9,7 +9,7 @@ export const ADMIN_MODERATION_ACTIONS = [
   'hideContent',
   'restoreContent',
 ] as const;
-export const ADMIN_REPORT_TARGET_TYPES = ['profile', 'movieReview', 'episodeReview'] as const;
+export const ADMIN_REPORT_TARGET_TYPES = ['profile', 'movieReview', 'episodeReview', 'reviewReply'] as const;
 export const ADMIN_REPORT_REASONS = [
   'spam',
   'harassment',

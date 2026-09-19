@@ -85,6 +85,10 @@ export class PrismaService implements OnModuleDestroy {
     return this.client.releaseEventSyncRun;
   }
 
+  get reviewReply() {
+    return this.client.reviewReply;
+  }
+
   get notification() {
     return this.client.notification;
   }

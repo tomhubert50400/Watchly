@@ -8,6 +8,7 @@ const SUBJECT_ID = '22222222-2222-4222-8222-222222222222';
 const PROFILE_REPORT_ID = '33333333-3333-4333-8333-333333333333';
 const MOVIE_REVIEW_ID = '44444444-4444-4444-8444-444444444444';
 const EPISODE_REVIEW_ID = '55555555-5555-4555-8555-555555555555';
+const REVIEW_REPLY_ID = '77777777-7777-4777-8777-777777777777';
 
 type StoredReport = {
   createdAt: Date;
@@ -83,6 +84,21 @@ async function run() {
           : null
       ),
     },
+    reviewReply: {
+      findUnique: async ({ where }: { where: { id: string } }) => (
+        where.id === REVIEW_REPLY_ID
+          ? {
+              body: 'Reported reply',
+              containsSpoilers: true,
+              episodeReviewId: null,
+              id: REVIEW_REPLY_ID,
+              movieReviewId: MOVIE_REVIEW_ID,
+              user: { displayName: 'Reported member' },
+              userId: SUBJECT_ID,
+            }
+          : null
+      ),
+    },
     withConnectionRetry: async (operation: () => Promise<unknown>) => operation(),
   };
   const service = new ReportsService(
@@ -130,7 +146,20 @@ async function run() {
     targetId: EPISODE_REVIEW_ID,
     targetType: 'episodeReview',
   });
-  assert.equal(reports.size, 3, 'Movie and episode reviews must create distinct moderation items.');
+  await service.submitReport(identity, {
+    reason: 'spam',
+    targetId: REVIEW_REPLY_ID,
+    targetType: 'reviewReply',
+  });
+  assert.equal(reports.size, 4, 'Reviews and replies must create distinct moderation items.');
+  assert.deepEqual([...reports.values()].at(-1)?.targetSnapshot, {
+    authorDisplayName: 'Reported member',
+    body: 'Reported reply',
+    containsSpoilers: true,
+    episodeReviewId: null,
+    movieReviewId: MOVIE_REVIEW_ID,
+    replyId: REVIEW_REPLY_ID,
+  });
 
   await assert.rejects(
     () => service.submitReport(identity, {

@@ -51,7 +51,12 @@ export async function communityFeed(prisma: PrismaService, avatar: AvatarStorage
   const userWhere = (visibility: 'reviewsVisibility' | 'ratingsVisibility' | 'viewingHistoryVisibility'): Prisma.UserWhereInput => ({
     AND: [activeAccountWhere(now), { id: { notIn: excluded }, privacySettings: { profileVisibility: 'PUBLIC', [visibility]: 'PUBLIC' } }],
   });
-  const reviewInclude = { user: { select: authorSelect }, _count: { select: { likes: true } }, likes: { where: { userId: viewerId }, select: { id: true } } } as const;
+  const replyUserWhere = { AND: [activeAccountWhere(now), { id: { notIn: excluded.slice(1) } }] };
+  const reviewInclude = {
+    user: { select: authorSelect },
+    _count: { select: { likes: true, replies: { where: { moderationHiddenAt: null, user: replyUserWhere } } } },
+    likes: { where: { userId: viewerId }, select: { id: true } },
+  } as const;
   // Separate candidate sources prevent global activity from crowding out personal interests or follows.
   const batches = await Promise.all((mode === 'following' ? ['followed'] : ['followed', 'interests', 'discovery']).map(async (source) => {
     const userId = source === 'followed' ? { in: followedIds } : { notIn: [...excluded, ...followedIds] };
@@ -82,10 +87,10 @@ export async function communityFeed(prisma: PrismaService, avatar: AvatarStorage
   const movieScoreMap = new Map(movieScores.map((r) => [`${r.userId}:${r.tmdbId}`, r.scoreHalfSteps / 2]));
   const episodeScoreMap = new Map(episodeScores.map((r) => [`${r.userId}:${r.seriesTmdbId}:${r.seasonNumber}:${r.episodeNumber}`, r.scoreHalfSteps / 2]));
   type Row = { id: string; userId: string; createdAt: Date; user: { id: string; displayName: string | null; avatarObjectKey: string | null } };
-  const make = (row: Row, content: CommunityContent, type: CommunityItem['type'], score: number | null, body = '', likeCount = 0, likedByViewer = false): CommunityItem => ({
+  const make = (row: Row, content: CommunityContent, type: CommunityItem['type'], score: number | null, body = '', likeCount = 0, likedByViewer = false, replyCount = 0): CommunityItem => ({
     id: type.endsWith('Review') ? row.id : `${type}:${row.id}`,
     author: { id: row.user.id, displayName: row.user.displayName, avatarUrl: avatar.getPublicUrl(row.user.avatarObjectKey) },
-    body, content, type, score, likeCount, likedByViewer, updatedAt: row.createdAt.toISOString(), followed: followed.has(row.userId),
+    body, content, type, score, likeCount, likedByViewer, replyCount, updatedAt: row.createdAt.toISOString(), followed: followed.has(row.userId),
     viewerHasWatched: content.contentType === 'movie' ? watchedMovies.has(content.tmdbId) : content.contentType === 'series' ? watchedSeries.has(content.seriesTmdbId) : watchedEpisodes.has(`${content.seriesTmdbId}:${content.seasonNumber}:${content.episodeNumber}`),
     inWatchlist: queued.has(contentKey(content)), affinity: affinity.get(contentKey(content)) ?? 0,
   });
@@ -95,12 +100,12 @@ export async function communityFeed(prisma: PrismaService, avatar: AvatarStorage
   for (const r of movies) {
     const content = { contentType: 'movie' as const, tmdbId: r.tmdbId };
     opinions.add(opinionKey(r.userId, content));
-    candidates.push(make(r, content, 'movieReview', movieScoreMap.get(`${r.userId}:${r.tmdbId}`) ?? null, r.body, r._count.likes, r.likes.length > 0));
+    candidates.push(make(r, content, 'movieReview', movieScoreMap.get(`${r.userId}:${r.tmdbId}`) ?? null, r.body, r._count.likes, r.likes.length > 0, r._count.replies));
   }
   for (const r of episodes) {
     const content = { contentType: 'episode' as const, seriesTmdbId: r.seriesTmdbId, seasonNumber: r.seasonNumber, episodeNumber: r.episodeNumber };
     opinions.add(opinionKey(r.userId, content));
-    candidates.push(make(r, content, 'episodeReview', episodeScoreMap.get(`${r.userId}:${r.seriesTmdbId}:${r.seasonNumber}:${r.episodeNumber}`) ?? null, r.body, r._count.likes, r.likes.length > 0));
+    candidates.push(make(r, content, 'episodeReview', episodeScoreMap.get(`${r.userId}:${r.seriesTmdbId}:${r.seasonNumber}:${r.episodeNumber}`) ?? null, r.body, r._count.likes, r.likes.length > 0, r._count.replies));
   }
   for (const batch of batches) {
     const ratings = [

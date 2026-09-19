@@ -14,6 +14,7 @@ export type CommunityItem = {
   score: number | null;
   likeCount: number;
   likedByViewer: boolean;
+  replyCount: number;
   updatedAt: string;
   followed: boolean;
   viewerHasWatched: boolean;

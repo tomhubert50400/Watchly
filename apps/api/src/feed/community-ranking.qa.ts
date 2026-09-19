@@ -5,7 +5,7 @@ import { followedShare, rankCommunity, type CommunityItem } from './community-ra
 
 const now = new Date('2026-09-10T12:00:00Z');
 function post(id: number, followed = false, author = `${followed ? 'followed' : 'public'}-${id}`): CommunityItem {
-  return { id: String(id), author: { id: author, avatarUrl: null, displayName: author }, body: 'Review', content: { contentType: 'movie', tmdbId: id }, type: 'movieReview', score: 4, likeCount: 0, likedByViewer: false, updatedAt: now.toISOString(), followed, affinity: 0, viewerHasWatched: false, inWatchlist: false };
+  return { id: String(id), author: { id: author, avatarUrl: null, displayName: author }, body: 'Review', content: { contentType: 'movie', tmdbId: id }, type: 'movieReview', score: 4, likeCount: 0, likedByViewer: false, replyCount: 0, updatedAt: now.toISOString(), followed, affinity: 0, viewerHasWatched: false, inWatchlist: false };
 }
 const discoveries = Array.from({ length: 250 }, (_, i) => post(i));
 for (const [authors, share] of [[0, 0], [1, .05], [2, .15], [4, .15], [5, .25], [9, .25], [10, .4], [19, .4], [20, .5], [49, .5], [50, .55], [200, .55]]) {

@@ -5,7 +5,7 @@ const now = new Date('2026-09-10T00:00:00Z');
 const createdAt = new Date('2026-09-09T00:00:00Z');
 const cursor = (offset = 0) => Buffer.from(JSON.stringify({ at: now.toISOString(), offset })).toString('base64url');
 const author = (id: string, overrides = {}) => ({ id, displayName: id, avatarObjectKey: null, suspendedAt: null, suspendedUntil: null, privacySettings: { profileVisibility: 'PUBLIC', reviewsVisibility: 'PUBLIC', ratingsVisibility: 'PUBLIC', viewingHistoryVisibility: 'PUBLIC' }, ...overrides });
-const review = (id: string, tmdbId: number, user = author(id)) => ({ id, tmdbId, userId: user.id, user, body: 'A review', moderationHiddenAt: null, createdAt, updatedAt: createdAt, _count: { likes: 0 }, likes: [] });
+const review = (id: string, tmdbId: number, user = author(id)) => ({ id, tmdbId, userId: user.id, user, body: 'A review', moderationHiddenAt: null, createdAt, updatedAt: createdAt, _count: { likes: 0, replies: 0 }, likes: [] });
 const publicReviews = Array.from({ length: 60 }, (_, i) => review(`public-${i}`, i));
 const favorites = review('favorite-review', 900);
 const notified = review('notified-review', 901);

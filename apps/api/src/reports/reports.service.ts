@@ -145,6 +145,36 @@ export class ReportsService {
           },
         };
       }
+      case 'reviewReply': {
+        const reply = await this.prisma.withConnectionRetry(() =>
+          this.prisma.reviewReply.findUnique({
+            select: {
+              body: true,
+              containsSpoilers: true,
+              episodeReviewId: true,
+              id: true,
+              movieReviewId: true,
+              user: { select: { displayName: true } },
+              userId: true,
+            },
+            where: { id: targetId },
+          }),
+        );
+
+        if (!reply) throw new NotFoundException('Reply not found.');
+
+        return {
+          reportedUserId: reply.userId,
+          snapshot: {
+            authorDisplayName: reply.user.displayName,
+            body: reply.body,
+            containsSpoilers: reply.containsSpoilers,
+            episodeReviewId: reply.episodeReviewId,
+            movieReviewId: reply.movieReviewId,
+            replyId: reply.id,
+          },
+        };
+      }
     }
   }
 }
@@ -160,6 +190,7 @@ function toPrismaTargetType(value: ReportTargetTypeValue) {
     episodeReview: ReportTargetType.EPISODE_REVIEW,
     movieReview: ReportTargetType.MOVIE_REVIEW,
     profile: ReportTargetType.PROFILE,
+    reviewReply: ReportTargetType.REVIEW_REPLY,
   };
 
   return targetTypes[value];

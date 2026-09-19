@@ -1,6 +1,6 @@
 import { IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
-export const REPORT_TARGET_TYPES = ['profile', 'movieReview', 'episodeReview'] as const;
+export const REPORT_TARGET_TYPES = ['profile', 'movieReview', 'episodeReview', 'reviewReply'] as const;
 export const REPORT_REASONS = [
   'spam',
   'harassment',
