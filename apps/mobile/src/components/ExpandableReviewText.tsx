@@ -36,8 +36,16 @@ export function ExpandableReviewText({ body, style, textStyle }: ExpandableRevie
   return (
     <View style={style}>
       <Text
-        numberOfLines={isExpanded ? undefined : collapsedLineCount}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
         onTextLayout={handleTextLayout}
+        pointerEvents="none"
+        style={[styles.body, textStyle, styles.measure]}
+      >
+        {body}
+      </Text>
+      <Text
+        numberOfLines={isExpanded ? undefined : collapsedLineCount}
         style={[styles.body, textStyle]}
       >
         {body}
@@ -51,7 +59,7 @@ export function ExpandableReviewText({ body, style, textStyle }: ExpandableRevie
           onPress={() => setIsExpanded((current) => !current)}
           style={({ pressed }) => [styles.toggle, pressed ? styles.togglePressed : null]}
         >
-          <Text style={styles.toggleLabel}>{isExpanded ? 'Less' : 'More'}</Text>
+          <Text style={styles.toggleLabel}>{isExpanded ? 'Show less' : 'Read more'}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -62,6 +70,12 @@ const styles = StyleSheet.create({
   body: {
     ...typography.body,
     color: colors.textMuted,
+  },
+  measure: {
+    left: 0,
+    opacity: 0,
+    position: 'absolute',
+    right: 0,
   },
   toggle: {
     alignItems: 'flex-start',

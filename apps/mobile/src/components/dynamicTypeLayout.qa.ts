@@ -1,6 +1,8 @@
 // Node types are intentionally not part of the Expo runtime TypeScript configuration.
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import assert from 'node:assert/strict';
+// @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
+import { readFileSync } from 'node:fs';
 import {
   resolveDetailMetadataLayout,
   resolveDynamicTypeLayout,
@@ -40,5 +42,17 @@ assert.deepEqual(resolveTrackingStatusLayout(3.2), {
 });
 assert.deepEqual(resolveDetailMetadataLayout(1), { genreNumberOfLines: 1 });
 assert.deepEqual(resolveDetailMetadataLayout(3.2), { genreNumberOfLines: 2 });
+
+const expandableReviewTextSource = readFileSync(
+  new URL('./ExpandableReviewText.tsx', import.meta.url),
+  'utf8',
+);
+
+assert.match(
+  expandableReviewTextSource,
+  /onTextLayout=\{handleTextLayout\}[\s\S]*numberOfLines=\{isExpanded \? undefined : collapsedLineCount\}/,
+  'Expandable reviews must measure the unclamped text separately from the visible five-line text.',
+);
+assert.match(expandableReviewTextSource, /'Show less' : 'Read more'/);
 
 console.log('Dynamic Type layout QA passed.');
