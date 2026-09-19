@@ -270,11 +270,11 @@ const styles = StyleSheet.create({
   },
   communityMediaCopy: {
     alignSelf: 'stretch',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
   },
   communityPost: {
     ...shadows.panel,
-    backgroundColor: 'rgba(15, 19, 29, 0.74)',
+    backgroundColor: 'rgba(15, 19, 29, 0.62)',
     borderBottomWidth: 0,
     borderColor: colors.borderStrong,
     borderRadius: radii.lg,
@@ -282,16 +282,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   communityPoster: {
-    height: 126,
-    width: 84,
+    height: 112,
+    width: 75,
   },
   communityRating: {
     alignItems: 'center',
     alignSelf: 'stretch',
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
   communityReview: {
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
   date: {
     ...typography.meta,

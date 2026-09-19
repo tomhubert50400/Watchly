@@ -267,8 +267,7 @@ async function hydrateFeedItem(
 
 function communityLabel(item: CommunityItem) {
   const media = item.content.contentType === 'movie' ? 'Movie' : 'Series';
-  const action = item.type === 'viewing' ? item.content.contentType === 'series' ? 'Watched an episode' : 'Watched' : item.type.endsWith('Review') ? 'Review' : 'Rating';
-  return `${media} · ${action}`;
+  return media;
 }
 
 const styles = StyleSheet.create({
