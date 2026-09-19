@@ -7,13 +7,15 @@ import { flattenReviewReplies } from './reviewThreadModel';
 const api = readFileSync(new URL('../api/feed.ts', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../../App.tsx', import.meta.url), 'utf8');
 const feed = readFileSync(new URL('./FeedScreen.tsx', import.meta.url), 'utf8');
+const notifications = readFileSync(new URL('../notifications/NotificationsScreen.tsx', import.meta.url), 'utf8');
 const post = readFileSync(new URL('../components/SocialReviewPost.tsx', import.meta.url), 'utf8');
 const expandable = readFileSync(new URL('../components/ExpandableReviewText.tsx', import.meta.url), 'utf8');
 const screen = readFileSync(new URL('./ReviewRepliesScreen.tsx', import.meta.url), 'utf8');
 
 assert.match(api, /listReviewReplies[\s\S]*createReviewReply[\s\S]*deleteReviewReply/);
-assert.match(app, /<Stack\.Screen component=\{ReviewRepliesScreen\} name="ReviewReplies"/);
-assert.match(feed, /onOpenReplies=\{reviewType[\s\S]*navigation\.navigate\('ReviewReplies'/);
+assert.doesNotMatch(app, /ReviewRepliesScreen|name="ReviewReplies"/);
+assert.doesNotMatch(feed, /onOpenReplies|replyCount=\{item\.replyCount\}|navigate\('ReviewReplies'/);
+assert.match(notifications, /ownedInbox\.items\.filter\(\(item\) => item\.kind !== 'review_reply'\)/);
 assert.match(post, /MessageCircle[\s\S]*replyCount[\s\S]*onOpenReplies/);
 assert.match(post, /ExpandableReviewText[\s\S]*onPress=\{variant === 'community' \? onOpenReplies : undefined\}/);
 assert.match(expandable, /accessibilityLabel="Open review discussion"[\s\S]*onPress=\{onPress\}/);
@@ -61,4 +63,4 @@ assert.deepEqual(threaded.map((item) => [item.reply.id, item.ancestorHasNextSibl
   ['other', [], true],
 ]);
 
-console.log('Review replies mobile QA passed: branched threads, synopsis spoiler blur, composer, moderation and pagination.');
+console.log('Review replies mobile QA passed: dormant implementation with Community and Alerts entry points hidden.');

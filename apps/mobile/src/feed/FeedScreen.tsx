@@ -6,7 +6,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ActivityIndicator, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import type { MovieDetails, SeriesDetails } from '../api/catalogue';
 import { getEpisodeDetails } from '../api/catalogue';
-import { CommunityItem, CommunityMode, FeedItem, getCommunityFeed, setFeedItemLiked } from '../api/feed';
+import { CommunityItem, CommunityMode, getCommunityFeed, setFeedItemLiked } from '../api/feed';
 import type { ReportTarget } from '../api/reports';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
@@ -229,28 +229,6 @@ export function FeedScreen() {
               canReveal={protection.loaded}
               onOpenAuthor={() => navigation.navigate('PublicProfile', { userId: item.author.id })}
               onOpenContent={() => openContent(item)}
-              onOpenReplies={reviewType ? () => navigation.navigate('ReviewReplies', {
-                preview: {
-                  author: item.author,
-                  backgroundUrl: item.contentBackgroundUrl,
-                  body: item.body,
-                  content: item.content as FeedItem['content'],
-                  contentContext: item.content.contentType === 'episode' && item.seriesTitle
-                    ? `${item.seriesTitle} · S${item.content.seasonNumber} E${item.content.episodeNumber}`
-                    : null,
-                  contentImageUrl: item.contentImageUrl,
-                  contentMeta: item.contentSubtitle,
-                  contentTitle: item.contentTitle,
-                  id: item.id,
-                  likeCount: item.likeCount,
-                  likedByViewer: item.likedByViewer,
-                  score: item.score,
-                  spoilerReason: reviewSpoilerReason,
-                  type: reviewType,
-                  updatedAt: item.updatedAt,
-                },
-                target: { id: item.id, type: reviewType },
-              }) : undefined}
               onReport={currentUser?.id === item.author.id || !reviewType ? undefined : () => setReportTarget({
                 id: item.id, label: `Review by ${item.author.displayName?.trim() || 'Watchly member'}`, type: reviewType,
               })}
@@ -259,7 +237,6 @@ export function FeedScreen() {
                 return result;
               }) : undefined}
               rating={item.score}
-              replyCount={item.replyCount}
               updatedAt={item.updatedAt}
               variant="community"
             />;

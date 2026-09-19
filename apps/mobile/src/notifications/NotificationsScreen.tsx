@@ -203,7 +203,9 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
     }
   }, [getFirebaseIdToken]);
 
-  const items = ownedInbox.ownerId === ownerId ? ownedInbox.items : [];
+  const items = ownedInbox.ownerId === ownerId
+    ? ownedInbox.items.filter((item) => item.kind !== 'review_reply')
+    : [];
   const visibleFollowRequests = followRequestsOwnerId === ownerId ? followRequests : [];
   const unreadCount = countUnreadNotifications(items);
   const groups = useMemo(
