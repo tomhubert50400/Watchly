@@ -110,6 +110,21 @@ export const SocialReviewPost = memo(function SocialReviewPost({
     await queuedMutation;
   };
 
+  const reportButton = onReport ? (
+    <Pressable
+      accessibilityLabel={`Report ${visibleAuthor}'s review`}
+      accessibilityRole="button"
+      hitSlop={variant === 'community' ? 8 : undefined}
+      onPress={onReport}
+      style={({ pressed }) => [
+        variant === 'community' ? styles.communityReportButton : styles.actionButton,
+        pressed ? styles.actionButtonPressed : null,
+      ]}
+    >
+      <Flag color={colors.textMuted} size={18} strokeWidth={2} />
+    </Pressable>
+  ) : null;
+
   return (
     <View style={[styles.post, variant === 'community' ? styles.communityPost : null]}>
       <View style={styles.byline}>
@@ -120,7 +135,12 @@ export const SocialReviewPost = memo(function SocialReviewPost({
           <UserAvatar avatarUrl={authorAvatarUrl} displayName={visibleAuthor} size={42} />
           <Text numberOfLines={1} style={styles.author}>{visibleAuthor}</Text>
         </>}
-        <Text style={styles.date}>{formatDate(updatedAt)}</Text>
+        {variant === 'community' ? (
+          <View style={styles.communityHeaderMeta}>
+            {reportButton}
+            <Text style={styles.date}>{formatDate(updatedAt)}</Text>
+          </View>
+        ) : <Text style={styles.date}>{formatDate(updatedAt)}</Text>}
       </View>
       <SpoilerGuard reason={spoilerReason} contextLabel={spoilerContextLabel} revealKey={`${spoilerKey ?? ''}:${body}:${visibleContentLabel}`} canReveal={canReveal}>
         <Pressable
@@ -170,18 +190,14 @@ export const SocialReviewPost = memo(function SocialReviewPost({
         ) : null}
         {body ? <ExpandableReviewText body={body} style={[styles.review, variant === 'community' ? styles.communityReview : null]} /> : null}
       </SpoilerGuard>
-      {onReport || onSetLiked ? (
+      {onSetLiked || (variant !== 'community' && onReport) ? (
         <View style={[styles.actions, variant === 'community' ? styles.communityActions : null]}>
-          {onReport ? (
-            <Pressable
-              accessibilityLabel={`Report ${visibleAuthor}'s review`}
-              accessibilityRole="button"
-              onPress={onReport}
-              style={({ pressed }) => [styles.actionButton, pressed ? styles.actionButtonPressed : null]}
-            >
-              <Flag color={colors.textMuted} size={18} strokeWidth={2} />
-            </Pressable>
+          {variant === 'community' && onSetLiked ? (
+            <Text style={styles.communityLikePrompt}>
+              {likeState.likedByViewer ? 'You liked this review' : 'Like this review'}
+            </Text>
           ) : null}
+          {variant !== 'community' ? reportButton : null}
           {onSetLiked ? <Pressable
             accessibilityLabel={`${likeState.likedByViewer ? 'Unlike' : 'Like'} ${visibleAuthor}'s review, ${likeState.likeCount} ${likeState.likeCount === 1 ? 'like' : 'likes'}`}
             accessibilityRole="button"
@@ -269,7 +285,16 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   communityActions: {
+    justifyContent: 'space-between',
     marginTop: spacing.xs,
+  },
+  communityHeaderMeta: {
+    alignItems: 'flex-end',
+  },
+  communityLikePrompt: {
+    ...typography.meta,
+    color: colors.textMuted,
+    flex: 1,
   },
   communityMediaCopy: {
     alignSelf: 'stretch',
@@ -293,6 +318,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     alignSelf: 'stretch',
     marginTop: spacing.xs,
+  },
+  communityReportButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 28,
+    minWidth: touchTargets.min,
   },
   communityReview: {
     marginTop: spacing.xs,

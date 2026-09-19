@@ -27,7 +27,10 @@ assert.match(socialPostSource, /StarRatingDisplay rating=\{rating\} showValue si
 assert.match(socialPostSource, /communityRating: \{[\s\S]*?alignItems: 'flex-start',[\s\S]*?alignSelf: 'stretch'/);
 assert.match(socialPostSource, /communityPoster: \{\s*height: 112,\s*width: 75,/);
 assert.match(socialPostSource, /styles\.actions,\s*variant === 'community' \? styles\.communityActions : null/);
-assert.match(socialPostSource, /communityActions: \{\s*marginTop: spacing\.xs,/);
+assert.match(socialPostSource, /variant === 'community' \? \(\s*<View style=\{styles\.communityHeaderMeta\}>[\s\S]*?\{reportButton\}[\s\S]*?<Text style=\{styles\.date\}>/);
+assert.match(socialPostSource, /variant !== 'community' \? reportButton : null/);
+assert.match(socialPostSource, /likeState\.likedByViewer \? 'You liked this review' : 'Like this review'/);
+assert.match(socialPostSource, /communityActions: \{[\s\S]*?justifyContent: 'space-between',[\s\S]*?marginTop: spacing\.xs,/);
 assert.match(socialPostSource, /communityPost: \{[\s\S]*?paddingBottom: spacing\.xs,/);
 const pagination = source.slice(source.indexOf('  async function loadMore()'), source.indexOf('  const openContent'));
 async function run() {
