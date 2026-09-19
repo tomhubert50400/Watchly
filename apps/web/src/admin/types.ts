@@ -1,5 +1,5 @@
 export type ReportStatus = 'new' | 'inProgress' | 'resolved' | 'rejected';
-export type ReportTargetType = 'profile' | 'movieReview' | 'episodeReview';
+export type ReportTargetType = 'profile' | 'movieReview' | 'episodeReview' | 'reviewReply';
 export type ModerationActionName = 'suspendUser' | 'reactivateUser' | 'hideContent' | 'restoreContent';
 export type ModerationState = 'active' | 'suspended' | 'visible' | 'hidden' | 'unavailable';
 export type SuspensionDuration = '24Hours' | '7Days' | '30Days' | 'permanent';

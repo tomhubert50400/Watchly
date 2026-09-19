@@ -30,6 +30,7 @@ export const targetTypeLabels: Record<ReportTargetType, string> = {
   episodeReview: 'Episode review',
   movieReview: 'Movie review',
   profile: 'Profile',
+  reviewReply: 'Review reply',
 };
 
 export const suspensionDurationLabels: Record<SuspensionDuration, string> = {
@@ -94,10 +95,10 @@ export function getEnforcementAction(
     if (state === 'visible') {
       return {
         action: 'hideContent',
-        confirmationCopy: 'This immediately removes the reported review from public Watchly surfaces.',
-        description: 'The reported review is currently visible wherever the author privacy settings allow.',
-        label: 'Hide review',
-        stateLabel: 'Review visible',
+        confirmationCopy: 'This immediately removes the reported content from public Watchly surfaces.',
+        description: 'The reported content is currently visible wherever the author privacy settings allow.',
+        label: 'Hide content',
+        stateLabel: 'Content visible',
         tone: 'negative',
       };
     }
@@ -105,10 +106,10 @@ export function getEnforcementAction(
     if (state === 'hidden') {
       return {
         action: 'restoreContent',
-        confirmationCopy: 'This makes the reported review eligible for public display again.',
-        description: 'The reported review is hidden from public Watchly surfaces.',
-        label: 'Restore review',
-        stateLabel: 'Review hidden',
+        confirmationCopy: 'This makes the reported content eligible for public display again.',
+        description: 'The reported content is hidden from public Watchly surfaces.',
+        label: 'Restore content',
+        stateLabel: 'Content hidden',
         tone: 'positive',
       };
     }
