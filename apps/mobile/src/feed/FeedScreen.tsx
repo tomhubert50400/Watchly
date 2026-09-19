@@ -200,6 +200,7 @@ export function FeedScreen() {
               authorAvatarUrl={item.author.avatarUrl}
               authorDisplayName={item.author.displayName}
               body={item.body}
+              contentContext={item.content.contentType === 'episode' && item.seriesTitle ? `${item.seriesTitle} · S${item.content.seasonNumber} E${item.content.episodeNumber}` : null}
               contentImageUrl={item.contentImageUrl}
               contentMeta={item.contentSubtitle}
               contentTitle={item.contentTitle}
@@ -265,9 +266,9 @@ async function hydrateFeedItem(
 }
 
 function communityLabel(item: CommunityItem) {
+  const media = item.content.contentType === 'movie' ? 'Movie' : 'Series';
   const action = item.type === 'viewing' ? item.content.contentType === 'series' ? 'Watched an episode' : 'Watched' : item.type.endsWith('Review') ? 'Review' : 'Rating';
-  const episode = item.content.contentType === 'episode' ? ` / S${item.content.seasonNumber} E${item.content.episodeNumber}` : '';
-  return `${action}${episode}`;
+  return `${media} · ${action}`;
 }
 
 const styles = StyleSheet.create({

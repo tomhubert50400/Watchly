@@ -19,6 +19,7 @@ type SocialReviewPostProps = {
   authorAvatarUrl: string | null;
   authorDisplayName: string | null;
   body: string;
+  contentContext?: string | null;
   contentImageUrl: string | null;
   contentMeta: string;
   contentTitle: string;
@@ -41,6 +42,7 @@ export const SocialReviewPost = memo(function SocialReviewPost({
   authorAvatarUrl,
   authorDisplayName,
   body,
+  contentContext,
   contentImageUrl,
   contentMeta,
   contentTitle,
@@ -59,6 +61,7 @@ export const SocialReviewPost = memo(function SocialReviewPost({
   variant = 'default',
 }: SocialReviewPostProps) {
   const visibleAuthor = authorDisplayName?.trim() || 'Watchly member';
+  const visibleContentLabel = contentContext ? `${contentContext}, ${contentTitle}` : contentTitle;
   const { showToast } = useToast();
   const [likeState, setLikeState] = useState<FeedLikeState>({ likeCount, likedByViewer });
   const confirmedLikeStateRef = useRef(likeState);
@@ -119,9 +122,9 @@ export const SocialReviewPost = memo(function SocialReviewPost({
         </>}
         <Text style={styles.date}>{formatDate(updatedAt)}</Text>
       </View>
-      <SpoilerGuard reason={spoilerReason} contextLabel={spoilerContextLabel} revealKey={`${spoilerKey ?? ''}:${body}:${contentTitle}`} canReveal={canReveal}>
+      <SpoilerGuard reason={spoilerReason} contextLabel={spoilerContextLabel} revealKey={`${spoilerKey ?? ''}:${body}:${visibleContentLabel}`} canReveal={canReveal}>
         <Pressable
-          accessibilityLabel={`Open ${contentTitle}`}
+          accessibilityLabel={`Open ${visibleContentLabel}`}
           accessibilityRole="button"
           onPress={onOpenContent}
           style={({ pressed }) => [
@@ -137,16 +140,19 @@ export const SocialReviewPost = memo(function SocialReviewPost({
               style={styles.poster}
             />
           ) : null}
-          <View style={styles.mediaCopy}>
-            <Text style={styles.mediaMeta}>{contentMeta}</Text>
-            <Text numberOfLines={2} style={styles.mediaTitle}>{contentTitle}</Text>
+          <View style={[styles.mediaCopy, variant === 'community' ? styles.communityMediaCopy : null]}>
+            <View>
+              <Text style={styles.mediaMeta}>{contentMeta}</Text>
+              {contentContext ? <Text numberOfLines={2} style={styles.mediaContext}>{contentContext}</Text> : null}
+              <Text numberOfLines={2} style={[styles.mediaTitle, contentContext ? styles.episodeTitle : null]}>{contentTitle}</Text>
+              {variant !== 'community' ? (
+                <Text style={styles.openLabel}>Open content</Text>
+              ) : null}
+            </View>
             {variant === 'community' && rating !== null ? (
               <View style={styles.communityRating}>
-                <StarRatingDisplay rating={rating} showValue size={17} />
+                <StarRatingDisplay rating={rating} showValue size={22} />
               </View>
-            ) : null}
-            {variant !== 'community' ? (
-              <Text style={styles.openLabel}>Open content</Text>
             ) : null}
           </View>
           {variant === 'community' ? (
@@ -162,7 +168,7 @@ export const SocialReviewPost = memo(function SocialReviewPost({
             <StarRatingDisplay rating={rating} showValue size={17} />
           </View>
         ) : null}
-        {body ? <ExpandableReviewText body={body} style={styles.review} /> : null}
+        {body ? <ExpandableReviewText body={body} style={[styles.review, variant === 'community' ? styles.communityReview : null]} /> : null}
       </SpoilerGuard>
       {onReport || onSetLiked ? (
         <View style={styles.actions}>
@@ -262,9 +268,13 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.md,
   },
+  communityMediaCopy: {
+    alignSelf: 'stretch',
+    justifyContent: 'space-between',
+  },
   communityPost: {
     ...shadows.panel,
-    backgroundColor: 'rgba(15, 19, 29, 0.86)',
+    backgroundColor: 'rgba(15, 19, 29, 0.74)',
     borderBottomWidth: 0,
     borderColor: colors.borderStrong,
     borderRadius: radii.lg,
@@ -276,7 +286,11 @@ const styles = StyleSheet.create({
     width: 84,
   },
   communityRating: {
-    alignSelf: 'flex-start',
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    marginTop: spacing.sm,
+  },
+  communityReview: {
     marginTop: spacing.sm,
   },
   date: {
@@ -306,6 +320,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minWidth: 0,
   },
+  mediaContext: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '800',
+    lineHeight: 21,
+  },
   mediaLink: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -326,6 +346,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     lineHeight: 21,
+  },
+  episodeTitle: {
+    color: colors.textMuted,
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 19,
+    marginTop: 2,
   },
   openLabel: {
     ...typography.meta,

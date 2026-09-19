@@ -17,7 +17,12 @@ assert.equal(exported.getCommunityFeedKey('a'), exported.getCommunityFeedKey('a'
 assert.match(source, /background=\{atmosphereUrl \? <SpotlightAtmosphere imageUrl=\{atmosphereUrl\} \/> : null\}/);
 assert.match(source, /variant="community"/);
 assert.doesNotMatch(source.slice(source.indexOf('function communityLabel')), /Discover|Following/);
+assert.match(source, /contentContext=\{item\.content\.contentType === 'episode' && item\.seriesTitle \? `\$\{item\.seriesTitle\} · S\$\{item\.content\.seasonNumber\} E\$\{item\.content\.episodeNumber\}` : null\}/);
+assert.match(source, /const media = item\.content\.contentType === 'movie' \? 'Movie' : 'Series'/);
 assert.match(socialPostSource, /variant !== 'community' \? \(\s*<Text style=\{styles\.openLabel\}>Open content<\/Text>/);
+assert.match(socialPostSource, /backgroundColor: 'rgba\(15, 19, 29, 0\.74\)'/);
+assert.match(socialPostSource, /StarRatingDisplay rating=\{rating\} showValue size=\{22\}/);
+assert.match(socialPostSource, /communityRating: \{[\s\S]*?alignItems: 'center',[\s\S]*?alignSelf: 'stretch'/);
 const pagination = source.slice(source.indexOf('  async function loadMore()'), source.indexOf('  const openContent'));
 async function run() {
   for (const fail of [false, true]) {
