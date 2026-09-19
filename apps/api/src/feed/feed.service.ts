@@ -284,6 +284,22 @@ export class FeedService {
             where: { ...visibility, episodeReviewId: reviewId },
           });
       const items = rows.slice(0, REVIEW_REPLY_PAGE_SIZE);
+      const rating = 'tmdbId' in review
+        ? await this.prisma.userMovieRating.findUnique({
+            select: { scoreHalfSteps: true },
+            where: { userId_tmdbId: { tmdbId: review.tmdbId, userId: review.userId } },
+          })
+        : await this.prisma.userEpisodeRating.findUnique({
+            select: { scoreHalfSteps: true },
+            where: {
+              userId_seriesTmdbId_seasonNumber_episodeNumber: {
+                episodeNumber: review.episodeNumber,
+                seasonNumber: review.seasonNumber,
+                seriesTmdbId: review.seriesTmdbId,
+                userId: review.userId,
+              },
+            },
+          });
 
       return {
         items: items.map((reply) => this.toReviewReply(reply, viewer.id)),
@@ -291,8 +307,20 @@ export class FeedService {
         review: {
           author: toAuthor(review.user, this.avatarStorage),
           body: review.body,
+          content: 'tmdbId' in review
+            ? { contentType: 'movie' as const, tmdbId: review.tmdbId }
+            : {
+                contentType: 'episode' as const,
+                episodeNumber: review.episodeNumber,
+                seasonNumber: review.seasonNumber,
+                seriesTmdbId: review.seriesTmdbId,
+              },
           id: review.id,
+          likeCount: review._count.likes,
+          likedByViewer: review.likes.length > 0,
+          score: rating ? rating.scoreHalfSteps / 2 : null,
           type: reviewType,
+          updatedAt: review.updatedAt.toISOString(),
         },
       };
     });
@@ -475,7 +503,11 @@ export class FeedService {
   }
 
   private async getVisibleReview(viewerId: string, reviewType: FeedReviewType, reviewId: string) {
-    const include = { user: { include: { privacySettings: true } } } as const;
+    const include = {
+      _count: { select: { likes: true } },
+      likes: { select: { id: true }, where: { userId: viewerId } },
+      user: { include: { privacySettings: true } },
+    } as const;
     const review = reviewType === 'movieReview'
       ? await this.prisma.userMovieReview.findUnique({ include, where: { id: reviewId } })
       : await this.prisma.userEpisodeReview.findUnique({ include, where: { id: reviewId } });

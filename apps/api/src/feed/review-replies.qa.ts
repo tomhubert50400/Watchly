@@ -24,9 +24,13 @@ const reply = (index = 0) => ({
   userId: VIEWER_ID,
 });
 const review = {
+  _count: { likes: 3 },
   body: 'Original review',
   id: REVIEW_ID,
+  likes: [{ id: 'like' }],
   moderationHiddenAt: null,
+  tmdbId: 550,
+  updatedAt: createdAt,
   user: {
     avatarObjectKey: null,
     displayName: 'Reviewer',
@@ -50,6 +54,8 @@ const prisma: any = {
     findFirst: async ({ where }: any) => where.userId === VIEWER_ID ? { id: REPLY_ID } : null,
     findMany: async (args: any) => { listArgs = args; return Array.from({ length: 31 }, (_, index) => reply(index)); },
   },
+  userEpisodeRating: { findUnique: async () => null },
+  userMovieRating: { findUnique: async () => ({ scoreHalfSteps: 9 }) },
   userBlock: {
     findFirst: async () => blocked ? { blockerId: AUTHOR_ID, blockedUserId: VIEWER_ID } : null,
     findMany: async () => [{ blockerId: VIEWER_ID, blockedUserId: BLOCKED_ID }],
@@ -92,6 +98,11 @@ async function run() {
   assert.equal(page.items.length, 30);
   assert.equal(page.nextCursor, page.items.at(-1)?.id);
   assert.equal(page.items[0].ownedByViewer, true);
+  assert.deepEqual(page.review.content, { contentType: 'movie', tmdbId: 550 });
+  assert.equal(page.review.likeCount, 3);
+  assert.equal(page.review.likedByViewer, true);
+  assert.equal(page.review.score, 4.5);
+  assert.equal(page.review.updatedAt, createdAt.toISOString());
   assert.equal(listArgs?.take, 31);
   assert.deepEqual(listArgs?.where.userId.notIn, [BLOCKED_ID]);
   assert.equal(listArgs?.where.moderationHiddenAt, null);
