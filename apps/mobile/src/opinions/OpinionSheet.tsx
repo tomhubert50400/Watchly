@@ -37,7 +37,6 @@ import {
   buildClearPlan,
   buildDeleteReviewPlan,
   buildReviewSavePlan,
-  canSaveReview,
   createOpinionState,
   getRatingFromTrackPosition,
   getRatingAccessibilityValue,
@@ -52,6 +51,7 @@ const STAR_GAP = 2;
 const STAR_VALUES = [1, 2, 3, 4, 5] as const;
 const STAR_TRACK_WIDTH = STAR_TARGET_SIZE * STAR_VALUES.length + STAR_GAP * (STAR_VALUES.length - 1);
 const ACTIVITY_STAR_TRACK_WIDTH = 138;
+const RATING_SAVE_DEBOUNCE_MS = 1_000;
 
 type LoadedOpinion = {
   rating: number | null;
@@ -99,8 +99,11 @@ export function OpinionSheet({
   const [opinion, setOpinion] = useState<OpinionState>(() => createOpinionState(null, null));
   const activityBatchChangedRef = useRef(false);
   const activityConfirmedRatingRef = useRef<number | null>(null);
+  const activityDebounceResolveRef = useRef<(() => void) | null>(null);
+  const activityDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activityMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const activityPendingMutationCountRef = useRef(0);
+  const activitySettledPromiseRef = useRef<Promise<void>>(Promise.resolve());
   const activityRatingGestureActiveRef = useRef(false);
   const activityRatingTrackWidthRef = useRef(ACTIVITY_STAR_TRACK_WIDTH);
   const requestScope = JSON.stringify([ownerKey ?? currentUser?.id ?? null, resourceKey ?? mediaLabel, isSignedIn]);
@@ -257,8 +260,14 @@ export function OpinionSheet({
   }
 
   async function saveReview() {
+    const operations = buildReviewSavePlan(opinion);
     setIsOpen(false);
-    const succeeded = await runOperations(buildReviewSavePlan(opinion));
+    await activitySettledPromiseRef.current;
+    if (operations.length === 0) {
+      setOpinion((current) => resetOpinionDraft(current));
+      return;
+    }
+    const succeeded = await runOperations(operations);
     if (!succeeded) {
       setIsOpen(true);
       return;
@@ -266,7 +275,7 @@ export function OpinionSheet({
     setOpinion((current) => resetOpinionDraft(current));
   }
 
-  async function saveRatingImmediately(score: number | null) {
+  function saveRatingImmediately(score: number | null) {
     if (!isSignedIn) {
       setIsSignInOpen(true);
       return;
@@ -282,11 +291,16 @@ export function OpinionSheet({
       confirmClearRating();
       return;
     }
-    if (opinion.savedRating === score) return;
+    const ratingSavePending = activityDebounceTimerRef.current !== null
+      || activityPendingMutationCountRef.current > 0;
+    if (!ratingSavePending && opinion.savedRating === score) return;
     const operation: OpinionOperation = score === null ? { kind: 'clearRating' } : { kind: 'saveRating', score };
-    if (activityPendingMutationCountRef.current === 0) {
+    if (!ratingSavePending) {
       activityConfirmedRatingRef.current = opinion.savedRating;
       activityBatchChangedRef.current = false;
+      activitySettledPromiseRef.current = new Promise((resolve) => {
+        activityDebounceResolveRef.current = resolve;
+      });
     }
     const scope = requestScope;
     requestRef.current = { scope, version: requestRef.current.version + 1 };
@@ -304,7 +318,9 @@ export function OpinionSheet({
       }
       return optimistic;
     });
-    activityPendingMutationCountRef.current += 1;
+    if (activityDebounceTimerRef.current !== null) {
+      clearTimeout(activityDebounceTimerRef.current);
+    }
 
     const commitMutation = async () => {
       try {
@@ -316,7 +332,7 @@ export function OpinionSheet({
         showToast('Could not save your rating.');
       } finally {
         activityPendingMutationCountRef.current -= 1;
-        if (activityPendingMutationCountRef.current === 0) {
+        if (activityPendingMutationCountRef.current === 0 && activityDebounceTimerRef.current === null) {
           const confirmedRating = activityConfirmedRatingRef.current;
           if (!activityRatingGestureActiveRef.current) {
             draftRatingRef.current = confirmedRating;
@@ -341,12 +357,17 @@ export function OpinionSheet({
           });
           if (activityBatchChangedRef.current) onChanged();
           activityBatchChangedRef.current = false;
+          activityDebounceResolveRef.current?.();
+          activityDebounceResolveRef.current = null;
         }
       }
     };
-    const queuedMutation = activityMutationQueueRef.current.then(commitMutation, commitMutation);
-    activityMutationQueueRef.current = queuedMutation.catch(() => undefined);
-    await queuedMutation;
+    activityDebounceTimerRef.current = setTimeout(() => {
+      activityDebounceTimerRef.current = null;
+      activityPendingMutationCountRef.current += 1;
+      const queuedMutation = activityMutationQueueRef.current.then(commitMutation, commitMutation);
+      activityMutationQueueRef.current = queuedMutation.catch(() => undefined);
+    }, RATING_SAVE_DEBOUNCE_MS);
   }
 
   function beginActivityRatingGesture(event: GestureResponderEvent) {
@@ -454,7 +475,6 @@ export function OpinionSheet({
         </View>
         <View style={styles.saveButton}>
           <Button
-            disabled={!canSaveReview(opinion) || activityPendingMutationCountRef.current > 0}
             fullWidth
             label="Save review"
             loading={isSaving}

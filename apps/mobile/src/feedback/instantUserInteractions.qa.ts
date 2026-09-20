@@ -73,6 +73,11 @@ assert.match(
 );
 assert.match(
   opinion,
+  /RATING_SAVE_DEBOUNCE_MS = 1_000[\s\S]*clearTimeout\(activityDebounceTimerRef\.current\)[\s\S]*setTimeout\(/,
+  'rapid rating releases must collapse into one backend save after a one-second pause',
+);
+assert.match(
+  opinion,
   /label="Save review"/,
   'the opinion sheet save action must be reserved for written reviews',
 );
