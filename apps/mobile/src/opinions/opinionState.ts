@@ -41,37 +41,25 @@ export function getRatingAccessibilityValue(rating: number | null) {
   };
 }
 
-export function isOpinionDirty(state: OpinionState) {
-  return state.draftRating !== state.savedRating || state.draftReview !== (state.savedReview ?? '');
+export function isReviewDirty(state: OpinionState) {
+  return state.draftReview !== (state.savedReview ?? '');
 }
 
-export function canSaveOpinion(state: OpinionState) {
-  if (!isOpinionDirty(state) || state.draftRating === null) {
+export function canSaveReview(state: OpinionState) {
+  if (!isReviewDirty(state) || state.draftRating === null) {
     return false;
-  }
-
-  const reviewChanged = state.draftReview !== (state.savedReview ?? '');
-  if (!reviewChanged) {
-    return state.draftRating !== state.savedRating;
   }
 
   const trimmedReview = state.draftReview.trim();
   return trimmedReview.length > 0 && state.draftReview.length <= MAX_REVIEW_LENGTH;
 }
 
-export function buildSavePlan(state: OpinionState): OpinionOperation[] {
-  if (!canSaveOpinion(state)) {
+export function buildReviewSavePlan(state: OpinionState): OpinionOperation[] {
+  if (!canSaveReview(state)) {
     return [];
   }
 
-  const operations: OpinionOperation[] = [];
-  if (state.draftRating !== state.savedRating && state.draftRating !== null) {
-    operations.push({ kind: 'saveRating', score: state.draftRating });
-  }
-  if (state.draftReview !== (state.savedReview ?? '')) {
-    operations.push({ body: state.draftReview.trim(), kind: 'saveReview' });
-  }
-  return operations;
+  return [{ body: state.draftReview.trim(), kind: 'saveReview' }];
 }
 
 export function buildDeleteReviewPlan(state: OpinionState): OpinionOperation[] {

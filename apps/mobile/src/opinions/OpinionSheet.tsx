@@ -36,12 +36,12 @@ import {
   beginOpinionOperations,
   buildClearPlan,
   buildDeleteReviewPlan,
-  buildSavePlan,
-  canSaveOpinion,
+  buildReviewSavePlan,
+  canSaveReview,
   createOpinionState,
   getRatingFromTrackPosition,
   getRatingAccessibilityValue,
-  isOpinionDirty,
+  isReviewDirty,
   resetOpinionDraft,
 } from './opinionState';
 import { resolveOpinionTriggerLayout } from './opinionTriggerLayout';
@@ -256,9 +256,9 @@ export function OpinionSheet({
     }
   }
 
-  async function save() {
+  async function saveReview() {
     setIsOpen(false);
-    const succeeded = await runOperations(buildSavePlan(opinion));
+    const succeeded = await runOperations(buildReviewSavePlan(opinion));
     if (!succeeded) {
       setIsOpen(true);
       return;
@@ -266,7 +266,7 @@ export function OpinionSheet({
     setOpinion((current) => resetOpinionDraft(current));
   }
 
-  async function saveActivityRating(score: number | null) {
+  async function saveRatingImmediately(score: number | null) {
     if (!isSignedIn) {
       setIsSignInOpen(true);
       return;
@@ -377,12 +377,28 @@ export function OpinionSheet({
     activityRatingGestureActiveRef.current = false;
     onRatingGestureChange?.(false);
     const score = draftRatingRef.current;
-    if (score !== null || triggerVariant === 'inline') void saveActivityRating(score);
+    if (score !== null || triggerVariant === 'inline') void saveRatingImmediately(score);
   }
 
   function cancelActivityRatingGesture() {
     activityRatingGestureActiveRef.current = false;
     onRatingGestureChange?.(false);
+    draftRatingRef.current = opinion.savedRating;
+    setOpinion((current) => ({ ...current, draftRating: current.savedRating }));
+  }
+
+  function beginSheetRatingGesture(event: GestureResponderEvent) {
+    activityRatingGestureActiveRef.current = true;
+    selectRatingAtTouch(event);
+  }
+
+  function saveSheetRatingAtRelease() {
+    activityRatingGestureActiveRef.current = false;
+    void saveRatingImmediately(draftRatingRef.current);
+  }
+
+  function cancelSheetRatingGesture() {
+    activityRatingGestureActiveRef.current = false;
     draftRatingRef.current = opinion.savedRating;
     setOpinion((current) => ({ ...current, draftRating: current.savedRating }));
   }
@@ -430,7 +446,7 @@ export function OpinionSheet({
     );
   }
 
-  const sheetFooter = (
+  const sheetFooter = reviewsEnabled ? (
     <View>
       <View style={[styles.sheetActions, triggerLayout.actionsStacked ? styles.sheetActionsStacked : null]}>
         <View style={styles.actionButton}>
@@ -438,16 +454,18 @@ export function OpinionSheet({
         </View>
         <View style={styles.saveButton}>
           <Button
-            disabled={!canSaveOpinion(opinion)}
+            disabled={!canSaveReview(opinion) || activityPendingMutationCountRef.current > 0}
             fullWidth
-            label="Save"
+            label="Save review"
             loading={isSaving}
-            onPress={() => void save()}
+            onPress={() => void saveReview()}
           />
         </View>
       </View>
-      {isOpinionDirty(opinion) ? <Text style={styles.unsaved}>Unsaved changes</Text> : null}
+      {isReviewDirty(opinion) ? <Text style={styles.unsaved}>Unsaved review changes</Text> : null}
     </View>
+  ) : (
+    <Button disabled={isSaving} fullWidth label="Done" onPress={closeSheet} variant="secondary" />
   );
 
   return (
@@ -472,7 +490,7 @@ export function OpinionSheet({
                 const score = event.nativeEvent.actionName === 'increment'
                   ? Math.min(5, value + 0.5)
                   : Math.max(triggerVariant === 'inline' ? 0 : 0.5, value - 0.5);
-                void saveActivityRating(score === 0 ? null : score);
+                void saveRatingImmediately(score === 0 ? null : score);
               }}
               onLayout={(event) => {
                 activityRatingTrackWidthRef.current = event.nativeEvent.layout.width;
@@ -575,8 +593,10 @@ export function OpinionSheet({
               }}
               onLayout={(event) => { ratingTrackWidthRef.current = event.nativeEvent.layout.width; }}
               onMoveShouldSetResponder={() => !isSaving}
-              onResponderGrant={selectRatingAtTouch}
+              onResponderGrant={beginSheetRatingGesture}
               onResponderMove={selectRatingAtTouch}
+              onResponderRelease={saveSheetRatingAtRelease}
+              onResponderTerminate={cancelSheetRatingGesture}
               onResponderTerminationRequest={() => true}
               onStartShouldSetResponder={() => !isSaving}
               style={styles.stars}
@@ -592,7 +612,7 @@ export function OpinionSheet({
             <Text accessibilityLiveRegion="polite" style={styles.scoreLabel}>
               {opinion.draftRating === null ? 'Tap to rate' : `${opinion.draftRating} / 5`}
             </Text>
-            <Text style={styles.help}>Tap or slide across the stars. With VoiceOver, swipe up or down to adjust.</Text>
+            <Text style={styles.help}>Ratings save automatically. Tap or slide across the stars. With VoiceOver, swipe up or down to adjust.</Text>
           </View>
 
           {reviewsEnabled ? (

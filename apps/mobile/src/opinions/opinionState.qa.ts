@@ -6,12 +6,12 @@ import {
   applyOperationSuccess,
   buildClearPlan,
   buildDeleteReviewPlan,
-  buildSavePlan,
-  canSaveOpinion,
+  buildReviewSavePlan,
+  canSaveReview,
   createOpinionState,
   getRatingFromTrackPosition,
   getRatingAccessibilityValue,
-  isOpinionDirty,
+  isReviewDirty,
   type OpinionState,
   type OpinionOperation,
 } from './opinionState';
@@ -37,32 +37,35 @@ assert.deepEqual(getRatingAccessibilityValue(null), {
 });
 
 const empty = createOpinionState(null, null);
-assert.equal(isOpinionDirty(empty), false);
-assert.equal(canSaveOpinion(empty), false);
+assert.equal(isReviewDirty(empty), false);
+assert.equal(canSaveReview(empty), false);
 
 const ratingDraft = { ...empty, draftRating: 4.5 };
-assert.equal(isOpinionDirty(ratingDraft), true);
-assert.equal(canSaveOpinion(ratingDraft), true);
-assert.deepEqual(buildSavePlan(ratingDraft), [{ kind: 'saveRating', score: 4.5 }]);
+assert.equal(isReviewDirty(ratingDraft), false);
+assert.equal(canSaveReview(ratingDraft), false);
+assert.deepEqual(buildReviewSavePlan(ratingDraft), []);
 
 const reviewWithoutRating = { ...empty, draftReview: 'Worth seeing.' };
-assert.equal(isOpinionDirty(reviewWithoutRating), true);
-assert.equal(canSaveOpinion(reviewWithoutRating), false);
-assert.deepEqual(buildSavePlan(reviewWithoutRating), []);
+assert.equal(isReviewDirty(reviewWithoutRating), true);
+assert.equal(canSaveReview(reviewWithoutRating), false);
+assert.deepEqual(buildReviewSavePlan(reviewWithoutRating), []);
 
 const existing = createOpinionState(4, 'Original review');
-assert.equal(canSaveOpinion({ ...existing, draftReview: '  ' }), false);
-assert.deepEqual(buildSavePlan({ ...existing, draftRating: 4.5, draftReview: 'Updated review' }), [
-  { kind: 'saveRating', score: 4.5 },
+assert.equal(canSaveReview({ ...existing, draftReview: '  ' }), false);
+assert.deepEqual(buildReviewSavePlan({ ...existing, draftRating: 4, draftReview: 'Updated review' }), [
   { body: 'Updated review', kind: 'saveReview' },
 ]);
+const changedRatingOnly = { ...existing, draftRating: 4.5 };
+assert.equal(isReviewDirty(changedRatingOnly), false);
+assert.equal(canSaveReview(changedRatingOnly), false);
+assert.deepEqual(buildReviewSavePlan(changedRatingOnly), []);
 
 let partial: OpinionState = { ...existing, draftRating: 4.5, draftReview: 'Updated review' };
 partial = applyOperationSuccess(partial, { kind: 'saveRating', score: 4.5 });
 assert.equal(partial.savedRating, 4.5);
 assert.equal(partial.draftRating, 4.5);
 assert.equal(partial.savedReview, 'Original review');
-assert.equal(isOpinionDirty(partial), true);
+assert.equal(isReviewDirty(partial), true);
 partial = applyOperationFailure(partial, { body: 'Updated review', kind: 'saveReview' }, 'Could not save your review.');
 assert.equal(partial.savedRating, 4.5);
 assert.equal(partial.draftRating, 4.5);

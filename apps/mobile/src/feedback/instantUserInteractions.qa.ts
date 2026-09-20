@@ -66,6 +66,16 @@ assert.doesNotMatch(
   /buildSelectionDiff|buildSelectionLabel|Save changes/,
   'watchlist membership must auto-save each choice instead of waiting for a save action',
 );
+assert.match(
+  opinion,
+  /onResponderRelease=\{saveSheetRatingAtRelease\}/,
+  'ratings chosen in the opinion sheet must save without waiting for the review button',
+);
+assert.match(
+  opinion,
+  /label="Save review"/,
+  'the opinion sheet save action must be reserved for written reviews',
+);
 assert.doesNotMatch(
   reviewPost,
   /disabled=\{[^}]*pending|hapticSelection/,
