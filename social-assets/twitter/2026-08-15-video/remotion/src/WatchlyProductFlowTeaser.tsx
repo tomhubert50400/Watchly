@@ -552,7 +552,7 @@ const DetailHero = () => (
         Science Fiction · Action · Adventure
       </div>
       <div style={{display: 'flex', gap: 12, marginTop: 18}}>
-        {['Film', '2026', '2 hr 25 min', '★ 7.9/10'].map((item) => (
+        {['Film', '2026', '2 hr 25 min', '★ 4.0/5'].map((item) => (
           <div
             key={item}
             style={{
