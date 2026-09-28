@@ -18,6 +18,7 @@ assert(detailBackOptions('Library').headerBackTitle === 'Library', 'Detail back 
 assert(detailBackOptions(undefined).headerBackTitle === 'Back', 'Unknown detail origins must use a human fallback.');
 assert(needsCustomStackBackButton('ios', '26.0'), 'iOS 26 must bypass the native back button interaction bug.');
 assert(needsCustomStackBackButton('ios', '26.1'), 'iOS 26 minor versions need the same workaround.');
+assert(needsCustomStackBackButton('ios', '27.0'), 'iOS 27 must retain the direct back action.');
 assert(!needsCustomStackBackButton('ios', '18.6'), 'Older iOS versions must keep their native back button.');
 assert(!needsCustomStackBackButton('android', 36), 'Android API levels must not enable the iOS workaround.');
 
@@ -55,7 +56,35 @@ assert(
   'The app root must remain dark behind rounded native transition corners.',
 );
 
-console.log('Stack config QA passed.');
+const nativeHeaderSubview = readFileSync(new URL('../../node_modules/react-native-screens/ios/RNSScreenStackHeaderSubview.mm', import.meta.url), 'utf8');
+const nativeHeaderConfig = readFileSync(new URL('../../node_modules/react-native-screens/ios/RNSScreenStackHeaderConfig.mm', import.meta.url), 'utf8');
+assert(
+  nativeHeaderSubview.includes('withFrame:self.bounds]'),
+  'Native header touch coordinates must not include the subview offset twice.',
+);
+assert(
+  nativeHeaderSubview.includes('usesAutoLayoutForBarButton') && nativeHeaderSubview.includes('invalidateIntrinsicContentSize'),
+  'The installed native patch must report updated React content sizes to UIKit.',
+);
+assert(
+  nativeHeaderConfig.includes('setContentHuggingPriority:UILayoutPriorityRequired')
+    && nativeHeaderConfig.includes('setContentCompressionResistancePriority:UILayoutPriorityRequired'),
+  'Liquid Glass header content must neither stretch nor shrink away from its React touch area.',
+);
+assert(
+  nativeHeaderConfig.includes('subview.superview == previousItem.customView')
+    && nativeHeaderConfig.includes('navitem.leftBarButtonItem != leftItem')
+    && nativeHeaderConfig.includes('navitem.rightBarButtonItem != rightItem'),
+  'Unchanged native header items must be reused rather than recreated during transitions.',
+);
+for (const side of ['left', 'right']) {
+  assert(
+    nativeHeaderConfig.includes(`RNSReplaceHeaderContentWithSnapshot(navitem.${side}BarButtonItem, childComponentView, snapshot)`),
+    `The ${side} header snapshot must preserve the native wrapper size during a pop.`,
+  );
+}
+
+console.log('Stack config and installed native header patch QA passed.');
 
 let backCalls = 0;
 let focused = true;

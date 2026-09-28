@@ -1,3 +1,203 @@
+diff --git a/ios/RNSScreenStackHeaderConfig.mm b/ios/RNSScreenStackHeaderConfig.mm
+index 57ff861b84b6b85e5c9e91775e1638a31ffd68ab..2166c4167d283cafb8d9991958636839cd6b3c0f 100644
+--- a/ios/RNSScreenStackHeaderConfig.mm
++++ b/ios/RNSScreenStackHeaderConfig.mm
+@@ -40,6 +40,61 @@ namespace react = facebook::react;
+ static constexpr auto DEFAULT_TITLE_FONT_SIZE = @17;
+ static constexpr auto DEFAULT_TITLE_LARGE_FONT_SIZE = @34;
+ 
++// Backport of upstream #3449 and #3548, retaining native Liquid Glass.
++static void RNSConstrainHeaderContent(UIView *content, UIView *wrapper)
++{
++  content.translatesAutoresizingMaskIntoConstraints = NO;
++  [wrapper addSubview:content];
++  [content.centerXAnchor constraintEqualToAnchor:wrapper.centerXAnchor].active = YES;
++  [content.centerYAnchor constraintEqualToAnchor:wrapper.centerYAnchor].active = YES;
++  NSLayoutConstraint *width = [wrapper.widthAnchor constraintEqualToAnchor:content.widthAnchor];
++  width.priority = UILayoutPriorityDefaultHigh;
++  width.active = YES;
++  NSLayoutConstraint *height = [wrapper.heightAnchor constraintEqualToAnchor:content.heightAnchor];
++  height.priority = UILayoutPriorityDefaultHigh;
++  height.active = YES;
++}
++
++static UIBarButtonItem *RNSHeaderBarButtonItem(RNSScreenStackHeaderSubview *subview, UIBarButtonItem *previousItem)
++{
++#if !TARGET_OS_TV
++  if (@available(iOS 26.0, *)) {
++    // Keep the native item alive across header updates without a subview/item retain cycle.
++    if (previousItem != nil && subview.superview == previousItem.customView) {
++      return previousItem;
++    }
++    UIView *wrapper = [UIView new];
++    wrapper.translatesAutoresizingMaskIntoConstraints = NO;
++    RNSConstrainHeaderContent(subview, wrapper);
++    [subview setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
++    [subview setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisVertical];
++    [subview setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
++    [subview setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisVertical];
++    return [[UIBarButtonItem alloc] initWithCustomView:wrapper];
++  }
++#endif
++  return [[UIBarButtonItem alloc] initWithCustomView:subview];
++}
++
++#ifdef RCT_NEW_ARCH_ENABLED
++// Preserve the wrapper's dimensions after the live React view is removed during a pop.
++// See upstream issue #4360; the snapshot must replace the content inside the wrapper.
++static void RNSReplaceHeaderContentWithSnapshot(
++    UIBarButtonItem *item, RNSScreenStackHeaderSubview *subview, UIView *snapshot)
++{
++  if (snapshot == nil || item == nil) {
++    return;
++  }
++  if (item.customView == subview) {
++    item.customView = snapshot;
++  } else if (subview.superview != nil && item.customView == subview.superview) {
++    [snapshot.widthAnchor constraintEqualToConstant:subview.bounds.size.width].active = YES;
++    [snapshot.heightAnchor constraintEqualToConstant:subview.bounds.size.height].active = YES;
++    RNSConstrainHeaderContent(snapshot, item.customView);
++  }
++}
++#endif
++
+ #if !defined(RCT_NEW_ARCH_ENABLED)
+ // Some RN private method hacking below. Couldn't figure out better way to access image data
+ // of a given RCTImageView. See more comments in the code section processing SubviewTypeBackButton
+@@ -659,8 +714,10 @@ RNS_IGNORE_SUPER_CALL_END
+ #if !TARGET_OS_TV
+   navitem.hidesBackButton = config.hideBackButton;
+ #endif
+-  navitem.leftBarButtonItem = nil;
+-  navitem.rightBarButtonItem = nil;
++  UIBarButtonItem *previousLeftItem = navitem.leftBarButtonItem;
++  UIBarButtonItem *previousRightItem = navitem.rightBarButtonItem;
++  UIBarButtonItem *leftItem = nil;
++  UIBarButtonItem *rightItem = nil;
+   navitem.titleView = nil;
+ 
+ #if !TARGET_OS_TV
+@@ -677,13 +734,11 @@ RNS_IGNORE_SUPER_CALL_END
+ #if !TARGET_OS_TV
+         navitem.leftItemsSupplementBackButton = config.backButtonInCustomView;
+ #endif
+-        UIBarButtonItem *buttonItem = [[UIBarButtonItem alloc] initWithCustomView:subview];
+-        navitem.leftBarButtonItem = buttonItem;
++        leftItem = RNSHeaderBarButtonItem(subview, previousLeftItem);
+         break;
+       }
+       case RNSScreenStackHeaderSubviewTypeRight: {
+-        UIBarButtonItem *buttonItem = [[UIBarButtonItem alloc] initWithCustomView:subview];
+-        navitem.rightBarButtonItem = buttonItem;
++        rightItem = RNSHeaderBarButtonItem(subview, previousRightItem);
+         break;
+       }
+       case RNSScreenStackHeaderSubviewTypeCenter:
+@@ -739,6 +794,13 @@ RNS_IGNORE_SUPER_CALL_END
+     }
+   }
+ 
++  if (navitem.leftBarButtonItem != leftItem) {
++    navitem.leftBarButtonItem = leftItem;
++  }
++  if (navitem.rightBarButtonItem != rightItem) {
++    navitem.rightBarButtonItem = rightItem;
++  }
++
+ #if !TARGET_OS_TV
+   if (!searchBarPresent) {
+     navitem.searchController = nil;
+@@ -958,14 +1020,14 @@ RNS_IGNORE_SUPER_CALL_END
+     // `+ [RNSScreenStackHeaderConfig updateViewController: withConfig: animated:]` method.
+     switch (childComponentView.type) {
+       case RNSScreenStackHeaderSubviewTypeLeft:
+-        navitem.leftBarButtonItem.customView = snapshot;
++        RNSReplaceHeaderContentWithSnapshot(navitem.leftBarButtonItem, childComponentView, snapshot);
+         break;
+       case RNSScreenStackHeaderSubviewTypeCenter:
+       case RNSScreenStackHeaderSubviewTypeTitle:
+         navitem.titleView = snapshot;
+         break;
+       case RNSScreenStackHeaderSubviewTypeRight:
+-        navitem.rightBarButtonItem.customView = snapshot;
++        RNSReplaceHeaderContentWithSnapshot(navitem.rightBarButtonItem, childComponentView, snapshot);
+         break;
+       case RNSScreenStackHeaderSubviewTypeSearchBar:
+       case RNSScreenStackHeaderSubviewTypeBackButton:
+diff --git a/ios/RNSScreenStackHeaderSubview.mm b/ios/RNSScreenStackHeaderSubview.mm
+index b4e3c15d85691b493ab75284485b62b917067e84..3216922635da74fa9f081e87f104c4ebb66c1d84 100644
+--- a/ios/RNSScreenStackHeaderSubview.mm
++++ b/ios/RNSScreenStackHeaderSubview.mm
+@@ -19,6 +19,7 @@ namespace react = facebook::react;
+ #endif // RCT_NEW_ARCH_ENABLED
+ 
+ @implementation RNSScreenStackHeaderSubview {
++  CGSize _reactContentSize;
+ #ifdef RCT_NEW_ARCH_ENABLED
+   react::RNSScreenStackHeaderSubviewShadowNode::ConcreteState::Shared _state;
+   CGRect _lastScheduledFrame;
+@@ -27,6 +28,22 @@ namespace react = facebook::react;
+ 
+ #pragma mark - Common
+ 
++// Backport of upstream #3449: UIKit owns placement, Yoga owns content size.
++- (BOOL)usesAutoLayoutForBarButton
++{
++#if !TARGET_OS_TV
++  if (@available(iOS 26.0, *)) {
++    return _type == RNSScreenStackHeaderSubviewTypeLeft || _type == RNSScreenStackHeaderSubviewTypeRight;
++  }
++#endif
++  return NO;
++}
++
++- (CGSize)intrinsicContentSize
++{
++  return [self usesAutoLayoutForBarButton] ? _reactContentSize : [super intrinsicContentSize];
++}
++
+ - (nullable RNSScreenStackHeaderConfig *)getHeaderConfig
+ {
+   RNSScreenStackHeaderConfig *headerConfig = (RNSScreenStackHeaderConfig *_Nullable)self.reactSuperview;
+@@ -83,7 +100,7 @@ namespace react = facebook::react;
+ 
+ - (void)updateShadowStateInContextOfAncestorView:(nullable UIView *)ancestorView
+ {
+-  [self updateShadowStateInContextOfAncestorView:ancestorView withFrame:self.frame];
++  [self updateShadowStateInContextOfAncestorView:ancestorView withFrame:self.bounds];
+ }
+ 
+ - (void)updateShadowStateWithFrame:(CGRect)frame
+@@ -160,7 +177,14 @@ RNS_IGNORE_SUPER_CALL_BEGIN
+         NSStringFromCGRect(frame),
+         self);
+   } else {
+-    self.bounds = CGRect{CGPointZero, frame.size};
++    if ([self usesAutoLayoutForBarButton]) {
++      if (!CGSizeEqualToSize(_reactContentSize, frame.size)) {
++        _reactContentSize = frame.size;
++        [self invalidateIntrinsicContentSize];
++      }
++    } else {
++      self.bounds = CGRect{CGPointZero, frame.size};
++    }
+     [self layoutNavigationBar];
+   }
+ }
+@@ -184,7 +208,12 @@ RNS_IGNORE_SUPER_CALL_END
+   // Block any attempt to set coordinates on RNSScreenStackHeaderSubview. This
+   // makes UINavigationBar the only one to control the position of header content.
+   if (!CGSizeEqualToSize(frame.size, self.frame.size)) {
+-    [super reactSetFrame:CGRectMake(0, 0, frame.size.width, frame.size.height)];
++    if ([self usesAutoLayoutForBarButton]) {
++      _reactContentSize = frame.size;
++      [self invalidateIntrinsicContentSize];
++    } else {
++      [super reactSetFrame:CGRectMake(0, 0, frame.size.width, frame.size.height)];
++    }
+     [self layoutNavigationBar];
+   }
+ }
 diff --git a/src/components/bottom-tabs/BottomTabsScreen.tsx b/src/components/bottom-tabs/BottomTabsScreen.tsx
 index ce02d94844d248fe4c0f607392d409d603a77c9b..33b2ef7d5335bcb9d7fbe6c6519c141c8bb31883 100644
 --- a/src/components/bottom-tabs/BottomTabsScreen.tsx
