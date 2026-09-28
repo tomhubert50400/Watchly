@@ -28,6 +28,16 @@ The snapshot proposal is not an upstream merged release. Installed-source QA
 checks patch application and the existing direct-back action; it cannot verify
 UIKit layout or physical-device touch handling.
 
+## Validation
+
+- `pnpm check`: passed (lint, typechecks, and workspace QA).
+- `pnpm install --frozen-lockfile --ignore-scripts`: passed, followed by the
+  installed native header patch QA.
+- [EAS build 16](https://expo.dev/accounts/zerqua/projects/tv-app/builds/36e8479f-85c4-4706-9001-fb8e6252b7d9):
+  finished successfully from commit `43dca39`, using the TestFlight profile.
+  The signed archive has not been submitted to App Store Connect.
+- Physical iPhone layout, back/favorite taps, and navigation gestures: pending.
+
 ## Device acceptance
 
 A new native iOS build is required. A Metro reload or JavaScript update cannot
