@@ -229,6 +229,22 @@ assert.doesNotMatch(
 );
 
 const episodeCommunitySource = source('../catalogue/EpisodeCommunityPanel.tsx');
+const movieCommunitySource = source('../reviews/MovieCommunityPanel.tsx');
+assert.doesNotMatch(
+  movieCommunitySource,
+  /movie-community:[^`]*\$\{revision\}/,
+  'rating and review mutations must not change movie community cache identity and discard visible content',
+);
+assert.match(
+  movieCommunitySource,
+  /\}, \[firebaseIdToken, getFirebaseIdToken, revision, tmdbId\]\)/,
+  'movie community must still fetch updated ratings and reviews when the opinion revision changes',
+);
+assert.match(
+  movieCommunitySource,
+  /!community && resource\.error \? <Button/,
+  'movie community refresh failures must not add a retry control while existing content is visible',
+);
 assert.doesNotMatch(
   episodeCommunitySource,
   /Loading community opinions|Could not load ratings and reviews/,

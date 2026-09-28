@@ -26,13 +26,14 @@ export function MovieCommunityPanel({ tmdbId, displayRating, artworkUrl, onViewM
   const [expanded, setExpanded] = useState(false);
   const [selectedScore, setSelectedScore] = useState<number | null>(null);
   const { width } = useWindowDimensions();
-  const load = useCallback(async () => getMovieCommunity(
-    firebaseIdToken ? await getFirebaseIdToken() : null, tmdbId,
-  ), [firebaseIdToken, getFirebaseIdToken, tmdbId]);
+  const load = useCallback(async () => {
+    void revision;
+    return getMovieCommunity(firebaseIdToken ? await getFirebaseIdToken() : null, tmdbId);
+  }, [firebaseIdToken, getFirebaseIdToken, revision, tmdbId]);
   const resource = useCachedResource<MovieCommunityResponse>({
     key: currentUser
-      ? getPrivateCacheKey(currentUser.id, `movie-community:${tmdbId}:${revision}`)
-      : getPublicCacheKey(`movie-community:${tmdbId}:${revision}`),
+      ? getPrivateCacheKey(currentUser.id, `movie-community:${tmdbId}`)
+      : getPublicCacheKey(`movie-community:${tmdbId}`),
     load,
   });
   const community = resource.data ? getRatingDistribution(resource.data, displayRating) : null;
@@ -106,7 +107,7 @@ export function MovieCommunityPanel({ tmdbId, displayRating, artworkUrl, onViewM
           ) : null}
         </>
       ) : <Text style={styles.muted}>{resource.error ? 'Could not load ratings and reviews.' : 'Loading ratings and reviews…'}</Text>}
-      {resource.error ? <Button label="Retry" variant="ghost" onPress={resource.retry} /> : null}
+      {!community && resource.error ? <Button label="Retry" variant="ghost" onPress={resource.retry} /> : null}
     </View>
   );
 }
