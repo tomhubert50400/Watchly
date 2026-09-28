@@ -7,8 +7,12 @@ import './actorFilmographyModel.qa';
 import { formatCatalogueRating } from './catalogueRatingModel';
 
 assert.equal(formatCatalogueRating(null), null);
-assert.equal(formatCatalogueRating(8), '8.0/10');
-assert.equal(formatCatalogueRating(5.24), '5.2/10');
+assert.equal(formatCatalogueRating(0), '0.0/5');
+assert.equal(formatCatalogueRating(1), '0.5/5');
+assert.equal(formatCatalogueRating(8), '4.0/5');
+assert.equal(formatCatalogueRating(5.24), '2.6/5');
+assert.equal(formatCatalogueRating(8.6), '4.3/5');
+assert.equal(formatCatalogueRating(10), '5.0/5');
 
 const ratingSource = readFileSync(new URL('CatalogueRating.tsx', import.meta.url), 'utf8');
 const exploreCardSource = readFileSync(new URL('ExploreMediaCard.tsx', import.meta.url), 'utf8');

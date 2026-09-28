@@ -1,3 +1,3 @@
 export function formatCatalogueRating(voteAverage: number | null) {
-  return voteAverage === null ? null : `${voteAverage.toFixed(1)}/10`;
+  return voteAverage === null ? null : `${(voteAverage / 2).toFixed(1)}/5`;
 }
