@@ -26,7 +26,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'AllTimeStats'>;
 
 export function AllTimeStatsScreen({ route }: Props) {
   const { currentUser, getFirebaseIdToken } = useAuthSession();
-  const statsRevision = useUserDataRevision('episodeProgress', 'opinions', 'viewings');
+  const statsRevision = useUserDataRevision('episodeProgress', 'opinions', 'tracking', 'viewings');
   const { refreshMovie, refreshSeries } = useCatalogueCache();
   const [expanded, setExpanded] = useState<ExpandedStat>(null);
   const providedStats = route.params.stats;

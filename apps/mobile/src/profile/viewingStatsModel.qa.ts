@@ -18,6 +18,13 @@ const highlightCardSource = readFileSync(
   'utf8',
 );
 const allTimeSource = readFileSync(new URL('./AllTimeStatsScreen.tsx', import.meta.url), 'utf8');
+const profileSource = readFileSync(new URL('./ProfileScreen.tsx', import.meta.url), 'utf8');
+for (const [screen, source] of [['Profile', profileSource], ['All Time', allTimeSource]]) {
+  const domains = source.match(/useUserDataRevision\(([^)]+)\)/)?.[1] ?? '';
+  for (const domain of ['tracking', 'episodeProgress', 'viewings']) {
+    assert.ok(domains.includes(`'${domain}'`), `${screen} stats must refresh after ${domain} changes from Your activity`);
+  }
+}
 assert(
   allTimeSource.includes('minimumFontScale={0.5}')
     && allTimeSource.includes('fontSize: 64'),

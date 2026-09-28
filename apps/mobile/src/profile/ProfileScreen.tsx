@@ -90,7 +90,7 @@ export function ProfileScreen() {
     currentUser,
     firebaseIdToken,
   } = useAuthSession();
-  const profileRevision = useUserDataRevision('opinions', 'profile', 'socialGraph', 'viewings');
+  const profileRevision = useUserDataRevision('episodeProgress', 'opinions', 'profile', 'socialGraph', 'tracking', 'viewings');
   const [avatarOverride, setAvatarOverride] = useState<string | null | undefined>(undefined);
   const [avatarStatus, setAvatarStatus] = useState<'idle' | 'saving'>('idle');
   const [avatarError, setAvatarError] = useState<string | null>(null);
