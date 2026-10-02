@@ -599,6 +599,7 @@ export async function commitPreparedItems(
     }),
   ]);
   const existingMovieRatingIds = new Set(existingMovieRatings.map((item) => item.tmdbId));
+  const ratedMovieIds = new Set([...existingMovieRatingIds, ...movieRatingItems.map((item) => item.match.tmdbId)]);
   const existingSeriesRatingIds = new Set(existingSeriesRatings.map((item) => item.seriesTmdbId));
   const existingReviewIds = new Set(existingReviews.map((item) => item.tmdbId));
   const movieRatingsToCreate = movieRatingItems.filter(
@@ -607,7 +608,9 @@ export async function commitPreparedItems(
   const seriesRatingsToCreate = seriesRatingItems.filter(
     (item) => !existingSeriesRatingIds.has(item.match.tmdbId),
   );
-  const reviewsToCreate = reviewItems.filter((item) => !existingReviewIds.has(item.match.tmdbId));
+  const reviewsToCreate = reviewItems.filter(
+    (item) => ratedMovieIds.has(item.match.tmdbId) && !existingReviewIds.has(item.match.tmdbId),
+  );
 
   if (movieRatingsToCreate.length > 0) {
     await transaction.userMovieRating.createMany({
@@ -764,7 +767,7 @@ export async function commitPreparedItems(
     preservedExisting:
       movieRatingItems.length - movieRatingsToCreate.length
       + seriesRatingItems.length - seriesRatingsToCreate.length
-      + reviewItems.length - reviewsToCreate.length,
+      + reviewItems.filter((item) => existingReviewIds.has(item.match.tmdbId)).length,
     ratingsCreated: movieRatingsToCreate.length + seriesRatingsToCreate.length,
     reviewsCreated: reviewsToCreate.length,
     statesChanged,

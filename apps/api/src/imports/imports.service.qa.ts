@@ -162,6 +162,51 @@ assert.equal(createdViewings.length, 1);
 assert.equal((createdViewings[0] as { runtimeMinutes: number }).runtimeMinutes, 120);
 assert.deepEqual((createdViewings[0] as { genres: string[] }).genres, ['Drama']);
 assert.deepEqual(updatedStates, [{ favorite: true, status: UserContentStatus.WATCHING }]);
+
+for (const scenario of [
+  { label: 'unrated review', existingRatingIds: [], importedRatingId: null, expectedReviews: 0 },
+  { label: 'existing rating', existingRatingIds: [1], importedRatingId: null, expectedReviews: 1 },
+  { label: 'rating in another import row', existingRatingIds: [], importedRatingId: 1, expectedReviews: 1 },
+  { label: 'unrelated existing rating', existingRatingIds: [2], importedRatingId: null, expectedReviews: 0 },
+  { label: 'unrelated imported rating', existingRatingIds: [], importedRatingId: 2, expectedReviews: 0 },
+]) {
+  const ratedIds = new Set(scenario.existingRatingIds);
+  const importedReviews: unknown[] = [];
+  const importedRatings: unknown[] = [];
+  const reviewTransaction = {
+    ...transaction,
+    userMovieRating: {
+      findMany: async () => scenario.existingRatingIds.map((tmdbId) => ({ tmdbId })),
+      createMany: async ({ data }: { data: Array<{ tmdbId: number }> }) => {
+        importedRatings.push(...data);
+        data.forEach((rating) => ratedIds.add(rating.tmdbId));
+      },
+    },
+    userMovieReview: {
+      findMany: async () => [],
+      createMany: async ({ data }: { data: Array<{ tmdbId: number }> }) => {
+        data.forEach((review) => assert(ratedIds.has(review.tmdbId), scenario.label));
+        importedReviews.push(...data);
+      },
+    },
+  } as unknown as Prisma.TransactionClient;
+  const reviewResult = await commitPreparedItems(reviewTransaction, 'user-id', [
+    { ...baseItem, rating: null, watchedDates: ['2025-02-02'] },
+    ...(scenario.importedRatingId === null ? [] : [{
+      ...baseItem,
+      match: { ...baseItem.match, tmdbId: scenario.importedRatingId },
+      rating: 0.5,
+      review: null,
+      watched: false,
+    }]),
+  ]);
+  assert.equal(importedReviews.length, scenario.expectedReviews, scenario.label);
+  assert.equal(reviewResult.reviewsCreated, scenario.expectedReviews, scenario.label);
+  assert.equal(importedRatings.length, scenario.importedRatingId === null ? 0 : 1, scenario.label);
+  assert.equal(reviewResult.preservedExisting, 0, 'Skipped unrated reviews are not existing data.');
+  assert.equal(reviewResult.viewingEventsCreated, 1, 'Keep viewing history when skipping an unrated review.');
+}
+
 assert.match(
   readFileSync('src/imports/imports.service.ts', 'utf8'),
   /sourceRating: item\.rating/,
