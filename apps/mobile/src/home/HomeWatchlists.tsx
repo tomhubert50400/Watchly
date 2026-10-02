@@ -30,7 +30,11 @@ export function HomeWatchlists({ data, error, loading, onRetry }: { data: Librar
           </Pressable>
         </View>)}
       </ScrollView>
-      : <View style={styles.header}><Text style={styles.empty}>{data?.lists.length ? 'Add titles to your watchlists to find them here.' : 'Keep your next movies and series in a watchlist.'}</Text><Button label="Open watchlists" onPress={openLists} /></View>}
+      : <View style={styles.header}><Text style={styles.empty}>{data?.lists.length
+        ? data.lists.some((list) => list.showOnHome !== false)
+          ? 'Add titles to your watchlists to find them here.'
+          : 'Choose a watchlist to show here in its settings.'
+        : 'Keep your next movies and series in a watchlist.'}</Text><Button label="Open watchlists" onPress={openLists} /></View>}
   </ScreenReveal>;
 }
 

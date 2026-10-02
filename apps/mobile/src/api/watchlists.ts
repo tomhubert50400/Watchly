@@ -2,6 +2,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from './client';
 
 export type WatchlistContentType = 'movie' | 'series';
 export type PersonalWatchlistVisibility = 'public' | 'private';
+export type WatchlistSettings = { removeWatchedMovies: boolean; showOnHome: boolean };
 
 export type PersonalWatchlistSummary = {
   containsTitle?: boolean;
@@ -10,6 +11,7 @@ export type PersonalWatchlistSummary = {
   isPlanned?: boolean;
   itemCount: number;
   name: string;
+  showOnHome?: boolean;
   updatedAt: string;
   visibility: PersonalWatchlistVisibility;
 };
@@ -39,6 +41,7 @@ export type PersonalWatchlist = {
   items: PersonalWatchlistItem[];
   name: string;
   removeWatchedMovies?: boolean;
+  showOnHome?: boolean;
   sections: PersonalWatchlistSection[];
   updatedAt: string;
   visibility: PersonalWatchlistVisibility;
@@ -101,9 +104,9 @@ export function updateWatchlistVisibility(
   );
 }
 
-export function updateWatchlistSettings(token: string, watchlistId: string, removeWatchedMovies: boolean) {
-  return apiPut<{ removeWatchedMovies: boolean }>(
-    `/watchlists/${watchlistId}/settings`, { removeWatchedMovies }, { token },
+export function updateWatchlistSettings(token: string, watchlistId: string, settings: Partial<WatchlistSettings>) {
+  return apiPut<WatchlistSettings>(
+    `/watchlists/${watchlistId}/settings`, settings, { token },
   );
 }
 

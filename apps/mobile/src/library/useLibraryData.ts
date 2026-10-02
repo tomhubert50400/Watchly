@@ -27,6 +27,7 @@ export type LibraryMediaItem = LibraryItemBase & {
 export type LibraryListItem = {
   id: string; isOwner: boolean; itemCount: number; key: string; kind: 'personal' | 'shared';
   isPlanned?: boolean;
+  showOnHome?: boolean;
   memberCount: number | null; name: string; posterUrls: Array<string | null>; updatedAt: string;
   previewItems?: WatchlistPreviewItem[];
 };
@@ -109,7 +110,7 @@ export async function loadLibraryData(
     lists = previous.lists;
   } else {
     const summaries: Omit<LibraryListItem, 'posterUrls'>[] = [
-      ...(personal.status === 'fulfilled' ? personal.value.items : []).map((list) => ({ id: list.id, isOwner: true, isPlanned: list.isPlanned, itemCount: list.itemCount, key: `personal:${list.id}`, kind: 'personal' as const, memberCount: null, name: list.name, updatedAt: list.updatedAt })),
+      ...(personal.status === 'fulfilled' ? personal.value.items : []).map((list) => ({ id: list.id, isOwner: true, isPlanned: list.isPlanned, showOnHome: list.showOnHome ?? true, itemCount: list.itemCount, key: `personal:${list.id}`, kind: 'personal' as const, memberCount: null, name: list.name, updatedAt: list.updatedAt })),
       ...(shared.status === 'fulfilled' ? shared.value.items : []).map((list) => ({ id: list.id, isOwner: list.isOwner, itemCount: list.itemCount, key: `shared:${list.id}`, kind: 'shared' as const, memberCount: list.memberCount, name: list.name, updatedAt: list.updatedAt })),
     ].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     const previewKeys = new Set(

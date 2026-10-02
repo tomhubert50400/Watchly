@@ -661,10 +661,11 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
       <WatchlistFiltersSheet filters={filters} />
       {visibleWatchlist && !visibleWatchlist.isPlanned ? <WatchlistSettingsSheet key={`settings:${resourceScope}`}
         watchlistId={watchlistId} removeWatchedMovies={visibleWatchlist.removeWatchedMovies ?? false}
+        showOnHome={visibleWatchlist.showOnHome ?? true}
         visible={settingsScope === resourceScope} onClose={() => setSettingsScope(null)}
-        onSaved={(removeWatchedMovies) => {
+        onSaved={(settings) => {
           requestRef.current.version += 1;
-          setWatchlist((current) => current ? { ...current, removeWatchedMovies } : current);
+          setWatchlist((current) => current ? { ...current, ...settings } : current);
         }} /> : null}
       {artworkScope === resourceScope && visibleWatchlist ? <WatchlistArtworkSheet key={resourceScope}
         kind="personal" watchlistId={watchlistId} items={visibleWatchlist.items}
