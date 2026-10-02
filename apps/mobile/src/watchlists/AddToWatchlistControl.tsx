@@ -35,7 +35,7 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { useToast } from '../notifications/ToastContext';
-import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
+import { notifyUserDataChanged, subscribeToUserData, useUserDataRevision } from '../sync/userDataEvents';
 import { useWatchlistCache } from './WatchlistCacheContext';
 import { WatchlistOption, WatchlistOptionRow } from './WatchlistOptionRow';
 import { loadProgressively, takeHydrationItems } from './requestBoundaries';
@@ -60,7 +60,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   const { refreshMovie, refreshSeries } = useCatalogueCache();
   const { showToast } = useToast();
   const { preloadWatchlists } = useWatchlistCache();
-  const trackingRevision = useUserDataRevision('tracking');
+  const trackingRevision = useUserDataRevision('tracking', 'episodeProgress', 'viewings');
   const [plannedState, setPlannedState] = useState<{ ownerKey: string; planned: boolean } | null>(null);
   const trackingLoadVersionRef = useRef(0);
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
@@ -82,6 +82,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
   const confirmedSelectedKeysRef = useRef(new Set<string>());
   const optionMutationQueuesRef = useRef(new Map<string, Promise<void>>());
   const optionPendingCountsRef = useRef(new Map<string, number>());
+  const optionsRefreshPendingRef = useRef(false);
   const optionsRef = useRef(options);
   const selectedKeysRef = useRef(selectedKeys);
   const contentKey = `${contentType}:${tmdbId}`;
@@ -194,9 +195,9 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
     if (showLoading) setIsLoading(true);
 
     try {
-      if (optionsCacheKey) {
+      if (optionsCacheKey && optionsRef.current.length === 0) {
         const cached = await readPersistedCache<WatchlistOption[]>(optionsCacheKey).catch(() => null);
-        if (cached && loadVersionRef.current === loadVersion) {
+        if (cached && loadVersionRef.current === loadVersion && optionPendingCountsRef.current.size === 0) {
           const cachedSelectedKeys = new Set(
             cached.data.filter((option) => option.containsTitle).map((option) => option.key),
           );
@@ -272,6 +273,14 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
     void loadOptions(false);
   }, [firebaseIdToken, loadOptions]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    return subscribeToUserData(['watchlists', 'tracking', 'episodeProgress', 'viewings'], () => {
+      if (optionPendingCountsRef.current.size > 0) optionsRefreshPendingRef.current = true;
+      else void loadOptions(false, true);
+    });
+  }, [isOpen, loadOptions]);
+
   async function planToWatch() {
     if (!firebaseIdToken || planningRef.current) return;
 
@@ -302,9 +311,9 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
         ).catch(() => undefined);
       }
       if (previewOwnerKeyRef.current !== ownerKey) return;
-      notifyUserDataChanged('tracking');
+      notifyUserDataChanged('tracking', 'watchlists');
+      void preloadWatchlists().catch(() => undefined);
       hapticSuccess();
-      if (!removing) openSheet();
     } catch (error) {
       if (previewOwnerKeyRef.current !== ownerKey) return;
       hapticError();
@@ -327,10 +336,8 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
       setOptions([]);
       confirmedSelectedKeysRef.current = new Set();
       setSelectedKeys(new Set());
-      void loadOptions(true, true);
-    } else {
-      void loadOptionPreviews(options, optionsOwnerKey);
     }
+    void loadOptions(optionsContentKey !== optionsOwnerKey, true);
   }
 
   function dismissSheet() {
@@ -417,7 +424,11 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
         confirmedSelectedKeysRef.current = confirmed;
         previewHydrationCacheRef.current.delete(key);
         void preloadWatchlists();
-        notifyUserDataChanged('watchlists');
+        if (option.isPlanned) {
+          trackingLoadVersionRef.current += 1;
+          setPlannedState({ ownerKey: optionsOwnerKey, planned: nextContainsTitle });
+        }
+        notifyUserDataChanged('watchlists', ...(option.isPlanned ? ['tracking' as const] : []));
       } catch (saveError) {
         hapticError();
         showToast(saveError instanceof Error ? saveError.message : 'Could not update watchlists.');
@@ -439,6 +450,10 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
           setOptions(reconciledOptions);
           if (optionsCacheKey) {
             void writePersistedCache(optionsCacheKey, reconciledOptions).catch(() => undefined);
+          }
+          if (optionPendingCountsRef.current.size === 0 && optionsRefreshPendingRef.current) {
+            optionsRefreshPendingRef.current = false;
+            void loadOptions(false, true);
           }
         }
       }
@@ -503,50 +518,31 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
 
   return (
     <>
-      {isPlanned ? (
-        <View style={styles.plannedTrigger}>
-          <Pressable
-            accessibilityLabel="Remove from Planned"
-            accessibilityRole="button"
-            accessibilityState={{ busy: isPlanning, disabled: isPlanning }}
-            disabled={isPlanning}
-            onPress={() => void planToWatch()}
-            style={({ pressed }) => [styles.trigger, styles.plannedStatus, pressed ? styles.pressed : null]}
-          >
-            <Check color={colors.accentText} size={16} strokeWidth={2.4} />
-            <Text style={styles.triggerLabel}>{isPlanning ? 'Saving…' : 'Planned'}</Text>
-          </Pressable>
-          <Pressable
-            accessibilityLabel="Add to watchlist"
-            accessibilityRole="button"
-            onPress={openSheet}
-            style={({ pressed }) => [styles.trigger, styles.watchlistTrigger, pressed ? styles.pressed : null]}
-          >
-            <BookmarkPlus color={colors.accentText} size={18} strokeWidth={2.4} />
-          </Pressable>
-        </View>
-      ) : (
+      <View style={styles.plannedTrigger}>
         <Pressable
-          accessibilityLabel={firebaseIdToken ? 'Plan to watch' : 'Sign in to plan to watch'}
+          accessibilityLabel={firebaseIdToken ? isPlanned ? 'Remove from Planned' : 'Plan to watch' : 'Sign in to plan to watch'}
           accessibilityRole="button"
           accessibilityState={{ busy: isPlanning, disabled: isPlanning }}
           disabled={isPlanning}
           onPress={() => firebaseIdToken ? void planToWatch() : setIsSignInOpen(true)}
-          style={({ pressed }) => [
-            styles.trigger,
-            pressed ? styles.pressed : null,
-          ]}
+          style={({ pressed }) => [styles.trigger, styles.plannedStatus, pressed ? styles.pressed : null]}
         >
-          <BookmarkPlus color={colors.accentText} size={16} strokeWidth={2.4} />
-          <Text style={styles.triggerLabel}>{isPlanning ? 'Saving…' : 'Plan to watch'}</Text>
+          {isPlanned ? <Check color={colors.accentText} size={16} strokeWidth={2.4} /> : null}
+          <Text style={styles.triggerLabel}>{isPlanning ? 'Saving…' : isPlanned ? 'Planned' : 'Plan to watch'}</Text>
         </Pressable>
-      )}
+        <Pressable
+          accessibilityLabel="Add to watchlist"
+          accessibilityRole="button"
+          onPress={() => firebaseIdToken ? openSheet() : setIsSignInOpen(true)}
+          style={({ pressed }) => [styles.trigger, styles.watchlistTrigger, pressed ? styles.pressed : null]}
+        >
+          <BookmarkPlus color={colors.accentText} size={18} strokeWidth={2.4} />
+        </Pressable>
+      </View>
 
       <BottomActionSheet onClose={dismissSheet} title="Add to a list" visible={isOpen}>
         <BottomActionSheetScrollView disableScrollViewPanResponder={false} contentContainerStyle={styles.optionSections}>
-          <Text style={styles.sheetSubtitle}>{isPlanned
-            ? 'Added to Planned. You can also add it to a watchlist, or close this sheet.'
-            : 'Select one or more watchlists.'}</Text>
+          <Text style={styles.sheetSubtitle}>Select one or more watchlists. Planned to Watch stays in sync with Planned on your profile.</Text>
 
           {(!hasCurrentOptions || (isLoading && options.length === 0)) ? (
             <LoadingState label="Loading your lists" variant="settings" />
@@ -606,7 +602,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
         </BottomActionSheetScrollView>
       </BottomActionSheet>
       <SignInSheet
-        body="Sign in to add titles to Planned and optionally to a watchlist."
+        body="Sign in to plan your next watch and save titles to watchlists."
         onClose={() => setIsSignInOpen(false)}
         title="Sign in to plan to watch"
         visible={isSignInOpen && !firebaseIdToken}
@@ -619,6 +615,7 @@ function toPersonalOption(watchlist: PersonalWatchlistSummary): WatchlistOption 
   return {
     containsTitle: Boolean(watchlist.containsTitle),
     id: watchlist.id,
+    isPlanned: watchlist.isPlanned,
     itemCount: watchlist.itemCount,
     key: `personal:${watchlist.id}`,
     kind: 'personal',

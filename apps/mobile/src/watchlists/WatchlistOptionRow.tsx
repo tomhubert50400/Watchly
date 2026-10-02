@@ -3,6 +3,7 @@ import { WatchlistCard } from '../library/WatchlistRail';
 export type WatchlistOption = {
   containsTitle: boolean;
   id: string;
+  isPlanned?: boolean;
   itemCount: number;
   key: string;
   kind: 'personal' | 'shared';

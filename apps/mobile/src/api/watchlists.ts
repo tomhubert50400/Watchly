@@ -7,6 +7,7 @@ export type PersonalWatchlistSummary = {
   containsTitle?: boolean;
   createdAt: string;
   id: string;
+  isPlanned?: boolean;
   itemCount: number;
   name: string;
   updatedAt: string;
@@ -34,6 +35,7 @@ export type PersonalWatchlist = {
   coverItemIds?: string[];
   createdAt: string;
   id: string;
+  isPlanned?: boolean;
   items: PersonalWatchlistItem[];
   name: string;
   sections: PersonalWatchlistSection[];

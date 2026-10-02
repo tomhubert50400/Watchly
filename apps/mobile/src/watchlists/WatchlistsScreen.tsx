@@ -122,7 +122,7 @@ export function WatchlistsScreen() {
     const ownerId = currentUser?.id;
     const cleanName = name.trim();
     if (!ownerId || !cleanName || creatingRef.current) return;
-    if (lists.filter((list) => list.kind === kind).length >= 5) {
+    if (lists.filter((list) => list.kind === kind && !list.isPlanned).length >= 5) {
       setError(kind === 'personal' ? 'You can have up to 5 personal watchlists.' : 'You can belong to up to 5 shared watchlists, including lists you create.');
       return;
     }

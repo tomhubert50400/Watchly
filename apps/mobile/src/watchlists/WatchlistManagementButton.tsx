@@ -51,6 +51,7 @@ export function WatchlistManagementButton({ list, onRemoved }: { list: LibraryLi
       { text: leaving ? 'Leave' : 'Delete', style: 'destructive', onPress: () => void remove() },
     ]);
   }
+  if (list.isPlanned) return null;
   return <Pressable accessibilityRole="button" accessibilityLabel={`${label}, ${list.name}`} accessibilityState={{ disabled: busy, busy }} disabled={busy} onPress={confirmRemoval} style={styles.trigger}>
     {busy ? <ActivityIndicator color={colors.text} size="small" /> : leaving ? <LogOut color={colors.text} size={19} /> : <Trash2 color={colors.text} size={19} />}
   </Pressable>;

@@ -36,6 +36,7 @@ import { TextInput } from '../components/TextInput';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
 import { hapticError, hapticSelection, hapticSuccess } from '../feedback/haptics';
 import { RootStackParamList } from '../navigation/types';
+import { subscribeToUserData } from '../sync/userDataEvents';
 import {
   WatchlistDisplayItem,
   WatchlistPage,
@@ -186,6 +187,13 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     setStateScope(resourceScope);
     void loadWatchlist();
   }, [loadWatchlist, resourceScope, watchlistId]);
+
+  useEffect(() => subscribeToUserData(
+    visibleWatchlist?.isPlanned
+      ? ['watchlists', 'tracking', 'episodeProgress', 'viewings']
+      : ['watchlists'],
+    () => { void loadWatchlist(); },
+  ), [loadWatchlist, visibleWatchlist?.isPlanned]);
 
   useEffect(() => () => {
     if (autoScrollFrameRef.current !== null) cancelAnimationFrame(autoScrollFrameRef.current);
