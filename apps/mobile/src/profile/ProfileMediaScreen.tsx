@@ -69,16 +69,8 @@ export function ProfileMediaScreen() {
   }, [navigation]);
 
   useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <Pressable accessibilityRole="button" accessibilityLabel={`Filter by genre: ${selectedGenre ?? 'All genres'}`}
-          onPress={() => { setGenresEnabled(true); setGenreSheetOpen(true); }}
-          style={({ pressed }) => [styles.genreButton, pressed && styles.pressed]}>
-          <Funnel size={20} color={selectedGenre ? colors.accentText : colors.text} />
-        </Pressable>
-      ),
-    });
-  }, [navigation, selectedGenre]);
+    navigation.setOptions({ headerRight: undefined });
+  }, [navigation]);
 
   return (
     <SafeAreaView edges={['top']} style={styles.screen}>
@@ -92,7 +84,15 @@ export function ProfileMediaScreen() {
           </EmptyState>
         ) : (
           <>
-            <SegmentedControl options={sections} value={activeSection.value} onChange={setSelectedSection} containerStyle={styles.selector} />
+            <View style={styles.filterRow}>
+              <SegmentedControl options={sections} value={activeSection.value} onChange={setSelectedSection} containerStyle={styles.selector} />
+              <Pressable accessibilityRole="button" accessibilityLabel={`Filter by genre: ${selectedGenre ?? 'All genres'}`}
+                accessibilityState={{ expanded: genreSheetOpen, selected: selectedGenre !== null }}
+                onPress={() => { setGenresEnabled(true); setGenreSheetOpen(true); }}
+                style={({ pressed }) => [styles.genreButton, pressed && styles.pressed]}>
+                <Funnel size={20} color={selectedGenre ? colors.accentText : colors.text} />
+              </Pressable>
+            </View>
             <FlatList
               key={`${route.params.filter}:${activeSection.value}:${selectedGenre ?? 'all'}`}
               data={visibleItems}
@@ -135,10 +135,11 @@ export function ProfileMediaScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   content: { flex: 1, paddingTop: spacing.xxxl + spacing.md },
-  selector: { marginHorizontal: spacing.xl, marginBottom: spacing.lg },
+  filterRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.xl, marginBottom: spacing.lg },
+  selector: { flex: 1, minWidth: 0 },
   grid: { paddingHorizontal: spacing.xl, gap: spacing.lg, flexGrow: 1 },
   row: { gap: spacing.sm },
-  genreButton: { width: 44, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
+  genreButton: { width: 44, minHeight: 44, flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
   genreRow: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, paddingVertical: spacing.sm },
   genreLabel: { ...typography.body, color: colors.text, flex: 1 },
   genreLoading: { padding: spacing.lg },
