@@ -128,6 +128,7 @@ export class WatchlistsService {
       items: watchlist.items.map(toItem),
       coverItemIds: watchlist.coverItemIds.filter((id) => watchlist.items.some((item) => item.id === id)),
       name: watchlist.name,
+      removeWatchedMovies: watchlist.removeWatchedMovies,
       sections: watchlist.sections.map(toSection),
       updatedAt: watchlist.updatedAt.toISOString(),
       visibility: fromPrivacyVisibility(watchlist.visibility),
@@ -161,6 +162,19 @@ export class WatchlistsService {
     );
 
     return toSummary(watchlist);
+  }
+
+  async updateSettings(identity: AuthenticatedIdentity, watchlistId: string, removeWatchedMovies: boolean) {
+    const userId = await this.getUserId(identity);
+    const watchlist = await this.assertOwnedWatchlist(userId, watchlistId);
+    if (watchlist.systemKey === 'planned') {
+      throw new BadRequestException('Planned to Watch automatically removes titles when their tracking status changes.');
+    }
+    return this.withConnectionRetry(() => this.prisma.personalWatchlist.update({
+      where: { id: watchlistId },
+      data: { removeWatchedMovies },
+      select: { removeWatchedMovies: true },
+    }));
   }
 
   async deleteWatchlist(identity: AuthenticatedIdentity, watchlistId: string) {

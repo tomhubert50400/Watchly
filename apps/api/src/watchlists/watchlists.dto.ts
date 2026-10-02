@@ -1,4 +1,4 @@
-import { ArrayMaxSize, ArrayUnique, IsArray, IsUUID, IsIn, IsInt, IsString, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsBoolean, IsUUID, IsIn, IsInt, IsString, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
 
 export const watchlistContentTypes = ['movie', 'series'] as const;
 export const watchlistVisibilities = ['public', 'private'] as const;
@@ -40,6 +40,11 @@ export class MoveWatchlistItemDto {
 export class UpdateWatchlistVisibilityDto {
   @IsIn(watchlistVisibilities)
   visibility!: WatchlistVisibility;
+}
+
+export class UpdateWatchlistSettingsDto {
+  @IsBoolean()
+  removeWatchedMovies!: boolean;
 }
 
 export class UpdateWatchlistCoverDto {

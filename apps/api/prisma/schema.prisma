@@ -554,6 +554,7 @@ model PersonalWatchlist {
   userId     String                  @db.Uuid
   name       String                  @db.VarChar(80)
   systemKey  String?
+  removeWatchedMovies Boolean        @default(false)
   visibility PrivacyVisibility       @default(PRIVATE)
   createdAt  DateTime                @default(now())
   updatedAt  DateTime                @updatedAt

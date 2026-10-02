@@ -20,6 +20,7 @@ import {
   CreateWatchlistSectionDto,
   MoveWatchlistItemDto,
   UpdateWatchlistSectionDto,
+  UpdateWatchlistSettingsDto,
   UpdateWatchlistVisibilityDto,
   UpdateWatchlistBackgroundDto,
   UpdateWatchlistCoverDto,
@@ -76,6 +77,15 @@ export class WatchlistsController {
       parseWatchlistId(watchlistId),
       body.visibility,
     );
+  }
+
+  @Put(':watchlistId/settings')
+  async updateSettings(
+    @Req() request: AuthenticatedRequest,
+    @Param('watchlistId') watchlistId: string,
+    @Body() body: UpdateWatchlistSettingsDto,
+  ) {
+    return this.watchlists.updateSettings(getIdentity(request), parseWatchlistId(watchlistId), body.removeWatchedMovies);
   }
 
   @Put(':watchlistId/cover')

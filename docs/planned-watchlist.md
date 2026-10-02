@@ -21,6 +21,14 @@ Concurrent batch imports and tracking edits can conflict. The existing database
 retry budget also retries rolled-back transaction conflicts without resetting
 the connection pool.
 
+User-created personal lists offer **Settings > Remove movies after watching**.
+The preference defaults to off and applies only to future watched transitions
+or newly logged movie viewings, including rewatches. Enabling it does not remove
+previously watched movies. Series, shared lists, favorites, and viewing history
+are unaffected. Planned keeps its automatic rule and does not offer this setting.
+Deploy migration `20261002120000_watchlist_remove_watched_movies` with the API
+before releasing this setting in the mobile app.
+
 Migration `20261002090000_add_planned_watchlist` creates private automatic lists
 for existing planned titles. Deploy this migration with the API before releasing
 the mobile changes. It has not been applied to production during development.
@@ -33,6 +41,10 @@ remote database hosts and cleans up its fixtures. It checks bidirectional
 synchronization, status changes, favorites, duplicate additions, ownership,
 movie/series IDs, independent lists, empty lists, manual/import quotas, and
 recovery from an actual concurrent PostgreSQL deadlock.
+
+Run `pnpm --filter api test:watchlist-settings` against the same local test
+database to verify per-list retention, watched transitions, rewatches, history
+edits, ownership isolation, and the unchanged Planned/shared-list behavior.
 
 Personal watchlist artwork loads progressively for every title, with at most
 three catalogue requests in flight. Known titles and artwork survive refreshes;
