@@ -1,17 +1,30 @@
-import { useState, type PropsWithChildren } from 'react';
-import { BlurView } from 'expo-blur';
+import { useId, useState, type PropsWithChildren } from 'react';
 import { EyeOff } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radii, spacing, touchTargets } from '../design/tokens';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { colors, spacing, touchTargets } from '../design/tokens';
 
 export function SpoilerGuard({ children, reason, contextLabel, revealKey, canReveal = true }: PropsWithChildren<{ reason?: string | null; contextLabel?: string; revealKey: string; canReveal?: boolean }>) {
   const [revealed, setRevealed] = useState<string | null>(null);
+  const veilId = `spoiler-veil-${useId().replace(/:/g, '')}`;
   const hidden = Boolean(reason) && (revealed !== revealKey || !canReveal);
   return <View style={[styles.container, hidden && styles.protected]}>
-    <View aria-hidden={hidden} accessibilityElementsHidden={hidden} importantForAccessibility={hidden ? 'no-hide-descendants' : 'auto'} pointerEvents={hidden ? 'none' : 'auto'}>{children}</View>
+    <View aria-hidden={hidden} accessibilityElementsHidden={hidden} importantForAccessibility={hidden ? 'no-hide-descendants' : 'auto'} pointerEvents={hidden ? 'none' : 'auto'} style={hidden ? styles.concealed : null}>{children}</View>
     {hidden ? <>
-      <View pointerEvents="none" style={styles.blurFrame}>
-        <BlurView experimentalBlurMethod="dimezisBlurView" intensity={80} tint="dark" style={styles.blur} />
+      <View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.veil}>
+        <Svg width="100%" height="100%" viewBox="0 0 1 1" preserveAspectRatio="none">
+          <Defs>
+            <RadialGradient id={veilId} cx="50%" cy="50%" rx="50%" ry="50%">
+              <Stop offset="0" stopColor={colors.background} stopOpacity={0.8} />
+              <Stop offset="0.35" stopColor={colors.background} stopOpacity={0.72} />
+              <Stop offset="0.6" stopColor={colors.background} stopOpacity={0.42} />
+              <Stop offset="0.8" stopColor={colors.background} stopOpacity={0.14} />
+              <Stop offset="0.94" stopColor={colors.background} stopOpacity={0.02} />
+              <Stop offset="1" stopColor={colors.background} stopOpacity={0} />
+            </RadialGradient>
+          </Defs>
+          <Rect width="1" height="1" fill={`url(#${veilId})`} />
+        </Svg>
       </View>
       <View style={styles.overlay}>
         {contextLabel ? <Text numberOfLines={2} style={styles.context}>{contextLabel}</Text> : null}
@@ -28,8 +41,8 @@ const styles = StyleSheet.create({
   container: { position: 'relative' },
   protected: { minHeight: 150 },
   context: { color: colors.text, fontSize: 15, fontWeight: '800', textAlign: 'center' },
-  blurFrame: { ...StyleSheet.absoluteFillObject, left: -spacing.xs, right: -spacing.xs, borderRadius: radii.xl, boxShadow: '0 0 14px 6px rgba(15, 19, 29, 0.55)' },
-  blur: { ...StyleSheet.absoluteFillObject, borderRadius: radii.xl, overflow: 'hidden' },
+  concealed: { opacity: 0 },
+  veil: { ...StyleSheet.absoluteFillObject, left: -spacing.sm, right: -spacing.sm },
   overlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, padding: spacing.sm },
   reason: { color: colors.text, fontSize: 13, fontWeight: '700', textAlign: 'center' },
   button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, minHeight: touchTargets.min, paddingHorizontal: spacing.md, backgroundColor: colors.accentSoft, borderColor: colors.accentBorder, borderWidth: 1, borderRadius: 12 },
