@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Check, Funnel } from 'lucide-react-native';
+import { Check } from 'lucide-react-native';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useMediaGenres } from '../catalogue/useMediaGenres';
 import { BottomActionSheet, BottomActionSheetScrollView } from '../components/BottomActionSheet';
@@ -39,13 +39,6 @@ export function useWatchlistFilters<T extends { contentType: 'movie' | 'series';
 
 type Filters = ReturnType<typeof useWatchlistFilters>;
 
-export function WatchlistFilterButton({ filters }: { filters: Filters }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel="Filter watchlist" accessibilityState={{ expanded: filters.isOpen, selected: filters.active }}
-    onPress={filters.open} style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
-    <Funnel size={20} color={filters.active ? colors.accentText : colors.text} />
-  </Pressable>;
-}
-
 export function WatchlistFiltersSheet({ filters }: { filters: Filters }) {
   return <BottomActionSheet title="Filters" visible={filters.isOpen} onClose={filters.close}>
     <BottomActionSheetScrollView>
@@ -80,7 +73,6 @@ export function WatchlistFilterStatus({ filters }: { filters: Filters }) {
 }
 
 const styles = StyleSheet.create({
-  button: { width: 44, minHeight: 44, flexShrink: 0, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-end' },
   heading: { ...typography.title, color: colors.text, marginTop: spacing.lg, marginBottom: spacing.sm },
   row: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, paddingVertical: spacing.sm },
   label: { ...typography.body, color: colors.text, flex: 1 },

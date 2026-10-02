@@ -1,4 +1,3 @@
-import { Camera } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { apiPut } from '../api/client';
@@ -22,36 +21,23 @@ type Props = {
   kind: 'personal' | 'shared';
   onBackgroundSaved: (id: string | null) => void;
   onCoverSaved: (ids: string[]) => void;
+  onClose: () => void;
   watchlistId: string;
 };
 type Artwork = { artworkUrl: string | null; title: string };
 type ArtworkMode = 'background' | 'cover';
 
-export function WatchlistCoverButton(props: Props) {
-  const [mode, setMode] = useState<ArtworkMode | null>(null);
-  return <>
-    <Pressable accessibilityLabel="Customize watchlist artwork" accessibilityRole="button"
-      onPress={() => setMode('cover')} style={({ pressed }) => [styles.headerButton, pressed && styles.pressed]}>
-      <Camera color={colors.text} size={20} strokeWidth={2} />
-    </Pressable>
-    {mode === 'cover' || mode === 'background' ? (
-      <WatchlistArtworkSheet {...props} mode={mode} onChangeMode={setMode} onClose={() => setMode(null)} />
-    ) : null}
-  </>;
-}
-
-function WatchlistArtworkSheet({
+export function WatchlistArtworkSheet({
   backgroundItemId = null,
   coverItemIds = [],
   items,
   kind,
-  mode,
   onBackgroundSaved,
-  onChangeMode,
   onClose,
   onCoverSaved,
   watchlistId,
-}: Props & { mode: ArtworkMode; onChangeMode: (mode: ArtworkMode) => void; onClose: () => void }) {
+}: Props) {
+  const [mode, setMode] = useState<ArtworkMode>('cover');
   const { currentUser, getFirebaseIdToken } = useAuthSession();
   const { refreshMovie, refreshSeries } = useCatalogueCache();
   const [coverSelection, setCoverSelection] = useState(
@@ -157,7 +143,7 @@ function WatchlistArtworkSheet({
         value={mode}
         onChange={(value) => {
           setError(null);
-          onChangeMode(value);
+          setMode(value);
         }}
       />
       <View
@@ -218,8 +204,6 @@ const styles = StyleSheet.create({
   backgroundPreviewImage: { aspectRatio: 2 / 3, width: '100%' },
   backgroundTile: { width: '31%' },
   coverArtwork: { width: '100%', aspectRatio: 16 / 9 },
-  headerButton: { width: 44, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
-  pressed: { opacity: 0.7 },
   content: { padding: spacing.xl, gap: spacing.md },
   preview: { width: '100%', aspectRatio: 278 / 156, overflow: 'hidden', borderRadius: radii.lg, backgroundColor: colors.panelElevated },
   copy: { ...typography.body, color: colors.textMuted },

@@ -59,10 +59,9 @@ assert.match(screen, /Animated\.spring\(dragScale,[\s\S]*?useNativeDriver: false
 assert.match(screen, /transform: \[\{ rotate: rotation \}, \{ scale: dragScale \}\]/, 'the carried poster must animate its tilt and lift');
 assert.match(screen, /transformOrigin: \[moving\.gripX, moving\.gripY, 0\]/, 'the poster must swing around the point held by the user');
 assert.doesNotMatch(screen, /style=\{styles\.movePanel\}/, 'moving must not replace the watchlist with a destination panel');
-assert.match(screen, /ActionSheetIOS\.showActionSheetWithOptions/, 'the add button must use the native iOS action sheet');
-assert.match(screen, /options: \['Add a title', 'Create a section', 'Cancel'\]/, 'the add sheet must expose both actions');
+assert.match(screen, /label: 'Add a title'[\s\S]*label: 'Create a section'/, 'the watchlist menu must expose both add actions');
 assert.doesNotMatch(screen, /<Button compact label="Add titles"/, 'separate add-title and section buttons must be removed');
-assert.match(screen, /headerRight:[\s\S]*?onPress=\{showAddActions\}[\s\S]*?<WatchlistCoverButton/, 'the add button must sit before the cover button in the navigation header');
+assert.match(screen, /headerRight:[\s\S]*?<WatchlistActionsMenu/, 'the native header must group actions in one watchlist menu');
 assert.match(screen, /headerTitle:[\s\S]*?visibleItems\.length === 1 \? 'title' : 'titles'/, 'the navigation title must show the title count beneath the watchlist name');
 assert.doesNotMatch(screen, /<SectionHeader title="Titles"/, 'the content must not repeat a titles heading');
 assert.match(screen, /SECTION_PREVIEW_ITEM_COUNT/, 'large sections must start with a bounded grid');

@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ChevronDown, ChevronRight, Ellipsis, Plus } from 'lucide-react-native';
+import { Camera, ChevronDown, ChevronRight, Ellipsis, FolderPlus, Funnel, Plus } from 'lucide-react-native';
 import {
   Alert,
   Animated,
-  ActionSheetIOS,
   GestureResponderEvent,
   LayoutChangeEvent,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -43,9 +41,10 @@ import {
   WatchlistPosterGrid,
   WatchlistSection,
 } from './WatchlistDetailLayout';
-import { WatchlistCoverButton } from './WatchlistCoverButton';
+import { WatchlistActionsMenu } from './WatchlistActionsMenu';
+import { WatchlistArtworkSheet } from './WatchlistArtworkSheet';
 import { HydratedPersonalWatchlistItem, useWatchlistCache } from './WatchlistCacheContext';
-import { useWatchlistFilters, WatchlistFilterButton, WatchlistFiltersSheet, WatchlistFilterStatus } from './WatchlistFilters';
+import { useWatchlistFilters, WatchlistFiltersSheet, WatchlistFilterStatus } from './WatchlistFilters';
 import {
   groupPersonalWatchlistItems,
   MAX_PERSONAL_WATCHLIST_SECTIONS,
@@ -75,6 +74,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   const initialCached = getCachedPersonalWatchlist(watchlistId);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
   const [editor, setEditor] = useState<SectionEditor | null>(null);
+  const [artworkScope, setArtworkScope] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
   const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null);
@@ -224,32 +224,15 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
         </View>
       ),
       headerRight: visibleWatchlist ? () => (
-        <View style={styles.headerActions}>
-          <Pressable
-            accessibilityHint="Choose whether to add a title or create a section"
-            accessibilityLabel="Add to watchlist"
-            accessibilityRole="button"
-            onPress={showAddActions}
-            style={({ pressed }) => [styles.headerButton, pressed ? styles.pressed : null]}
-          >
-            <Plus color={colors.text} size={20} strokeWidth={2} />
-          </Pressable>
-          <WatchlistCoverButton key={resourceScope} kind="personal" watchlistId={watchlistId}
-            items={visibleWatchlist.items}
-            backgroundItemId={visibleWatchlist.backgroundItemId}
-            coverItemIds={visibleWatchlist.coverItemIds}
-            onBackgroundSaved={(backgroundItemId) => {
-              setWatchlist((current) => current ? { ...current, backgroundItemId } : current);
-              void loadWatchlist();
-            }}
-            onCoverSaved={(coverItemIds) => {
-              setWatchlist((current) => current ? { ...current, coverItemIds } : current);
-              void loadWatchlist();
-            }} />
-        </View>
+        <WatchlistActionsMenu key={resourceScope} actions={[
+          { label: 'Filters', icon: <Funnel color={filters.active ? colors.accentText : colors.text} size={20} />, onPress: filters.open, active: filters.active },
+          { label: 'Add a title', icon: <Plus color={colors.text} size={20} />, onPress: () => navigation.navigate('MainTabs', { screen: 'Explore' }) },
+          { label: 'Create a section', icon: <FolderPlus color={colors.text} size={20} />, onPress: () => openSectionEditor({ mode: 'create' }), disabled: visibleSections.length >= MAX_PERSONAL_WATCHLIST_SECTIONS },
+          { label: 'Cover & background', icon: <Camera color={colors.text} size={20} />, onPress: () => setArtworkScope(resourceScope) },
+        ]} />
       ) : undefined,
     });
-  }, [backgroundUrl, navigation, visibleWatchlist, resourceScope, route.params.title, watchlistId, loadWatchlist, visibleItems.length, visibleSections.length]);
+  }, [backgroundUrl, navigation, visibleWatchlist, resourceScope, route.params.title, watchlistId, visibleItems.length, visibleSections.length, filters.active, filters.open]);
 
   function openItem(item: WatchlistDisplayItem) {
     const title = item.title ?? (item.contentType === 'movie' ? 'Film' : 'Series');
@@ -266,32 +249,6 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     setSectionError(null);
     setSectionName(nextEditor.mode === 'rename' ? nextEditor.section.name : '');
     setEditor(nextEditor);
-  }
-
-  function showAddActions() {
-    const addTitle = () => navigation.navigate('MainTabs', { screen: 'Explore' });
-    const addSection = () => openSectionEditor({ mode: 'create' });
-    const sectionLimitReached = visibleSections.length >= MAX_PERSONAL_WATCHLIST_SECTIONS;
-
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions({
-        cancelButtonIndex: 2,
-        disabledButtonIndices: sectionLimitReached ? [1] : undefined,
-        message: 'What would you like to add?',
-        options: ['Add a title', 'Create a section', 'Cancel'],
-        title: 'Add to watchlist',
-      }, (buttonIndex) => {
-        if (buttonIndex === 0) addTitle();
-        if (buttonIndex === 1 && !sectionLimitReached) addSection();
-      });
-      return;
-    }
-
-    Alert.alert('Add to watchlist', 'What would you like to add?', [
-      { text: 'Add a title', onPress: addTitle },
-      ...(!sectionLimitReached ? [{ text: 'Create a section', onPress: addSection }] : []),
-      { text: 'Cancel', style: 'cancel' },
-    ]);
   }
 
   async function saveSection() {
@@ -620,7 +577,6 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
           </EmptyState>
         ) : visibleWatchlist ? (
           <WatchlistSection>
-            <WatchlistFilterButton filters={filters} />
             <WatchlistFilterStatus filters={filters} />
             {visibleItems.length === 0 && visibleSections.length === 0 ? (
               <Text style={styles.emptyCopy}>
@@ -700,6 +656,18 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
         ) : null}
       </WatchlistPage>
       <WatchlistFiltersSheet filters={filters} />
+      {artworkScope === resourceScope && visibleWatchlist ? <WatchlistArtworkSheet key={resourceScope}
+        kind="personal" watchlistId={watchlistId} items={visibleWatchlist.items}
+        backgroundItemId={visibleWatchlist.backgroundItemId} coverItemIds={visibleWatchlist.coverItemIds}
+        onClose={() => setArtworkScope(null)}
+        onBackgroundSaved={(backgroundItemId) => {
+          setWatchlist((current) => current ? { ...current, backgroundItemId } : current);
+          void loadWatchlist();
+        }}
+        onCoverSaved={(coverItemIds) => {
+          setWatchlist((current) => current ? { ...current, coverItemIds } : current);
+          void loadWatchlist();
+        }} /> : null}
       <BottomActionSheet
         visible={Boolean(editor)}
         title={editor?.mode === 'rename' ? 'Rename section' : 'New section'}
@@ -784,16 +752,6 @@ function toggleSetValue(current: Set<string>, value: string) {
 }
 
 const styles = StyleSheet.create({
-  headerActions: {
-    alignSelf: 'stretch',
-    flexDirection: 'row',
-  },
-  headerButton: {
-    alignItems: 'center',
-    alignSelf: 'stretch',
-    justifyContent: 'center',
-    width: 44,
-  },
   headerSubtitle: {
     color: colors.textMuted,
     fontSize: 11,

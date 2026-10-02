@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ChevronRight, Users } from 'lucide-react-native';
+import { Camera, ChevronRight, Funnel, Plus, Users } from 'lucide-react-native';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   addSharedWatchlistMember,
@@ -30,12 +30,12 @@ import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { RootStackParamList } from '../navigation/types';
 import { notifyUserDataChanged } from '../sync/userDataEvents';
-import { WatchlistCoverButton } from './WatchlistCoverButton';
+import { WatchlistActionsMenu } from './WatchlistActionsMenu';
+import { WatchlistArtworkSheet } from './WatchlistArtworkSheet';
 import { getVoteLifecycle, getVoteLeaders, getVoteRemainingLabel } from './sharedVoteModel';
 import { hydrateWatchlistItems } from './personalWatchlistHydration';
 import {
   useWatchlistFilters,
-  WatchlistFilterButton,
   WatchlistFiltersSheet,
   WatchlistFilterStatus,
 } from './WatchlistFilters';
@@ -105,6 +105,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
   const [isAddingMember, setIsAddingMember] = useState(false);
   const [isCreatingVote, setIsCreatingVote] = useState(false);
   const [isMembersSheetOpen, setIsMembersSheetOpen] = useState(false);
+  const [artworkScope, setArtworkScope] = useState<string | null>(null);
   const [isVoteComposerOpen, setIsVoteComposerOpen] = useState(false);
   const [memberError, setMemberError] = useState<string | null>(null);
   const [voteError, setVoteError] = useState<string | null>(null);
@@ -161,41 +162,15 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
       headerStyle: { backgroundColor: backgroundUrl ? 'transparent' : colors.background },
       headerTransparent: Boolean(backgroundUrl),
       headerRight: watchlist ? () => (
-        <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch' }}>
-          {watchlist.isOwner ? <WatchlistCoverButton key={`${ownerId}:${watchlist.id}`} kind="shared" watchlistId={watchlist.id}
-            items={watchlist.items}
-            backgroundItemId={watchlist.backgroundItemId}
-            coverItemIds={watchlist.coverItemIds}
-            onBackgroundSaved={(backgroundItemId) => {
-              const snapshot = ownedDetailsRef.current;
-              if (ownerId && snapshot.ownerId === ownerId && snapshot.data) {
-                const next = { ...snapshot.data, watchlist: { ...snapshot.data.watchlist, backgroundItemId } };
-                commitDetails(ownerId, next);
-                resource.revalidate();
-              }
-            }}
-            onCoverSaved={(coverItemIds) => {
-              const snapshot = ownedDetailsRef.current;
-              if (ownerId && snapshot.ownerId === ownerId && snapshot.data) {
-                const next = { ...snapshot.data, watchlist: { ...snapshot.data.watchlist, coverItemIds } };
-                commitDetails(ownerId, next);
-              }
-            }} /> : null}
-          <Pressable
-            accessibilityLabel={`Open members, ${watchlist.memberCount} ${watchlist.memberCount === 1 ? 'member' : 'members'}`}
-            accessibilityRole="button"
-            onPress={() => setIsMembersSheetOpen(true)}
-            style={({ pressed }) => [
-              styles.headerMembersButton,
-              pressed ? styles.headerMembersButtonPressed : null,
-            ]}
-          >
-            <Users color={colors.text} size={20} strokeWidth={2} />
-          </Pressable>
-        </View>
+        <WatchlistActionsMenu key={resourceScope} actions={[
+          { label: 'Filters', icon: <Funnel color={filters.active ? colors.accentText : colors.text} size={20} />, onPress: filters.open, active: filters.active },
+          { label: 'Add titles', icon: <Plus color={colors.text} size={20} />, onPress: () => navigation.navigate('MainTabs', { screen: 'Explore' }) },
+          ...(watchlist.isOwner ? [{ label: 'Cover & background', icon: <Camera color={colors.text} size={20} />, onPress: () => setArtworkScope(resourceScope) }] : []),
+          { label: `Members (${watchlist.memberCount})`, icon: <Users color={colors.text} size={20} />, onPress: () => setIsMembersSheetOpen(true) },
+        ]} />
       ) : undefined,
     });
-  }, [backgroundUrl, navigation, watchlist, ownerId]);
+  }, [backgroundUrl, navigation, watchlist, resourceScope, filters.active, filters.open]);
 
   const commitDetails = useCallback((expectedOwnerId: string, next: SharedListDetails) => {
     if (ownerIdRef.current !== expectedOwnerId) return;
@@ -354,12 +329,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
         {statusBanner}
 
         <WatchlistSection delay={50}>
-          <View style={styles.titlesHeader}>
-            <View style={styles.titlesHeaderCopy}>
-              <SectionHeader title="Titles" actionLabel="Add titles" onActionPress={() => navigation.navigate('MainTabs', { screen: 'Explore' })} />
-            </View>
-            <WatchlistFilterButton filters={filters} />
-          </View>
+          <SectionHeader title="Titles" />
           <WatchlistFilterStatus filters={filters} />
           {details.hydratedItems.length === 0 ? (
             <Text style={styles.emptyCopy}>
@@ -431,6 +401,23 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
       </WatchlistPage>
 
       <WatchlistFiltersSheet filters={filters} />
+      {artworkScope === resourceScope && watchlist.isOwner ? <WatchlistArtworkSheet key={resourceScope}
+        kind="shared" watchlistId={watchlist.id} items={watchlist.items}
+        backgroundItemId={watchlist.backgroundItemId} coverItemIds={watchlist.coverItemIds}
+        onClose={() => setArtworkScope(null)}
+        onBackgroundSaved={(backgroundItemId) => {
+          const snapshot = ownedDetailsRef.current;
+          if (ownerId && snapshot.ownerId === ownerId && snapshot.data) {
+            commitDetails(ownerId, { ...snapshot.data, watchlist: { ...snapshot.data.watchlist, backgroundItemId } });
+            resource.revalidate();
+          }
+        }}
+        onCoverSaved={(coverItemIds) => {
+          const snapshot = ownedDetailsRef.current;
+          if (ownerId && snapshot.ownerId === ownerId && snapshot.data) {
+            commitDetails(ownerId, { ...snapshot.data, watchlist: { ...snapshot.data.watchlist, coverItemIds } });
+          }
+        }} /> : null}
       <BottomActionSheet
         onClose={() => {
           setIsMembersSheetOpen(false);
@@ -480,8 +467,6 @@ const styles = StyleSheet.create({
   composerCopy: { ...typography.body, color: colors.textMuted },
   composer: { backgroundColor: colors.panelSoft, borderRadius: radii.lg, gap: spacing.md, padding: spacing.md },
   emptyCopy: { ...typography.body, color: colors.textMuted, paddingVertical: spacing.sm },
-  headerMembersButton: { alignItems: 'center', borderRadius: 22, height: 44, justifyContent: 'center', width: 44 },
-  headerMembersButtonPressed: { backgroundColor: colors.panelElevated },
   memberForm: { gap: spacing.sm },
   memberFormTitle: { ...typography.title, color: colors.text },
   memberList: { borderTopColor: colors.border, borderTopWidth: 1 },
@@ -499,6 +484,4 @@ const styles = StyleSheet.create({
   statusPillNeutral: { backgroundColor: colors.panelElevated },
   statusText: { color: colors.accentText, fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
   statusTextNeutral: { color: colors.textMuted },
-  titlesHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  titlesHeaderCopy: { flex: 1, minWidth: 0 },
 });

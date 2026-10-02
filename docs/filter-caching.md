@@ -1,7 +1,8 @@
 # Watchlist filters and filter data caches
 
-Personal and shared watchlists expose a funnel above their title grids, outside
-the native header so it leaves room for the list name. Profile media pages,
+Personal and shared watchlists group Filters, adding titles, artwork, and
+section/member actions in one hamburger menu with icons and labels. Artwork
+customization remains owner-only in shared lists. Profile media pages,
 including Planned, place their genre funnel beside the section selector. Type
 (All, Movies, Series) and genre combine without changing membership, section
 assignments, source order, or shared vote candidates. Clear filters restores

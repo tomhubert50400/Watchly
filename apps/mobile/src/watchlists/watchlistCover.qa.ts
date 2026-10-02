@@ -18,7 +18,7 @@ assert.deepEqual(selected, ['1', '2', '3', '4']);
 selected = toggleWatchlistCoverItem(selected, '2');
 assert.deepEqual(toggleWatchlistCoverItem(selected, '5'), ['1', '3', '4', '5']);
 
-const artworkButton = readFileSync(new URL('./WatchlistCoverButton.tsx', import.meta.url), 'utf8');
+const artworkButton = readFileSync(new URL('./WatchlistArtworkSheet.tsx', import.meta.url), 'utf8');
 const personalScreen = readFileSync(new URL('./PersonalWatchlistScreen.tsx', import.meta.url), 'utf8');
 const sharedScreen = readFileSync(new URL('./SharedWatchlistScreen.tsx', import.meta.url), 'utf8');
 assert.match(artworkButton, /<SegmentedControl[\s\S]*label: 'Change cover'[\s\S]*label: 'Change background'/, 'The artwork modal must switch modes with the shared segmented control');
