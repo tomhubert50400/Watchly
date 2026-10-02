@@ -10,7 +10,9 @@ export function SpoilerGuard({ children, reason, contextLabel, revealKey, canRev
   return <View style={[styles.container, hidden && styles.protected]}>
     <View aria-hidden={hidden} accessibilityElementsHidden={hidden} importantForAccessibility={hidden ? 'no-hide-descendants' : 'auto'} pointerEvents={hidden ? 'none' : 'auto'}>{children}</View>
     {hidden ? <>
-      <BlurView experimentalBlurMethod="dimezisBlurView" intensity={80} tint="dark" pointerEvents="none" style={styles.blur} />
+      <View pointerEvents="none" style={styles.blurFrame}>
+        <BlurView experimentalBlurMethod="dimezisBlurView" intensity={80} tint="dark" style={styles.blur} />
+      </View>
       <View style={styles.overlay}>
         {contextLabel ? <Text numberOfLines={2} style={styles.context}>{contextLabel}</Text> : null}
         <Text style={styles.reason}>{reason}</Text>
@@ -26,7 +28,8 @@ const styles = StyleSheet.create({
   container: { position: 'relative' },
   protected: { minHeight: 150 },
   context: { color: colors.text, fontSize: 15, fontWeight: '800', textAlign: 'center' },
-  blur: { ...StyleSheet.absoluteFillObject, borderRadius: radii.lg, overflow: 'hidden' },
+  blurFrame: { ...StyleSheet.absoluteFillObject, left: -spacing.xs, right: -spacing.xs, borderRadius: radii.xl, boxShadow: '0 0 14px 6px rgba(15, 19, 29, 0.55)' },
+  blur: { ...StyleSheet.absoluteFillObject, borderRadius: radii.xl, overflow: 'hidden' },
   overlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, padding: spacing.sm },
   reason: { color: colors.text, fontSize: 13, fontWeight: '700', textAlign: 'center' },
   button: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, minHeight: touchTargets.min, paddingHorizontal: spacing.md, backgroundColor: colors.accentSoft, borderColor: colors.accentBorder, borderWidth: 1, borderRadius: 12 },
