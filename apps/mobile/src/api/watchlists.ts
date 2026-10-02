@@ -38,6 +38,7 @@ export type PersonalWatchlist = {
   isPlanned?: boolean;
   items: PersonalWatchlistItem[];
   name: string;
+  removeWatchedMovies?: boolean;
   sections: PersonalWatchlistSection[];
   updatedAt: string;
   visibility: PersonalWatchlistVisibility;
@@ -97,6 +98,12 @@ export function updateWatchlistVisibility(
     `/watchlists/${watchlistId}`,
     { visibility },
     { token },
+  );
+}
+
+export function updateWatchlistSettings(token: string, watchlistId: string, removeWatchedMovies: boolean) {
+  return apiPut<{ removeWatchedMovies: boolean }>(
+    `/watchlists/${watchlistId}/settings`, { removeWatchedMovies }, { token },
   );
 }
 

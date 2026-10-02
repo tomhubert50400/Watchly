@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Camera, ChevronDown, ChevronRight, Ellipsis, FolderPlus, Funnel, Plus } from 'lucide-react-native';
+import { Camera, ChevronDown, ChevronRight, Ellipsis, FolderPlus, Funnel, Plus, Settings } from 'lucide-react-native';
 import {
   Alert,
   Animated,
@@ -43,6 +43,7 @@ import {
 } from './WatchlistDetailLayout';
 import { WatchlistActionsMenu } from './WatchlistActionsMenu';
 import { WatchlistArtworkSheet } from './WatchlistArtworkSheet';
+import { WatchlistSettingsSheet } from './WatchlistSettingsSheet';
 import { HydratedPersonalWatchlistItem, useWatchlistCache } from './WatchlistCacheContext';
 import { useWatchlistFilters, WatchlistFiltersSheet, WatchlistFilterStatus } from './WatchlistFilters';
 import {
@@ -75,6 +76,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
   const [editor, setEditor] = useState<SectionEditor | null>(null);
   const [artworkScope, setArtworkScope] = useState<string | null>(null);
+  const [settingsScope, setSettingsScope] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
   const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null);
@@ -197,11 +199,11 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   }, [loadWatchlist, resourceScope, watchlistId]);
 
   useEffect(() => subscribeToUserData(
-    visibleWatchlist?.isPlanned
+    visibleWatchlist?.isPlanned || visibleWatchlist?.removeWatchedMovies
       ? ['watchlists', 'tracking', 'episodeProgress', 'viewings']
       : ['watchlists'],
     () => { void loadWatchlist(); },
-  ), [loadWatchlist, visibleWatchlist?.isPlanned]);
+  ), [loadWatchlist, visibleWatchlist?.isPlanned, visibleWatchlist?.removeWatchedMovies]);
 
   useEffect(() => () => {
     if (autoScrollFrameRef.current !== null) cancelAnimationFrame(autoScrollFrameRef.current);
@@ -229,6 +231,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
           { label: 'Add a title', icon: <Plus color={colors.text} size={20} />, onPress: () => navigation.navigate('MainTabs', { screen: 'Explore' }) },
           { label: 'Create a section', icon: <FolderPlus color={colors.text} size={20} />, onPress: () => openSectionEditor({ mode: 'create' }), disabled: visibleSections.length >= MAX_PERSONAL_WATCHLIST_SECTIONS },
           { label: 'Cover & background', icon: <Camera color={colors.text} size={20} />, onPress: () => setArtworkScope(resourceScope) },
+          ...(!visibleWatchlist.isPlanned ? [{ label: 'Settings', icon: <Settings color={colors.text} size={20} />, onPress: () => setSettingsScope(resourceScope) }] : []),
         ]} />
       ) : undefined,
     });
@@ -656,6 +659,13 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
         ) : null}
       </WatchlistPage>
       <WatchlistFiltersSheet filters={filters} />
+      {visibleWatchlist && !visibleWatchlist.isPlanned ? <WatchlistSettingsSheet key={`settings:${resourceScope}`}
+        watchlistId={watchlistId} removeWatchedMovies={visibleWatchlist.removeWatchedMovies ?? false}
+        visible={settingsScope === resourceScope} onClose={() => setSettingsScope(null)}
+        onSaved={(removeWatchedMovies) => {
+          requestRef.current.version += 1;
+          setWatchlist((current) => current ? { ...current, removeWatchedMovies } : current);
+        }} /> : null}
       {artworkScope === resourceScope && visibleWatchlist ? <WatchlistArtworkSheet key={resourceScope}
         kind="personal" watchlistId={watchlistId} items={visibleWatchlist.items}
         backgroundItemId={visibleWatchlist.backgroundItemId} coverItemIds={visibleWatchlist.coverItemIds}
