@@ -162,7 +162,6 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
       headerTransparent: Boolean(backgroundUrl),
       headerRight: watchlist ? () => (
         <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch' }}>
-          <WatchlistFilterButton filters={filters} />
           {watchlist.isOwner ? <WatchlistCoverButton key={`${ownerId}:${watchlist.id}`} kind="shared" watchlistId={watchlist.id}
             items={watchlist.items}
             backgroundItemId={watchlist.backgroundItemId}
@@ -196,7 +195,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
         </View>
       ) : undefined,
     });
-  }, [backgroundUrl, filters.active, filters.isOpen, filters.open, navigation, watchlist, ownerId]);
+  }, [backgroundUrl, navigation, watchlist, ownerId]);
 
   const commitDetails = useCallback((expectedOwnerId: string, next: SharedListDetails) => {
     if (ownerIdRef.current !== expectedOwnerId) return;
@@ -355,7 +354,12 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
         {statusBanner}
 
         <WatchlistSection delay={50}>
-          <SectionHeader title="Titles" actionLabel="Add titles" onActionPress={() => navigation.navigate('MainTabs', { screen: 'Explore' })} />
+          <View style={styles.titlesHeader}>
+            <View style={styles.titlesHeaderCopy}>
+              <SectionHeader title="Titles" actionLabel="Add titles" onActionPress={() => navigation.navigate('MainTabs', { screen: 'Explore' })} />
+            </View>
+            <WatchlistFilterButton filters={filters} />
+          </View>
           <WatchlistFilterStatus filters={filters} />
           {details.hydratedItems.length === 0 ? (
             <Text style={styles.emptyCopy}>
@@ -495,4 +499,6 @@ const styles = StyleSheet.create({
   statusPillNeutral: { backgroundColor: colors.panelElevated },
   statusText: { color: colors.accentText, fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
   statusTextNeutral: { color: colors.textMuted },
+  titlesHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  titlesHeaderCopy: { flex: 1, minWidth: 0 },
 });

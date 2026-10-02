@@ -225,7 +225,6 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
       ),
       headerRight: visibleWatchlist ? () => (
         <View style={styles.headerActions}>
-          <WatchlistFilterButton filters={filters} />
           <Pressable
             accessibilityHint="Choose whether to add a title or create a section"
             accessibilityLabel="Add to watchlist"
@@ -250,7 +249,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
         </View>
       ) : undefined,
     });
-  }, [backgroundUrl, navigation, visibleWatchlist, resourceScope, route.params.title, watchlistId, loadWatchlist, visibleItems.length, visibleSections.length, filters.active, filters.isOpen, filters.open]);
+  }, [backgroundUrl, navigation, visibleWatchlist, resourceScope, route.params.title, watchlistId, loadWatchlist, visibleItems.length, visibleSections.length]);
 
   function openItem(item: WatchlistDisplayItem) {
     const title = item.title ?? (item.contentType === 'movie' ? 'Film' : 'Series');
@@ -621,6 +620,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
           </EmptyState>
         ) : visibleWatchlist ? (
           <WatchlistSection>
+            <WatchlistFilterButton filters={filters} />
             <WatchlistFilterStatus filters={filters} />
             {visibleItems.length === 0 && visibleSections.length === 0 ? (
               <Text style={styles.emptyCopy}>

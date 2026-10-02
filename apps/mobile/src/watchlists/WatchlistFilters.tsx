@@ -80,7 +80,7 @@ export function WatchlistFilterStatus({ filters }: { filters: Filters }) {
 }
 
 const styles = StyleSheet.create({
-  button: { width: 44, alignItems: 'center', justifyContent: 'center', alignSelf: 'stretch' },
+  button: { width: 44, minHeight: 44, flexShrink: 0, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-end' },
   heading: { ...typography.title, color: colors.text, marginTop: spacing.lg, marginBottom: spacing.sm },
   row: { minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md, paddingVertical: spacing.sm },
   label: { ...typography.body, color: colors.text, flex: 1 },

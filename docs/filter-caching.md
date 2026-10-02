@@ -1,6 +1,8 @@
 # Watchlist filters and filter data caches
 
-Personal and shared watchlists expose a funnel in the native header. Type
+Personal and shared watchlists expose a funnel above their title grids, outside
+the native header so it leaves room for the list name. Profile media pages,
+including Planned, place their genre funnel beside the section selector. Type
 (All, Movies, Series) and genre combine without changing membership, section
 assignments, source order, or shared vote candidates. Clear filters restores
 all titles. Genre loading is progressive, with retry and empty-result states.
