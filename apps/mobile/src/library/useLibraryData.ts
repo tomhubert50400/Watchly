@@ -130,6 +130,7 @@ export async function loadLibraryData(
       const posterUrls = previewKeys.has(list.key)
         ? await loadWatchlistPreviewUrls({
             fallback,
+            includeHomeItems: list.showOnHome !== false,
             list,
             loadArtwork: async (item, index) => {
               const media = await loadPoster(`${item.contentType}:${item.tmdbId}`);

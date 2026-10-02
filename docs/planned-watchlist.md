@@ -30,8 +30,11 @@ Deploy migration `20261002120000_watchlist_remove_watched_movies` with the API
 before releasing this setting in the mobile app.
 
 The same settings sheet offers **Show in From your watchlists**, enabled by
-default. Turning it off excludes that personal list from Home only. Titles can
-still appear through another enabled list. The two settings save independently.
+default, including for Planned. Turning it off excludes that list from Home only.
+Titles can still appear through another enabled list. The two settings save independently.
+Planned exposes only the Home setting and retains automatic watched removal.
+Home shows up to 12 unique titles, alternating enabled lists. Each included list
+can supply up to 12 titles without changing its selected cover artwork.
 Deploy migration `20261002130000_watchlist_home_visibility` with the API before
 releasing the Home setting.
 
