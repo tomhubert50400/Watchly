@@ -4,14 +4,17 @@ import { commitImportWatchlists } from './import-watchlists';
 import type { PreparedImportItem } from './imports.service';
 
 export function watchlistHarness(initialCount = 0) {
-  const lists = new Map<string, { id: string; name: string; userId: string }>(
+  const lists = new Map<string, { id: string; name: string; userId: string; systemKey?: string | null }>(
     Array.from({ length: initialCount }, (_, index) => [`existing-${index}`, { id: `existing-${index}`, name: 'Existing', userId: 'owner' }]),
   );
   const memberships = new Map<string, { watchlistId: string; tmdbId: number; contentType: string }>();
   const transaction = {
     $queryRaw: async () => [],
     personalWatchlist: {
-      findMany: async ({ where }: { where: { userId: string } }) => [...lists.values()].filter((list) => list.userId === where.userId),
+      findMany: async ({ where }: { where: { userId: string; systemKey: null } }) => {
+        assert.equal(where.systemKey, null, 'automatic lists must not consume import slots');
+        return [...lists.values()].filter((list) => list.userId === where.userId && !list.systemKey);
+      },
       create: async ({ data }: { data: { id: string; name: string; userId: string } }) => {
         assert.ok(!lists.has(data.id));
         lists.set(data.id, data);
@@ -31,17 +34,18 @@ export function watchlistHarness(initialCount = 0) {
 
 export async function verifyImportWatchlists(baseItem: PreparedImportItem) {
   const harness = watchlistHarness(3);
+  harness.lists.set('planned', { id: 'planned', name: 'Planned to Watch', userId: 'owner', systemKey: 'planned' });
   const tx = harness.transaction as unknown as Prisma.TransactionClient;
   const lists = [{ key: 'a', name: 'Same name' }, { key: 'b', name: 'Same name' }, { key: 'c', name: 'Overflow' }];
   const item = { ...baseItem, watched: true, watchlistKeys: ['a', 'b', 'c'] };
   const result = await commitImportWatchlists(tx, 'owner', 'letterboxd', lists, [item]);
-  assert.equal(harness.lists.size, 5, 'existing personal lists count toward the limit');
+  assert.equal(harness.lists.size, 6, 'five manual lists fit alongside automatic Planned');
   assert.notEqual(result.ids.a, result.ids.b, 'distinct source lists with equal names remain separate');
   assert.equal(result.ids.c, null, 'excess lists must be skipped');
   assert.equal(harness.memberships.size, 2, 'watched films must be added to every accepted list');
   assert.equal(result.items[0].watched, true);
   await commitImportWatchlists(tx, 'owner', 'letterboxd', lists, [item]);
-  assert.equal(harness.lists.size, 5, 'reimport must reuse lists even at the limit');
+  assert.equal(harness.lists.size, 6, 'reimport must reuse lists even at the limit');
   assert.equal(harness.memberships.size, 2, 'reimport must not duplicate films');
   const skipped = await commitImportWatchlists(tx, 'owner', 'letterboxd', lists, [
     { ...baseItem, watched: false, rating: null, review: null, watchlisted: true, watchlistKeys: ['c'] },

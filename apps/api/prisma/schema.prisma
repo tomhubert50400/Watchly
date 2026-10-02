@@ -553,6 +553,7 @@ model PersonalWatchlist {
   id         String                  @id @default(uuid()) @db.Uuid
   userId     String                  @db.Uuid
   name       String                  @db.VarChar(80)
+  systemKey  String?
   visibility PrivacyVisibility       @default(PRIVATE)
   createdAt  DateTime                @default(now())
   updatedAt  DateTime                @updatedAt
@@ -560,6 +561,7 @@ model PersonalWatchlist {
   sections   PersonalWatchlistSection[]
   user       User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, systemKey])
   @@index([userId])
   @@map("personal_watchlists")
 }

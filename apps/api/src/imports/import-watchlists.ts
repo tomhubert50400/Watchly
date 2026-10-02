@@ -19,7 +19,7 @@ export async function commitImportWatchlists(
 
   // Share the creation lock with manual watchlist creation, including concurrent imports.
   await transaction.$queryRaw`SELECT id FROM "users" WHERE id = ${userId}::uuid FOR UPDATE`;
-  const existing = await transaction.personalWatchlist.findMany({ where: { userId }, select: { id: true } });
+  const existing = await transaction.personalWatchlist.findMany({ where: { userId, systemKey: null }, select: { id: true } });
   const existingIds = new Set(existing.map((list) => list.id));
   let count = existing.length;
   for (const list of watchlists) {

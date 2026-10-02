@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
 import { PrismaClient } from '../generated/prisma/client';
-import { isPrismaConnectionError, registerPrismaPoolErrorHandler } from './prisma-retry';
+import { isPrismaConnectionError, isPrismaTransactionConflict, registerPrismaPoolErrorHandler } from './prisma-retry';
 
 @Injectable()
 export class PrismaService implements OnModuleDestroy {
@@ -242,13 +242,14 @@ export class PrismaService implements OnModuleDestroy {
       try {
         return await operation();
       } catch (error) {
-        if (!isPrismaConnectionError(error)) {
+        const connectionError = isPrismaConnectionError(error);
+        if (!connectionError && !isPrismaTransactionConflict(error)) {
           throw error;
         }
 
         lastError = error;
 
-        await this.resetConnection(failedGeneration);
+        if (connectionError) await this.resetConnection(failedGeneration);
         await delay((attempt + 1) * 300);
       }
     }

@@ -68,7 +68,7 @@ export class WatchlistsService {
     const watchlist = await this.withConnectionRetry(() =>
       this.prisma.$transaction(async (transaction) => {
         await transaction.$queryRaw`SELECT id FROM "users" WHERE id = ${userId}::uuid FOR UPDATE`;
-        const count = await transaction.personalWatchlist.count({ where: { userId } });
+        const count = await transaction.personalWatchlist.count({ where: { userId, systemKey: null } });
         if (count >= 5) {
           throw new BadRequestException('You can have up to 5 personal watchlists. Delete a list before creating another.');
         }
@@ -124,6 +124,7 @@ export class WatchlistsService {
         : null,
       createdAt: watchlist.createdAt.toISOString(),
       id: watchlist.id,
+      isPlanned: watchlist.systemKey === 'planned',
       items: watchlist.items.map(toItem),
       coverItemIds: watchlist.coverItemIds.filter((id) => watchlist.items.some((item) => item.id === id)),
       name: watchlist.name,
@@ -164,6 +165,13 @@ export class WatchlistsService {
 
   async deleteWatchlist(identity: AuthenticatedIdentity, watchlistId: string) {
     const userId = await this.getUserId(identity);
+    const watchlist = await this.withConnectionRetry(() => this.prisma.personalWatchlist.findFirst({
+      where: { id: watchlistId, userId },
+      select: { systemKey: true },
+    }));
+    if (watchlist?.systemKey === 'planned') {
+      throw new BadRequestException('Planned to Watch is automatic. Remove individual titles to update Planned.');
+    }
 
     await this.withConnectionRetry(() =>
       this.prisma.personalWatchlist.deleteMany({
@@ -177,9 +185,23 @@ export class WatchlistsService {
 
   async addItem(identity: AuthenticatedIdentity, watchlistId: string, input: WatchlistItemDto) {
     const userId = await this.getUserId(identity);
-    await this.assertOwnedWatchlist(userId, watchlistId);
+    const watchlist = await this.assertOwnedWatchlist(userId, watchlistId);
 
     const contentType = toTrackedContentType(input.contentType);
+    if (watchlist.systemKey === 'planned') {
+      return this.withConnectionRetry(() => this.prisma.$transaction(async (transaction) => {
+        // The state trigger creates membership in the same transaction, including imports and viewings.
+        await transaction.userContentState.upsert({
+          where: { userId_contentType_tmdbId: { userId, contentType, tmdbId: input.tmdbId } },
+          create: { userId, contentType, tmdbId: input.tmdbId, status: 'WATCHLISTED' },
+          update: { status: 'WATCHLISTED' },
+        });
+        const item = await transaction.personalWatchlistItem.findUniqueOrThrow({
+          where: { watchlistId_contentType_tmdbId: { watchlistId, contentType, tmdbId: input.tmdbId } },
+        });
+        return toItem(item);
+      }));
+    }
     const item = await this.withConnectionRetry(() =>
       this.prisma.personalWatchlistItem.upsert({
       create: {
@@ -210,7 +232,16 @@ export class WatchlistsService {
     tmdbId: number,
   ) {
     const userId = await this.getUserId(identity);
-    await this.assertOwnedWatchlist(userId, watchlistId);
+    const watchlist = await this.assertOwnedWatchlist(userId, watchlistId);
+
+    if (watchlist.systemKey === 'planned') {
+      await this.withConnectionRetry(() => this.prisma.$transaction(async (transaction) => {
+        const where = { userId, contentType: toTrackedContentType(contentType), tmdbId, status: 'WATCHLISTED' as const };
+        await transaction.userContentState.deleteMany({ where: { ...where, favorite: false } });
+        await transaction.userContentState.updateMany({ where, data: { status: null } });
+      }));
+      return;
+    }
 
     await this.withConnectionRetry(() =>
       this.prisma.personalWatchlistItem.deleteMany({
@@ -395,6 +426,7 @@ export class WatchlistsService {
       this.prisma.personalWatchlist.findFirst({
       select: {
         id: true,
+        systemKey: true,
       },
       where: {
         id: watchlistId,
@@ -406,6 +438,7 @@ export class WatchlistsService {
     if (!watchlist) {
       throw new NotFoundException('Watchlist not found.');
     }
+    return watchlist;
   }
 
   private async touchWatchlist(watchlistId: string) {
@@ -432,6 +465,7 @@ type WatchlistSummaryRecord = {
     id: string;
   }[];
   name: string;
+  systemKey?: string | null;
   updatedAt: Date;
   visibility: PrivacyVisibility;
 };
@@ -457,6 +491,7 @@ function toSummary(watchlist: WatchlistSummaryRecord, includeContainsTitle = fal
     ...(includeContainsTitle ? { containsTitle: (watchlist.items?.length ?? 0) > 0 } : {}),
     createdAt: watchlist.createdAt.toISOString(),
     id: watchlist.id,
+    isPlanned: watchlist.systemKey === 'planned',
     itemCount: watchlist._count.items,
     name: watchlist.name,
     updatedAt: watchlist.updatedAt.toISOString(),

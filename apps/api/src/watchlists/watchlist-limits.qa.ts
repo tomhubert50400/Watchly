@@ -40,7 +40,11 @@ async function run() {
           return [{ id: userId }];
         },
         personalWatchlist: {
-          count: async ({ where }: { where: { userId: string } }) => { assertLocked(where.userId); return personal.get(where.userId) ?? 0; },
+          count: async ({ where }: { where: { userId: string; systemKey: null } }) => {
+            assertLocked(where.userId);
+            assert.equal(where.systemKey, null, 'automatic Planned must not consume a manual watchlist slot');
+            return personal.get(where.userId) ?? 0;
+          },
           create: async ({ data }: { data: { name: string; userId: string } }) => {
             assertLocked(data.userId);
             personal.set(data.userId, (personal.get(data.userId) ?? 0) + 1);

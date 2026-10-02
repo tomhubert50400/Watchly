@@ -45,3 +45,17 @@ export function isPrismaConnectionError(error: unknown) {
     message.includes('ECONNRESET')
   );
 }
+
+export function isPrismaTransactionConflict(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const prismaError = error as {
+    code?: string;
+    cause?: { originalCode?: string };
+    meta?: {
+      code?: string;
+      driverAdapterError?: { cause?: { originalCode?: string } };
+    };
+  };
+  return [prismaError.code, prismaError.cause?.originalCode, prismaError.meta?.code, prismaError.meta?.driverAdapterError?.cause?.originalCode]
+    .some((code) => code === 'P2034' || code === '40P01' || code === '40001');
+}

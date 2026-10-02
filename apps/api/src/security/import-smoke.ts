@@ -86,14 +86,14 @@ async function main() {
     const listResult = await imports.confirm(identity, listPreview.importId);
     assert(listResult.watchlistsImported === 2, 'Only two places are available.');
     assert(listResult.watchlistsSkipped?.[0] === 'Overflow', 'Overflow must be reported.');
-    const importedLists = await prisma.personalWatchlist.findMany({ where: { userId: persistedUserId }, include: { items: true } });
+    const importedLists = await prisma.personalWatchlist.findMany({ where: { userId: persistedUserId, systemKey: null }, include: { items: true } });
     assert(importedLists.length === 5, 'The personal watchlist limit must hold.');
     assert(importedLists.find((list) => list.name === 'Crime')?.items.length === 2, 'Every movie must be added to Crime.');
     assert(importedLists.find((list) => list.name === 'Classics')?.items.some((item) => item.tmdbId === 949) === true, 'Already-watched movies must remain in imported lists.');
     const repeatPreview = await imports.preview(identity, 'letterboxd', file);
     await imports.confirm(identity, repeatPreview.importId);
-    assert(await prisma.personalWatchlist.count({ where: { userId: persistedUserId } }) === 5, 'Reimport must not create duplicate lists.');
-    assert(await prisma.personalWatchlistItem.count({ where: { watchlist: { userId: persistedUserId } } }) === 3, 'Reimport must not duplicate membership.');
+    assert(await prisma.personalWatchlist.count({ where: { userId: persistedUserId, systemKey: null } }) === 5, 'Reimport must not create duplicate lists.');
+    assert(await prisma.personalWatchlistItem.count({ where: { watchlist: { userId: persistedUserId, systemKey: null } } }) === 3, 'Reimport must not duplicate membership.');
 
     console.log('Import smoke passed.');
   } finally {
