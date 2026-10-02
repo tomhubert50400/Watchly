@@ -16,7 +16,17 @@ import {
   createInitialCachedResourceState,
 } from './cachedResourceReducer';
 import { setMemoryResource } from './memoryResourceCache';
-import { createCachedResourceStateFromMemory, createRequestVersionGuard } from './useCachedResource';
+import { canReuseCachedResource, createCachedResourceStateFromMemory, createRequestVersionGuard } from './useCachedResource';
+
+const freshFilter = {
+  savedAt: new Date().toISOString(), staleTimeMs: 5 * 60 * 1000,
+  requestedRefresh: false, previousKey: 'mood:funny', key: 'mood:comfort', loadChanged: true,
+};
+assert.equal(canReuseCachedResource(freshFilter), true, 'returning to a fresh filter must reuse its results despite a different loader');
+assert.equal(canReuseCachedResource({ ...freshFilter, previousKey: freshFilter.key }), false, 'a data revision changing the loader for the same key must still revalidate');
+assert.equal(canReuseCachedResource({ ...freshFilter, requestedRefresh: true }), false, 'manual refresh must bypass cached filter results');
+assert.equal(canReuseCachedResource({ ...freshFilter, savedAt: new Date(Date.now() - 600_000).toISOString() }), false, 'expired filter results must reload');
+assert.equal(canReuseCachedResource({ ...freshFilter, savedAt: undefined }), false, 'an uncached filter must load');
 
 const initial = createInitialCachedResourceState<string[]>();
 assert.deepEqual(initial, {

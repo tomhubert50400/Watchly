@@ -4,25 +4,33 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { searchCatalogue, type CatalogueSearchItem, type CatalogueSearchType } from '../api/catalogue';
 import { searchProfiles, type ProfileSearchItem } from '../api/profile';
 import { useAuthSession } from '../auth/AuthSessionContext';
+import { getPrivateCacheKey } from '../cache/persistedCache';
+import { useUserDataRevision } from '../sync/userDataEvents';
 import type { RootStackParamList } from '../navigation/types';
+import { loadCachedCatalogueResource } from './catalogueResourceCache';
 import { SearchComposition } from './ExploreScreen';
 import { deduplicateMediaItems, getExploreViewState } from './exploreState';
 
 export function DiscoverSearchResults({ query, searchType }: { query: string; searchType: CatalogueSearchType }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { currentUser, firebaseIdToken } = useAuthSession();
+  const socialRevision = useUserDataRevision('socialGraph', 'profile');
   const [revision, setRevision] = useState(0);
   const [result, setResult] = useState<{
     key: string; items: CatalogueSearchItem[]; people: ProfileSearchItem[]; error: string | null;
   } | null>(null);
-  const key = JSON.stringify([query, searchType, firebaseIdToken, revision]);
+  const key = JSON.stringify([query, searchType, currentUser?.id ?? null, socialRevision, revision]);
 
   useEffect(() => {
     let current = true;
     const timer = setTimeout(() => {
       void Promise.all([
         searchCatalogue(query, searchType),
-        firebaseIdToken && searchType === 'all' ? searchProfiles(firebaseIdToken, query) : Promise.resolve({ items: [] }),
+        currentUser && firebaseIdToken && searchType === 'all'
+          ? loadCachedCatalogueResource(
+            getPrivateCacheKey(currentUser.id, `profile:search:${encodeURIComponent(query)}:${socialRevision}:v1`),
+            () => searchProfiles(firebaseIdToken, query),
+          ) : Promise.resolve({ items: [] }),
       ]).then(([catalogue, profiles]) => {
         if (current) setResult({ key, items: deduplicateMediaItems(catalogue.items), people: profiles.items, error: null });
       }).catch((error: unknown) => {
@@ -30,7 +38,7 @@ export function DiscoverSearchResults({ query, searchType }: { query: string; se
       });
     }, 350);
     return () => { current = false; clearTimeout(timer); };
-  }, [key, query, searchType, firebaseIdToken]);
+  }, [currentUser?.id, key, query, searchType, firebaseIdToken, socialRevision]);
 
   const visible = result?.key === key ? result : null;
   return <SearchComposition

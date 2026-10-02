@@ -25,6 +25,8 @@ import {
 import { ProfileSearchItem, searchProfiles } from '../api/profile';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { useCachedResource } from '../cache/useCachedResource';
+import { getPrivateCacheKey } from '../cache/persistedCache';
+import { useUserDataRevision } from '../sync/userDataEvents';
 import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
@@ -39,6 +41,7 @@ import { hapticSelection } from '../feedback/haptics';
 import { RootStackParamList } from '../navigation/types';
 import { ReleaseAlertControl } from '../notifications/ReleaseAlertControl';
 import { useCatalogueCache } from './CatalogueCacheContext';
+import { loadCachedCatalogueResource } from './catalogueResourceCache';
 import { CatalogueRating } from './CatalogueRating';
 import { loadCatalogueSections, PUBLIC_CATALOGUE_SECTIONS_KEY } from './catalogueSectionsResource';
 import { ExploreMediaCard } from './ExploreMediaCard';
@@ -77,6 +80,7 @@ type ExploreScreenProps = {
 export function ExploreScreen({ isActive = true, searchOnly = false }: ExploreScreenProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { currentUser, firebaseIdToken } = useAuthSession();
+  const socialRevision = useUserDataRevision('socialGraph', 'profile');
   const { preloadCatalogueItems } = useCatalogueCache();
   const [query, setQuery] = useState('');
   const [searchType, setSearchType] = useState<CatalogueSearchType>('all');
@@ -84,11 +88,13 @@ export function ExploreScreen({ isActive = true, searchOnly = false }: ExploreSc
   const [activeSection, setActiveSection] = useState<ExploreSection>('trending');
   const [searchItems, setSearchItems] = useState<CatalogueSearchItem[]>([]);
   const [searchPeople, setSearchPeople] = useState<ProfileSearchItem[]>([]);
+  const [searchPeopleScope, setSearchPeopleScope] = useState<string | null>(null);
   const [searchItemsQuery, setSearchItemsQuery] = useState('');
   const [searchError, setSearchError] = useState<string | null>(null);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [searchRevision, setSearchRevision] = useState(0);
   const trimmedQuery = query.trim();
+  const peopleScope = JSON.stringify([currentUser?.id ?? null, socialRevision]);
   const isSearching = trimmedQuery.length >= 2;
   const showSearchTypeFilters = searchOnly || isSearchFocused || isSearching;
   const sections = useCachedResource({
@@ -113,8 +119,8 @@ export function ExploreScreen({ isActive = true, searchOnly = false }: ExploreSc
     [searchItems, searchItemsQuery, searchType, trimmedQuery],
   );
   const visibleSearchPeople = useMemo(
-    () => searchItemsQuery === trimmedQuery && searchType === 'all' ? searchPeople : [],
-    [searchItemsQuery, searchPeople, searchType, trimmedQuery],
+    () => searchItemsQuery === trimmedQuery && searchType === 'all' && searchPeopleScope === peopleScope ? searchPeople : [],
+    [peopleScope, searchItemsQuery, searchPeople, searchPeopleScope, searchType, trimmedQuery],
   );
   const visibleItems = isSearching
     ? visibleSearchItems
@@ -162,8 +168,11 @@ export function ExploreScreen({ isActive = true, searchOnly = false }: ExploreSc
     const handle = setTimeout(() => {
       Promise.all([
         searchCatalogue(trimmedQuery, searchType),
-        firebaseIdToken && searchType === 'all'
-          ? searchProfiles(firebaseIdToken, trimmedQuery)
+        currentUser && firebaseIdToken && searchType === 'all'
+          ? loadCachedCatalogueResource(
+            getPrivateCacheKey(currentUser.id, `profile:search:${encodeURIComponent(trimmedQuery)}:${socialRevision}:v1`),
+            () => searchProfiles(firebaseIdToken, trimmedQuery),
+          )
           : Promise.resolve({ items: [] }),
       ])
         .then(([catalogueResponse, profileResponse]) => {
@@ -173,6 +182,7 @@ export function ExploreScreen({ isActive = true, searchOnly = false }: ExploreSc
 
           setSearchItems(deduplicateMediaItems(catalogueResponse.items));
           setSearchPeople(profileResponse.items);
+          setSearchPeopleScope(peopleScope);
           setSearchItemsQuery(trimmedQuery);
         })
         .catch((error) => {
@@ -191,7 +201,7 @@ export function ExploreScreen({ isActive = true, searchOnly = false }: ExploreSc
       isCurrent = false;
       clearTimeout(handle);
     };
-  }, [firebaseIdToken, isSearching, searchRevision, searchType, trimmedQuery]);
+  }, [currentUser?.id, firebaseIdToken, isSearching, peopleScope, searchRevision, searchType, socialRevision, trimmedQuery]);
 
   const openItem = useCallback((item: CatalogueSearchItem) => {
     navigation.navigate(item.mediaType === 'movie' ? 'FilmDetail' : 'SeriesDetail', {

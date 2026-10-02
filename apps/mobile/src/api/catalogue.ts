@@ -1,4 +1,5 @@
 import { apiGet } from './client';
+import { loadCachedCatalogueResource } from '../catalogue/catalogueResourceCache';
 
 export type CatalogueSearchType = 'all' | 'movie' | 'series';
 
@@ -9,7 +10,9 @@ export type CatalogueActor = {
 };
 
 export function searchActors(query: string) {
-  return apiGet<{ items: CatalogueActor[] }>(`/catalog/actors/search?${new URLSearchParams({ query })}`);
+  const params = new URLSearchParams({ query: query.trim() });
+  return loadCachedCatalogueResource(`watchly:public:actors:search:${params}:v1`,
+    () => apiGet<{ items: CatalogueActor[] }>(`/catalog/actors/search?${params}`));
 }
 
 export function getActor(tmdbId: number) {
@@ -260,9 +263,10 @@ export type StreamingAvailabilityResponse = {
 };
 
 export function searchCatalogue(query: string, type: CatalogueSearchType) {
-  const params = new URLSearchParams({ query, type });
+  const params = new URLSearchParams({ query: query.trim(), type });
 
-  return apiGet<CatalogueSearchResponse>(`/catalog/search?${params.toString()}`);
+  return loadCachedCatalogueResource(`watchly:public:catalogue:search:${params}:v1`,
+    () => apiGet<CatalogueSearchResponse>(`/catalog/search?${params.toString()}`));
 }
 
 export function getCatalogueMovieSections() {
@@ -274,7 +278,8 @@ export function getOnboardingTasteOptions(movieGenreId?: number) {
     ? ''
     : `?${new URLSearchParams({ movieGenreId: String(movieGenreId) }).toString()}`;
 
-  return apiGet<OnboardingTasteOptionsResponse>(`/catalog/onboarding-taste-options${params}`);
+  return loadCachedCatalogueResource(`watchly:public:onboarding:taste:${movieGenreId ?? 'all'}:v1`,
+    () => apiGet<OnboardingTasteOptionsResponse>(`/catalog/onboarding-taste-options${params}`));
 }
 
 export function getCatalogueDiscovery(

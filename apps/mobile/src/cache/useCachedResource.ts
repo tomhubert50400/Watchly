@@ -21,6 +21,18 @@ type UseCachedResourceOptions<T> = {
 
 const DEFAULT_STALE_TIME_MS = 5 * 60 * 1000;
 
+export function canReuseCachedResource({ savedAt, staleTimeMs, requestedRefresh, previousKey, key, loadChanged }: {
+  savedAt: string | undefined;
+  staleTimeMs: number;
+  requestedRefresh: boolean;
+  previousKey: string;
+  key: string;
+  loadChanged: boolean;
+}) {
+  return Boolean(savedAt && !requestedRefresh && !(previousKey === key && loadChanged)
+    && isMemoryResourceFresh(savedAt, staleTimeMs));
+}
+
 export type UseCachedResourceResult<T> = CachedResourceState<T> & {
   revalidate: () => void;
   retry: () => void;
@@ -131,6 +143,10 @@ export function useCachedResource<T>({
     const isSilentRevalidation = handledRevalidateRevisionRef.current !== revalidateRevision;
     const isRequestedRefresh = isManualRetry || isSilentRevalidation;
     const loadChanged = loadRef.current !== load;
+    const previousKey = stateKeyRef.current;
+    const canReuseCache = (savedAt: string | undefined) => canReuseCachedResource({
+      savedAt, staleTimeMs, requestedRefresh: isRequestedRefresh, previousKey, key, loadChanged,
+    });
     handledRetryRevisionRef.current = retryRevision;
     handledRevalidateRevisionRef.current = revalidateRevision;
     loadRef.current = load;
@@ -151,10 +167,7 @@ export function useCachedResource<T>({
     }
 
     if (
-      memoryEntry &&
-      !isRequestedRefresh &&
-      !loadChanged &&
-      isMemoryResourceFresh(memoryEntry.savedAt, staleTimeMs)
+      memoryEntry && canReuseCache(memoryEntry.savedAt)
     ) {
       return;
     }
@@ -193,10 +206,7 @@ export function useCachedResource<T>({
       }
 
       if (
-        cachedSavedAt &&
-        !isRequestedRefresh &&
-        !loadChanged &&
-        isMemoryResourceFresh(cachedSavedAt, staleTimeMs)
+        canReuseCache(cachedSavedAt)
       ) {
         return;
       }

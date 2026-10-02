@@ -5,7 +5,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { ChevronLeft, SlidersHorizontal } from 'lucide-react-native';
 import type { CatalogueSearchType } from '../api/catalogue';
-import { browseGenreLabel, browseResourceKey, collectionFilters, discoverMoods, getDiscoverBrowse, type BrowseFilters, type DiscoverItem } from '../api/discover';
+import { browseGenreLabel, browseResourceKey, collectionFilters, discoverMoods, getDiscoverBrowse, type BrowseFilters } from '../api/discover';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { getPrivateCacheKey, getPublicCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
@@ -22,6 +22,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { useUserDataRevision } from '../sync/userDataEvents';
 import { discoverTypeOptions } from './DiscoverScreen';
 import { ExploreMediaCard } from './ExploreMediaCard';
+import { appendDiscoverBrowsePage, restoreDiscoverBrowsePages } from './discoverBrowsePages';
 
 export function DiscoverResultsScreen() {
   const route = useRoute<RouteProp<RootStackParamList, 'DiscoverResults'>>();
@@ -40,33 +41,32 @@ function DiscoverGrid({ type, onType, filters, onFilters }: { type: CatalogueSea
   const { currentUser, firebaseIdToken } = useAuthSession();
   const load = useCallback(() => getDiscoverBrowse(firebaseIdToken, filters), [firebaseIdToken, filters]);
   const key = browseResourceKey(filters);
-  const resource = useCachedResource({ key: currentUser ? getPrivateCacheKey(currentUser.id, key) : getPublicCacheKey(key), load, enabled: !currentUser || Boolean(firebaseIdToken) });
+  const cacheKey = currentUser ? getPrivateCacheKey(currentUser.id, key) : getPublicCacheKey(key);
+  const resource = useCachedResource({ key: cacheKey, load, enabled: !currentUser || Boolean(firebaseIdToken) });
   const revision = useUserDataRevision('tracking', 'opinions', 'viewings', 'episodeProgress', 'watchlists');
   const lastRevision = useRef(revision);
   useEffect(() => {
     if (lastRevision.current !== revision) { lastRevision.current = revision; resource.revalidate(); }
   }, [resource.revalidate, revision]);
-  const [extra, setExtra] = useState<DiscoverItem[]>([]);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
+  const [pages, setPages] = useState(() => restoreDiscoverBrowsePages(cacheKey, resource.savedAt, resource.data?.hasMore ?? false));
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState<string | null>(null);
   const version = useRef(0);
   const busy = useRef(false);
-  useEffect(() => { version.current += 1; busy.current = false; setExtra([]); setPage(1); setHasMore(resource.data?.hasMore ?? false); setLoadingMore(false); setMoreError(null); }, [resource.data]);
+  useEffect(() => { version.current += 1; busy.current = false; setPages(restoreDiscoverBrowsePages(cacheKey, resource.savedAt, resource.data?.hasMore ?? false)); setLoadingMore(false); setMoreError(null); }, [cacheKey, resource.data, resource.savedAt]);
   useEffect(() => () => { version.current += 1; }, []);
   const loadMore = async () => {
     if (busy.current) return;
     busy.current = true; setLoadingMore(true); setMoreError(null); const request = version.current;
     try {
-      const result = await getDiscoverBrowse(firebaseIdToken, filters, page + 1);
+      const result = await getDiscoverBrowse(firebaseIdToken, filters, pages.page + 1);
       if (request !== version.current) return;
-      setExtra(previous => [...previous, ...result.items]); setPage(previous => previous + 1); setHasMore(result.hasMore);
+      setPages(appendDiscoverBrowsePage(cacheKey, pages, result));
       if (result.partial) setMoreError('Some titles could not be loaded. Pull to refresh to try again.');
     } catch (error) { if (request === version.current) setMoreError(error instanceof Error ? error.message : 'Could not load more titles.'); }
     finally { if (request === version.current) { busy.current = false; setLoadingMore(false); } }
   };
-  const items = [...new Map([...(resource.data?.items ?? []), ...extra].map(item => [item.id, item])).values()].filter(item => type === 'all' || item.mediaType === type);
+  const items = [...new Map([...(resource.data?.items ?? []), ...pages.items].map(item => [item.id, item])).values()].filter(item => type === 'all' || item.mediaType === type);
   return <Screen contentReady={Boolean(resource.data)} title="" leading={<Pressable accessibilityRole="button" accessibilityLabel="Back to Discover" onPress={() => navigation.goBack()} style={styles.back}><ChevronLeft size={22} color={colors.text} /><Text style={styles.backText}>Discover</Text></Pressable>} background={<SpotlightAtmosphere imageUrl={items[0]?.posterUrl ?? null} />} refreshControl={<RefreshControl refreshing={resource.isRefreshing} onRefresh={resource.retry} tintColor={colors.accent} />}>
     <View style={styles.content}>
       <ScreenReveal delay={0} style={styles.titleRow}>
@@ -83,7 +83,7 @@ function DiscoverGrid({ type, onType, filters, onFilters }: { type: CatalogueSea
       {resource.data && !items.length ? <EmptyState title="No titles for this filter" body="Try All, or choose another selection." /> : null}
       <ScreenReveal delay={100} style={styles.grid}>{items.map(item => <ExploreMediaCard key={item.id} layout="grid" item={item} onPress={() => navigation.navigate(item.mediaType === 'movie' ? 'FilmDetail' : 'SeriesDetail', { title: item.title, tmdbId: item.tmdbId })} />)}</ScreenReveal>
       {moreError ? <Text accessibilityRole="alert" style={styles.description}>{moreError}</Text> : null}
-      {hasMore ? <Button disabled={loadingMore || resource.isRefreshing} label={loadingMore ? 'Loading…' : moreError ? 'Retry loading more' : 'Load more'} onPress={() => void loadMore()} /> : null}
+      {pages.hasMore ? <Button disabled={loadingMore || resource.isRefreshing} label={loadingMore ? 'Loading…' : moreError ? 'Retry loading more' : 'Load more'} onPress={() => void loadMore()} /> : null}
     </View>
   </Screen>;
 }
