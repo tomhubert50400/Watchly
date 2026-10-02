@@ -45,6 +45,7 @@ import {
 } from './WatchlistDetailLayout';
 import { WatchlistCoverButton } from './WatchlistCoverButton';
 import { HydratedPersonalWatchlistItem, useWatchlistCache } from './WatchlistCacheContext';
+import { useWatchlistFilters, WatchlistFilterButton, WatchlistFiltersSheet, WatchlistFilterStatus } from './WatchlistFilters';
 import {
   groupPersonalWatchlistItems,
   MAX_PERSONAL_WATCHLIST_SECTIONS,
@@ -114,10 +115,11 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   const isStateCurrent = stateScope === resourceScope;
   const visibleWatchlist = isStateCurrent ? watchlist : null;
   const visibleItems = isStateCurrent ? hydratedItems : [];
+  const filters = useWatchlistFilters(visibleItems, resourceScope);
   const visibleSections = visibleWatchlist?.sections ?? [];
   const groups = useMemo(
-    () => groupPersonalWatchlistItems(visibleSections, visibleItems),
-    [visibleItems, visibleSections],
+    () => groupPersonalWatchlistItems(visibleSections, filters.visibleItems),
+    [filters.visibleItems, visibleSections],
   );
   const backgroundItem = visibleItems.find((item) => item.id === visibleWatchlist?.backgroundItemId);
   const backgroundUrl = backgroundItem?.posterUrl ?? backgroundItem?.backdropUrl ?? null;
@@ -223,6 +225,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
       ),
       headerRight: visibleWatchlist ? () => (
         <View style={styles.headerActions}>
+          <WatchlistFilterButton filters={filters} />
           <Pressable
             accessibilityHint="Choose whether to add a title or create a section"
             accessibilityLabel="Add to watchlist"
@@ -247,7 +250,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
         </View>
       ) : undefined,
     });
-  }, [backgroundUrl, navigation, visibleWatchlist, resourceScope, route.params.title, watchlistId, loadWatchlist, visibleItems.length, visibleSections.length]);
+  }, [backgroundUrl, navigation, visibleWatchlist, resourceScope, route.params.title, watchlistId, loadWatchlist, visibleItems.length, visibleSections.length, filters.active, filters.isOpen, filters.open]);
 
   function openItem(item: WatchlistDisplayItem) {
     const title = item.title ?? (item.contentType === 'movie' ? 'Film' : 'Series');
@@ -618,11 +621,12 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
           </EmptyState>
         ) : visibleWatchlist ? (
           <WatchlistSection>
+            <WatchlistFilterStatus filters={filters} />
             {visibleItems.length === 0 && visibleSections.length === 0 ? (
               <Text style={styles.emptyCopy}>
                 Add films or series from detail pages, or create a section to start shaping this list.
               </Text>
-            ) : groups.map((group) => {
+            ) : groups.filter((group) => !filters.active || group.items.length > 0).map((group) => {
               const collapsed = collapsedGroups.has(group.id);
               const expanded = expandedGroups.has(group.id);
               const shownItems = expanded ? group.items : group.items.slice(0, SECTION_PREVIEW_ITEM_COUNT);
@@ -695,6 +699,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
           </WatchlistSection>
         ) : null}
       </WatchlistPage>
+      <WatchlistFiltersSheet filters={filters} />
       <BottomActionSheet
         visible={Boolean(editor)}
         title={editor?.mode === 'rename' ? 'Rename section' : 'New section'}

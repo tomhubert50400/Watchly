@@ -32,7 +32,13 @@ import { RootStackParamList } from '../navigation/types';
 import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { WatchlistCoverButton } from './WatchlistCoverButton';
 import { getVoteLifecycle, getVoteLeaders, getVoteRemainingLabel } from './sharedVoteModel';
-import { takeHydrationItems } from './requestBoundaries';
+import { hydrateWatchlistItems } from './personalWatchlistHydration';
+import {
+  useWatchlistFilters,
+  WatchlistFilterButton,
+  WatchlistFiltersSheet,
+  WatchlistFilterStatus,
+} from './WatchlistFilters';
 import {
   WatchlistDisplayItem,
   WatchlistPage,
@@ -44,11 +50,10 @@ type Props = NativeStackScreenProps<RootStackParamList, 'SharedWatchlist'>;
 type HydratedItem = SharedWatchlist['items'][number] & {
   backdropUrl: string | null;
   posterUrl: string | null;
-  title: string | null;
+  title: string;
 };
 type SharedListDetails = { hydratedItems: HydratedItem[]; watchlist: SharedWatchlist };
 type OwnedDetails = { data: SharedListDetails | null; ownerId: string | null };
-const MAX_SHARED_WATCHLIST_HYDRATIONS = 12;
 
 export function SharedWatchlistScreen({ navigation, route }: Props) {
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
@@ -56,53 +61,38 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
   const ownerId = currentUser?.id ?? null;
   const ownerIdRef = useRef(ownerId);
   ownerIdRef.current = ownerId;
+  const resourceScope = JSON.stringify([ownerId, 'shared', route.params.watchlistId]);
+  const scopeRef = useRef({ key: resourceScope });
+  if (scopeRef.current.key !== resourceScope) scopeRef.current = { key: resourceScope };
   const cacheKey = getPrivateCacheKey(ownerId ?? 'visitor', `shared-watchlist:${route.params.watchlistId}:v3`);
   const load = useCallback(async (cached?: SharedListDetails): Promise<SharedListDetails> => {
     const expectedOwnerId = ownerId;
+    const expectedScope = scopeRef.current;
     const token = await getFirebaseIdToken();
-    if (!expectedOwnerId || ownerIdRef.current !== expectedOwnerId || !token) {
+    if (!expectedOwnerId || scopeRef.current !== expectedScope || !token) {
       throw new Error('Sign in again to load this shared list.');
     }
 
     const watchlist = await getSharedWatchlist(token, route.params.watchlistId);
-    if (ownerIdRef.current !== expectedOwnerId) {
+    if (scopeRef.current !== expectedScope) {
       throw new Error('The active account changed while loading this list.');
     }
 
-    const hydrationIds = new Set(
-      takeHydrationItems(watchlist.items, MAX_SHARED_WATCHLIST_HYDRATIONS).map((item) => item.id),
-    );
-    if (watchlist.backgroundItemId) hydrationIds.add(watchlist.backgroundItemId);
-    const hydratedItems = await Promise.all(watchlist.items.map(async (item): Promise<HydratedItem> => {
-      const previous = cached?.hydratedItems.find((candidate) => candidate.id === item.id);
-      if (!hydrationIds.has(item.id)) {
-        return {
-          ...item,
-          backdropUrl: previous?.backdropUrl ?? null,
-          posterUrl: previous?.posterUrl ?? null,
-          title: previous?.title ?? null,
-        };
-      }
-      try {
-        const media = item.contentType === 'movie'
-          ? await refreshMovie(item.tmdbId)
-          : await refreshSeries(item.tmdbId);
-        return { ...item, backdropUrl: media.backdropUrl, posterUrl: media.posterUrl, title: media.title };
-      } catch {
-        return {
-          ...item,
-          backdropUrl: previous?.backdropUrl ?? null,
-          posterUrl: previous?.posterUrl ?? null,
-          title: previous?.title ?? null,
-        };
-      }
-    }));
-
-    if (ownerIdRef.current !== expectedOwnerId) {
-      throw new Error('The active account changed while loading this list.');
-    }
+    const current = ownedDetailsRef.current;
+    const previousItems = current.ownerId === expectedOwnerId && current.data?.watchlist.id === watchlist.id
+      ? current.data.hydratedItems : cached?.hydratedItems;
+    const previousByMedia = new Map(previousItems?.map((item) => [`${item.contentType}:${item.tmdbId}`, item]));
+    const hydratedItems = watchlist.items.map((item): HydratedItem => {
+      const previous = previousByMedia.get(`${item.contentType}:${item.tmdbId}`);
+      return {
+        ...item,
+        backdropUrl: previous?.backdropUrl ?? null,
+        posterUrl: previous?.posterUrl ?? null,
+        title: previous?.title ?? 'Loading title',
+      };
+    });
     return { hydratedItems, watchlist };
-  }, [getFirebaseIdToken, ownerId, refreshMovie, refreshSeries, route.params.watchlistId]);
+  }, [getFirebaseIdToken, ownerId, route.params.watchlistId]);
   const resource = useCachedResource<SharedListDetails>({
     enabled: Boolean(ownerId && firebaseIdToken),
     key: cacheKey,
@@ -120,20 +110,48 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
   const [voteError, setVoteError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!ownerId) {
+    if (!ownerId || !resource.data) {
       const empty = { data: null, ownerId: null };
       ownedDetailsRef.current = empty;
       setOwnedDetails(empty);
       return;
     }
-    if (resource.data) {
-      const next = { data: resource.data, ownerId };
-      ownedDetailsRef.current = next;
-      setOwnedDetails(next);
-    }
-  }, [ownerId, resource.data]);
+    const expectedScope = scopeRef.current;
+    const watchlist = resource.data.watchlist;
+    const savedAt = resource.savedAt ?? new Date().toISOString();
+    let cancelled = false;
+    const isCurrent = () => !cancelled && scopeRef.current === expectedScope;
+    const initial = { data: resource.data, ownerId };
+    ownedDetailsRef.current = initial;
+    setOwnedDetails(initial);
+    void hydrateWatchlistItems({
+      backgroundItemId: watchlist.backgroundItemId,
+      isCurrent,
+      items: watchlist.items,
+      previousItems: resource.data.hydratedItems,
+      load: (item) => item.contentType === 'movie' ? refreshMovie(item.tmdbId) : refreshSeries(item.tmdbId),
+      onProgress: (hydratedItems) => {
+        const current = ownedDetailsRef.current;
+        if (!isCurrent() || current.ownerId !== ownerId || current.data?.watchlist.id !== watchlist.id) return;
+        const next = { ...current.data, hydratedItems };
+        const owned = { data: next, ownerId };
+        ownedDetailsRef.current = owned;
+        setOwnedDetails(owned);
+        setMemoryResource(cacheKey, next, savedAt);
+      },
+    }).then(() => {
+      if (!isCurrent()) return;
+      const current = ownedDetailsRef.current;
+      if (current.ownerId === ownerId && current.data?.watchlist.id === watchlist.id) {
+        void writePersistedCache(cacheKey, current.data, undefined, savedAt).catch(() => undefined);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [cacheKey, ownerId, refreshMovie, refreshSeries, resource.data, resource.savedAt, resourceScope]);
 
-  const details = ownedDetails.ownerId === ownerId ? ownedDetails.data : null;
+  const details = ownedDetails.ownerId === ownerId && ownedDetails.data?.watchlist.id === route.params.watchlistId
+    ? ownedDetails.data : null;
+  const filters = useWatchlistFilters(details?.hydratedItems ?? [], resourceScope);
   const watchlist = details?.watchlist ?? null;
   const backgroundItem = details?.hydratedItems.find((item) => item.id === watchlist?.backgroundItemId);
   const backgroundUrl = backgroundItem?.posterUrl ?? backgroundItem?.backdropUrl ?? null;
@@ -144,6 +162,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
       headerTransparent: Boolean(backgroundUrl),
       headerRight: watchlist ? () => (
         <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch' }}>
+          <WatchlistFilterButton filters={filters} />
           {watchlist.isOwner ? <WatchlistCoverButton key={`${ownerId}:${watchlist.id}`} kind="shared" watchlistId={watchlist.id}
             items={watchlist.items}
             backgroundItemId={watchlist.backgroundItemId}
@@ -152,7 +171,6 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
               const snapshot = ownedDetailsRef.current;
               if (ownerId && snapshot.ownerId === ownerId && snapshot.data) {
                 const next = { ...snapshot.data, watchlist: { ...snapshot.data.watchlist, backgroundItemId } };
-                setMemoryResource(cacheKey, next, new Date().toISOString());
                 commitDetails(ownerId, next);
                 resource.revalidate();
               }
@@ -161,7 +179,6 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
               const snapshot = ownedDetailsRef.current;
               if (ownerId && snapshot.ownerId === ownerId && snapshot.data) {
                 const next = { ...snapshot.data, watchlist: { ...snapshot.data.watchlist, coverItemIds } };
-                setMemoryResource(cacheKey, next, new Date().toISOString());
                 commitDetails(ownerId, next);
               }
             }} /> : null}
@@ -179,18 +196,19 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
         </View>
       ) : undefined,
     });
-  }, [backgroundUrl, navigation, watchlist, ownerId]);
+  }, [backgroundUrl, filters.active, filters.isOpen, filters.open, navigation, watchlist, ownerId]);
 
   const commitDetails = useCallback((expectedOwnerId: string, next: SharedListDetails) => {
     if (ownerIdRef.current !== expectedOwnerId) return;
     const owned = { data: next, ownerId: expectedOwnerId };
     ownedDetailsRef.current = owned;
     setOwnedDetails(owned);
+    setMemoryResource(cacheKey, next, new Date().toISOString());
     void writePersistedCache(
       getPrivateCacheKey(expectedOwnerId, `shared-watchlist:${route.params.watchlistId}:v3`),
       next,
     ).catch(() => undefined);
-  }, [route.params.watchlistId]);
+  }, [cacheKey, route.params.watchlistId]);
 
   async function handleAddMember() {
     const expectedOwnerId = ownerIdRef.current;
@@ -233,9 +251,11 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
         itemIds: snapshot.watchlist.items.map((item) => item.id), title,
       });
       if (ownerIdRef.current !== expectedOwnerId) return;
+      const current = ownedDetailsRef.current;
+      if (current.ownerId !== expectedOwnerId || current.data?.watchlist.id !== snapshot.watchlist.id) return;
       commitDetails(expectedOwnerId, {
-        ...snapshot,
-        watchlist: { ...snapshot.watchlist, votingSessions: [created, ...snapshot.watchlist.votingSessions] },
+        ...current.data,
+        watchlist: { ...current.data.watchlist, votingSessions: [created, ...current.data.watchlist.votingSessions] },
       });
       setSessionTitle('Tonight');
       setIsVoteComposerOpen(false);
@@ -336,12 +356,13 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
 
         <WatchlistSection delay={50}>
           <SectionHeader title="Titles" actionLabel="Add titles" onActionPress={() => navigation.navigate('MainTabs', { screen: 'Explore' })} />
+          <WatchlistFilterStatus filters={filters} />
           {details.hydratedItems.length === 0 ? (
             <Text style={styles.emptyCopy}>
               Add titles from their detail pages before starting a vote.
             </Text>
           ) : (
-            <WatchlistPosterGrid items={details.hydratedItems} onOpen={openItem} />
+            <WatchlistPosterGrid items={filters.visibleItems} onOpen={openItem} />
           )}
         </WatchlistSection>
 
@@ -405,6 +426,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
         </WatchlistSection>
       </WatchlistPage>
 
+      <WatchlistFiltersSheet filters={filters} />
       <BottomActionSheet
         onClose={() => {
           setIsMembersSheetOpen(false);

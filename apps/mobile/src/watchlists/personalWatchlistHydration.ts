@@ -9,7 +9,9 @@ type WatchlistArtwork = {
 
 export type HydratedPersonalWatchlistItem = PersonalWatchlistItem & WatchlistArtwork;
 
-export async function hydratePersonalWatchlistItems({
+export const hydratePersonalWatchlistItems = hydrateWatchlistItems<PersonalWatchlistItem>;
+
+export async function hydrateWatchlistItems<T extends { id: string; contentType: 'movie' | 'series'; tmdbId: number }>({
   items,
   previousItems = [],
   backgroundItemId,
@@ -17,21 +19,21 @@ export async function hydratePersonalWatchlistItems({
   isCurrent,
   onProgress,
 }: {
-  items: PersonalWatchlistItem[];
-  previousItems?: HydratedPersonalWatchlistItem[];
+  items: T[];
+  previousItems?: (T & Omit<WatchlistArtwork, 'title'> & { title: string | null })[];
   backgroundItemId?: string | null;
-  load: (item: PersonalWatchlistItem) => Promise<WatchlistArtwork>;
+  load: (item: T) => Promise<WatchlistArtwork>;
   isCurrent: () => boolean;
-  onProgress: (items: HydratedPersonalWatchlistItem[]) => void;
+  onProgress: (items: (T & WatchlistArtwork)[]) => void;
 }) {
   const previousByMedia = new Map(previousItems.map((item) => [`${item.contentType}:${item.tmdbId}`, item]));
-  const hydratedItems = items.map((item): HydratedPersonalWatchlistItem => {
+  const hydratedItems = items.map((item): T & WatchlistArtwork => {
     const previous = previousByMedia.get(`${item.contentType}:${item.tmdbId}`);
     return {
       ...item,
       backdropUrl: previous?.backdropUrl ?? null,
       posterUrl: previous?.posterUrl ?? null,
-      title: previous && !needsHydration(previous) ? previous.title : 'Loading title',
+      title: previous?.title && !needsHydration(previous) ? previous.title : 'Loading title',
     };
   });
   const pending = hydratedItems
@@ -60,6 +62,6 @@ export async function hydratePersonalWatchlistItems({
   return hydratedItems;
 }
 
-function needsHydration(item: WatchlistArtwork) {
-  return item.title === 'Loading title' || item.title === 'Title unavailable' || /^TMDB \d+$/.test(item.title);
+function needsHydration(item: { title: string | null }) {
+  return !item.title || item.title === 'Loading title' || item.title === 'Title unavailable' || /^TMDB \d+$/.test(item.title);
 }

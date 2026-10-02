@@ -2,8 +2,10 @@
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import assert from 'node:assert/strict';
 import type { PersonalWatchlistItem } from '../api/watchlists';
+import type { SharedWatchlistItem } from '../api/sharedWatchlists';
 import {
   hydratePersonalWatchlistItems,
+  hydrateWatchlistItems,
   type HydratedPersonalWatchlistItem,
 } from './personalWatchlistHydration';
 
@@ -168,7 +170,24 @@ async function run() {
   assert.equal(cancelledPublications, publicationsBeforeCancellation,
     'an account change, new refresh or screen close must stop all further publications');
 
-  console.log('Personal watchlist hydration QA passed: 500 titles, bounded progressive loads, retained metadata, retry and cancellation.');
+  const sharedItems: SharedWatchlistItem[] = makeItems(20).map(({ sectionId: _sectionId, ...item }) => item);
+  let sharedLoads = 0;
+  const sharedResult = await hydrateWatchlistItems({
+    items: sharedItems,
+    previousItems: sharedItems.map((item) => ({ ...item, backdropUrl: null, posterUrl: null, title: null })),
+    isCurrent: () => true,
+    load: async (item) => {
+      sharedLoads += 1;
+      return { backdropUrl: `backdrop:${item.tmdbId}`, posterUrl: `poster:${item.tmdbId}`, title: `Shared ${item.tmdbId}` };
+    },
+    onProgress: () => undefined,
+  });
+  assert.equal(sharedLoads, 20, 'legacy null titles in shared caches must hydrate beyond twelve entries');
+  assert.equal(sharedResult[19].title, 'Shared 20');
+  assert.deepEqual(sharedResult.map(({ backdropUrl: _backdropUrl, posterUrl: _posterUrl, title: _title, ...item }) => item), sharedItems,
+    'shared metadata hydration must retain every candidate identity and original order');
+
+  console.log('Watchlist hydration QA passed: 500 titles, shared legacy metadata, bounded progressive loads, retained metadata, retry and cancellation.');
 }
 
 const timeout = setTimeout(() => {
