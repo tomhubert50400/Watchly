@@ -42,6 +42,10 @@ async function run() {
   systemKey = 'planned';
   await assert.rejects(service.updateSettings(identity, 'list', { removeWatchedMovies: false }), BadRequestException);
   assert.deepEqual(saved, { removeWatchedMovies: true, showOnHome: false }, 'Planned cannot override its automatic behavior');
+  assert.deepEqual(await service.updateSettings(identity, 'list', { showOnHome: true }), { removeWatchedMovies: true, showOnHome: true }, 'Planned can appear in Home');
+  assert.deepEqual(await service.updateSettings(identity, 'list', { showOnHome: false }), { removeWatchedMovies: true, showOnHome: false }, 'Planned can be excluded from Home');
+  await assert.rejects(service.updateSettings(identity, 'list', { removeWatchedMovies: true, showOnHome: true }), BadRequestException);
+  assert.equal(saved.showOnHome, false, 'A rejected removal setting must not partially save Home visibility');
   systemKey = null;
   assert.deepEqual(await service.updateSettings(identity, 'list', { removeWatchedMovies: false }), { removeWatchedMovies: false, showOnHome: false }, 'Changing movie removal preserves Home visibility');
   assert.deepEqual(await service.updateSettings(identity, 'list', { showOnHome: true }), { removeWatchedMovies: false, showOnHome: true });

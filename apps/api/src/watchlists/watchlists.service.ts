@@ -171,7 +171,7 @@ export class WatchlistsService {
     }
     const userId = await this.getUserId(identity);
     const watchlist = await this.assertOwnedWatchlist(userId, watchlistId);
-    if (watchlist.systemKey === 'planned') {
+    if (watchlist.systemKey === 'planned' && input.removeWatchedMovies !== undefined) {
       throw new BadRequestException('Planned to Watch automatically removes titles when their tracking status changes.');
     }
     return this.withConnectionRetry(() => this.prisma.personalWatchlist.update({

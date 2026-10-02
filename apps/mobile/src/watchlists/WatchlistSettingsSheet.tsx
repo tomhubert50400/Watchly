@@ -8,8 +8,9 @@ import { hapticError, hapticSelection } from '../feedback/haptics';
 import { useToast } from '../notifications/ToastContext';
 import { notifyUserDataChanged } from '../sync/userDataEvents';
 
-export function WatchlistSettingsSheet({ watchlistId, removeWatchedMovies, showOnHome, visible, onClose, onSaved }: {
+export function WatchlistSettingsSheet({ watchlistId, isPlanned, removeWatchedMovies, showOnHome, visible, onClose, onSaved }: {
   watchlistId: string;
+  isPlanned: boolean;
   removeWatchedMovies: boolean;
   showOnHome: boolean;
   visible: boolean;
@@ -64,12 +65,12 @@ export function WatchlistSettingsSheet({ watchlistId, removeWatchedMovies, showO
 
   return <BottomActionSheet visible={visible} onClose={onClose} title="Watchlist settings">
     <BottomActionSheetScrollView>
-      <View style={styles.row}>
+      {!isPlanned ? <View style={styles.row}>
         <Text style={styles.label}>Remove movies after watching</Text>
         <Switch accessibilityLabel="Remove movies after watching" accessibilityState={{ busy: saving, disabled: saving }}
           disabled={saving} value={settings.removeWatchedMovies} onValueChange={(value) => void save('removeWatchedMovies', value)}
           trackColor={{ true: colors.accent }} thumbColor={colors.text} />
-      </View>
+      </View> : null}
       <View style={styles.row}>
         <Text style={styles.label}>Show in “From your watchlists”</Text>
         <Switch accessibilityLabel="Show in From your watchlists" accessibilityState={{ busy: saving, disabled: saving }}

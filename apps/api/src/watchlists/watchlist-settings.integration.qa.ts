@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaClient } from '../generated/prisma/client';
@@ -70,9 +71,20 @@ async function run() {
       await lists.addItem(identity, removing.id, movie);
       await tracking.upsertState(identity, { ...movie, status: 'watchlisted', favorite: true });
       const planned = (await lists.listWatchlists(identity)).items.find((list) => list.isPlanned)!;
+      assert.equal(planned.showOnHome, true, 'Planned is included in Home by default');
+      await lists.updateSettings(identity, planned.id, { showOnHome: false });
+      assert.equal((await lists.getWatchlist(identity, planned.id)).showOnHome, false, 'Planned Home visibility persists');
+      assert.equal(await hasMovie(planned.id), true, 'Hiding Planned does not change its membership');
+      await assert.rejects(lists.updateSettings(identity, planned.id, { removeWatchedMovies: false, showOnHome: true }), BadRequestException);
+      assert.equal((await lists.getWatchlist(identity, planned.id)).showOnHome, false, 'An invalid Planned change saves neither field');
+      const otherLists = new WatchlistsService({ getOrCreateUser: async () => other } as never, database as never);
+      await assert.rejects(otherLists.updateSettings(identity, planned.id, { showOnHome: true }), NotFoundException);
       await tracking.upsertState(identity, { ...movie, status: 'watched', favorite: true });
       assert.equal(await hasMovie(removing.id), false, 'A watched transition removes the movie even with existing history');
       assert.equal(await hasMovie(planned.id), false, 'Planned retains its own automatic rule');
+      assert.equal((await lists.getWatchlist(identity, planned.id)).showOnHome, false, 'Automatic removal preserves the Home preference');
+      await lists.updateSettings(identity, planned.id, { showOnHome: true });
+      assert.equal((await lists.listWatchlists(identity)).items.find((list) => list.id === planned.id)?.showOnHome, true, 'Planned can be included again');
       assert.equal(await hasMovie(keeping.id), true);
 
       await lists.addItem(identity, removing.id, movie);

@@ -231,7 +231,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
           { label: 'Add a title', icon: <Plus color={colors.text} size={20} />, onPress: () => navigation.navigate('MainTabs', { screen: 'Explore' }) },
           { label: 'Create a section', icon: <FolderPlus color={colors.text} size={20} />, onPress: () => openSectionEditor({ mode: 'create' }), disabled: visibleSections.length >= MAX_PERSONAL_WATCHLIST_SECTIONS },
           { label: 'Cover & background', icon: <Camera color={colors.text} size={20} />, onPress: () => setArtworkScope(resourceScope) },
-          ...(!visibleWatchlist.isPlanned ? [{ label: 'Settings', icon: <Settings color={colors.text} size={20} />, onPress: () => setSettingsScope(resourceScope) }] : []),
+          { label: 'Settings', icon: <Settings color={colors.text} size={20} />, onPress: () => setSettingsScope(resourceScope) },
         ]} />
       ) : undefined,
     });
@@ -659,8 +659,9 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
         ) : null}
       </WatchlistPage>
       <WatchlistFiltersSheet filters={filters} />
-      {visibleWatchlist && !visibleWatchlist.isPlanned ? <WatchlistSettingsSheet key={`settings:${resourceScope}`}
+      {visibleWatchlist ? <WatchlistSettingsSheet key={`settings:${resourceScope}`}
         watchlistId={watchlistId} removeWatchedMovies={visibleWatchlist.removeWatchedMovies ?? false}
+        isPlanned={visibleWatchlist.isPlanned ?? false}
         showOnHome={visibleWatchlist.showOnHome ?? true}
         visible={settingsScope === resourceScope} onClose={() => setSettingsScope(null)}
         onSaved={(settings) => {
