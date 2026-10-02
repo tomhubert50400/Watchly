@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { colors, spacing, touchTargets } from '../design/tokens';
 
-export function SpoilerGuard({ children, reason, contextLabel, revealKey, canReveal = true }: PropsWithChildren<{ reason?: string | null; contextLabel?: string; revealKey: string; canReveal?: boolean }>) {
+export function SpoilerGuard({ children, reason, revealKey, canReveal = true }: PropsWithChildren<{ reason?: string | null; revealKey: string; canReveal?: boolean }>) {
   const [revealed, setRevealed] = useState<string | null>(null);
   const veilId = `spoiler-veil-${useId().replace(/:/g, '')}`;
   const hidden = Boolean(reason) && (revealed !== revealKey || !canReveal);
@@ -27,11 +27,10 @@ export function SpoilerGuard({ children, reason, contextLabel, revealKey, canRev
         </Svg>
       </View>
       <View style={styles.overlay}>
-        {contextLabel ? <Text numberOfLines={2} style={styles.context}>{contextLabel}</Text> : null}
         <Text style={styles.reason}>{reason}</Text>
-        {canReveal ? <Pressable accessibilityRole="button" accessibilityLabel="Reveal this post" onPress={() => setRevealed(revealKey)} style={styles.button}>
+        {canReveal ? <Pressable accessibilityRole="button" accessibilityLabel="Reveal this review" onPress={() => setRevealed(revealKey)} style={styles.button}>
           <EyeOff size={18} color={colors.accentText} />
-          <Text style={styles.label}>Reveal post</Text>
+          <Text style={styles.label}>Reveal review</Text>
         </Pressable> : null}
       </View>
     </> : null}
@@ -39,8 +38,7 @@ export function SpoilerGuard({ children, reason, contextLabel, revealKey, canRev
 }
 const styles = StyleSheet.create({
   container: { position: 'relative' },
-  protected: { minHeight: 150 },
-  context: { color: colors.text, fontSize: 15, fontWeight: '800', textAlign: 'center' },
+  protected: { minHeight: 112 },
   concealed: { opacity: 0 },
   veil: { ...StyleSheet.absoluteFillObject, left: -spacing.sm, right: -spacing.sm },
   overlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: spacing.sm, padding: spacing.sm },

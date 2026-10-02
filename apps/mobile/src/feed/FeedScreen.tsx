@@ -225,7 +225,6 @@ export function FeedScreen() {
               likedByViewer={item.likedByViewer}
               spoilerReason={reviewSpoilerReason}
               spoilerKey={`${currentUser?.id}:${item.id}:${JSON.stringify(protection.preferences)}`}
-              spoilerContextLabel={item.content.contentType === 'episode' ? `${item.seriesTitle ?? 'Episode'} / S${item.content.seasonNumber} E${item.content.episodeNumber}` : item.contentTitle}
               canReveal={protection.loaded}
               onOpenAuthor={() => navigation.navigate('PublicProfile', { userId: item.author.id })}
               onOpenContent={() => openContent(item)}

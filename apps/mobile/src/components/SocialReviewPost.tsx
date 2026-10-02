@@ -32,7 +32,6 @@ type SocialReviewPostProps = {
   onOpenAuthor?: () => void;
   spoilerReason?: string | null;
   spoilerKey?: string;
-  spoilerContextLabel?: string;
   canReveal?: boolean;
   rating: number | null;
   replyCount?: number;
@@ -57,7 +56,6 @@ export const SocialReviewPost = memo(function SocialReviewPost({
   onOpenAuthor,
   spoilerReason,
   spoilerKey,
-  spoilerContextLabel,
   canReveal,
   rating,
   replyCount = 0,
@@ -141,7 +139,7 @@ export const SocialReviewPost = memo(function SocialReviewPost({
         </>}
         {!usesCommunityLayout ? <Text style={styles.date}>{formatDate(updatedAt)}</Text> : null}
       </View>
-      <SpoilerGuard reason={spoilerReason} contextLabel={spoilerContextLabel} revealKey={`${spoilerKey ?? ''}:${body}:${visibleContentLabel}`} canReveal={canReveal}>
+      <View>
         <Pressable
           accessibilityLabel={`Open ${visibleContentLabel}`}
           accessibilityRole="button"
@@ -189,12 +187,14 @@ export const SocialReviewPost = memo(function SocialReviewPost({
             <StarRatingDisplay rating={rating} showValue size={17} />
           </View>
         ) : null}
-        {body ? <ExpandableReviewText
-          body={body}
-          onPress={variant === 'community' ? onOpenReplies : undefined}
-          style={[styles.review, usesCommunityLayout ? styles.communityReview : null]}
-        /> : null}
-      </SpoilerGuard>
+        {body ? <SpoilerGuard reason={spoilerReason} revealKey={`${spoilerKey ?? ''}:${body}:${visibleContentLabel}`} canReveal={canReveal}>
+          <ExpandableReviewText
+            body={body}
+            onPress={variant === 'community' ? onOpenReplies : undefined}
+            style={[styles.review, usesCommunityLayout ? styles.communityReview : null]}
+          />
+        </SpoilerGuard> : null}
+      </View>
       {usesCommunityLayout || onReport || onSetLiked ? (
         <View style={[styles.actions, usesCommunityLayout ? styles.communityActions : null]}>
           {usesCommunityLayout ? (
