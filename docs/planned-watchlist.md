@@ -29,6 +29,12 @@ are unaffected. Planned keeps its automatic rule and does not offer this setting
 Deploy migration `20261002120000_watchlist_remove_watched_movies` with the API
 before releasing this setting in the mobile app.
 
+The same settings sheet offers **Show in From your watchlists**, enabled by
+default. Turning it off excludes that personal list from Home only. Titles can
+still appear through another enabled list. The two settings save independently.
+Deploy migration `20261002130000_watchlist_home_visibility` with the API before
+releasing the Home setting.
+
 Migration `20261002090000_add_planned_watchlist` creates private automatic lists
 for existing planned titles. Deploy this migration with the API before releasing
 the mobile changes. It has not been applied to production during development.

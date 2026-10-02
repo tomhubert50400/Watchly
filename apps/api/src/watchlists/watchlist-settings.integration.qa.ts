@@ -40,6 +40,7 @@ async function run() {
       await tx.personalWatchlistItem.create({ data: { ...movieItem, watchlistId: foreign.id } });
       await tx.sharedWatchlistItem.create({ data: { ...movieItem, watchlistId: shared.id } });
       for (const list of [removing, keeping]) {
+        assert.equal(list.showOnHome, true, 'New lists are included in Home by default');
         assert.equal((await lists.getWatchlist(identity, list.id)).removeWatchedMovies, false, 'Existing behavior is the default');
         await lists.addItem(identity, list.id, movie);
         await lists.addItem(identity, list.id, series);
@@ -47,8 +48,13 @@ async function run() {
       const hasMovie = async (id: string) => (await lists.getWatchlist(identity, id)).items.some((item) => item.contentType === 'movie');
       await tracking.upsertState(identity, { ...movie, status: 'watched', favorite: true });
       assert.equal(await hasMovie(removing.id), true, 'Disabled lists retain movies when watched');
-      await lists.updateSettings(identity, removing.id, true);
+      await lists.updateSettings(identity, removing.id, { removeWatchedMovies: true });
       assert.equal((await lists.getWatchlist(identity, removing.id)).removeWatchedMovies, true, 'Preference survives a fresh read');
+      assert.deepEqual(await lists.updateSettings(identity, removing.id, { showOnHome: false }), { removeWatchedMovies: true, showOnHome: false });
+      assert.equal((await lists.getWatchlist(identity, removing.id)).showOnHome, false, 'Home exclusion survives a fresh detail read');
+      assert.equal((await lists.listWatchlists(identity)).items.find((list) => list.id === removing.id)?.showOnHome, false, 'Home reads the saved preference from the list summary');
+      assert.equal((await lists.getWatchlist(identity, keeping.id)).showOnHome, true, 'Home visibility is independent for every list');
+      assert.equal((await lists.getWatchlist(identity, removing.id)).items.length, 2, 'Hiding a list from Home preserves its movies and series');
       assert.equal(await hasMovie(removing.id), true, 'Enabling is not retroactive');
       await tracking.upsertState(identity, { ...movie, status: 'watched', favorite: true });
       assert.equal(await hasMovie(removing.id), true, 'Saving the same status must not act as a new viewing');
@@ -85,12 +91,15 @@ async function run() {
       await tx.viewingEvent.create({ data: { userId: owner.id, contentType: 'EPISODE', tmdbId: movie.tmdbId, seasonNumber: 1, episodeNumber: 1 } });
       assert.equal(await hasMovie(removing.id), true, 'Episode viewings cannot remove movies');
       assert.equal((await lists.getWatchlist(identity, removing.id)).items.length, 2, 'Series tracking cannot remove series');
-      await lists.updateSettings(identity, removing.id, false);
+      await lists.updateSettings(identity, removing.id, { removeWatchedMovies: false });
+      assert.equal((await lists.getWatchlist(identity, removing.id)).showOnHome, false, 'Movie removal updates do not reset Home visibility');
+      await lists.updateSettings(identity, removing.id, { showOnHome: true });
+      assert.equal((await lists.listWatchlists(identity)).items.find((list) => list.id === removing.id)?.showOnHome, true, 'Home inclusion can be restored');
       await viewings.logMovieViewing(identity, movie.tmdbId);
       assert.equal(await hasMovie(removing.id), true, 'Disabling persists and stops future removals');
 
       const importedMovie = { contentType: 'movie' as const, tmdbId: 11 };
-      await lists.updateSettings(identity, removing.id, true);
+      await lists.updateSettings(identity, removing.id, { removeWatchedMovies: true });
       await lists.addItem(identity, removing.id, importedMovie);
       await tx.userContentState.create({ data: { userId: owner.id, contentType: 'MOVIE', tmdbId: importedMovie.tmdbId, status: 'WATCHED' } });
       assert.equal((await lists.getWatchlist(identity, removing.id)).items.some((item) => item.tmdbId === importedMovie.tmdbId), false, 'Direct watched inserts also respect the preference');

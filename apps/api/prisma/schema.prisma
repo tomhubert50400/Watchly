@@ -555,6 +555,7 @@ model PersonalWatchlist {
   name       String                  @db.VarChar(80)
   systemKey  String?
   removeWatchedMovies Boolean        @default(false)
+  showOnHome Boolean                @default(true)
   visibility PrivacyVisibility       @default(PRIVATE)
   createdAt  DateTime                @default(now())
   updatedAt  DateTime                @updatedAt

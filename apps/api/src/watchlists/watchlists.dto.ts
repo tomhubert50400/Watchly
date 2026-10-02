@@ -43,8 +43,13 @@ export class UpdateWatchlistVisibilityDto {
 }
 
 export class UpdateWatchlistSettingsDto {
+  @ValidateIf((_object, value) => value !== undefined)
   @IsBoolean()
-  removeWatchedMovies!: boolean;
+  removeWatchedMovies?: boolean;
+
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsBoolean()
+  showOnHome?: boolean;
 }
 
 export class UpdateWatchlistCoverDto {

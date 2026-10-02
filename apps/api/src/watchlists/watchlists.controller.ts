@@ -85,7 +85,7 @@ export class WatchlistsController {
     @Param('watchlistId') watchlistId: string,
     @Body() body: UpdateWatchlistSettingsDto,
   ) {
-    return this.watchlists.updateSettings(getIdentity(request), parseWatchlistId(watchlistId), body.removeWatchedMovies);
+    return this.watchlists.updateSettings(getIdentity(request), parseWatchlistId(watchlistId), body);
   }
 
   @Put(':watchlistId/cover')

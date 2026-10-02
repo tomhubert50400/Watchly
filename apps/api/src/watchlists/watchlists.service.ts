@@ -3,7 +3,7 @@ import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
 import { PrivacyVisibility, TrackedContentType } from '../generated/prisma/enums';
-import { WatchlistContentType, WatchlistItemDto, WatchlistVisibility } from './watchlists.dto';
+import { UpdateWatchlistSettingsDto, WatchlistContentType, WatchlistItemDto, WatchlistVisibility } from './watchlists.dto';
 
 const MAX_PERSONAL_WATCHLIST_SECTIONS = 12;
 
@@ -129,6 +129,7 @@ export class WatchlistsService {
       coverItemIds: watchlist.coverItemIds.filter((id) => watchlist.items.some((item) => item.id === id)),
       name: watchlist.name,
       removeWatchedMovies: watchlist.removeWatchedMovies,
+      showOnHome: watchlist.showOnHome,
       sections: watchlist.sections.map(toSection),
       updatedAt: watchlist.updatedAt.toISOString(),
       visibility: fromPrivacyVisibility(watchlist.visibility),
@@ -164,7 +165,10 @@ export class WatchlistsService {
     return toSummary(watchlist);
   }
 
-  async updateSettings(identity: AuthenticatedIdentity, watchlistId: string, removeWatchedMovies: boolean) {
+  async updateSettings(identity: AuthenticatedIdentity, watchlistId: string, input: UpdateWatchlistSettingsDto) {
+    if (input.removeWatchedMovies === undefined && input.showOnHome === undefined) {
+      throw new BadRequestException('Provide at least one watchlist setting.');
+    }
     const userId = await this.getUserId(identity);
     const watchlist = await this.assertOwnedWatchlist(userId, watchlistId);
     if (watchlist.systemKey === 'planned') {
@@ -172,8 +176,11 @@ export class WatchlistsService {
     }
     return this.withConnectionRetry(() => this.prisma.personalWatchlist.update({
       where: { id: watchlistId },
-      data: { removeWatchedMovies },
-      select: { removeWatchedMovies: true },
+      data: {
+        ...(input.removeWatchedMovies !== undefined ? { removeWatchedMovies: input.removeWatchedMovies } : {}),
+        ...(input.showOnHome !== undefined ? { showOnHome: input.showOnHome } : {}),
+      },
+      select: { removeWatchedMovies: true, showOnHome: true },
     }));
   }
 
@@ -480,6 +487,7 @@ type WatchlistSummaryRecord = {
   }[];
   name: string;
   systemKey?: string | null;
+  showOnHome: boolean;
   updatedAt: Date;
   visibility: PrivacyVisibility;
 };
@@ -508,6 +516,7 @@ function toSummary(watchlist: WatchlistSummaryRecord, includeContainsTitle = fal
     isPlanned: watchlist.systemKey === 'planned',
     itemCount: watchlist._count.items,
     name: watchlist.name,
+    showOnHome: watchlist.showOnHome,
     updatedAt: watchlist.updatedAt.toISOString(),
     visibility: fromPrivacyVisibility(watchlist.visibility),
   };

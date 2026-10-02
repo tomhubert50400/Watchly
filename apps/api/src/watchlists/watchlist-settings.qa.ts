@@ -7,15 +7,17 @@ import { UpdateWatchlistSettingsDto } from './watchlists.dto';
 import { WatchlistsService } from './watchlists.service';
 
 async function run() {
-  for (const removeWatchedMovies of [true, false]) {
-    assert.equal((await validate(Object.assign(new UpdateWatchlistSettingsDto(), { removeWatchedMovies }))).length, 0);
-  }
-  for (const removeWatchedMovies of [undefined, null, 'true', 'false', 0, 1]) {
-    assert.ok((await validate(Object.assign(new UpdateWatchlistSettingsDto(), { removeWatchedMovies }))).length);
+  for (const field of ['removeWatchedMovies', 'showOnHome']) {
+    for (const value of [true, false]) {
+      assert.equal((await validate(Object.assign(new UpdateWatchlistSettingsDto(), { [field]: value }))).length, 0);
+    }
+    for (const value of [null, 'true', 'false', 0, 1]) {
+      assert.ok((await validate(Object.assign(new UpdateWatchlistSettingsDto(), { [field]: value }))).length);
+    }
   }
   let owned = true;
   let systemKey: string | null = null;
-  let saved = false;
+  let saved = { removeWatchedMovies: false, showOnHome: true };
   const service = new WatchlistsService({ getOrCreateUser: async () => ({ id: 'owner' }) } as never, {
     withConnectionRetry: (operation: () => unknown) => operation(),
     personalWatchlist: {
@@ -23,23 +25,26 @@ async function run() {
         assert.deepEqual(where, { id: 'list', userId: 'owner' });
         return owned ? { id: 'list', systemKey } : null;
       },
-      update: async ({ data }: { data: { removeWatchedMovies: boolean } }) => {
-        saved = data.removeWatchedMovies;
-        return { removeWatchedMovies: saved };
+      update: async ({ data }: { data: UpdateWatchlistSettingsDto }) => {
+        saved = { ...saved, ...data };
+        return saved;
       },
     },
   } as never);
   const identity = {} as AuthenticatedIdentity;
-  assert.deepEqual(await service.updateSettings(identity, 'list', true), { removeWatchedMovies: true });
+  await assert.rejects(service.updateSettings(identity, 'list', {}), BadRequestException);
+  assert.deepEqual(await service.updateSettings(identity, 'list', { removeWatchedMovies: true }), { removeWatchedMovies: true, showOnHome: true });
+  assert.deepEqual(await service.updateSettings(identity, 'list', { showOnHome: false }), { removeWatchedMovies: true, showOnHome: false }, 'Changing Home visibility preserves movie removal');
   owned = false;
-  await assert.rejects(service.updateSettings(identity, 'list', false), NotFoundException);
-  assert.equal(saved, true, 'A non-owner cannot change the setting');
+  await assert.rejects(service.updateSettings(identity, 'list', { showOnHome: true }), NotFoundException);
+  assert.deepEqual(saved, { removeWatchedMovies: true, showOnHome: false }, 'A non-owner cannot change the setting');
   owned = true;
   systemKey = 'planned';
-  await assert.rejects(service.updateSettings(identity, 'list', false), BadRequestException);
-  assert.equal(saved, true, 'Planned cannot override its automatic behavior');
+  await assert.rejects(service.updateSettings(identity, 'list', { removeWatchedMovies: false }), BadRequestException);
+  assert.deepEqual(saved, { removeWatchedMovies: true, showOnHome: false }, 'Planned cannot override its automatic behavior');
   systemKey = null;
-  assert.deepEqual(await service.updateSettings(identity, 'list', false), { removeWatchedMovies: false });
+  assert.deepEqual(await service.updateSettings(identity, 'list', { removeWatchedMovies: false }), { removeWatchedMovies: false, showOnHome: false }, 'Changing movie removal preserves Home visibility');
+  assert.deepEqual(await service.updateSettings(identity, 'list', { showOnHome: true }), { removeWatchedMovies: false, showOnHome: true });
   console.log('Watchlist settings validation and ownership QA passed.');
 }
 
