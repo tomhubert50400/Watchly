@@ -19,11 +19,13 @@ export function createRequestCoalescer<K, V>(load: (key: K) => Promise<V>) {
 export async function loadProgressively<T, V>({
   concurrency,
   items,
+  isCurrent = () => true,
   load,
   onLoaded,
 }: {
   concurrency: number;
   items: readonly T[];
+  isCurrent?: () => boolean;
   load: (item: T, index: number) => Promise<V>;
   onLoaded: (value: V, item: T, index: number) => void;
 }) {
@@ -34,12 +36,12 @@ export async function loadProgressively<T, V>({
   let nextIndex = 0;
 
   async function runWorker() {
-    while (nextIndex < items.length) {
+    while (isCurrent() && nextIndex < items.length) {
       const index = nextIndex;
       nextIndex += 1;
       const item = items[index]!;
       const value = await load(item, index);
-      onLoaded(value, item, index);
+      if (isCurrent()) onLoaded(value, item, index);
     }
   }
 

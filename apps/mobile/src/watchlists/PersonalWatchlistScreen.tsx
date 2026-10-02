@@ -142,12 +142,17 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     setIsLoading(!visibleStateRef.current.watchlist);
 
     try {
-      const cached = await refreshPersonalWatchlist(watchlistId);
-      if (!isCurrent()) return;
-
-      setHydratedItems(cached.hydratedItems);
-      setWatchlist(cached.watchlist);
-      setStateScope(requestScope);
+      await refreshPersonalWatchlist(watchlistId, {
+        isCurrent,
+        onProgress: (cached) => {
+          if (!isCurrent()) return;
+          setHydratedItems(cached.hydratedItems);
+          setWatchlist(cached.watchlist);
+          setStateScope(requestScope);
+          setIsLoading(false);
+          setIsRefreshing(false);
+        },
+      });
     } catch (loadError) {
       if (!isCurrent()) return;
       setError(loadError instanceof Error ? loadError.message : 'Could not load the list.');
@@ -178,14 +183,15 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
       setWatchlist(cached.watchlist);
       setStateScope(resourceScope);
       setIsLoading(false);
-      void loadWatchlist();
-      return;
+    } else {
+      setHydratedItems([]);
+      setWatchlist(null);
+      setStateScope(resourceScope);
     }
-
-    setHydratedItems([]);
-    setWatchlist(null);
-    setStateScope(resourceScope);
     void loadWatchlist();
+    return () => {
+      requestRef.current.version += 1;
+    };
   }, [loadWatchlist, resourceScope, watchlistId]);
 
   useEffect(() => subscribeToUserData(
@@ -539,6 +545,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   }
 
   async function moveItem(item: WatchlistDisplayItem, sectionId: string | null) {
+    requestRef.current.version += 1;
     const previousSectionId = item.sectionId ?? null;
     setHydratedItems((current) => current.map((candidate) => candidate.id === item.id
       ? { ...candidate, sectionId }
@@ -565,6 +572,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
       } : current);
       hapticError();
       Alert.alert('Could not move title', cause instanceof Error ? cause.message : 'Try again.');
+      void loadWatchlist();
     }
   }
 

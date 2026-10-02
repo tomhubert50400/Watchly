@@ -15,15 +15,12 @@ import {
 } from '../api/watchlists';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
+import { hydratePersonalWatchlistItems, HydratedPersonalWatchlistItem } from './personalWatchlistHydration';
 import { takeHydrationItems } from './requestBoundaries';
 
 const MAX_WATCHLIST_ITEM_HYDRATIONS = 12;
 
-export type HydratedPersonalWatchlistItem = PersonalWatchlistItem & {
-  backdropUrl: string | null;
-  posterUrl: string | null;
-  title: string;
-};
+export type { HydratedPersonalWatchlistItem } from './personalWatchlistHydration';
 
 export type HydratedSharedWatchlistItem = SharedWatchlistItem & {
   backdropUrl: string | null;
@@ -46,7 +43,10 @@ type WatchlistCacheContextValue = {
   getCachedSharedWatchlist: (watchlistId: string) => CachedSharedWatchlist | null;
   personalWatchlists: PersonalWatchlistSummary[];
   preloadWatchlists: () => Promise<void>;
-  refreshPersonalWatchlist: (watchlistId: string) => Promise<CachedPersonalWatchlist>;
+  refreshPersonalWatchlist: (watchlistId: string, options?: {
+    isCurrent: () => boolean;
+    onProgress: (cached: CachedPersonalWatchlist) => void;
+  }) => Promise<CachedPersonalWatchlist>;
   refreshSharedWatchlist: (watchlistId: string) => Promise<CachedSharedWatchlist>;
   removePersonalWatchlist: (watchlistId: string) => void;
   removeSharedWatchlist: (watchlistId: string) => void;
@@ -61,6 +61,7 @@ export function WatchlistCacheProvider({ children }: PropsWithChildren) {
   const { currentUser, getFirebaseIdToken } = useAuthSession();
   const { refreshMovie, refreshSeries } = useCatalogueCache();
   const [personalDetails, setPersonalDetails] = useState<Record<string, CachedPersonalWatchlist>>({});
+  const personalDetailsRef = useRef(personalDetails);
   const [personalWatchlists, setPersonalWatchlists] = useState<PersonalWatchlistSummary[]>([]);
   const [sharedDetails, setSharedDetails] = useState<Record<string, CachedSharedWatchlist>>({});
   const [sharedWatchlists, setSharedWatchlists] = useState<SharedWatchlistSummary[]>([]);
@@ -83,6 +84,7 @@ export function WatchlistCacheProvider({ children }: PropsWithChildren) {
   }
 
   useEffect(() => {
+    personalDetailsRef.current = {};
     setPersonalDetails({});
     setPersonalWatchlists([]);
     setSharedDetails({});
@@ -91,7 +93,7 @@ export function WatchlistCacheProvider({ children }: PropsWithChildren) {
     preloadVersionRef.current += 1;
   }, [currentUser?.id]);
 
-  const refreshPersonalWatchlist = useCallback(async (watchlistId: string) => {
+  const refreshPersonalWatchlist = useCallback<WatchlistCacheContextValue['refreshPersonalWatchlist']>(async (watchlistId, options) => {
     const requestOwner = ownerId;
     if (!requestOwner) throw new Error('Sign in again to load watchlists.');
 
@@ -101,27 +103,29 @@ export function WatchlistCacheProvider({ children }: PropsWithChildren) {
     personalRefreshVersionsRef.current.set(detailKey, refreshVersion);
     const isCurrent = () => ownerRef.current === requestOwner
       && ownerVersionRef.current === ownerVersion
-      && personalRefreshVersionsRef.current.get(detailKey) === refreshVersion;
+      && personalRefreshVersionsRef.current.get(detailKey) === refreshVersion
+      && (options?.isCurrent() ?? true);
 
     const token = await getRequiredToken(getFirebaseIdToken);
     assertCurrentRequest(isCurrent);
     const watchlist = await getWatchlist(token, watchlistId);
     assertCurrentRequest(isCurrent);
-    const hydrationItems = takeHydrationItems(watchlist.items, MAX_WATCHLIST_ITEM_HYDRATIONS);
-    const backgroundItem = watchlist.items.find((item) => item.id === watchlist.backgroundItemId);
-    if (backgroundItem && !hydrationItems.some((item) => item.id === backgroundItem.id)) {
-      hydrationItems.push(backgroundItem);
-    }
-    const hydratedById = new Map((await Promise.all(
-      hydrationItems.map((item) => hydratePersonalItem(item, refreshMovie, refreshSeries)),
-    )).map((item) => [item.id, item]));
-    const hydratedItems = watchlist.items.map((item) => hydratedById.get(item.id) ?? toPersonalFallback(item));
+    const hydratedItems = await hydratePersonalWatchlistItems({
+      items: watchlist.items,
+      previousItems: personalDetailsRef.current[detailKey]?.hydratedItems,
+      backgroundItemId: watchlist.backgroundItemId,
+      isCurrent,
+      load: (item) => item.contentType === 'movie' ? refreshMovie(item.tmdbId) : refreshSeries(item.tmdbId),
+      onProgress: (items) => {
+        if (!isCurrent()) return;
+        const cached = { hydratedItems: items, watchlist };
+        personalDetailsRef.current = { ...personalDetailsRef.current, [detailKey]: cached };
+        setPersonalDetails((current) => isCurrent() ? { ...current, [detailKey]: cached } : current);
+        options?.onProgress(cached);
+      },
+    });
     assertCurrentRequest(isCurrent);
-    const cached = { hydratedItems, watchlist };
-
-    setPersonalDetails((current) => ({ ...current, [detailKey]: cached }));
-
-    return cached;
+    return { hydratedItems, watchlist };
   }, [getFirebaseIdToken, ownerId, refreshMovie, refreshSeries]);
 
   const refreshSharedWatchlist = useCallback(async (watchlistId: string) => {
@@ -207,7 +211,10 @@ export function WatchlistCacheProvider({ children }: PropsWithChildren) {
       refreshSharedWatchlist,
       removePersonalWatchlist: (watchlistId) => {
         if (ownerId) {
-          setPersonalDetails((current) => removeKey(current, getDetailCacheKey(ownerId, watchlistId)));
+          const detailKey = getDetailCacheKey(ownerId, watchlistId);
+          personalRefreshVersionsRef.current.set(detailKey, (personalRefreshVersionsRef.current.get(detailKey) ?? 0) + 1);
+          personalDetailsRef.current = removeKey(personalDetailsRef.current, detailKey);
+          setPersonalDetails((current) => removeKey(current, detailKey));
         }
         setPersonalWatchlists((current) => current.filter((watchlist) => watchlist.id !== watchlistId));
       },
@@ -263,14 +270,6 @@ async function getRequiredToken(getFirebaseIdToken: () => Promise<string | null>
   return token;
 }
 
-async function hydratePersonalItem(
-  item: PersonalWatchlistItem,
-  refreshMovie: (tmdbId: number) => Promise<{ backdropUrl: string | null; posterUrl: string | null; title: string }>,
-  refreshSeries: (tmdbId: number) => Promise<{ backdropUrl: string | null; posterUrl: string | null; title: string }>,
-): Promise<HydratedPersonalWatchlistItem> {
-  return hydrateItem(item, refreshMovie, refreshSeries);
-}
-
 async function hydrateSharedItem(
   item: SharedWatchlistItem,
   refreshMovie: (tmdbId: number) => Promise<{ backdropUrl: string | null; posterUrl: string | null; title: string }>,
@@ -312,10 +311,6 @@ async function hydrateItem<T extends PersonalWatchlistItem | SharedWatchlistItem
       title: `TMDB ${item.tmdbId}`,
     };
   }
-}
-
-function toPersonalFallback(item: PersonalWatchlistItem): HydratedPersonalWatchlistItem {
-  return { ...item, backdropUrl: null, posterUrl: null, title: `TMDB ${item.tmdbId}` };
 }
 
 function toSharedFallback(item: SharedWatchlistItem): HydratedSharedWatchlistItem {

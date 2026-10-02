@@ -33,3 +33,9 @@ remote database hosts and cleans up its fixtures. It checks bidirectional
 synchronization, status changes, favorites, duplicate additions, ownership,
 movie/series IDs, independent lists, empty lists, manual/import quotas, and
 recovery from an actual concurrent PostgreSQL deadlock.
+
+Personal watchlist artwork loads progressively for every title, with at most
+three catalogue requests in flight. Known titles and artwork survive refreshes;
+superseded requests stop scheduling or publishing results. The mobile test suite
+includes a 500-title regression that checks progress beyond the former 12-title
+limit, ordering, retries, metadata retention, and cancellation.

@@ -77,8 +77,11 @@ const watchlistCache = source('../watchlists/WatchlistCacheContext.tsx');
 assert.match(watchlistCache, /getDetailCacheKey\(requestOwner, watchlistId\)/);
 assert.match(watchlistCache, /ownerRef\.current !== ownerId/);
 assert.match(watchlistCache, /assertCurrentRequest\(isCurrent\);[\s\S]*getWatchlist/);
-assert.match(watchlistCache, /getWatchlist[\s\S]*assertCurrentRequest\(isCurrent\);[\s\S]*Promise\.all/);
-assert.match(watchlistCache, /Promise\.all[\s\S]*assertCurrentRequest\(isCurrent\);/);
+const personalRefresh = watchlistCache.split('const refreshPersonalWatchlist =')[1]!.split('const refreshSharedWatchlist =')[0]!;
+assert.match(personalRefresh, /getWatchlist[\s\S]*assertCurrentRequest\(isCurrent\);[\s\S]*hydratePersonalWatchlistItems/);
+assert.match(personalRefresh, /hydratePersonalWatchlistItems\(\{[\s\S]*isCurrent,[\s\S]*onProgress:[\s\S]*if \(!isCurrent\(\)\) return/);
+assert.match(personalRefresh, /hydratePersonalWatchlistItems[\s\S]*assertCurrentRequest\(isCurrent\);/);
+assert.match(personalRefresh, /options\?\.isCurrent\(\)/);
 
 const personalScreen = source('../watchlists/PersonalWatchlistScreen.tsx');
 assert.match(personalScreen, /stateScope === resourceScope/);
