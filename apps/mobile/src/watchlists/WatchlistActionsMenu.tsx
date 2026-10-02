@@ -52,7 +52,7 @@ export function WatchlistActionsMenu({ actions }: { actions: Action[] }) {
       style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
       <Menu color={colors.text} size={22} />
     </Pressable>
-    <Modal transparent animationType="fade" visible={visible} onRequestClose={close} onDismiss={runPendingAction} statusBarTranslucent>
+    <Modal transparent animationType="none" visible={visible} onRequestClose={close} onDismiss={runPendingAction} statusBarTranslucent>
       <View style={styles.overlay}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close watchlist menu" onPress={close} style={StyleSheet.absoluteFill} />
         <View accessibilityViewIsModal onAccessibilityEscape={close}
@@ -65,7 +65,7 @@ export function WatchlistActionsMenu({ actions }: { actions: Action[] }) {
                 closing.current = true;
                 pendingAction.current = action.onPress;
                 setVisible(false);
-                // iOS must dismiss this modal before presenting an action's sheet.
+                // Dismiss without animation, then present the next sheet once iOS is ready.
                 if (Platform.OS !== 'ios') runPendingAction();
               }}
               style={({ pressed }) => [styles.row, { minHeight: rowHeight }, action.disabled && styles.disabled, pressed && styles.rowPressed]}>
