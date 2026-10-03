@@ -2,7 +2,7 @@ import { RefObject, useCallback, useEffect, useRef } from 'react';
 import { Keyboard, ScrollView, ScrollViewProps, TextInput } from 'react-native';
 import { resolveFocusedFieldScrollOffset } from './bottomActionSheetKeyboard';
 
-export function useFocusedFieldVisibility(scrollRef: RefObject<ScrollView | null>) {
+export function useFocusedFieldVisibility(scrollRef: RefObject<ScrollView | null>, topInset = 0) {
   const focusedInput = useRef<ReturnType<typeof TextInput.State.currentlyFocusedInput> | null>(null);
   const scrollOffset = useRef(0);
   const scheduledFrame = useRef<number | null>(null);
@@ -18,12 +18,12 @@ export function useFocusedFieldVisibility(scrollRef: RefObject<ScrollView | null
       scroll.getNativeScrollRef()?.measureInWindow((_x, viewportTop, _width, viewportHeight) => {
         input.measureInWindow((_inputX, fieldTop, _inputWidth, fieldHeight) => {
           if (version !== measurementVersion.current || focusedInput.current !== input || TextInput.State.currentlyFocusedInput() !== input) return;
-          const y = resolveFocusedFieldScrollOffset({ scrollOffset: scrollOffset.current, viewportTop, viewportHeight, keyboardTop: Keyboard.metrics()?.screenY, fieldTop, fieldHeight });
+          const y = resolveFocusedFieldScrollOffset({ scrollOffset: scrollOffset.current, viewportTop: viewportTop + topInset, viewportHeight: viewportHeight - topInset, keyboardTop: Keyboard.metrics()?.screenY, fieldTop, fieldHeight });
           if (Math.abs(y - scrollOffset.current) > 1) scroll.scrollTo({ y, animated: false });
         });
       });
     });
-  }, [scrollRef]);
+  }, [scrollRef, topInset]);
 
   useEffect(() => {
     const shown = Keyboard.addListener('keyboardDidShow', revealFocusedInput);

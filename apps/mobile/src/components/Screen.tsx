@@ -60,8 +60,9 @@ export function Screen({
 }: ScreenProps) {
   const fallbackScrollViewRef = useRef<ScrollView>(null);
   const scrollViewRef = providedScrollViewRef ?? fallbackScrollViewRef;
-  const visibility = useFocusedFieldVisibility(scrollViewRef);
   const insets = useSafeAreaInsets();
+  const topInset = safeAreaEdges.includes('top') ? insets.top : 0;
+  const visibility = useFocusedFieldVisibility(scrollViewRef, topInset);
   const sidePadding = typeof horizontalPadding === 'number'
     ? horizontalPadding
     : horizontalPadding
@@ -83,19 +84,24 @@ export function Screen({
   useScrollToTop(scrollViewRef);
 
   return (
-    <SafeAreaView edges={safeAreaEdges} style={styles.safeArea} {...gestureHandlers}>
+    <SafeAreaView edges={safeAreaEdges.filter((edge) => edge !== 'top')} style={styles.safeArea} {...gestureHandlers}>
       {background ? <View pointerEvents="none" style={styles.background}>{background}</View> : null}
       <KeyboardAvoidingView
         behavior={!useNativeKeyboardInsets && Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardAvoider}
       >
-        <ScreenTopFade enabled={safeAreaEdges.includes('top') && insets.top > 0}>
+        <ScreenTopFade enabled={topInset > 0} topInset={topInset}>
           <ScrollView
             {...visibility}
+            automaticallyAdjustContentInsets={topInset > 0 ? false : undefined}
             automaticallyAdjustKeyboardInsets={useNativeKeyboardInsets}
+            contentInsetAdjustmentBehavior={topInset > 0 ? 'never' : undefined}
             contentContainerStyle={[
               styles.content,
-              { paddingBottom: footer ? spacing.lg : navigationPadding + insets.bottom },
+              {
+                paddingBottom: footer ? spacing.lg : navigationPadding + insets.bottom,
+                paddingTop: topInset,
+              },
             ]}
             keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
             keyboardShouldPersistTaps="handled"

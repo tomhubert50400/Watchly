@@ -3,7 +3,7 @@ import { PropsWithChildren } from 'react';
 import { StyleSheet, UIManager, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
-export function ScreenTopFade({ children, enabled }: PropsWithChildren<{ enabled: boolean }>) {
+export function ScreenTopFade({ children, enabled, topInset }: PropsWithChildren<{ enabled: boolean; topInset: number }>) {
   if (!enabled || !UIManager.hasViewManagerConfig('RNCMaskedView')) {
     return <View style={styles.container}>{children}</View>;
   }
@@ -20,7 +20,7 @@ export function ScreenTopFade({ children, enabled }: PropsWithChildren<{ enabled
               x1="0"
               x2="0"
               y1="0"
-              y2="16"
+              y2={topInset}
             >
               <Stop offset="0" stopColor="black" stopOpacity={0.55} />
               <Stop offset="0.5" stopColor="black" stopOpacity={0.82} />
