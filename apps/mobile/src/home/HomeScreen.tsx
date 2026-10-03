@@ -134,7 +134,7 @@ export function HomeScreen() {
 
   if (catalogue.isInitialLoading && !catalogue.data) {
     return (
-      <Screen contentReady={Boolean(catalogue.data)} leading={<BrandWordmark height={44} />} title="">
+      <Screen contentReady={Boolean(catalogue.data)} headerTopPadding={spacing.sm} leading={<BrandWordmark height={44} />} title="">
         <View style={styles.blockingState}>
           <LoadingState variant="detail" label="Loading home" />
         </View>
@@ -144,7 +144,7 @@ export function HomeScreen() {
 
   if (catalogue.error && !catalogue.data) {
     return (
-      <Screen contentReady={Boolean(catalogue.data)} leading={<BrandWordmark height={44} />} title="">
+      <Screen contentReady={Boolean(catalogue.data)} headerTopPadding={spacing.sm} leading={<BrandWordmark height={44} />} title="">
         <EmptyState body={catalogue.error} title="Home is unavailable">
           <Button label="Retry" onPress={catalogue.retry} />
         </EmptyState>
@@ -155,6 +155,7 @@ export function HomeScreen() {
   return (
     <Screen contentReady={Boolean(catalogue.data)}
       background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null}
+      headerTopPadding={spacing.sm}
       horizontalPadding={false}
       refreshControl={
         <RefreshControl
