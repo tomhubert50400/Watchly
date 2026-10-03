@@ -9,6 +9,7 @@ import { useAuthSession } from '../auth/AuthSessionContext';
 import { useCachedResource } from '../cache/useCachedResource';
 import { getPrivateCacheKey } from '../cache/persistedCache';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { StarRatingDisplay } from '../components/StarRatingDisplay';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import type { LibraryMediaItem } from '../library/useLibraryData';
@@ -45,7 +46,7 @@ export function RecentViewingActivity({ userId, owner = false, mediaItems = [] }
     <View style={styles.header}>
       <View style={styles.headingRow}><Text style={styles.heading}>Recent activity</Text>{owner && data ? <Pressable accessibilityRole="button" accessibilityLabel={`Manage viewing history visibility, currently ${data.visibility}`} onPress={() => navigation.navigate('Settings')} style={styles.visibility}>{data.visibility === 'public' ? <Globe color={colors.textSubtle} size={15} /> : <Lock color={colors.textSubtle} size={15} />}</Pressable> : null}</View>
     </View>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
+    <HorizontalScrollFade><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
     {data?.items.map((item) => {
       const opinion = data.opinions.find((opinion) => {
         const content = opinion.content;
@@ -65,7 +66,7 @@ export function RecentViewingActivity({ userId, owner = false, mediaItems = [] }
         </ImageBackground>
       </Pressable>;
     })}
-    </ScrollView>
+    </ScrollView></HorizontalScrollFade>
     {status === 'loading' ? <Text style={styles.meta}>Loading activity…</Text> : status === 'error' ? <Text style={styles.meta}>Activity could not load. Try again later.</Text> : data?.items.length === 0 ? <Text style={styles.meta}>{owner ? 'Your next viewing will appear here.' : 'No viewings yet.'}</Text> : null}
   </View>;
 }

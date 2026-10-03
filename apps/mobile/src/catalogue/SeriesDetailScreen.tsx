@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CatalogueRelatedItem, SeriesDetails } from '../api/catalogue';
 import { useCachedResource } from '../cache/useCachedResource';
+import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -222,7 +223,7 @@ function SeriesEpisodesPanel({ seasons, seriesTitle, seriesTmdbId }: {
     <View style={styles.episodesPanel}>
       {ordered.length > 1 ? (
         <View style={styles.seasonSelectorSection}>
-          <ScrollView
+          <HorizontalScrollFade><ScrollView
             contentContainerStyle={styles.seasonSelector}
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -252,7 +253,7 @@ function SeriesEpisodesPanel({ seasons, seriesTitle, seriesTmdbId }: {
                 </Pressable>
               );
             })}
-          </ScrollView>
+          </ScrollView></HorizontalScrollFade>
         </View>
       ) : null}
       <SeasonEpisodeList seasonNumber={selected} seriesTitle={seriesTitle} seriesTmdbId={seriesTmdbId} />

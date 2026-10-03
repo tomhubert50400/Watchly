@@ -18,6 +18,7 @@ import { BrandWordmark } from '../brand/BrandWordmark';
 import { getPrivateCacheKey, getPublicCacheKey } from '../cache/persistedCache';
 import { setMemoryResource } from '../cache/memoryResourceCache';
 import { useCachedResource } from '../cache/useCachedResource';
+import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -312,7 +313,7 @@ function TrendingRail({
   onOpen: (item: HomeTrendingItem) => void;
 }) {
   return (
-    <ScrollView
+    <HorizontalScrollFade><ScrollView
       contentContainerStyle={styles.posterRail}
       horizontal
       nestedScrollEnabled
@@ -331,7 +332,7 @@ function TrendingRail({
           <TrendingMetadata item={item} />
         </Pressable>
       ))}
-    </ScrollView>
+    </ScrollView></HorizontalScrollFade>
   );
 }
 

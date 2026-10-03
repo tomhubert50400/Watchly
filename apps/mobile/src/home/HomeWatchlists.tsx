@@ -1,6 +1,7 @@
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { Button } from '../components/Button';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { LoadingState } from '../components/LoadingState';
@@ -20,7 +21,7 @@ export function HomeWatchlists({ data, error, loading, onRetry }: { data: Librar
     <View style={styles.header}><SectionHeader title="From your watchlists" actionLabel="View all" onActionPress={openLists} /></View>
     {loading && !data ? <View style={styles.header}><LoadingState label="Loading watchlists" /></View>
       : error && !data ? <View style={styles.header}><InlineStatusBanner detail={error} onRetry={onRetry} tone="error" /></View>
-      : items.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
+      : items.length ? <HorizontalScrollFade><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
         {items.map((item) => <View style={styles.item} key={`${item.contentType}:${item.tmdbId}`}>
           <Pressable accessibilityRole="button" accessibilityLabel={`Open ${item.title}`} onPress={() => navigation.navigate(item.contentType === 'movie' ? 'FilmDetail' : 'SeriesDetail', { title: item.title, tmdbId: item.tmdbId })}>
             <MediaPoster posterUrl={item.posterUrl} style={styles.poster} />
@@ -29,7 +30,7 @@ export function HomeWatchlists({ data, error, loading, onRetry }: { data: Librar
             <Text numberOfLines={2} style={styles.sourceText}>{item.listName}</Text>
           </Pressable>
         </View>)}
-      </ScrollView>
+      </ScrollView></HorizontalScrollFade>
       : <View style={styles.header}><Text style={styles.empty}>{data?.lists.length
         ? data.lists.some((list) => list.showOnHome !== false)
           ? 'Add titles to your watchlists to find them here.'

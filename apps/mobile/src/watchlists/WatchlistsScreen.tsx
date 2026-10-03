@@ -11,6 +11,7 @@ import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { setMemoryResource } from '../cache/memoryResourceCache';
 import { writePersistedCache } from '../cache/persistedCache';
+import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { BottomActionSheet, BottomActionSheetScrollView } from '../components/BottomActionSheet';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -183,9 +184,9 @@ export function WatchlistsScreen() {
           {!progress.data ? progress.error ? <EmptyState title="Progress unavailable" body="Refresh to load your next episodes." /> : <LoadingState variant="grid" label="Loading your progress" /> : visibleProgress.length === 0 ? progress.isLoadingMore ? <LoadingState variant="grid" label="Loading your progress" /> : <EmptyState title={normalizedQuery ? 'No matching series' : progressFilter === 'progress' ? 'Nothing in progress right now' : progressFilter === 'caughtUp' ? 'No series up to date yet' : 'No completed series yet'} body={normalizedQuery ? 'Try another title or change the filter.' : progressFilter === 'progress' ? 'Start a series to find your next episode here. Caught-up series are available in the filter.' : 'Your series will appear here as you mark episodes watched.'} /> : <>
             {recentProgress.length > 0 ? <View style={styles.progressSection}>
               <Text style={styles.progressHeading}>Pick up where you left off</Text>
-              <ScrollView horizontal accessibilityLabel="Recently watched series" showsHorizontalScrollIndicator={false} style={{ marginRight: width < 360 ? -spacing.md : -spacing.xl }} contentContainerStyle={[styles.recentRail, { paddingRight: width < 360 ? spacing.md : spacing.xl }]}>
+              <HorizontalScrollFade><ScrollView horizontal accessibilityLabel="Recently watched series" showsHorizontalScrollIndicator={false} style={{ marginRight: width < 360 ? -spacing.md : -spacing.xl }} contentContainerStyle={[styles.recentRail, { paddingRight: width < 360 ? spacing.md : spacing.xl }]}>
                 {recentProgress.map((item) => <View key={item.media.key} style={{ width: Math.min(278, width - 64) }}><ProgressCard item={item} busy={progress.isBusy(item)} onRetry={() => progress.retry(item.media.key)} onWatched={() => void progress.markNext(item)} onOpen={() => openProgress(item)} /></View>)}
-              </ScrollView>
+              </ScrollView></HorizontalScrollFade>
             </View> : null}
             <View style={styles.progressSection}>
               <View style={styles.progressSectionHeader}><Text style={styles.progressHeading}>{normalizedQuery ? 'Search results' : 'All my series'}</Text><Text style={styles.progressCount}>{visibleProgress.length}</Text></View>

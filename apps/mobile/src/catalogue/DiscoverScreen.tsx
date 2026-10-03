@@ -8,6 +8,7 @@ import { browseResourceKey, collectionFilters, discoverMoods, getDiscover, getDi
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { getPrivateCacheKey, getPublicCacheKey } from '../cache/persistedCache';
 import { preloadCachedResource, useCachedResource } from '../cache/useCachedResource';
+import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -116,18 +117,18 @@ export function DiscoverScreen({ isActive = true }: { isActive?: boolean }) {
           {collections.error ? <EmptyState title="Collections are unavailable" body={collections.error}><Button label="Retry collections" onPress={collections.retry} /></EmptyState> : null}
           {collections.isInitialLoading && !collections.data ? <LoadingState variant="grid" label="Loading collections" /> : null}
           {collections.data?.partial ? <InlineStatusBanner title="Some collections are unavailable" detail="Pull to refresh to try again." tone="error" /> : null}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.collectionRail}>
+          <HorizontalScrollFade><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.collectionRail}>
             {collections.data?.items.map(collection => <Pressable key={collection.id} accessibilityRole="button" accessibilityLabel={`Open ${collection.title}`} style={styles.collection} onPress={() => navigation.navigate('DiscoverResults', { collectionId: collection.id, title: collection.title, description: collection.description, mediaType })}>
               <View style={styles.collectionArtwork}><BlendedArtwork blendId={`discover-${collection.id}`} urls={collection.artwork} /></View>
               <Text style={styles.collectionTitle}>{collection.title}</Text>
             </Pressable>)}
-          </ScrollView>
+          </ScrollView></HorizontalScrollFade>
         </ScreenReveal>
         {items.length > featured.length ? <ScreenReveal delay={200}>
           <SectionHeader title="More for you" actionLabel="View more" onActionPress={() => navigation.navigate('DiscoverResults', { title: 'Selected for you', mediaType, mood })} />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
+          <HorizontalScrollFade><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
             {items.slice(featured.length, featured.length + 10).map(item => <ExploreMediaCard key={item.id} item={item} onPress={() => openItem(item)} />)}
-          </ScrollView>
+          </ScrollView></HorizontalScrollFade>
         </ScreenReveal> : null}
         </>}
       </View>

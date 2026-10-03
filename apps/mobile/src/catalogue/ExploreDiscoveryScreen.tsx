@@ -8,6 +8,7 @@ import {
 } from '../api/catalogue';
 import { useCachedResource } from '../cache/useCachedResource';
 import { getPublicCacheKey } from '../cache/persistedCache';
+import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -93,7 +94,7 @@ export function ExploreDiscoveryScreen() {
                   subtitle={`${group.items.length} ${group.items.length === 1 ? 'title' : 'titles'}`}
                   title={group.genre}
                 />
-                <ScrollView
+                <HorizontalScrollFade><ScrollView
                   contentContainerStyle={styles.rail}
                   horizontal
                   nestedScrollEnabled
@@ -107,7 +108,7 @@ export function ExploreDiscoveryScreen() {
                       showReleaseAlert={route.params.section === 'announced'}
                     />
                   ))}
-                </ScrollView>
+                </ScrollView></HorizontalScrollFade>
               </View>
             ))}
           </ScreenReveal>

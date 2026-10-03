@@ -3,6 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { searchActors, type CatalogueActor } from '../api/catalogue';
+import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { UserAvatar } from '../components/UserAvatar';
 import { colors, spacing, typography } from '../design/tokens';
 import type { RootStackParamList } from '../navigation/types';
@@ -32,7 +33,7 @@ export function ActorSearchGroup({ items }: { items: readonly CatalogueActor[] }
   return (
     <View style={styles.section}>
       <Text accessibilityRole="header" style={styles.heading}>Actors</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.rail}>
+      <HorizontalScrollFade><ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.rail}>
         {items.map(actor => (
           <Pressable key={actor.tmdbId} accessibilityRole="button" accessibilityLabel={`Open actor ${actor.name}`} onPress={() => {
             Keyboard.dismiss();
@@ -42,7 +43,7 @@ export function ActorSearchGroup({ items }: { items: readonly CatalogueActor[] }
             <Text numberOfLines={2} style={styles.name}>{actor.name}</Text>
           </Pressable>
         ))}
-      </ScrollView>
+      </ScrollView></HorizontalScrollFade>
     </View>
   );
 }

@@ -7,6 +7,7 @@ import { getMovieCommunity, type MovieCommunityResponse } from '../api/reviews';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { useCachedResource } from '../cache/useCachedResource';
 import { getPrivateCacheKey, getPublicCacheKey } from '../cache/persistedCache';
+import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { Button } from '../components/Button';
 import { StarRatingDisplay } from '../components/StarRatingDisplay';
 import { UserAvatar } from '../components/UserAvatar';
@@ -87,7 +88,7 @@ export function MovieCommunityPanel({ tmdbId, displayRating, artworkUrl, onViewM
           {expanded ? (
             <>
               {community.reviews.length ? (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
+                <HorizontalScrollFade><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
                   {community.reviews.map((review) => (
                     <View key={review.id} style={{ width: Math.min(320, width - spacing.xl * 2 - spacing.md) }}>
                       <MovieCommunityReviewCard review={review} artworkUrl={artworkUrl} compact />
@@ -101,7 +102,7 @@ export function MovieCommunityPanel({ tmdbId, displayRating, artworkUrl, onViewM
                     <ArrowRight size={26} color={colors.accentText} />
                   </Pressable>
                   </View>
-                </ScrollView>
+                </ScrollView></HorizontalScrollFade>
               ) : null}
             </>
           ) : null}

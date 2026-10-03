@@ -9,11 +9,12 @@ import Svg, {
   Rect,
   Stop,
 } from 'react-native-svg';
+import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { colors, radii, shadows, spacing } from '../design/tokens';
 import type { LibraryListItem } from './useLibraryData';
 
 export function WatchlistRail({ lists, onOpen }: { lists: LibraryListItem[]; onOpen: (list: LibraryListItem) => void }) {
-  return <ScrollView contentContainerStyle={styles.rail} horizontal showsHorizontalScrollIndicator={false}>
+  return <HorizontalScrollFade><ScrollView contentContainerStyle={styles.rail} horizontal showsHorizontalScrollIndicator={false}>
     {lists.map((list, index) => (
       <WatchlistCard
         blendId={`watchlist-art-${index}`}
@@ -23,7 +24,7 @@ export function WatchlistRail({ lists, onOpen }: { lists: LibraryListItem[]; onO
         posterUrls={list.posterUrls}
       />
     ))}
-  </ScrollView>;
+  </ScrollView></HorizontalScrollFade>;
 }
 
 type WatchlistCardProps = {

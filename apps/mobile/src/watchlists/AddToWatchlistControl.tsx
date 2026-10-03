@@ -29,6 +29,7 @@ import {
   BottomActionSheet,
   BottomActionSheetScrollView,
 } from '../components/BottomActionSheet';
+import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { Button } from '../components/Button';
 import { LoadingState } from '../components/LoadingState';
 import { SegmentedControl } from '../components/SegmentedControl';
@@ -556,7 +557,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
               {personalOptions.length > 0 ? (
                 <View style={styles.optionSection}>
                   <Text accessibilityRole="header" style={styles.optionSectionTitle}>Personal lists</Text>
-                  <BottomActionSheetScrollView
+                  <HorizontalScrollFade><BottomActionSheetScrollView
                     contentContainerStyle={styles.optionRail}
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -570,7 +571,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
                         option={option}
                       />
                     ))}
-                  </BottomActionSheetScrollView>
+                  </BottomActionSheetScrollView></HorizontalScrollFade>
                 </View>
               ) : null}
               {sharedOptions.length > 0 ? (
@@ -579,7 +580,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
                   personalOptions.length > 0 ? styles.optionSectionSeparated : null,
                 ]}>
                   <Text accessibilityRole="header" style={styles.optionSectionTitle}>Shared lists</Text>
-                  <BottomActionSheetScrollView
+                  <HorizontalScrollFade><BottomActionSheetScrollView
                     contentContainerStyle={styles.optionRail}
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -593,7 +594,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
                         option={option}
                       />
                     ))}
-                  </BottomActionSheetScrollView>
+                  </BottomActionSheetScrollView></HorizontalScrollFade>
                 </View>
               ) : null}
             </View>

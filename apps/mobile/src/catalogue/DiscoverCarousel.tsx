@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { DiscoverItem } from '../api/discover';
+import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { useCatalogueCache } from './CatalogueCacheContext';
 
@@ -24,7 +25,7 @@ export function DiscoverCarousel({ items, onOpen }: { items: DiscoverItem[]; onO
         <Pressable accessibilityLabel="Next recommendation" accessibilityRole="button" accessibilityState={{ disabled: index === items.length - 1 }} disabled={index === items.length - 1} onPress={() => go(index + 1)} style={[styles.arrow, index === items.length - 1 && styles.disabled]}><ChevronRight color={colors.accentText} size={18} /></Pressable>
       </View> : null}
     </View>
-    {width > 0 ? <ScrollView horizontal pagingEnabled decelerationRate="fast" ref={scroll} showsHorizontalScrollIndicator={false}
+    {width > 0 ? <HorizontalScrollFade><ScrollView horizontal pagingEnabled decelerationRate="fast" ref={scroll} showsHorizontalScrollIndicator={false}
       onMomentumScrollEnd={event => setIndex(Math.max(0, Math.min(items.length - 1, Math.round(event.nativeEvent.contentOffset.x / width))))}>
       {items.map(item => {
         const details = item.mediaType === 'movie' ? getCachedMovie(item.tmdbId) : getCachedSeries(item.tmdbId);
@@ -41,7 +42,7 @@ export function DiscoverCarousel({ items, onOpen }: { items: DiscoverItem[]; onO
           <Text style={styles.reason}>{item.reason}</Text>
         </View>;
       })}
-    </ScrollView> : null}
+    </ScrollView></HorizontalScrollFade> : null}
     {items.length > 1 ? <View style={styles.dots}>{items.map((item, position) => <Pressable
       accessibilityLabel={`Recommendation ${position + 1} of ${items.length}: ${item.title}`} accessibilityRole="button" accessibilityState={{ selected: position === index }}
       key={item.id} onPress={() => go(position)} style={styles.dotTarget}

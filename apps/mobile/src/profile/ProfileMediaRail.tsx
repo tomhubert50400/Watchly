@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MediaPoster } from '../components/MediaPoster';
+import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { SectionHeader } from '../components/SectionHeader';
 import { colors, spacing, typography } from '../design/tokens';
 import type { LibraryMediaItem } from '../library/useLibraryData';
@@ -45,7 +46,7 @@ export function ProfileMediaRail({
         </Pressable> : null}
       </View>
       {items.length ? (
-        <FlatList
+        <HorizontalScrollFade><FlatList
           alwaysBounceVertical={false}
           contentContainerStyle={styles.rail}
           data={items}
@@ -65,7 +66,7 @@ export function ProfileMediaRail({
           )}
           showsHorizontalScrollIndicator={false}
           windowSize={3}
-        />
+        /></HorizontalScrollFade>
       ) : (
         <Text style={styles.empty}>{emptyLabel}</Text>
       )}

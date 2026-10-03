@@ -17,6 +17,7 @@ import {
   CatalogueRelatedItem,
   CatalogueVideo,
 } from '../api/catalogue';
+import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { MediaPoster } from '../components/MediaPoster';
 import { SectionHeader } from '../components/SectionHeader';
 import { colors, radii, spacing, typography } from '../design/tokens';
@@ -30,7 +31,7 @@ export function CatalogueVideoRail({ videos }: { videos: CatalogueVideo[] }) {
 
   return (
     <CatalogueSection title="Teasers & trailers">
-      <ScrollView contentContainerStyle={styles.bleedRail} horizontal showsHorizontalScrollIndicator={false}>
+      <HorizontalScrollFade><ScrollView contentContainerStyle={styles.bleedRail} horizontal showsHorizontalScrollIndicator={false}>
         {videos.map((video) => {
           const publishedDate = formatDetailDate(video.publishedAt?.slice(0, 10) ?? null);
 
@@ -63,7 +64,7 @@ export function CatalogueVideoRail({ videos }: { videos: CatalogueVideo[] }) {
             </Pressable>
           );
         })}
-      </ScrollView>
+      </ScrollView></HorizontalScrollFade>
     </CatalogueSection>
   );
 }
@@ -76,7 +77,7 @@ export function CatalogueCastRail({ cast }: { cast: CatalogueCastMember[] }) {
 
   return (
     <CatalogueSection title="Cast">
-      <ScrollView contentContainerStyle={styles.bleedRail} horizontal showsHorizontalScrollIndicator={false}>
+      <HorizontalScrollFade><ScrollView contentContainerStyle={styles.bleedRail} horizontal showsHorizontalScrollIndicator={false}>
         {cast.map((person) => (
           <Pressable
             accessibilityLabel={person.character ? `${person.name}, ${person.character}` : person.name}
@@ -102,7 +103,7 @@ export function CatalogueCastRail({ cast }: { cast: CatalogueCastMember[] }) {
             {person.character ? <Text numberOfLines={2} style={styles.personRole}>{person.character}</Text> : null}
           </Pressable>
         ))}
-      </ScrollView>
+      </ScrollView></HorizontalScrollFade>
     </CatalogueSection>
   );
 }
@@ -138,7 +139,7 @@ export function CatalogueRelatedRail({
 
   return (
     <CatalogueSection title="More like this">
-      <ScrollView contentContainerStyle={styles.bleedRail} horizontal showsHorizontalScrollIndicator={false}>
+      <HorizontalScrollFade><ScrollView contentContainerStyle={styles.bleedRail} horizontal showsHorizontalScrollIndicator={false}>
         {items.map((item) => {
           const year = item.releaseDate?.slice(0, 4) ?? null;
 
@@ -160,7 +161,7 @@ export function CatalogueRelatedRail({
             </Pressable>
           );
         })}
-      </ScrollView>
+      </ScrollView></HorizontalScrollFade>
     </CatalogueSection>
   );
 }

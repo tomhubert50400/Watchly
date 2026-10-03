@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient as SvgLinearGradient, Rect, Stop } from 'react-native-svg';
 import { EpisodeDetails, EpisodeDetailsResponse } from '../api/catalogue';
 import { useCachedResource } from '../cache/useCachedResource';
+import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -327,7 +328,7 @@ function EpisodeCreditRail({
   return (
     <View style={styles.creditSection}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      <ScrollView
+      <HorizontalScrollFade><ScrollView
         contentContainerStyle={styles.creditRail}
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -363,7 +364,7 @@ function EpisodeCreditRail({
             ) : null}
           </Pressable>
         ))}
-      </ScrollView>
+      </ScrollView></HorizontalScrollFade>
     </View>
   );
 }

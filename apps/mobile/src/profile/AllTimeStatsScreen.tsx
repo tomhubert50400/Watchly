@@ -6,6 +6,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'r
 import { getViewingStats, ViewingStats } from '../api/viewings';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
+import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -118,7 +119,7 @@ function AllTimeContent({
       <ScreenReveal delay={150} style={styles.section}>
         <EditorialSectionTitle>HIGHLIGHTS</EditorialSectionTitle>
         {stats.highlights.length > 0 ? (
-          <ScrollView
+          <HorizontalScrollFade><ScrollView
             contentContainerStyle={styles.highlightRail}
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -130,7 +131,7 @@ function AllTimeContent({
                 label={index === 0 ? 'BIGGEST OBSESSION' : 'HIGHLIGHT'}
               />
             ))}
-          </ScrollView>
+          </ScrollView></HorizontalScrollFade>
         ) : (
           <Text style={styles.emptyCopy}>Your highlights will appear after your first watch.</Text>
         )}

@@ -27,6 +27,7 @@ import { useAuthSession } from '../auth/AuthSessionContext';
 import { useCachedResource } from '../cache/useCachedResource';
 import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useUserDataRevision } from '../sync/userDataEvents';
+import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
@@ -489,7 +490,7 @@ function DiscoveryRail({
         title={title}
       />
       {items.length > 0 ? (
-        <ScrollView
+        <HorizontalScrollFade><ScrollView
           contentContainerStyle={styles.rail}
           horizontal
           nestedScrollEnabled
@@ -503,7 +504,7 @@ function DiscoveryRail({
               showReleaseAlert={showReleaseAlert}
             />
           ))}
-        </ScrollView>
+        </ScrollView></HorizontalScrollFade>
       ) : (
         <Text style={styles.emptySection}>No {mediaType === 'movie' ? 'movies' : 'TV shows'} available.</Text>
       )}
