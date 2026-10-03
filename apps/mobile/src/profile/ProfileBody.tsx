@@ -41,6 +41,7 @@ export function ProfileBody({
   onFollowersPress,
   onFollowingPress,
   onOpenMediaItem,
+  onEditFavorites,
   onOpenOpinion,
   onOpenStats,
   onViewAllMedia,
@@ -74,6 +75,7 @@ export function ProfileBody({
   onFollowersPress?: () => void;
   onFollowingPress?: () => void;
   onOpenMediaItem: (item: LibraryMediaItem) => void;
+  onEditFavorites?: () => void;
   onOpenOpinion: (item: HydratedProfileOpinion) => void;
   onOpenStats: () => void;
   onViewAllMedia: (filter: ProfileMediaFilter) => void;
@@ -135,6 +137,7 @@ export function ProfileBody({
           <ScreenReveal delay={200}><ProfileMediaRail
             emptyLabel={mediaEmptyLabels.favorites}
             items={mediaPreviews.favorites}
+            onEdit={onEditFavorites}
             onOpen={onOpenMediaItem}
             onViewAll={() => onViewAllMedia('favorites')}
             title="Favorites"

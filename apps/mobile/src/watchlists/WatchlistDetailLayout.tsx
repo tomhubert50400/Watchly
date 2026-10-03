@@ -3,6 +3,7 @@ import {
   KeyboardAvoidingView,
   GestureResponderEvent,
   LayoutChangeEvent,
+  LayoutRectangle,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
@@ -44,6 +45,9 @@ type WatchlistPageProps = PropsWithChildren<{
 
 type WatchlistPosterGridProps = {
   items: WatchlistDisplayItem[];
+  dropTargetId?: string | null;
+  reordering?: boolean;
+  onItemLayout?: (item: WatchlistDisplayItem, layout: LayoutRectangle) => void;
   movingItemId?: string | null;
   onMove?: (item: WatchlistDisplayItem, event: GestureResponderEvent) => void;
   onMoveCancel?: (item: WatchlistDisplayItem) => void;
@@ -126,6 +130,9 @@ export function WatchlistPage({
 
 export function WatchlistPosterGrid({
   items,
+  dropTargetId,
+  reordering = false,
+  onItemLayout,
   movingItemId = null,
   onMove,
   onMoveCancel,
@@ -143,15 +150,17 @@ export function WatchlistPosterGrid({
 
   return (
     <ScreenReveal delay={100} style={styles.grid}>
-      {items.map((item) => {
+        {items.map((item, index) => {
         const title = item.title?.trim() || 'Title unavailable';
 
         return (
           <Pressable
-            accessibilityLabel={`Open ${title}`}
+            accessibilityLabel={reordering ? `Move ${title}, position ${index + 1}` : `Open ${title}`}
+            accessibilityHint={reordering ? 'Hold, then drag to another position.' : undefined}
             accessibilityRole="button"
             delayLongPress={350}
             key={item.id}
+            onLayout={onItemLayout ? (event) => onItemLayout(item, event.nativeEvent.layout) : undefined}
             onLongPress={(event) => {
               if (!onMoveStart) return;
               longPressedItemRef.current = item.id;
@@ -188,6 +197,7 @@ export function WatchlistPosterGrid({
               styles.tile,
               { width: itemWidth },
               movingItemId === item.id ? styles.moving : null,
+              dropTargetId === item.id ? styles.dropTarget : null,
               pressed ? styles.pressed : null,
             ]}
           >
@@ -239,6 +249,12 @@ const styles = StyleSheet.create({
   },
   moving: {
     opacity: 0.45,
+  },
+  dropTarget: {
+    backgroundColor: colors.panelElevated,
+    outlineColor: colors.accent,
+    outlineWidth: 2,
+    borderRadius: radii.md,
   },
   footer: {
     backgroundColor: colors.background,

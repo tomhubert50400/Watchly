@@ -12,6 +12,7 @@ import {
   type ProfileBackdropSelection,
 } from '../api/profile';
 import { getViewingStats, type ViewingStats } from '../api/viewings';
+import { saveFavoriteOrder } from '../api/tracking';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { ProfileAuthCard } from '../auth/ProfileAuthCard';
 import { BrandWordmark } from '../brand/BrandWordmark';
@@ -20,12 +21,12 @@ import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { Screen } from '../components/Screen';
 import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
-import { getPrivateCacheKey } from '../cache/persistedCache';
+import { getPrivateCacheKey, writePersistedCache } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
-import { setMemoryResource } from '../cache/memoryResourceCache';
+import { getMemoryResource, setMemoryResource } from '../cache/memoryResourceCache';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
-import type { LibraryMediaItem } from '../library/useLibraryData';
+import type { LibraryData, LibraryMediaItem } from '../library/useLibraryData';
 import { useLibraryData } from '../library/useLibraryData';
 import { RootStackParamList } from '../navigation/types';
 import {
@@ -33,6 +34,9 @@ import {
   type ProfileModel,
 } from './profileModel';
 import { ProfileBackdropPickerSheet } from './ProfileBackdropPickerSheet';
+import { FavoriteOrderEditor } from './FavoriteOrderEditor';
+import { createFavoriteOrderAutosave } from './favoriteOrderAutosave';
+import { useToast } from '../notifications/ToastContext';
 import { RecentViewingActivity } from './RecentViewingActivity';
 import { getHydratedProfileOpinionTarget, ProfileBody } from './ProfileBody';
 import { ProfileHeaderButton } from './ProfileHeaderButton';
@@ -99,10 +103,19 @@ export function ProfileScreen() {
     ProfileBackdropSelection | null | undefined
   >(undefined);
   const [backdropPickerOpen, setBackdropPickerOpen] = useState(false);
+  const [editingFavorites, setEditingFavorites] = useState<{ userId: string; items: LibraryMediaItem[] } | null>(null);
+  const [favoriteOrder, setFavoriteOrder] = useState<{ userId: string; items: LibraryMediaItem[] } | null>(null);
+  const favoriteOrderRef = useRef(favoriteOrder);
+  const [favoriteOrderError, setFavoriteOrderError] = useState<string | null>(null);
+  const { showToast } = useToast();
   const [backdropError, setBackdropError] = useState<string | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const { refreshSeries } = useCatalogueCache();
   const userId = currentUser?.id ?? null;
+  const favoriteOwnerRef = useRef(userId);
+  favoriteOwnerRef.current = userId;
+  const favoriteAutosave = useMemo(() => createFavoriteOrderAutosave(), [userId]);
+  useEffect(() => () => favoriteAutosave.flush(), [favoriteAutosave]);
   const loadProfile = useCallback(async (cached?: CachedProfile): Promise<CachedProfile> => {
     void profileRevision;
     if (!firebaseIdToken) {
@@ -123,7 +136,54 @@ export function ProfileScreen() {
     }
   }, [firebaseIdToken, resource.revalidate, userId]));
   const profile = resource.data;
-  const mediaItems = mediaResource.data?.items ?? EMPTY_PROFILE_MEDIA_ITEMS;
+  const loadedMediaItems = mediaResource.data?.items ?? EMPTY_PROFILE_MEDIA_ITEMS;
+  const mediaItems = useMemo(() => {
+    if (!favoriteOrder || favoriteOrder.userId !== userId) return loadedMediaItems;
+    const positions = new Map(favoriteOrder.items.map((item, index) => [item.key, index]));
+    return loadedMediaItems.map((item) => positions.has(item.key)
+      ? { ...item, favoritePosition: positions.get(item.key) }
+      : item);
+  }, [favoriteOrder, loadedMediaItems, userId]);
+  useEffect(() => {
+    if (favoriteOrder?.userId === userId && favoriteOrder.items.every((item, index) =>
+      loadedMediaItems.find((loaded) => loaded.key === item.key)?.favoritePosition === index)) {
+      setFavoriteOrder(null);
+    }
+  }, [favoriteOrder, loadedMediaItems, userId]);
+
+  function changeFavoriteOrder(ordered: LibraryMediaItem[]) {
+    if (!userId || !firebaseIdToken) return;
+    const change = { userId, items: ordered };
+    favoriteOrderRef.current = change;
+    setFavoriteOrder(change);
+    setFavoriteOrderError(null);
+    favoriteAutosave.schedule(async () => {
+      const saved = await saveFavoriteOrder(firebaseIdToken, ordered.map(({ contentType, tmdbId }) => ({ contentType, tmdbId })));
+      if (favoriteOrderRef.current !== change || favoriteOwnerRef.current !== userId) return;
+      const positions = new Map(saved.map((item) => [`${item.contentType}:${item.tmdbId}`, item.favoritePosition]));
+      const library = getMemoryResource<LibraryData>(mediaResource.key)?.data ?? mediaResource.data;
+      if (library) {
+        const updatedLibrary = {
+          ...library,
+          items: library.items.map((item) => positions.has(item.key)
+            ? { ...item, favoritePosition: positions.get(item.key) }
+            : item),
+        };
+        const savedAt = new Date().toISOString();
+        setMemoryResource(mediaResource.key, updatedLibrary, savedAt);
+        await writePersistedCache(mediaResource.key, updatedLibrary, undefined, savedAt).catch(() => undefined);
+      }
+      if (favoriteOrderRef.current === change && favoriteOwnerRef.current === userId) notifyUserDataChanged('tracking');
+    }, (cause) => {
+      if (favoriteOrderRef.current !== change || favoriteOwnerRef.current !== userId) return;
+      const message = cause instanceof Error ? cause.message : 'Could not save your favorites order.';
+      setFavoriteOrderError(message);
+      hapticError();
+      showToast(message, 'error', { label: 'Retry', onPress: () => {
+        if (favoriteOrderRef.current === change && favoriteOwnerRef.current === userId) changeFavoriteOrder(ordered);
+      } });
+    });
+  }
   const previews = useMemo(() => getProfileMediaPreviews(mediaItems), [mediaItems]);
   const previewSources = useMemo(() => dedupeProfileMediaItems([
     ...previews.series,
@@ -414,6 +474,9 @@ export function ProfileScreen() {
             series: 'No series to show yet.',
           }}
           mediaPreviews={hydratedPreviews}
+          onEditFavorites={previews.favorites.length > 1 ? () => {
+            setEditingFavorites({ userId, items: getProfileMediaItems(mediaItems, 'favorites') });
+          } : undefined}
           notice={(
             <>
               {avatarError ? <Text accessibilityLiveRegion="polite" style={styles.errorText}>{avatarError}</Text> : null}
@@ -458,6 +521,19 @@ export function ProfileScreen() {
         selected={profileBackdrop}
         visible={backdropPickerOpen}
       />
+      {editingFavorites?.userId === userId ? <FavoriteOrderEditor
+        key={userId}
+        items={editingFavorites.items}
+        error={favoriteOrderRef.current?.userId === userId ? favoriteOrderError : null}
+        onChange={changeFavoriteOrder}
+        onRetry={() => {
+          if (favoriteOrderRef.current?.userId === userId) changeFavoriteOrder(favoriteOrderRef.current.items);
+        }}
+        onClose={() => {
+          favoriteAutosave.flush();
+          setEditingFavorites(null);
+        }}
+      /> : null}
     </Screen>
   );
 }

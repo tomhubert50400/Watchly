@@ -16,6 +16,7 @@ type ProfileMediaRailProps = {
   emptyLabel: string;
   items: readonly LibraryMediaItem[];
   onOpen: (item: LibraryMediaItem) => void;
+  onEdit?: () => void;
   onViewAll?: () => void;
   title: string;
 };
@@ -24,17 +25,25 @@ export function ProfileMediaRail({
   emptyLabel,
   items,
   onOpen,
+  onEdit,
   onViewAll,
   title,
 }: ProfileMediaRailProps) {
   return (
     <View style={styles.section}>
-      <SectionHeader
-        actionAccessibilityLabel={onViewAll ? `View all ${title.toLowerCase()}` : undefined}
-        actionLabel={onViewAll ? 'View all' : undefined}
-        onActionPress={onViewAll}
-        title={title}
-      />
+      <View style={styles.header}>
+        <View style={styles.headerTitle}>
+          <SectionHeader
+            actionAccessibilityLabel={onViewAll ? `View all ${title.toLowerCase()}` : undefined}
+            actionLabel={onViewAll ? 'View all' : undefined}
+            onActionPress={onViewAll}
+            title={title}
+          />
+        </View>
+        {onEdit ? <Pressable accessibilityLabel="Edit favorites order" accessibilityRole="button" onPress={onEdit} style={styles.edit}>
+          <Text style={styles.editLabel}>Edit</Text>
+        </Pressable> : null}
+      </View>
       {items.length ? (
         <FlatList
           alwaysBounceVertical={false}
@@ -118,6 +127,10 @@ function getMediaMeta(item: LibraryMediaItem) {
 }
 
 const styles = StyleSheet.create({
+  header: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.md },
+  headerTitle: { flex: 1 },
+  edit: { minHeight: 44, justifyContent: 'center' },
+  editLabel: { ...typography.meta, color: colors.accentText },
   cardPressed: {
     opacity: 0.78,
     transform: [{ scale: 0.98 }],
