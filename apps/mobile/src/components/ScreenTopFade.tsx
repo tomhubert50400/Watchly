@@ -1,10 +1,10 @@
 import MaskedView from '@react-native-masked-view/masked-view';
 import { PropsWithChildren } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, UIManager, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 export function ScreenTopFade({ children, enabled }: PropsWithChildren<{ enabled: boolean }>) {
-  if (!enabled) {
+  if (!enabled || !UIManager.hasViewManagerConfig('RNCMaskedView')) {
     return <View style={styles.container}>{children}</View>;
   }
 
