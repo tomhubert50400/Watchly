@@ -4,12 +4,15 @@ import assert from 'node:assert/strict';
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import { readFileSync } from 'node:fs';
 import type { LibraryMediaItem } from '../library/useLibraryData';
+import { mergeLibraryItems } from '../library/libraryModel';
 import {
   getProfileMediaItems,
   getProfileMediaPreviews,
   getProfileMediaStatus,
   groupProfileMediaByStatus,
   isProfileBackdropCandidate,
+  moveFavorite,
+  resolveFavoriteDropTarget,
 } from './profileMediaModel';
 
 function media(
@@ -91,6 +94,63 @@ const recent = Array.from({ length: 12 }, (_, index) => media(`movie:${index + 1
   updatedAt: `2026-08-${String(index + 1).padStart(2, '0')}T00:00:00.000Z`,
 }));
 const previews = getProfileMediaPreviews(recent);
+const orderedFavorites = [
+  media('movie:1', { favorite: true, favoritePosition: 1, updatedAt: '2026-09-28' }),
+  media('series:1', { favorite: true, favoritePosition: 0, updatedAt: '2026-01-01' }),
+  media('movie:2', { favorite: true, updatedAt: '2026-09-29' }),
+  media('movie:3', { favorite: false, favoritePosition: 0 }),
+];
+assert.deepEqual(getProfileMediaItems(orderedFavorites, 'favorites').map((item) => item.key),
+  ['series:1', 'movie:1', 'movie:2'], 'saved favorite order must win over activity dates, with new favorites at the end');
+assert.equal(getProfileMediaItems(orderedFavorites, 'movies')[0]?.key, 'movie:2', 'ordering favorites must not reorder other rails');
+assert.deepEqual(moveFavorite(['a', 'b', 'c', 'd'], 0, 3), ['b', 'c', 'd', 'a']);
+assert.deepEqual(moveFavorite(['a', 'b', 'c', 'd'], 3, 0), ['d', 'a', 'b', 'c']);
+assert.deepEqual(moveFavorite(['a', 'b', 'c'], 1, 1), ['a', 'b', 'c']);
+const dropTargets = [
+  { key: 'a', x: 0, y: 0, width: 100, height: 180 },
+  { key: 'b', x: 110, y: 0, width: 100, height: 180 },
+  { key: 'c', x: 220, y: 0, width: 100, height: 180 },
+  { key: 'd', x: 0, y: 190, width: 100, height: 180 },
+];
+const dropBounds = { width: 320, height: 434 };
+for (const point of [{ x: 50, y: 250 }, { x: 200, y: 250 }, { x: 200, y: 410 }]) {
+  const key = resolveFavoriteDropTarget(point, dropTargets, dropBounds);
+  assert.equal(key, 'd', 'the last card and trailing empty grid space must resolve to the final position');
+  const order = dropTargets.map((item) => item.key);
+  assert.deepEqual(moveFavorite(order, 0, order.indexOf(key!)), ['b', 'c', 'd', 'a'],
+    'dropping first at the end must shift every following card forward, not swap cards');
+}
+assert.equal(resolveFavoriteDropTarget({ x: 250, y: 410 }, dropTargets.slice(0, 3), dropBounds), 'c', 'dropping below a full final row must append');
+assert.equal(resolveFavoriteDropTarget({ x: 150, y: 50 }, dropTargets, dropBounds), 'b');
+assert.equal(resolveFavoriteDropTarget({ x: 105, y: 50 }, dropTargets, dropBounds), null, 'earlier gaps must not append');
+assert.equal(resolveFavoriteDropTarget({ x: 321, y: 250 }, dropTargets, dropBounds), null);
+assert.equal(resolveFavoriteDropTarget({ x: 50, y: 435 }, dropTargets, dropBounds), null, 'dropping outside the grid must cancel');
+assert.equal(resolveFavoriteDropTarget({ x: 50, y: 50 }, [], dropBounds), null);
+const favoriteEditorSource = readFileSync(new URL('./FavoriteOrderEditor.tsx', import.meta.url), 'utf8');
+assert.doesNotMatch(favoriteEditorSource, /Save order|onSave|disabled=/,
+  'favorite ordering must not require a save button or block leaving while saving');
+assert.match(favoriteEditorSource, /onRequestClose=\{onClose\}/);
+assert.match(favoriteEditorSource, /label="Done" onPress=\{onClose\}/);
+assert.match(favoriteEditorSource, /setDraft\(ordered\);\s*onChange\(ordered\)/,
+  'dropping must update the visible order and schedule persistence immediately');
+const watchlistScreenSource = readFileSync(new URL('../watchlists/PersonalWatchlistScreen.tsx', import.meta.url), 'utf8');
+for (const animation of ['dragScale', 'dragTilt']) {
+  const spring = new RegExp(`Animated\\.spring\\(${animation},\\s*\\{([^}]+)\\}`);
+  const favoriteSpring = favoriteEditorSource.match(spring)?.[1]?.replace(/\s/g, '');
+  const watchlistSpring = watchlistScreenSource.match(spring)?.[1]?.replace(/\s/g, '');
+  assert.ok(favoriteSpring, `favorites must animate ${animation}`);
+  assert.equal(favoriteSpring, watchlistSpring, `favorites must use the same ${animation} spring as watchlists`);
+}
+assert.match(favoriteEditorSource, /resolveCarriedPosterTilt\(horizontalVelocity\)/);
+assert.match(favoriteEditorSource, /transformOrigin: \[moving\.gripX, moving\.gripY, 0\]/,
+  'the favorite must swing around the point held by the user');
+assert.deepEqual(orderedFavorites.map((item) => item.key), ['movie:1', 'series:1', 'movie:2', 'movie:3'], 'sorting must preserve cached source items');
+const mergedFavorites = mergeLibraryItems([
+  { id: 'movie', contentType: 'movie', tmdbId: 1, favorite: true, favoritePosition: 1, status: 'watched', updatedAt: '2026-01-01' },
+  { id: 'series', contentType: 'series', tmdbId: 1, favorite: true, favoritePosition: 0, status: 'watched', updatedAt: '2026-01-01' },
+], [], [], []).map((item) => media(item.key, item));
+assert.deepEqual(getProfileMediaPreviews(mergedFavorites).favorites.map((item) => item.key), ['series:1', 'movie:1'],
+  'owner and public profile library hydration must retain API favorite positions');
 assert.equal(previews.movies.length, 10, 'profile rails must contain at most ten titles');
 assert.equal(previews.movies[0]?.tmdbId, 21, 'profile rails must show the most recent title first');
 

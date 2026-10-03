@@ -6,6 +6,7 @@ import type { TrackingState } from '../api/tracking';
 export type LibraryItemBase = {
   contentType: TrackingState['contentType'];
   favorite: boolean;
+  favoritePosition?: number | null;
   hasReleaseAlert: boolean;
   inferredWatchingFromProgress: boolean;
   key: string;
@@ -51,6 +52,7 @@ export function mergeLibraryItems(
     const item = ensure(state.contentType, state.tmdbId, state.updatedAt);
     Object.assign(item, {
       favorite: state.favorite,
+      favoritePosition: state.favoritePosition ?? null,
       lastWatchedAt: state.status === 'watched'
         ? maxOptionalDate(item.lastWatchedAt, state.updatedAt)
         : item.lastWatchedAt,

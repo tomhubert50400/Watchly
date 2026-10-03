@@ -56,7 +56,37 @@ export function getProfileMediaItems(
       if (filter === 'favorites') return item.favorite;
       return item.contentType === (filter === 'movies' ? 'movie' : 'series');
     })
-    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    .sort((left, right) => {
+      if (filter === 'favorites') {
+        const position = (left.favoritePosition ?? Number.MAX_SAFE_INTEGER)
+          - (right.favoritePosition ?? Number.MAX_SAFE_INTEGER);
+        if (position) return position;
+      }
+      return right.updatedAt.localeCompare(left.updatedAt);
+    });
+}
+
+export function moveFavorite<T>(items: readonly T[], from: number, to: number): T[] {
+  const reordered = [...items];
+  const [item] = reordered.splice(from, 1);
+  reordered.splice(to, 0, item!);
+  return reordered;
+}
+
+export function resolveFavoriteDropTarget(
+  point: { x: number; y: number },
+  targets: readonly { key: string; x: number; y: number; width: number; height: number }[],
+  bounds: { width: number; height: number },
+) {
+  if (point.x < 0 || point.x > bounds.width || point.y < 0 || point.y > bounds.height) return null;
+  const hit = targets.find((rect) => point.x >= rect.x && point.x <= rect.x + rect.width
+    && point.y >= rect.y && point.y <= rect.y + rect.height);
+  if (hit) return hit.key;
+  const last = targets.at(-1);
+  if (last && (point.y > last.y + last.height || (point.y >= last.y && point.x > last.x + last.width))) {
+    return last.key;
+  }
+  return null;
 }
 
 export function getProfileMediaPreviews(items: readonly LibraryMediaItem[]) {

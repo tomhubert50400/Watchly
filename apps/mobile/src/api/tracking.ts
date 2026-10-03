@@ -6,6 +6,7 @@ export type TrackingStatus = 'watchlisted' | 'watching' | 'watched' | 'dropped';
 export type TrackingState = {
   contentType: TrackedContentType;
   favorite: boolean;
+  favoritePosition?: number | null;
   id: string;
   status: TrackingStatus | null;
   tmdbId: number;
@@ -39,4 +40,8 @@ export function listTrackingStates(token: string, contentType?: TrackedContentTy
 
 export function upsertTrackingState(token: string, input: UpsertTrackingStateInput) {
   return apiPut<TrackingState | null>('/tracking/states', input, { token });
+}
+
+export function saveFavoriteOrder(token: string, items: Array<{ contentType: TrackedContentType; tmdbId: number }>) {
+  return apiPut<TrackingState[]>('/tracking/states/favorites/order', { items }, { token });
 }
