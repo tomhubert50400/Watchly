@@ -14,6 +14,7 @@ import { colors, spacing } from '../design/tokens';
 import { useFocusedFieldVisibility } from './useFocusedFieldVisibility';
 import { AppHeader } from './AppHeader';
 import { ScreenReveal } from './ScreenReveal';
+import { ScreenTopFade } from './ScreenTopFade';
 
 type ScreenProps = PropsWithChildren<{
   background?: ReactNode;
@@ -88,38 +89,40 @@ export function Screen({
         behavior={!useNativeKeyboardInsets && Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardAvoider}
       >
-        <ScrollView
-          {...visibility}
-          automaticallyAdjustKeyboardInsets={useNativeKeyboardInsets}
-          contentContainerStyle={[
-            styles.content,
-            { paddingBottom: footer ? spacing.lg : navigationPadding + insets.bottom },
-          ]}
-          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-          keyboardShouldPersistTaps="handled"
-          onScroll={onScroll}
-          refreshControl={refreshControl}
-          ref={scrollViewRef}
-          scrollEventThrottle={scrollEventThrottle}
-          showsVerticalScrollIndicator={false}
-          stickyHeaderIndices={headerMode === 'sticky' && hasHeader ? [0] : undefined}
-          style={styles.container}
-        >
-          {hasHeader ? (
-            <ScreenReveal
-              style={[
-                styles.headerShell,
-                background ? styles.transparentHeader : null,
-                headerMode === 'sticky' ? styles.stickyHeader : null,
-                { paddingHorizontal: chromePadding },
-              ]}
-            >
-              <AppHeader eyebrow={eyebrow} leading={leading} title={title} trailing={trailing} />
-            </ScreenReveal>
-          ) : null}
-          {statusBanner ? <View style={[styles.banner, { marginHorizontal: chromePadding }]}>{statusBanner}</View> : null}
-          <ScreenReveal delay={50} ready={contentReady} style={[styles.body, { paddingHorizontal: sidePadding }]}>{children}</ScreenReveal>
-        </ScrollView>
+        <ScreenTopFade enabled={safeAreaEdges.includes('top') && insets.top > 0}>
+          <ScrollView
+            {...visibility}
+            automaticallyAdjustKeyboardInsets={useNativeKeyboardInsets}
+            contentContainerStyle={[
+              styles.content,
+              { paddingBottom: footer ? spacing.lg : navigationPadding + insets.bottom },
+            ]}
+            keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+            keyboardShouldPersistTaps="handled"
+            onScroll={onScroll}
+            refreshControl={refreshControl}
+            ref={scrollViewRef}
+            scrollEventThrottle={scrollEventThrottle}
+            showsVerticalScrollIndicator={false}
+            stickyHeaderIndices={headerMode === 'sticky' && hasHeader ? [0] : undefined}
+            style={styles.container}
+          >
+            {hasHeader ? (
+              <ScreenReveal
+                style={[
+                  styles.headerShell,
+                  background ? styles.transparentHeader : null,
+                  headerMode === 'sticky' ? styles.stickyHeader : null,
+                  { paddingHorizontal: chromePadding },
+                ]}
+              >
+                <AppHeader eyebrow={eyebrow} leading={leading} title={title} trailing={trailing} />
+              </ScreenReveal>
+            ) : null}
+            {statusBanner ? <View style={[styles.banner, { marginHorizontal: chromePadding }]}>{statusBanner}</View> : null}
+            <ScreenReveal delay={50} ready={contentReady} style={[styles.body, { paddingHorizontal: sidePadding }]}>{children}</ScreenReveal>
+          </ScrollView>
+        </ScreenTopFade>
         {footer ? (
           <View
             style={[
