@@ -4,3 +4,16 @@ packages:
 
 patchedDependencies:
   react-native-screens@4.16.0: patches/react-native-screens@4.16.0.patch
+
+# Patch security advisories in transitive dependencies pinned by upstream tools.
+# Keep these within the existing major version; avoid forcing native SDK upgrades.
+overrides:
+  '@hono/node-server@1.19.11': 1.19.15
+  '@grpc/grpc-js@1.9.16': 1.13.6
+  'postcss@8.4.49': 8.5.23
+  'esbuild@0.28.0': 0.28.1
+  'multer@2.1.1': 2.4.0
+  'valibot@1.2.0': 1.4.2
+  'browserslist@4.28.2': 4.28.7
+  'mysql2@3.15.3': 3.23.1
+  'baseline-browser-mapping@2.10.34': 2.11.0
