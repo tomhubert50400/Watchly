@@ -22,8 +22,8 @@ export function ScreenTopFade({ children, enabled, topInset }: PropsWithChildren
               y1="0"
               y2={topInset}
             >
-              <Stop offset="0" stopColor="black" stopOpacity={0.55} />
-              <Stop offset="0.5" stopColor="black" stopOpacity={0.82} />
+              <Stop offset="0" stopColor="black" stopOpacity={0.45} />
+              <Stop offset="0.5" stopColor="black" stopOpacity={0.74} />
               <Stop offset="1" stopColor="black" stopOpacity={1} />
             </LinearGradient>
           </Defs>
