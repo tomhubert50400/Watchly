@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { AuthenticatedRequest } from '../auth/auth.types';
-import { contentTypes, TrackingContentType, UpsertContentStateDto } from './tracking.dto';
+import { contentTypes, SaveFavoriteOrderDto, TrackingContentType, UpsertContentStateDto } from './tracking.dto';
 import { TrackingService } from './tracking.service';
 
 @Controller('tracking/states')
@@ -44,6 +44,11 @@ export class TrackingController {
   @Put()
   async upsert(@Req() request: AuthenticatedRequest, @Body() body: UpsertContentStateDto) {
     return this.tracking.upsertState(getIdentity(request), body);
+  }
+
+  @Put('favorites/order')
+  async saveFavoriteOrder(@Req() request: AuthenticatedRequest, @Body() body: SaveFavoriteOrderDto) {
+    return this.tracking.saveFavoriteOrder(getIdentity(request), body);
   }
 
   @Delete()

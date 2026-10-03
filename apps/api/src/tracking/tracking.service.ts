@@ -1,9 +1,9 @@
-import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, Optional } from '@nestjs/common';
 import { TrackedContentType, UserContentStatus } from '../generated/prisma/enums';
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
-import { TrackingContentType, TrackingStatus, UpsertContentStateDto } from './tracking.dto';
+import { SaveFavoriteOrderDto, TrackingContentType, TrackingStatus, UpsertContentStateDto } from './tracking.dto';
 import { ViewingsService } from '../viewings/viewings.service';
 
 @Injectable()
@@ -83,7 +83,7 @@ export class TrackingService {
         userId,
       },
       update: {
-        ...(hasOwn(input, 'favorite') ? { favorite } : {}),
+        ...(hasOwn(input, 'favorite') ? { favorite, ...(!favorite ? { favoritePosition: null } : {}) } : {}),
         ...(hasOwn(input, 'status') ? { status } : {}),
       },
       where: {
@@ -117,6 +117,36 @@ export class TrackingService {
     );
   }
 
+  async saveFavoriteOrder(identity: AuthenticatedIdentity, input: SaveFavoriteOrderDto) {
+    const userId = await this.getUserId(identity);
+    const keys = input.items.map((item) => `${toTrackedContentType(item.contentType)}:${item.tmdbId}`);
+    if (new Set(keys).size !== keys.length) throw new BadRequestException('Favorites must appear only once.');
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const favorites = await tx.userContentState.findMany({ where: { userId, favorite: true } });
+        const byKey = new Map(favorites.map((item) => [`${item.contentType}:${item.tmdbId}`, item]));
+        if (favorites.length !== keys.length || keys.some((key) => !byKey.has(key))) {
+          throw new ConflictException('Your favorites changed. Reopen the editor and try again.');
+        }
+        const saved = [];
+        for (const [favoritePosition, key] of keys.entries()) {
+          const state = byKey.get(key)!;
+          saved.push(await tx.userContentState.update({
+            where: { id: state.id },
+            data: { favoritePosition, updatedAt: state.updatedAt },
+          }));
+        }
+        return saved.map(toApiState);
+      }, { isolationLevel: 'Serializable' });
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2034') {
+        throw new ConflictException('Your favorites changed. Reopen the editor and try again.');
+      }
+      throw error;
+    }
+  }
+
   private async getUserId(identity: AuthenticatedIdentity) {
     const user = await this.authService.getOrCreateUser(identity);
 
@@ -127,6 +157,7 @@ export class TrackingService {
 type UserContentStateRecord = {
   contentType: TrackedContentType;
   favorite: boolean;
+  favoritePosition: number | null;
   id: string;
   status: UserContentStatus | null;
   tmdbId: number;
@@ -173,6 +204,7 @@ function toApiState(state: UserContentStateRecord) {
   return {
     contentType: fromTrackedContentType(state.contentType),
     favorite: state.favorite,
+    favoritePosition: state.favoritePosition,
     id: state.id,
     status: fromUserContentStatus(state.status),
     tmdbId: state.tmdbId,

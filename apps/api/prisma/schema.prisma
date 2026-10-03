@@ -267,6 +267,7 @@ model UserContentState {
   tmdbId      Int
   status      UserContentStatus?
   favorite    Boolean            @default(false)
+  favoritePosition Int?
   watchedEpisodesInitializedAt DateTime?
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt

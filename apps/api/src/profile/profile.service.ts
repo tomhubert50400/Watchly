@@ -1307,6 +1307,7 @@ export class ProfileService {
           select: {
             contentType: true,
             favorite: true,
+            favoritePosition: true,
             id: true,
             status: true,
             tmdbId: true,
@@ -1403,6 +1404,7 @@ export class ProfileService {
       trackingStates: trackingStates.map((state) => ({
         contentType: fromTrackedContentType(state.contentType),
         favorite: state.favorite,
+        favoritePosition: state.favoritePosition,
         id: state.id,
         status: fromUserContentStatus(state.status),
         tmdbId: state.tmdbId,

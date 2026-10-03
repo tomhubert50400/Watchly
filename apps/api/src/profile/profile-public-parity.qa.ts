@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const source = readFileSync(join(__dirname, 'profile.service.ts'), 'utf8');
+assert.match(source, /private async getPublicProfileMedia[\s\S]*favoritePosition: true[\s\S]*favoritePosition: state.favoritePosition/,
+  'public profiles must expose the favorite order chosen by their owner');
 
 assert.match(
   source,
