@@ -20,10 +20,10 @@ export function ScreenTopFade({ children, enabled }: PropsWithChildren<{ enabled
               x1="0"
               x2="0"
               y1="0"
-              y2="24"
+              y2="16"
             >
-              <Stop offset="0" stopColor="black" stopOpacity={0} />
-              <Stop offset="0.5" stopColor="black" stopOpacity={0.5} />
+              <Stop offset="0" stopColor="black" stopOpacity={0.55} />
+              <Stop offset="0.5" stopColor="black" stopOpacity={0.82} />
               <Stop offset="1" stopColor="black" stopOpacity={1} />
             </LinearGradient>
           </Defs>

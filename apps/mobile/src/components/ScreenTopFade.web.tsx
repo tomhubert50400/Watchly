@@ -7,7 +7,7 @@ export function ScreenTopFade({ children, enabled }: PropsWithChildren<{ enabled
       // React Native Web forwards CSS masks to the DOM.
       // @ts-expect-error maskImage is a web-only style.
       maskImage: enabled
-        ? 'linear-gradient(to bottom, transparent, black 24px)'
+        ? 'linear-gradient(to bottom, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.82) 8px, black 16px)'
         : undefined,
     }]}>
       {children}
