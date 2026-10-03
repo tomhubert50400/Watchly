@@ -23,7 +23,7 @@ type ScreenProps = PropsWithChildren<{
   footer?: ReactNode;
   gestureHandlers?: GestureResponderHandlers;
   headerMode?: 'regular' | 'sticky';
-  headerTopPadding?: number;
+  headerTopSpacing?: number;
   horizontalPadding?: boolean | number;
   leading?: ReactNode;
   nativeKeyboardInsetsOnly?: boolean;
@@ -46,7 +46,7 @@ export function Screen({
   footer,
   gestureHandlers,
   headerMode = 'regular',
-  headerTopPadding,
+  headerTopSpacing,
   horizontalPadding = true,
   leading,
   nativeKeyboardInsetsOnly = false,
@@ -119,7 +119,7 @@ export function Screen({
               <ScreenReveal
                 style={[
                   styles.headerShell,
-                  headerTopPadding !== undefined ? { paddingTop: headerTopPadding } : null,
+                  headerTopSpacing !== undefined ? { marginTop: Math.min(0, headerTopSpacing), paddingTop: Math.max(0, headerTopSpacing) } : null,
                   background ? styles.transparentHeader : null,
                   headerMode === 'sticky' ? styles.stickyHeader : null,
                   { paddingHorizontal: chromePadding },
