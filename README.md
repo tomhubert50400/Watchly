@@ -78,7 +78,7 @@ packages/
 
 ## Prerequisites
 
-- Node.js 20.9 or later
+- Node.js 22.12 or later in the 22.x line, or Node.js 24+ (Firebase Admin 14 and Prisma 7 requirements)
 - pnpm `10.28.2`
 - PostgreSQL
 - A Firebase project
