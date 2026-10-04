@@ -8,9 +8,12 @@ including Planned, place their genre funnel beside the section selector. Type
 assignments, source order, or shared vote candidates. Clear filters restores
 all titles. Genre loading is progressive, with retry and empty-result states.
 
-On iOS the hamburger opens the native action sheet, including disabled actions
-and a Cancel row. Other platforms retain the anchored popup. The native action
-sheet needs no additional native dependency or app rebuild.
+On iOS the hamburger uses a native UIMenu attached to the header button through
+`@react-native-menu/menu`. UIKit places it below the top-right button and towards
+the available space on its left. This native view requires a new iOS build.
+Existing builds and Expo Go retain the native action sheet, with a synchronous
+presentation guard to ignore rapid repeated taps. Other platforms retain the
+anchored popup. Both iOS presentations preserve disabled and selected actions.
 
 Profile genre filters and both watchlist types share public genre metadata by
 content type and TMDB ID. The session cache holds 2,000 entries for 24 hours,
