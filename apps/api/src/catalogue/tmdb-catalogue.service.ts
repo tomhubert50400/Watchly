@@ -1,4 +1,5 @@
 import { browseGenreIds, moodGenreIds, type BrowseFilters } from './discover-model';
+import { homeCategories, homeCategoryQuery, selectHomeCategories, type HomeCategoryId } from './home-categories';
 import {
   BadGatewayException,
   Inject,
@@ -39,6 +40,7 @@ type TmdbSearchResult = {
 
 type TmdbSearchResponse = {
   results?: TmdbSearchResult[];
+  total_pages?: number;
 };
 
 type TmdbGenreResponse = {
@@ -482,6 +484,43 @@ export class TmdbCatalogueService {
     return {
       item: this.toDiscoverTitle({ ...payload, genre_ids: payload.genres?.map(genre => genre.id) }, mediaType),
       recommendations: (payload.recommendations?.results ?? []).map(item => this.toDiscoverTitle(item, mediaType)),
+    };
+  }
+
+  async homeCategories(country?: string) {
+    const results = await Promise.allSettled(selectHomeCategories(country).map(async category => ({
+      ...category, ...(await this.homeCategory(category.id, 1, country)),
+    })));
+    if (results.every(result => result.status === 'rejected')) throw new ServiceUnavailableException('Home categories are temporarily unavailable.');
+    return {
+      items: results.flatMap(result => result.status === 'fulfilled' ? [result.value] : []),
+      partial: results.some(result => result.status === 'rejected' || result.value.partial),
+    };
+  }
+
+  async homeCategory(id: HomeCategoryId, page = 1, country?: string) {
+    const category = homeCategories.find(category => category.id === id)!;
+    if (id === 'local' && !country) return { items: [], hasMore: false, partial: false };
+    const moviesOnly = 'moviesOnly' in category && category.moviesOnly;
+    const sourcePage = moviesOnly ? page : Math.ceil(page / 2);
+    const types: DiscoverMediaType[] = moviesOnly ? ['movie'] : ['movie', 'series'];
+    const results = await Promise.allSettled(types.map(async type => {
+      const query = homeCategoryQuery(id, type, sourcePage, country);
+      const payload = await this.fetchDiscover<TmdbSearchResponse>(query.path, query.params);
+      return {
+        items: (payload.results ?? []).filter(item => item.title || item.name).map(item => ({ ...this.toDiscoverTitle(item, type), reason: category.title })),
+        hasMore: sourcePage < Math.min(payload.total_pages ?? sourcePage, 500),
+      };
+    }));
+    if (results.every(result => result.status === 'rejected')) throw new ServiceUnavailableException('This category is temporarily unavailable.');
+    const movies = results[0].status === 'fulfilled' ? results[0].value.items : [];
+    const series = results[1]?.status === 'fulfilled' ? results[1].value.items : [];
+    const pool = Array.from({ length: Math.max(movies.length, series.length) }, (_, index) => [movies[index], series[index]]).flat().filter(item => Boolean(item));
+    const offset = moviesOnly ? 0 : ((page - 1) % 2) * 20;
+    return {
+      items: pool.slice(offset, offset + 20),
+      hasMore: pool.length > offset + 20 || results.some(result => result.status === 'fulfilled' && result.value.hasMore),
+      partial: results.some(result => result.status === 'rejected'),
     };
   }
 

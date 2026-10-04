@@ -1,5 +1,6 @@
 import { BadRequestException, Controller, Get, Inject, Param, ParseIntPipe, Query } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { homeCategories, type HomeCategoryId } from './home-categories';
 import {
   CatalogueDiscoveryMediaType,
   CatalogueDiscoverySection,
@@ -52,6 +53,18 @@ export class CatalogueController {
   @Get('movie-sections')
   async movieSections() {
     return this.catalogue.movieSections();
+  }
+
+  @Get('home-categories')
+  async homeCategories(@Query('country') country?: string) {
+    return this.catalogue.homeCategories(country ? parseCountry(country) : undefined);
+  }
+
+  @Get('home-categories/:id')
+  async homeCategory(@Param('id') id: string, @Query('page') page = '1', @Query('country') country?: string) {
+    if (!homeCategories.some(category => category.id === id)) throw new BadRequestException('Unknown home category.');
+    if (!/^\d+$/.test(page) || Number(page) < 1 || Number(page) > 500) throw new BadRequestException('page must be between 1 and 500.');
+    return this.catalogue.homeCategory(id as HomeCategoryId, Number(page), country ? parseCountry(country) : undefined);
   }
 
   @Get('onboarding-taste-options')
