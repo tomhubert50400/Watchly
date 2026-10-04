@@ -251,7 +251,16 @@ function AppNavigator() {
           <>
             <Stack.Screen component={MainTabs} name="MainTabs" options={{ headerShown: false }} />
             <Stack.Screen component={ProfileReviewsScreen} name="ProfileReviews" options={{ headerShown: false }} />
-            <Stack.Screen component={DiscoverResultsScreen} name="DiscoverResults" options={({ route }) => ({ headerShown: Boolean(route.params.homeCategory), title: '' })} />
+            <Stack.Screen
+              component={DiscoverResultsScreen}
+              name="DiscoverResults"
+              options={({ route }) => ({
+                headerShown: Boolean(route.params.homeCategory),
+                headerStyle: { backgroundColor: 'transparent' },
+                headerTransparent: true,
+                title: '',
+              })}
+            />
             <Stack.Screen
               component={ProfileConnectionsScreen}
               name="ProfileConnections"
