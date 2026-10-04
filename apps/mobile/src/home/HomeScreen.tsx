@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useMemo } from 'react';
+import { Fragment, memo, useCallback, useMemo } from 'react';
 import { CompositeNavigationProp, useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -85,6 +85,12 @@ export function HomeScreen() {
   const { country } = useWatchRegion();
   const loadRecommendations = useCallback(() => getHomeCategories(country), [country]);
   const recommendations = useCachedResource({ key: homeCategoriesResourceKey(country), load: loadRecommendations });
+  const openRecommendation = useCallback((item: HomeTrendingItem) => {
+    navigation.navigate(item.mediaType === 'movie' ? 'FilmDetail' : 'SeriesDetail', {
+      title: item.title,
+      tmdbId: item.tmdbId,
+    });
+  }, [navigation]);
   const loadFeed = useCallback(
     () => firebaseIdToken ? loadHomeFeed(firebaseIdToken) : Promise.resolve([]),
     [feedRevision, firebaseIdToken],
@@ -305,10 +311,7 @@ export function HomeScreen() {
                   >
                     <TrendingRail
                       items={category.items}
-                      onOpen={item => navigation.navigate(item.mediaType === 'movie' ? 'FilmDetail' : 'SeriesDetail', {
-                        title: item.title,
-                        tmdbId: item.tmdbId,
-                      })}
+                      onOpen={openRecommendation}
                     />
                     {!category.items.length ? (
                       <Text style={styles.emptySection}>No titles are available in this category yet.</Text>
@@ -341,7 +344,7 @@ function HomeSection({ children, delay, title, onViewAll }: { children: React.Re
   );
 }
 
-function TrendingRail({
+const TrendingRail = memo(function TrendingRail({
   items,
   onOpen,
 }: {
@@ -373,7 +376,7 @@ function TrendingRail({
       )}
     /></HorizontalScrollFade>
   );
-}
+});
 
 export async function loadHomeCatalogue(): Promise<HomeCatalogueData> {
   const response = await ensureCatalogueSections();
