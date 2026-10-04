@@ -13,6 +13,7 @@ import { colors, radii, spacing, typography } from '../design/tokens';
 import { BlendedArtwork } from '../library/WatchlistRail';
 import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { getWatchlistCoverItems, toggleWatchlistCoverItem } from './watchlistCover';
+import { saveWatchlistArtwork } from './saveWatchlistArtwork';
 
 type Props = {
   backgroundItemId?: string | null;
@@ -46,6 +47,7 @@ export function WatchlistArtworkSheet({
   const [backgroundSelection, setBackgroundSelection] = useState(
     () => backgroundItemId && items.some((item) => item.id === backgroundItemId) ? [backgroundItemId] : [],
   );
+  const savedSelection = useRef({ coverItemIds: [...coverSelection], backgroundItemId: backgroundSelection[0] ?? null });
   const [artwork, setArtwork] = useState<Record<string, Artwork>>({});
   const [visibleCount, setVisibleCount] = useState(24);
   const [loading, setLoading] = useState(false);
@@ -103,25 +105,23 @@ export function WatchlistArtworkSheet({
     try {
       const token = await getFirebaseIdToken();
       if (!alive.current) return;
-      if (!token || !ownerId || ownerRef.current !== ownerId) throw new Error(`Sign in again to change the ${mode}.`);
+      if (!token || !ownerId || ownerRef.current !== ownerId) throw new Error('Sign in again to change the artwork.');
       const path = `/${kind === 'personal' ? 'watchlists' : 'shared-watchlists'}/${watchlistId}`;
-      if (mode === 'cover') {
-        const result = await apiPut<{ coverItemIds: string[] }>(`${path}/cover`, { itemIds: selected }, { token });
-        if (ownerRef.current !== ownerId) return;
-        onCoverSaved(result.coverItemIds);
-      } else {
-        const result = await apiPut<{ backgroundItemId: string | null }>(
-          `${path}/background`,
-          { itemId: selected[0] ?? null },
-          { token },
-        );
-        if (ownerRef.current !== ownerId) return;
-        onBackgroundSaved(result.backgroundItemId);
-      }
-      notifyUserDataChanged('watchlists');
-      if (alive.current) onClose();
+      await saveWatchlistArtwork({
+        selected: { coverItemIds: coverSelection, backgroundItemId: backgroundSelection[0] ?? null },
+        saved: savedSelection.current,
+        isCurrent: () => alive.current && ownerRef.current === ownerId,
+        saveCover: (itemIds) => apiPut(`${path}/cover`, { itemIds }, { token }),
+        saveBackground: (itemId) => apiPut(`${path}/background`, { itemId }, { token }),
+        onSaved: (change) => {
+          if (change.coverItemIds) onCoverSaved(change.coverItemIds);
+          if ('backgroundItemId' in change) onBackgroundSaved(change.backgroundItemId ?? null);
+          notifyUserDataChanged('watchlists');
+        },
+      });
+      if (alive.current && ownerRef.current === ownerId) onClose();
     } catch (failure) {
-      if (alive.current) setError(failure instanceof Error ? failure.message : `Could not save the ${mode}.`);
+      if (alive.current && ownerRef.current === ownerId) setError(failure instanceof Error ? failure.message : 'Could not save the artwork.');
     } finally {
       if (alive.current) setSaving(false);
     }
@@ -133,7 +133,7 @@ export function WatchlistArtworkSheet({
   const preview = previewItems.map((item) => artwork[item.id]?.artworkUrl ?? null);
   const unavailable = items.slice(0, visibleCount).some((item) => artwork[item.id]?.title === 'Title unavailable');
   return <BottomActionSheet visible title="Customize watchlist" onClose={onClose}
-    footer={<Button fullWidth label={mode === 'cover' ? 'Save cover' : 'Save background'} loading={saving} onPress={() => void save()} />}>
+    footer={<Button fullWidth label="Save cover & background" loading={saving} onPress={() => void save()} />}>
     <BottomActionSheetScrollView contentContainerStyle={styles.content}>
       <SegmentedControl
         options={[
