@@ -1,12 +1,30 @@
 import { Menu } from 'lucide-react-native';
 import { ReactNode, useEffect, useRef, useState } from 'react';
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActionSheetIOS, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 
 type Action = { label: string; icon: ReactNode; onPress: () => void; disabled?: boolean; active?: boolean };
 
 export function WatchlistActionsMenu({ actions }: { actions: Action[] }) {
+  if (Platform.OS === 'ios') return <Pressable accessibilityRole="button" accessibilityLabel="Watchlist menu"
+    onPress={() => ActionSheetIOS.showActionSheetWithOptions({
+      title: 'Watchlist menu',
+      options: [...actions.map((action) => `${action.active ? '✓ ' : ''}${action.label}`), 'Cancel'],
+      cancelButtonIndex: actions.length,
+      disabledButtonIndices: actions.flatMap((action, index) => action.disabled ? [index] : []),
+      userInterfaceStyle: 'dark',
+    }, (index) => {
+      const action = actions[index];
+      if (action && !action.disabled) action.onPress();
+    })}
+    style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
+    <Menu color={colors.text} size={22} />
+  </Pressable>;
+  return <WatchlistPopupMenu actions={actions} />;
+}
+
+function WatchlistPopupMenu({ actions }: { actions: Action[] }) {
   const { width, height, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const buttonRef = useRef<View>(null);
@@ -65,8 +83,7 @@ export function WatchlistActionsMenu({ actions }: { actions: Action[] }) {
                 closing.current = true;
                 pendingAction.current = action.onPress;
                 setVisible(false);
-                // Dismiss without animation, then present the next sheet once iOS is ready.
-                if (Platform.OS !== 'ios') runPendingAction();
+                runPendingAction();
               }}
               style={({ pressed }) => [styles.row, { minHeight: rowHeight }, action.disabled && styles.disabled, pressed && styles.rowPressed]}>
               {action.icon}
