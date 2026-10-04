@@ -10,7 +10,7 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { colors, spacing, typography } from '../design/tokens';
 import { filterWatchlistItems, type WatchlistMediaType } from './watchlistFiltersModel';
 
-type FilterState = { scope: string; mediaType: WatchlistMediaType; genre: string | null; open: boolean; enabled: boolean };
+type FilterState = { scope: string; mediaType: WatchlistMediaType; genre: string | null; open: boolean };
 const mediaTypes: Array<{ label: string; value: WatchlistMediaType }> = [
   { label: 'All', value: 'all' },
   { label: 'Movies', value: 'movie' },
@@ -18,20 +18,21 @@ const mediaTypes: Array<{ label: string; value: WatchlistMediaType }> = [
 ];
 
 export function useWatchlistFilters<T extends { contentType: 'movie' | 'series'; tmdbId: number }>(items: readonly T[], scope: string) {
-  const initial: FilterState = { scope, mediaType: 'all', genre: null, open: false, enabled: false };
+  const initial: FilterState = { scope, mediaType: 'all', genre: null, open: false };
   const [selection, setSelection] = useState(initial);
   const state = selection.scope === scope ? selection : initial;
   const update = useCallback((next: Partial<FilterState>) => setSelection((current) => ({
-    ...(current.scope === scope ? current : { scope, mediaType: 'all', genre: null, open: false, enabled: false }),
+    ...(current.scope === scope ? current : { scope, mediaType: 'all', genre: null, open: false }),
     ...next,
   })), [scope]);
   const genreItems = useMemo(() => items.filter((item) => state.mediaType === 'all' || item.contentType === state.mediaType), [items, state.mediaType]);
-  const genres = useMediaGenres(genreItems, state.enabled);
+  const genres = useMediaGenres(genreItems, true);
+  const selectedGenres = state.genre ? genres.genresByKey : null;
   const visibleItems = useMemo(
-    () => filterWatchlistItems(items, state.mediaType, state.genre, genres.genresByKey),
-    [items, state.mediaType, state.genre, genres.genresByKey],
+    () => filterWatchlistItems(items, state.mediaType, state.genre, selectedGenres ?? {}),
+    [items, state.mediaType, state.genre, selectedGenres],
   );
-  const open = useCallback(() => update({ open: true, enabled: true }), [update]);
+  const open = useCallback(() => update({ open: true }), [update]);
   const close = useCallback(() => update({ open: false }), [update]);
   const clear = useCallback(() => update({ mediaType: 'all', genre: null }), [update]);
   return { ...state, active: state.mediaType !== 'all' || state.genre !== null, isOpen: state.open, open, close, clear, update, genres, visibleItems, total: items.length };

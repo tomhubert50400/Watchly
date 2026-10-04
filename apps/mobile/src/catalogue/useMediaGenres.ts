@@ -37,6 +37,7 @@ export function useMediaGenres(items: readonly MediaGenresItem[], enabled: boole
     if (!enabled) return;
     let active = true;
     let failed = false;
+    let progressTimer: ReturnType<typeof setTimeout> | undefined;
     const missing = mediaItems.filter((item) => getCachedMediaGenres(item) === null);
     setStatus({ signature, loading: missing.length > 0, error: false });
 
@@ -57,12 +58,22 @@ export function useMediaGenres(items: readonly MediaGenresItem[], enabled: boole
           return null;
         }
       },
-      onLoaded: () => setStatus({ signature, loading: true, error: failed }),
+      onLoaded: () => {
+        if (progressTimer !== undefined) return;
+        progressTimer = setTimeout(() => {
+          progressTimer = undefined;
+          if (active) setStatus({ signature, loading: true, error: failed });
+        }, 100);
+      },
     }).then(() => {
+      if (progressTimer !== undefined) clearTimeout(progressTimer);
       if (active) setStatus({ signature, loading: false, error: failed });
     });
 
-    return () => { active = false; };
+    return () => {
+      active = false;
+      if (progressTimer !== undefined) clearTimeout(progressTimer);
+    };
   }, [mediaItems, signature, enabled, attempt, refreshMovie, refreshSeries]);
 
   const genres = [...new Set(Object.values(genresByKey).flat())]

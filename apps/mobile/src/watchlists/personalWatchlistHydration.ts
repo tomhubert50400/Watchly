@@ -41,6 +41,14 @@ export async function hydrateWatchlistItems<T extends { id: string; contentType:
     .filter(({ item }) => needsHydration(item))
     .sort((a, b) => Number(b.item.id === backgroundItemId) - Number(a.item.id === backgroundItemId));
 
+  let progressTimer: ReturnType<typeof setTimeout> | undefined;
+  let dirty = false;
+  function publish() {
+    progressTimer = undefined;
+    if (dirty && isCurrent()) onProgress([...hydratedItems]);
+    dirty = false;
+  }
+
   if (isCurrent()) onProgress([...hydratedItems]);
   await loadProgressively({
     concurrency: 3,
@@ -56,9 +64,12 @@ export async function hydrateWatchlistItems<T extends { id: string; contentType:
     },
     onLoaded: (loaded, { index }) => {
       hydratedItems[index] = loaded;
-      onProgress([...hydratedItems]);
+      dirty = true;
+      if (progressTimer === undefined) progressTimer = setTimeout(publish, 100);
     },
   });
+  if (progressTimer !== undefined) clearTimeout(progressTimer);
+  publish();
   return hydratedItems;
 }
 

@@ -77,12 +77,15 @@ async function run() {
   firstBatch.resolve();
   await tailStarted.promise;
   await flushMicrotasks();
+  await new Promise((resolve) => setTimeout(resolve, 120));
   assert.equal(finished, false, 'the deferred last title must still be loading');
   assert(snapshots.some((snapshot) => snapshot[13].title === metadata(items[13]).title),
     'titles beyond the old twelve-item boundary must appear before all requests finish');
   assert.equal(peak, 3, 'hydration must remain bounded throughout all 500 titles');
   tail.resolve();
   const result = await hydration;
+  assert(snapshots.length < 10, 'fast metadata completions must be batched instead of publishing 500 full grids');
+  assert.deepEqual(snapshots.at(-1), result, 'the final snapshot must publish every title without waiting for the progress timer');
   assert.equal(started.length, 500, 'every movie and series must receive metadata');
   assert.equal(new Set(started).size, 500, 'each item must be requested only once');
   assert.deepEqual(result, items.map((item) => ({ ...item, ...metadata(item) })));
