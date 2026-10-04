@@ -56,14 +56,12 @@ const filmFactsIndex = filmDetailSource.indexOf('<DetailFacts');
 const filmVideoIndex = filmDetailSource.indexOf('<CatalogueVideoRail');
 const filmStreamingIndex = filmDetailSource.indexOf('<StreamingAvailabilityPanel');
 const filmCastIndex = filmDetailSource.indexOf('<CatalogueCastRail');
-const filmKeywordIndex = filmDetailSource.indexOf('<CatalogueKeywordList');
 const filmRelatedIndex = filmDetailSource.indexOf('<CatalogueRelatedRail');
 const seriesSynopsisIndex = seriesDetailSource.indexOf('<SynopsisPanel');
 const seriesFactsIndex = seriesDetailSource.indexOf('<DetailFacts');
 const seriesVideoIndex = seriesDetailSource.indexOf('<CatalogueVideoRail');
 const seriesStreamingIndex = seriesDetailSource.indexOf('<StreamingAvailabilityPanel');
 const seriesCastIndex = seriesDetailSource.indexOf('<CatalogueCastRail');
-const seriesKeywordIndex = seriesDetailSource.indexOf('<CatalogueKeywordList');
 const seriesRelatedIndex = seriesDetailSource.indexOf('<CatalogueRelatedRail');
 
 assert.match(ratingSource, /color: colors\.rating/, 'catalogue ratings must use Watchly pink');
@@ -279,21 +277,18 @@ assert(
   filmFactsIndex < filmVideoIndex
     && filmVideoIndex < filmStreamingIndex
     && filmStreamingIndex < filmCastIndex
-    && filmCastIndex < filmKeywordIndex
-    && filmKeywordIndex < filmRelatedIndex,
+    && filmCastIndex < filmRelatedIndex,
   'film lower-page information must follow the intended cinematic hierarchy',
 );
 assert(
   seriesFactsIndex < seriesVideoIndex
     && seriesVideoIndex < seriesStreamingIndex
     && seriesStreamingIndex < seriesCastIndex
-    && seriesCastIndex < seriesKeywordIndex
-    && seriesKeywordIndex < seriesRelatedIndex,
+    && seriesCastIndex < seriesRelatedIndex,
   'series lower-page information must follow the intended cinematic hierarchy',
 );
 assert.match(catalogueDetailSectionsSource, /title="Teasers & trailers"/);
 assert.match(catalogueDetailSectionsSource, /title="Cast"/);
-assert.match(catalogueDetailSectionsSource, /title="Discover by keyword"/);
 assert.match(catalogueDetailSectionsSource, /title="More like this"/);
 assert.match(
   catalogueDetailSectionsSource,

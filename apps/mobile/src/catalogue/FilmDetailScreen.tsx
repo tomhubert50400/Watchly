@@ -23,7 +23,6 @@ import { ViewingCountControl } from '../viewings/ViewingCountControl';
 import { AddToWatchlistControl } from '../watchlists/AddToWatchlistControl';
 import {
   CatalogueCastRail,
-  CatalogueKeywordList,
   CatalogueRelatedRail,
   CatalogueVideoRail,
 } from './CatalogueDetailSections';
@@ -171,7 +170,6 @@ function MovieDetailContent({
         <StreamingAvailabilityPanel contentType="movie" tmdbId={movie.tmdbId} />
         <CatalogueCastRail cast={movie.cast ?? []} />
         <CharacterAlertsPanel contentType="movie" tmdbId={movie.tmdbId} />
-        <CatalogueKeywordList keywords={movie.keywords ?? []} />
         {!isWatched && movie.collection ? <MovieWhatsNext collectionId={movie.collection.id} tmdbId={movie.tmdbId} onOpen={onOpenRelated} /> : null}
         <CatalogueRelatedRail items={movie.recommendations ?? []} onOpen={onOpenRelated} />
       </ScreenReveal>

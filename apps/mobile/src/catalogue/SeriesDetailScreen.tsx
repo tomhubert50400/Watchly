@@ -25,7 +25,6 @@ import { ViewingCountControl } from '../viewings/ViewingCountControl';
 import { AddToWatchlistControl } from '../watchlists/AddToWatchlistControl';
 import {
   CatalogueCastRail,
-  CatalogueKeywordList,
   CatalogueRelatedRail,
   CatalogueVideoRail,
 } from './CatalogueDetailSections';
@@ -184,7 +183,6 @@ function SeriesDetailContent({ onOpenRelated, series, onRatingGestureChange }: {
             <StreamingAvailabilityPanel contentType="series" tmdbId={series.tmdbId} />
             <CatalogueCastRail cast={series.cast ?? []} />
             <CharacterAlertsPanel contentType="series" tmdbId={series.tmdbId} />
-            <CatalogueKeywordList keywords={series.keywords ?? []} />
             {!isWatched ? <SeriesProgressSummary seasons={series.seasons} seriesTitle={series.title} seriesTmdbId={series.tmdbId} /> : null}
             <CatalogueRelatedRail items={series.recommendations ?? []} onOpen={onOpenRelated} />
           </>

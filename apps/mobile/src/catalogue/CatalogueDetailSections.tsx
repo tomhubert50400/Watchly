@@ -108,24 +108,6 @@ export function CatalogueCastRail({ cast }: { cast: CatalogueCastMember[] }) {
   );
 }
 
-export function CatalogueKeywordList({ keywords }: { keywords: string[] }) {
-  if (keywords.length === 0) {
-    return null;
-  }
-
-  return (
-    <CatalogueSection title="Discover by keyword">
-      <View style={styles.keywordList}>
-        {keywords.map((keyword) => (
-          <View key={keyword} style={styles.keywordPill}>
-            <Text style={styles.keywordText}>{keyword}</Text>
-          </View>
-        ))}
-      </View>
-    </CatalogueSection>
-  );
-}
-
 export function CatalogueRelatedRail({
   items,
   onOpen,
@@ -181,25 +163,6 @@ const styles = StyleSheet.create({
   bleedRail: {
     gap: spacing.md,
     paddingHorizontal: spacing.xl,
-  },
-  keywordList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.xl,
-  },
-  keywordPill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.10)',
-    borderColor: colors.border,
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  keywordText: {
-    ...typography.meta,
-    color: colors.textMuted,
-    fontSize: 13,
   },
   personCard: {
     width: 96,
