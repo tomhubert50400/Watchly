@@ -22,6 +22,7 @@ export function WatchlistActionsMenu({ actions }: { actions: Action[] }) {
       id: String(index),
       title: action.label,
       image: action.nativeIcon,
+      imageColor: action.active ? colors.accentText : colors.text,
       state: action.active ? 'on' : 'off',
       attributes: { disabled: Boolean(action.disabled) },
     }))}
