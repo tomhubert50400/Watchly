@@ -8,12 +8,26 @@ including Planned, place their genre funnel beside the section selector. Type
 assignments, source order, or shared vote candidates. Clear filters restores
 all titles. Genre loading is progressive, with retry and empty-result states.
 
+On iOS the hamburger opens the native action sheet, including disabled actions
+and a Cancel row. Other platforms retain the anchored popup. The native action
+sheet needs no additional native dependency or app rebuild.
+
 Profile genre filters and both watchlist types share public genre metadata by
 content type and TMDB ID. The session cache holds 2,000 entries for 24 hours,
 reuses already loaded catalogue details, and coalesces duplicate requests.
 Cold loads use three workers; closing or superseding a loader stops further
 scheduling and publication. Personal and shared list artwork also hydrates
 beyond the first twelve titles.
+
+Watchlists start preparing genres when their items arrive, before Filters is
+opened. Genre and artwork progress updates are batched at 100 ms, with an
+immediate final publication, to reduce repeated list renders while loading.
+Type-only filtering keeps its results stable during genre progress updates.
+
+The artwork sheet keeps independent cover/background drafts across tabs. Its
+single Save cover & background button writes only changed selections and closes
+after both saves succeed. If one request fails, the sheet stays open; retry
+skips selections already saved successfully.
 
 Other filter surfaces reuse their source data:
 
