@@ -63,6 +63,7 @@ assert.equal(legacy.selected(), 1, 'disabled actions must remain unavailable');
 
 const native = mount(true);
 assert.equal(native.button.type, 'NativeMenuView');
+assert.equal(native.button.props.children.props.style.flex ?? 0, 0, 'the native trigger must keep its intrinsic icon height before the header has a measured height');
 assert.equal(native.button.props.shouldOpenOnLongPress, false);
 assert.equal(native.button.props.actions[0].state, 'on');
 assert.equal(native.button.props.actions[0].image, 'line.3.horizontal.decrease');
