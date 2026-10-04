@@ -1,6 +1,6 @@
 # Home discovery
 
-Home shows nine catalogue rows with 20 titles per row when the matching TMDB catalogue has enough results. Trending this week and All-time favorites remain visible. Cinema from the selected country also remains visible when the country is known. The remaining slots rotate every three days, using a shared UTC cycle. All sixteen supported categories take part in the rotation.
+Home shows nine catalogue rows with 20 titles per row when the matching TMDB catalogue has enough results. Trending this week and All-time favorites remain visible. Cinema from the selected country also remains visible when the country is known. The remaining slots rotate after a randomly selected duration of three to seven whole days. A seeded UTC schedule anchored on January 1, 2026 keeps each cycle stable across requests, API replicas and restarts, and shared by all users. The thirteen other categories take turns in the rotating slots.
 
 The categories are trending, all-time favorites, comedy, local cinema, recent releases, crime and mystery, science fiction and fantasy, animation, blockbusters, the 2000s, action and adventure, horror, romance, documentaries, the 1990s and movies under 90 minutes.
 
@@ -8,7 +8,7 @@ The local cinema row uses TMDB's origin-country filter for movies, including int
 
 All-time favorites sort by TMDB rating, with at least 2,000 votes for movies and 500 for series. Recent releases cover the previous six months, with at least 20 votes. Other discovery rows generally require 100 votes, including local cinema. Blockbusters sort movies by TMDB revenue. Under 90 minutes excludes unknown and zero runtimes. Genres use the corresponding movie or television IDs.
 
-View all opens the selected category's grid. Mixed categories retain the All, Movies and TV Shows selector. Pagination consumes both halves of each upstream TMDB page rather than skipping results. Home prepares the first grid page in memory. Country and rotation cycle are included in Home cache keys; grid caches include category and country. Public TMDB requests share the existing one-hour cache and in-flight request coalescing.
+View all opens the selected category's grid. Mixed categories retain the All, Movies and TV Shows selector. Pagination consumes both halves of each upstream TMDB page rather than skipping results. Home prepares the first grid page in memory. Country and UTC day are included in Home cache keys so a cached selection cannot survive a rotation boundary; the API controls which days actually change the categories. Grid caches include category and country. Public TMDB requests share the existing one-hour cache and in-flight request coalescing.
 
 Categories load independently of the existing spotlight and signed-in Home sections. Partial or failed loads provide a retry action. Horizontal lists render posters in small batches.
 

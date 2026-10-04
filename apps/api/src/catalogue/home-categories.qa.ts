@@ -9,17 +9,30 @@ async function main() {
   const now = new Date('2026-10-04T12:00:00Z');
   const selection = selectHomeCategories('KR', now);
   assert.equal(selection.length, 9);
-  assert.deepEqual(selection, selectHomeCategories('KR', new Date('2026-10-05T12:00:00Z')));
-  assert.notDeepEqual(selection, selectHomeCategories('KR', new Date('2026-10-07T12:00:00Z')));
+  assert.deepEqual(selection, selectHomeCategories('KR', new Date(now)), 'The schedule must be stable across requests.');
   assert.equal(selectHomeCategories(undefined, now).length, 9);
   assert(!selectHomeCategories(undefined, now).some(category => category.id === 'local'));
   const seen = new Set<string>();
-  for (let cycle = 0; cycle < 13; cycle += 1) {
-    const categories = selectHomeCategories('KR', new Date(now.getTime() + cycle * 3 * 86400000));
+  const durations = new Set<number>();
+  let previous = selectHomeCategories('KR', new Date('2026-01-01T00:00:00Z'));
+  let consecutiveDays = 0;
+  for (let day = 0; day < 365; day += 1) {
+    const date = new Date(Date.UTC(2026, 0, 1) + day * 86400000);
+    const categories = selectHomeCategories('KR', date);
+    if (categories.map(category => category.id).join() !== previous.map(category => category.id).join()) {
+      assert(consecutiveDays >= 3 && consecutiveDays <= 7, 'Each selection lasts between three and seven whole days.');
+      durations.add(consecutiveDays);
+      assert.deepEqual(selectHomeCategories('KR', new Date(date.getTime() - 1)), previous, 'The old selection remains valid until the UTC boundary.');
+      consecutiveDays = 0;
+    }
+    consecutiveDays += 1;
+    previous = categories;
     assert.equal(new Set(categories.map(category => category.id)).size, 9);
-    assert(categories.some(category => category.id === 'local'));
+    assert.deepEqual(categories.slice(0, 3).map(category => category.id), ['trending', 'all-time', 'local']);
+    assert.deepEqual(categories, selectHomeCategories('FR', date), 'Countries share the same rotation schedule.');
     categories.forEach(category => seen.add(category.id));
   }
+  assert.deepEqual([...durations].sort(), [3, 4, 5, 6, 7], 'The schedule uses all five durations rather than a fixed interval.');
   assert.equal(seen.size, homeCategories.length, 'Every supported category participates in rotation.');
   assert.equal(homeCategoryQuery('local', 'movie', 1, 'KR', now).params.with_origin_country, 'KR');
   assert.equal(homeCategoryQuery('local', 'movie', 1, 'KR', now).params['vote_count.gte'], '100');

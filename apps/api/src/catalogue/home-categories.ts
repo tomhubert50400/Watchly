@@ -20,7 +20,17 @@ export const homeCategories = [
 export type HomeCategoryId = typeof homeCategories[number]['id'];
 
 export function selectHomeCategories(country?: string, now = new Date()) {
-  const cycle = Math.floor(now.getTime() / (3 * 24 * 60 * 60 * 1000));
+  let days = Math.floor((now.getTime() - Date.UTC(2026, 0, 1)) / 86400000);
+  let cycle = 0;
+  let seed = 0x57415443;
+  // A seeded schedule stays identical across requests, API replicas and restarts.
+  for (;;) {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    const duration = 3 + seed % 5;
+    if (days < duration) break;
+    days -= duration;
+    cycle += 1;
+  }
   const fixed = homeCategories.filter(category => category.id === 'trending' || category.id === 'all-time' || (category.id === 'local' && country));
   const rotating = homeCategories.filter(category => !['trending', 'all-time', 'local'].includes(category.id));
   const count = 9 - fixed.length;

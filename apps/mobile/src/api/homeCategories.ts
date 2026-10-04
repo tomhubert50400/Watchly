@@ -7,7 +7,7 @@ export type HomeCategory = DiscoverCollectionResponse & { id: string; title: str
 export type HomeCategoriesResponse = { items: HomeCategory[]; partial: boolean };
 
 export const homeCategoryResourceKey = (id: string, country?: string | null) => getPublicCacheKey(`home:category:${id}:${country ?? 'global'}:v1`);
-export const homeCategoriesResourceKey = (country: string | null) => getPublicCacheKey(`home:categories:${country ?? 'global'}:${Math.floor(Date.now() / (3 * 24 * 60 * 60 * 1000))}:v1`);
+export const homeCategoriesResourceKey = (country: string | null) => getPublicCacheKey(`home:categories:${country ?? 'global'}:${Math.floor(Date.now() / 86400000)}:v2`);
 
 export async function getHomeCategories(country: string | null) {
   const response = await apiGet<HomeCategoriesResponse>(`/catalog/home-categories${country ? `?country=${country}` : ''}`, { timeoutMs: 30_000 });
