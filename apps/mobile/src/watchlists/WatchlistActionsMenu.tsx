@@ -1,27 +1,63 @@
 import { Menu } from 'lucide-react-native';
-import { ReactNode, useEffect, useRef, useState } from 'react';
-import { ActionSheetIOS, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ComponentType, ReactNode, useEffect, useRef, useState } from 'react';
+import { ActionSheetIOS, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, UIManager, useWindowDimensions, View, ViewProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 
-type Action = { label: string; icon: ReactNode; onPress: () => void; disabled?: boolean; active?: boolean };
+type Action = { label: string; icon: ReactNode; nativeIcon?: string; onPress: () => void; disabled?: boolean; active?: boolean };
+// The native view supports accessibility props, omitted from the package's wrapper type.
+type AccessibleMenuView = ComponentType<import('@react-native-menu/menu').MenuComponentProps
+  & Pick<ViewProps, 'accessible' | 'accessibilityRole' | 'accessibilityLabel'>>;
+
+// Older builds and Expo Go do not contain the native view yet.
+const NativeMenuView = Platform.OS === 'ios' && UIManager.getViewManagerConfig('MenuView')
+  ? (require('@react-native-menu/menu') as typeof import('@react-native-menu/menu')).MenuView as AccessibleMenuView
+  : null;
 
 export function WatchlistActionsMenu({ actions }: { actions: Action[] }) {
-  if (Platform.OS === 'ios') return <Pressable accessibilityRole="button" accessibilityLabel="Watchlist menu"
-    onPress={() => ActionSheetIOS.showActionSheetWithOptions({
-      title: 'Watchlist menu',
-      options: [...actions.map((action) => `${action.active ? '✓ ' : ''}${action.label}`), 'Cancel'],
-      cancelButtonIndex: actions.length,
-      disabledButtonIndices: actions.flatMap((action, index) => action.disabled ? [index] : []),
-      userInterfaceStyle: 'dark',
-    }, (index) => {
-      const action = actions[index];
+  if (NativeMenuView) return <NativeMenuView
+    accessible accessibilityRole="button" accessibilityLabel="Watchlist menu" style={styles.button}
+    shouldOpenOnLongPress={false} themeVariant="dark"
+    actions={actions.map((action, index) => ({
+      id: String(index),
+      title: action.label,
+      image: action.nativeIcon,
+      state: action.active ? 'on' : 'off',
+      attributes: { disabled: Boolean(action.disabled) },
+    }))}
+    onPressAction={({ nativeEvent }) => {
+      const action = actions[Number(nativeEvent.event)];
       if (action && !action.disabled) action.onPress();
-    })}
+    }}>
+    <View pointerEvents="none" style={styles.nativeTrigger}>
+      <Menu color={colors.text} size={22} />
+    </View>
+  </NativeMenuView>;
+  if (Platform.OS === 'ios') return <WatchlistIOSActionSheet actions={actions} />;
+  return <WatchlistPopupMenu actions={actions} />;
+}
+
+function WatchlistIOSActionSheet({ actions }: { actions: Action[] }) {
+  const presented = useRef(false);
+  return <Pressable accessibilityRole="button" accessibilityLabel="Watchlist menu"
+    onPress={() => {
+      if (presented.current) return;
+      presented.current = true;
+      ActionSheetIOS.showActionSheetWithOptions({
+        title: 'Watchlist menu',
+        options: [...actions.map((action) => `${action.active ? '✓ ' : ''}${action.label}`), 'Cancel'],
+        cancelButtonIndex: actions.length,
+        disabledButtonIndices: actions.flatMap((action, index) => action.disabled ? [index] : []),
+        userInterfaceStyle: 'dark',
+      }, (index) => {
+        presented.current = false;
+        const action = actions[index];
+        if (action && !action.disabled) action.onPress();
+      });
+    }}
     style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
     <Menu color={colors.text} size={22} />
   </Pressable>;
-  return <WatchlistPopupMenu actions={actions} />;
 }
 
 function WatchlistPopupMenu({ actions }: { actions: Action[] }) {
@@ -98,6 +134,7 @@ function WatchlistPopupMenu({ actions }: { actions: Action[] }) {
 
 const styles = StyleSheet.create({
   button: { width: 44, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
+  nativeTrigger: { flex: 1, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
   overlay: { flex: 1 },
   menu: { ...shadows.raised, position: 'absolute', backgroundColor: colors.panelElevated, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.borderStrong, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.md },

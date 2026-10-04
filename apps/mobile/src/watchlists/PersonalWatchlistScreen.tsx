@@ -227,11 +227,11 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
       ),
       headerRight: visibleWatchlist ? () => (
         <WatchlistActionsMenu key={resourceScope} actions={[
-          { label: 'Filters', icon: <Funnel color={filters.active ? colors.accentText : colors.text} size={20} />, onPress: filters.open, active: filters.active },
-          { label: 'Add a title', icon: <Plus color={colors.text} size={20} />, onPress: () => navigation.navigate('MainTabs', { screen: 'Explore' }) },
-          { label: 'Create a section', icon: <FolderPlus color={colors.text} size={20} />, onPress: () => openSectionEditor({ mode: 'create' }), disabled: visibleSections.length >= MAX_PERSONAL_WATCHLIST_SECTIONS },
-          { label: 'Cover & background', icon: <Camera color={colors.text} size={20} />, onPress: () => setArtworkScope(resourceScope) },
-          { label: 'Settings', icon: <Settings color={colors.text} size={20} />, onPress: () => setSettingsScope(resourceScope) },
+          { label: 'Filters', nativeIcon: 'line.3.horizontal.decrease', icon: <Funnel color={filters.active ? colors.accentText : colors.text} size={20} />, onPress: filters.open, active: filters.active },
+          { label: 'Add a title', nativeIcon: 'plus', icon: <Plus color={colors.text} size={20} />, onPress: () => navigation.navigate('MainTabs', { screen: 'Explore' }) },
+          { label: 'Create a section', nativeIcon: 'folder.badge.plus', icon: <FolderPlus color={colors.text} size={20} />, onPress: () => openSectionEditor({ mode: 'create' }), disabled: visibleSections.length >= MAX_PERSONAL_WATCHLIST_SECTIONS },
+          { label: 'Cover & background', nativeIcon: 'photo', icon: <Camera color={colors.text} size={20} />, onPress: () => setArtworkScope(resourceScope) },
+          { label: 'Settings', nativeIcon: 'gearshape', icon: <Settings color={colors.text} size={20} />, onPress: () => setSettingsScope(resourceScope) },
         ]} />
       ) : undefined,
     });

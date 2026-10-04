@@ -163,10 +163,10 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
       headerTransparent: Boolean(backgroundUrl),
       headerRight: watchlist ? () => (
         <WatchlistActionsMenu key={resourceScope} actions={[
-          { label: 'Filters', icon: <Funnel color={filters.active ? colors.accentText : colors.text} size={20} />, onPress: filters.open, active: filters.active },
-          { label: 'Add titles', icon: <Plus color={colors.text} size={20} />, onPress: () => navigation.navigate('MainTabs', { screen: 'Explore' }) },
-          ...(watchlist.isOwner ? [{ label: 'Cover & background', icon: <Camera color={colors.text} size={20} />, onPress: () => setArtworkScope(resourceScope) }] : []),
-          { label: `Members (${watchlist.memberCount})`, icon: <Users color={colors.text} size={20} />, onPress: () => setIsMembersSheetOpen(true) },
+          { label: 'Filters', nativeIcon: 'line.3.horizontal.decrease', icon: <Funnel color={filters.active ? colors.accentText : colors.text} size={20} />, onPress: filters.open, active: filters.active },
+          { label: 'Add titles', nativeIcon: 'plus', icon: <Plus color={colors.text} size={20} />, onPress: () => navigation.navigate('MainTabs', { screen: 'Explore' }) },
+          ...(watchlist.isOwner ? [{ label: 'Cover & background', nativeIcon: 'photo', icon: <Camera color={colors.text} size={20} />, onPress: () => setArtworkScope(resourceScope) }] : []),
+          { label: `Members (${watchlist.memberCount})`, nativeIcon: 'person.2', icon: <Users color={colors.text} size={20} />, onPress: () => setIsMembersSheetOpen(true) },
         ]} />
       ) : undefined,
     });
