@@ -69,8 +69,8 @@ function DiscoverGrid({ type, onType, filters, onFilters, category }: { type: Ca
     finally { if (request === version.current) { busy.current = false; setLoadingMore(false); } }
   };
   const items = [...new Map([...(resource.data?.items ?? []), ...pages.items].map(item => [item.id, item])).values()].filter(item => type === 'all' || item.mediaType === type);
-  return <Screen contentReady={Boolean(resource.data)} title="" leading={<Pressable accessibilityRole="button" accessibilityLabel={category ? 'Back to Home' : 'Back to Discover'} onPress={() => navigation.goBack()} style={styles.back}><ChevronLeft size={22} color={colors.text} /><Text style={styles.backText}>{category ? 'Home' : 'Discover'}</Text></Pressable>} background={<SpotlightAtmosphere imageUrl={items[0]?.posterUrl ?? null} />} refreshControl={<RefreshControl refreshing={resource.isRefreshing} onRefresh={resource.retry} tintColor={colors.accent} />}>
-    <View style={styles.content}>
+  return <Screen contentReady={Boolean(resource.data)} title="" safeAreaEdges={category ? [] : undefined} leading={category ? undefined : <Pressable accessibilityRole="button" accessibilityLabel="Back to Discover" onPress={() => navigation.goBack()} style={styles.back}><ChevronLeft size={22} color={colors.text} /><Text style={styles.backText}>Discover</Text></Pressable>} background={<SpotlightAtmosphere imageUrl={items[0]?.posterUrl ?? null} />} refreshControl={<RefreshControl refreshing={resource.isRefreshing} onRefresh={resource.retry} tintColor={colors.accent} />}>
+    <View style={[styles.content, category && { paddingTop: spacing.lg }]}>
       <ScreenReveal delay={0} style={styles.titleRow}>
         <Text accessibilityRole="header" style={styles.title}>{category?.title ?? 'Explore'}</Text>
         {!category ? <Pressable accessibilityRole="button" accessibilityLabel="Filters" onPress={onFilters} style={({ pressed }) => [styles.filterButton, pressed && { opacity: 0.7 }]}>
