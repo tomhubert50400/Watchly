@@ -18,7 +18,7 @@ export type RootTabParamList = {
 
 export type RootStackParamList = {
   ActorDetail: { name: string; tmdbId: number };
-  DiscoverResults: { collectionId?: string; title: string; description?: string; mediaType: CatalogueSearchType; mood?: DiscoverMood | null };
+  DiscoverResults: { collectionId?: string; homeCategory?: string; country?: string; title: string; description?: string; mediaType: CatalogueSearchType; mood?: DiscoverMood | null };
   ReviewAccess: undefined;
   AllTimeStats: {
     profileBackdropUrl: string | null;

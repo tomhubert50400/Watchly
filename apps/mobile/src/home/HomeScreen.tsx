@@ -3,7 +3,7 @@ import { CompositeNavigationProp, useFocusEffect, useIsFocused, useNavigation } 
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Bell, CalendarDays } from 'lucide-react-native';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import {
   CatalogueSearchItem,
   getEpisodeDetails,
@@ -11,6 +11,9 @@ import {
   getSeriesDetails,
 } from '../api/catalogue';
 import { FeedItem, getFeed, setFeedItemLiked } from '../api/feed';
+import { getHomeCategories, homeCategoriesResourceKey } from '../api/homeCategories';
+import { useWatchRegion } from '../catalogue/useWatchRegion';
+import { watchRegions } from '../catalogue/watchRegionModel';
 import { listNotifications } from '../api/notifications';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { SignInRequiredCard } from '../auth/SignInRequired';
@@ -79,6 +82,9 @@ export function HomeScreen() {
   const isSignedIn = Boolean(currentUser && firebaseIdToken);
   const watchlists = useLibraryData(isSignedIn);
   const loadCatalogue = useCallback(loadHomeCatalogue, []);
+  const { country } = useWatchRegion();
+  const loadRecommendations = useCallback(() => getHomeCategories(country), [country]);
+  const recommendations = useCachedResource({ key: homeCategoriesResourceKey(country), load: loadRecommendations });
   const loadFeed = useCallback(
     () => firebaseIdToken ? loadHomeFeed(firebaseIdToken) : Promise.resolve([]),
     [feedRevision, firebaseIdToken],
@@ -122,16 +128,17 @@ export function HomeScreen() {
     }),
     [catalogue.data, catalogue.error, feed.data, feed.error, isSignedIn, recentProgress, progress.error],
   );
-  const isRefreshing = catalogue.isRefreshing || progress.isRefreshing || feed.isRefreshing || notifications.isRefreshing || watchlists.isRefreshing;
+  const isRefreshing = catalogue.isRefreshing || recommendations.isRefreshing || progress.isRefreshing || feed.isRefreshing || notifications.isRefreshing || watchlists.isRefreshing;
   const retryAll = useCallback(() => {
     catalogue.retry();
+    recommendations.retry();
     if (isSignedIn) {
       progress.retry();
       feed.retry();
       notifications.retry();
       watchlists.retry();
     }
-  }, [catalogue.retry, feed.retry, isSignedIn, notifications.retry, progress.retry, watchlists.retry]);
+  }, [catalogue.retry, recommendations.retry, feed.retry, isSignedIn, notifications.retry, progress.retry, watchlists.retry]);
 
   if (catalogue.isInitialLoading && !catalogue.data) {
     return (
@@ -265,22 +272,51 @@ export function HomeScreen() {
           }
 
           return (
-            <HomeSection delay={200} key="trending" title="Trending now">
-              {section.error && section.items.length === 0 ? (
-                <InlineStatusBanner detail={section.error} onRetry={catalogue.retry} tone="error" />
+            <Fragment key="recommendations">
+              {recommendations.isInitialLoading && !recommendations.data ? (
+                <HomeSection delay={200} title="Discover something new">
+                  <LoadingState variant="grid" label="Loading recommendations" />
+                </HomeSection>
               ) : null}
-              {section.items.length > 0 ? (
-                <TrendingRail
-                  items={section.items}
-                  onOpen={(item) => navigation.navigate('FilmDetail', {
-                    title: item.title,
-                    tmdbId: item.tmdbId,
-                  })}
-                />
-              ) : !section.error ? (
-                <Text style={styles.emptySection}>No trending titles are available right now.</Text>
+              {recommendations.error || recommendations.data?.partial ? (
+                <HomeSection delay={200} title="Discover something new">
+                  <InlineStatusBanner
+                    detail={recommendations.error ?? 'Some categories could not be loaded.'}
+                    onRetry={recommendations.retry}
+                    tone="error"
+                  />
+                </HomeSection>
               ) : null}
-            </HomeSection>
+              {recommendations.data?.items.map(category => {
+                const title = category.id === 'local'
+                  ? `Cinema from ${watchRegions.find(region => region.code === country)?.name ?? country}`
+                  : category.title;
+                return (
+                  <HomeSection
+                    delay={200}
+                    key={category.id}
+                    title={title}
+                    onViewAll={() => navigation.navigate('DiscoverResults', {
+                      homeCategory: category.id,
+                      country: country ?? undefined,
+                      title,
+                      mediaType: category.moviesOnly ? 'movie' : 'all',
+                    })}
+                  >
+                    <TrendingRail
+                      items={category.items}
+                      onOpen={item => navigation.navigate(item.mediaType === 'movie' ? 'FilmDetail' : 'SeriesDetail', {
+                        title: item.title,
+                        tmdbId: item.tmdbId,
+                      })}
+                    />
+                    {!category.items.length ? (
+                      <Text style={styles.emptySection}>No titles are available in this category yet.</Text>
+                    ) : null}
+                  </HomeSection>
+                );
+              })}
+            </Fragment>
           );
         })}
         {!isSignedIn ? (
@@ -313,17 +349,20 @@ function TrendingRail({
   onOpen: (item: HomeTrendingItem) => void;
 }) {
   return (
-    <HorizontalScrollFade><ScrollView
+    <HorizontalScrollFade><FlatList
+      data={items}
       contentContainerStyle={styles.posterRail}
       horizontal
+      initialNumToRender={4}
+      maxToRenderPerBatch={4}
+      windowSize={3}
+      keyExtractor={item => `${item.mediaType}:${item.tmdbId}`}
       nestedScrollEnabled
       showsHorizontalScrollIndicator={false}
-    >
-      {items.map((item) => (
+      renderItem={({ item }) => (
         <Pressable
           accessibilityLabel={`Open ${item.title}`}
           accessibilityRole="button"
-          key={`${item.mediaType}:${item.tmdbId}`}
           onPress={() => onOpen(item)}
           style={({ pressed }) => [styles.posterCard, pressed ? styles.pressed : null]}
         >
@@ -331,8 +370,8 @@ function TrendingRail({
           <Text numberOfLines={1} style={styles.posterTitle}>{item.title}</Text>
           <TrendingMetadata item={item} />
         </Pressable>
-      ))}
-    </ScrollView></HorizontalScrollFade>
+      )}
+    /></HorizontalScrollFade>
   );
 }
 
