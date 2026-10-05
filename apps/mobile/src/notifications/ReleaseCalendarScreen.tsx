@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AppState, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
@@ -9,6 +9,7 @@ import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
+import { catalogueArtworkSnapshot, catalogueSnapshotKey, isCurrentCatalogueSnapshotDataset, retainCatalogueSnapshots, type CatalogueArtworkSnapshot, type CatalogueSnapshots } from '../catalogue/catalogueMediaSnapshots';
 import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -49,6 +50,10 @@ export function ReleaseCalendarScreen({ navigation }: Props) {
     resource.revalidate();
   }, [resource.revalidate]));
   const items = resource.data ?? emptyItems;
+  const artworkScope = useMemo(() => JSON.stringify([ownerId, items.map(catalogueSnapshotKey)]), [ownerId, items]);
+  const [artwork, setArtwork] = useState<CatalogueSnapshots<CatalogueArtworkSnapshot>>({ scope: '', items: new Map() });
+  const artworkDatasetRef = useRef({ scope: artworkScope, items });
+  artworkDatasetRef.current = { scope: artworkScope, items };
   const upcomingItems = useMemo(() => getUpcomingReleases(items, now), [items, now]);
   const filteredItems = useMemo(() => filterReleaseCalendarItems(upcomingItems, filter), [upcomingItems, filter]);
 
@@ -62,18 +67,24 @@ export function ReleaseCalendarScreen({ navigation }: Props) {
   }, [now]);
 
   useEffect(() => {
+    setArtwork((current) => retainCatalogueSnapshots(current, artworkScope, items));
     if (!ownerId) return;
     let active = true;
+    const isCurrent = () => active && isCurrentCatalogueSnapshotDataset(artworkDatasetRef.current, artworkScope, items);
     const titles = [...new Map(items.map((item) => [`${item.contentType}:${item.tmdbId}`, item])).values()];
     void (async () => {
-      for (let offset = 0; active && offset < titles.length; offset += 3) {
-        await Promise.allSettled(titles.slice(offset, offset + 3).map((item) =>
-          item.contentType === 'movie' ? refreshMovie(item.tmdbId) : refreshSeries(item.tmdbId),
-        ));
+      for (let offset = 0; isCurrent() && offset < titles.length; offset += 3) {
+        const batch = await Promise.allSettled(titles.slice(offset, offset + 3).map(async (item) => {
+          const detail = await (item.contentType === 'movie' ? refreshMovie(item.tmdbId) : refreshSeries(item.tmdbId));
+          return [item, catalogueArtworkSnapshot(detail)] as const;
+        }));
+        if (!isCurrent()) return;
+        const updates = batch.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
+        setArtwork((current) => isCurrent() ? retainCatalogueSnapshots(current, artworkScope, items, updates) : current);
       }
     })();
     return () => { active = false; };
-  }, [items, ownerId, refreshMovie, refreshSeries]);
+  }, [artworkScope, items, ownerId, refreshMovie, refreshSeries]);
 
   if (!ownerId || !firebaseIdToken) {
     return <Screen title=""><SignInRequiredCard body="Sign in to see upcoming releases from your watchlist and the series you follow." title="Sign in to view upcoming releases" /></Screen>;
@@ -107,7 +118,8 @@ export function ReleaseCalendarScreen({ navigation }: Props) {
           <ScreenReveal style={styles.list}>
             {filteredItems.map((item) => {
               const display = getReleaseDisplay(item);
-              const content = item.contentType === 'movie' ? getCachedMovie(item.tmdbId) : getCachedSeries(item.tmdbId);
+              const content = (item.contentType === 'movie' ? getCachedMovie(item.tmdbId) : getCachedSeries(item.tmdbId))
+                ?? (artwork.scope === artworkScope ? artwork.items.get(catalogueSnapshotKey(item)) : null);
               const days = getReleaseDaysRemaining(item, now);
               const countdown = days === null ? 'Date pending' : days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `${days} days`;
               const title = content?.title ?? display.title;

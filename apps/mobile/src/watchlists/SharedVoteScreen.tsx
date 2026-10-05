@@ -14,6 +14,7 @@ import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey, writePersistedCache } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
+import { catalogueMediaSnapshot, catalogueSnapshotKey, retainCatalogueSnapshots, type CatalogueMediaSnapshot, type CatalogueSnapshots } from '../catalogue/catalogueMediaSnapshots';
 import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
@@ -87,6 +88,7 @@ export function SharedVoteScreen({ route }: Props) {
   const [isClosing, setIsClosing] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
+  const [candidateSnapshots, setCandidateSnapshots] = useState<CatalogueSnapshots<CatalogueMediaSnapshot>>({ scope: '', items: new Map() });
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 30_000);
@@ -112,9 +114,19 @@ export function SharedVoteScreen({ route }: Props) {
 
   const details = ownedVote.ownerId === ownerId ? ownedVote.data : null;
   const session = details?.session ?? null;
+  const sessionMatchesRoute = session?.id === route.params.sessionId;
   const lifecycle = session ? getVoteLifecycle(session, now) : null;
   const leaderState = useMemo(() => session ? getVoteLeaders(session.candidates) : null, [session]);
   const selectedIds = useMemo(() => session ? new Set(getSelectedCandidateIds(session)) : new Set<string>(), [session]);
+
+  useEffect(() => {
+    const candidates = sessionMatchesRoute ? session?.candidates ?? [] : [];
+    const updates = candidates.flatMap((candidate) => {
+      const item = candidate.contentType === 'movie' ? getCachedMovie(candidate.tmdbId) : getCachedSeries(candidate.tmdbId);
+      return item ? [[candidate, catalogueMediaSnapshot(item)] as const] : [];
+    });
+    setCandidateSnapshots((current) => retainCatalogueSnapshots(current, cacheKey, candidates, updates));
+  }, [cacheKey, getCachedMovie, getCachedSeries, session, sessionMatchesRoute]);
 
   useEffect(() => {
     if (!session) return;
@@ -288,7 +300,8 @@ export function SharedVoteScreen({ route }: Props) {
               : getCachedSeries(candidate.tmdbId);
             const media = catalogueMedia
               ? { genres: catalogueMedia.genres, posterUrl: catalogueMedia.posterUrl, title: catalogueMedia.title }
-              : details.candidateMedia[candidate.id];
+              : (sessionMatchesRoute && candidateSnapshots.scope === cacheKey ? candidateSnapshots.items.get(catalogueSnapshotKey(candidate)) : null)
+                ?? details.candidateMedia[candidate.id];
             const isLeader = leaderState.leaderIds.includes(candidate.id);
             const isSelected = selectedIds.has(candidate.id);
             const canMutate = lifecycle === 'open' && !isClosing;

@@ -2,6 +2,7 @@ import { createContext, PropsWithChildren, useCallback, useContext, useMemo, use
 import { getMovieDetails, getSeriesDetails, MovieDetails, SeriesDetails } from '../api/catalogue';
 import { WatchlistContentType } from '../api/watchlists';
 import { loadCachedCatalogueResource } from './catalogueResourceCache';
+import { CatalogueDetailCache, getCachedMovieDetail, getCachedSeriesDetail, retainCatalogueDetail } from './catalogueDetailCache';
 
 type CatalogueCacheContextValue = {
   getCachedMovie: (tmdbId: number) => MovieDetails | null;
@@ -15,8 +16,7 @@ const MAX_PRELOAD_ITEMS = 3;
 const CatalogueCacheContext = createContext<CatalogueCacheContextValue | null>(null);
 
 export function CatalogueCacheProvider({ children }: PropsWithChildren) {
-  const [movies, setMovies] = useState<Record<number, MovieDetails>>({});
-  const [series, setSeries] = useState<Record<number, SeriesDetails>>({});
+  const [details, setDetails] = useState<CatalogueDetailCache>(() => new Map());
   const movieRequestsRef = useRef(new Map<number, Promise<MovieDetails>>());
   const seriesRequestsRef = useRef(new Map<number, Promise<SeriesDetails>>());
 
@@ -32,7 +32,7 @@ export function CatalogueCacheProvider({ children }: PropsWithChildren) {
       async () => (await getMovieDetails(tmdbId)).item,
     )
       .then((item) => {
-        setMovies((current) => ({ ...current, [tmdbId]: item }));
+        setDetails((current) => retainCatalogueDetail(current, tmdbId, item));
 
         return item;
       })
@@ -57,7 +57,7 @@ export function CatalogueCacheProvider({ children }: PropsWithChildren) {
       async () => (await getSeriesDetails(tmdbId)).item,
     )
       .then((item) => {
-        setSeries((current) => ({ ...current, [tmdbId]: item }));
+        setDetails((current) => retainCatalogueDetail(current, tmdbId, item));
 
         return item;
       })
@@ -87,13 +87,13 @@ export function CatalogueCacheProvider({ children }: PropsWithChildren) {
 
   const value = useMemo<CatalogueCacheContextValue>(
     () => ({
-      getCachedMovie: (tmdbId) => movies[tmdbId] ?? null,
-      getCachedSeries: (tmdbId) => series[tmdbId] ?? null,
+      getCachedMovie: (tmdbId) => getCachedMovieDetail(details, tmdbId),
+      getCachedSeries: (tmdbId) => getCachedSeriesDetail(details, tmdbId),
       preloadCatalogueItems,
       refreshMovie,
       refreshSeries,
     }),
-    [movies, preloadCatalogueItems, refreshMovie, refreshSeries, series],
+    [details, preloadCatalogueItems, refreshMovie, refreshSeries],
   );
 
   return <CatalogueCacheContext.Provider value={value}>{children}</CatalogueCacheContext.Provider>;
