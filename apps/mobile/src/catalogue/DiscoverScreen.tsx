@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Search, SlidersHorizontal, X } from 'lucide-react-native';
-import { Image, Keyboard, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { type CatalogueSearchType } from '../api/catalogue';
 import { browseResourceKey, collectionFilters, discoverMoods, getDiscover, getDiscoverBrowse, getDiscoverCollections, type DiscoverItem, type DiscoverMood } from '../api/discover';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { getPrivateCacheKey, getPublicCacheKey } from '../cache/persistedCache';
 import { preloadCachedResource, useCachedResource } from '../cache/useCachedResource';
+import { prefetchOptionalImages } from '../cache/optionalImagePrefetch';
 import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
@@ -47,24 +48,30 @@ export function DiscoverScreen({ isActive = true }: { isActive?: boolean }) {
   const resourceKey = `discover:${mood ?? 'all'}:v1`;
   const resource = useCachedResource({
     key: currentUser ? getPrivateCacheKey(currentUser.id, resourceKey) : getPublicCacheKey(resourceKey),
-    load, enabled: !currentUser || Boolean(firebaseIdToken), staleTimeMs: 5 * 60 * 1000,
+    load, enabled: isActive && (!currentUser || Boolean(firebaseIdToken)), staleTimeMs: 5 * 60 * 1000,
   });
-  const collections = useCachedResource({ key: getPublicCacheKey('discover:collections:v1'), load: getDiscoverCollections, staleTimeMs: 60 * 60 * 1000 });
+  const collections = useCachedResource({ key: getPublicCacheKey('discover:collections:v1'), load: getDiscoverCollections, enabled: isActive, staleTimeMs: 60 * 60 * 1000 });
   useEffect(() => {
     let cancelled = false;
-    if (currentUser && !firebaseIdToken) return;
+    if (!isActive || (currentUser && !firebaseIdToken)) return;
     const selections = [{}, ...(collections.data?.items ?? []).map(collection => collectionFilters(collection.id)), ...(mood ? [{ mood }] : [])];
-    void Promise.allSettled(selections.map(async filters => {
-      const result = await preloadCachedResource({
-        key: currentUser ? getPrivateCacheKey(currentUser.id, browseResourceKey(filters)) : getPublicCacheKey(browseResourceKey(filters)),
-        load: () => getDiscoverBrowse(firebaseIdToken, filters),
-      });
-      if (cancelled) return;
-      const urls = result.items.slice(0, 8).map(item => item.posterUrl).filter((url): url is string => Boolean(url));
-      await Promise.allSettled(urls.map(url => Image.prefetch(url)));
-    }));
+    void (async () => {
+      for (const filters of selections) {
+        if (cancelled) return;
+        try {
+          const result = await preloadCachedResource({
+            key: currentUser ? getPrivateCacheKey(currentUser.id, browseResourceKey(filters)) : getPublicCacheKey(browseResourceKey(filters)),
+            load: () => getDiscoverBrowse(firebaseIdToken, filters),
+          });
+          if (cancelled) return;
+          void prefetchOptionalImages(result.items.slice(0, 8).map(item => item.posterUrl), () => !cancelled);
+        } catch {
+          // Optional warming must not block later collections or the visible screen.
+        }
+      }
+    })();
     return () => { cancelled = true; };
-  }, [collections.data, currentUser?.id, firebaseIdToken, mood]);
+  }, [collections.data, currentUser?.id, firebaseIdToken, isActive, mood]);
   const revision = useUserDataRevision('tracking', 'opinions', 'viewings', 'episodeProgress', 'watchlists');
   const lastRevision = useRef(revision);
   useEffect(() => {
@@ -77,7 +84,7 @@ export function DiscoverScreen({ isActive = true }: { isActive?: boolean }) {
     if (!isActive || !resource.data) return;
     let cancelled = false;
     const nextItems = resource.data.items.filter(item => mediaType === 'all' || item.mediaType === mediaType).slice(0, 12);
-    void Promise.allSettled(nextItems.flatMap(item => [item.posterUrl, item.backdropUrl]).filter((url): url is string => Boolean(url)).map(url => Image.prefetch(url)));
+    void prefetchOptionalImages(nextItems.flatMap(item => [item.posterUrl, item.backdropUrl]), () => !cancelled);
     void (async () => {
       for (let index = 0; index < nextItems.length && !cancelled; index += 3) {
         await preloadCatalogueItems(nextItems.slice(index, index + 3).map(item => ({ contentType: item.mediaType, tmdbId: item.tmdbId })));

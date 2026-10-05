@@ -56,8 +56,8 @@ assert.match(
 
 assert.match(
   preloadSource,
-  /Image\.prefetch/,
-  'startup must warm the remote artwork that is immediately visible after launch',
+  /prefetchOptionalImages\(urls, \(\) => warming && isCurrent\(\)\)/,
+  'startup must use the shared image budget and cancel obsolete queued artwork',
 );
 assert.match(
   preloadSource,

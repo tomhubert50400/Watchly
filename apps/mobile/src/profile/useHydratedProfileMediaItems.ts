@@ -29,6 +29,7 @@ export function useHydratedProfileMediaItems(items: readonly LibraryMediaItem[])
     void loadProgressively({
       concurrency: PROFILE_MEDIA_HYDRATION_CONCURRENCY,
       items: pendingItems,
+      isCurrent: () => active,
       load: async (item) => {
         try {
           return await hydrateProfileMediaItem(item, refreshMovie, refreshSeries);

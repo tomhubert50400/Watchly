@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Image } from 'react-native';
 import type { CatalogueMovieSectionsResponse } from '../api/catalogue';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { preloadCachedResource } from '../cache/useCachedResource';
+import { prefetchOptionalImages } from '../cache/optionalImagePrefetch';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
 import {
   loadCatalogueSections,
@@ -50,6 +50,8 @@ export function AppStartupPreloader() {
   useEffect(() => {
     const requestVersion = requestVersionRef.current + 1;
     requestVersionRef.current = requestVersion;
+    let active = true;
+    const isCurrent = () => active && requestVersionRef.current === requestVersion;
 
     void (async () => {
       const [homeResult, catalogueSectionsResult] = await Promise.allSettled([
@@ -63,11 +65,13 @@ export function AppStartupPreloader() {
       const home = fulfilledValue(homeResult);
       const catalogueSections = fulfilledValue(catalogueSectionsResult);
 
+      if (!isCurrent()) return;
+
       if (status === 'loading') {
         return;
       }
 
-      if (requestVersionRef.current === requestVersion) {
+      if (isCurrent()) {
         setReady(true);
       }
 
@@ -83,6 +87,8 @@ export function AppStartupPreloader() {
         );
       }
 
+      if (!isCurrent()) return;
+
       let feed: HomeFeedItem[] | undefined;
       let communityFeed: HydratedFeedItem[] | undefined;
       let library: LibraryData | undefined;
@@ -95,6 +101,7 @@ export function AppStartupPreloader() {
         && currentUser.handle
       ) {
         const token = await getFirebaseIdToken();
+        if (!isCurrent()) return;
 
         if (token) {
           const userId = currentUser.id;
@@ -137,6 +144,7 @@ export function AppStartupPreloader() {
         }
       }
 
+      if (!isCurrent()) return;
       await prefetchStartupImages({
         catalogueSections,
         communityFeed,
@@ -144,8 +152,9 @@ export function AppStartupPreloader() {
         home,
         library,
         profile,
-      });
+      }, isCurrent);
     })();
+    return () => { active = false; };
   }, [
     currentUser?.handle,
     currentUser?.id,
@@ -179,7 +188,7 @@ async function prefetchStartupImages({
   home?: HomeCatalogueData;
   library?: LibraryData;
   profile?: CachedProfile;
-}) {
+}, isCurrent: () => boolean) {
   const groups: Array<Array<string | null | undefined>> = [
     [home?.hero?.backdropUrl, home?.hero?.logoUrl, home?.hero?.posterUrl],
     [
@@ -205,10 +214,15 @@ async function prefetchStartupImages({
   ];
   const urls = takeRoundRobinUrls(groups, STARTUP_IMAGE_LIMIT);
 
-  await waitAtMost(
-    Promise.allSettled(urls.map((url) => Image.prefetch(url))).then(() => undefined),
-    STARTUP_IMAGE_WAIT_MS,
-  );
+  let warming = true;
+  try {
+    await waitAtMost(
+      prefetchOptionalImages(urls, () => warming && isCurrent()),
+      STARTUP_IMAGE_WAIT_MS,
+    );
+  } finally {
+    warming = false;
+  }
 }
 
 function takeRoundRobinUrls(groups: Array<Array<string | null | undefined>>, limit: number) {
