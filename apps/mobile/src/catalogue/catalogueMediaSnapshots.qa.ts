@@ -3,7 +3,12 @@
 import assert from 'node:assert/strict';
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import { readFileSync } from 'node:fs';
+// @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
+import { runInNewContext } from 'node:vm';
+import ts from 'typescript';
 import type { MovieDetails } from '../api/catalogue';
+import * as voteModel from '../watchlists/sharedVoteModel';
+import * as snapshotModel from './catalogueMediaSnapshots';
 import { getCachedMovieDetail, retainCatalogueDetail, type CatalogueDetailCache } from './catalogueDetailCache';
 import {
   catalogueArtworkSnapshot,
@@ -88,8 +93,174 @@ assert.match(calendarSource, /artwork\.scope === artworkScope \? artwork\.items\
 assert.match(calendarSource, /setArtwork\(\(current\) => isCurrent\(\) \? retainCatalogueSnapshots/,
   'queued updates must recheck owner/dataset liveness');
 assert.match(calendarSource, /offset \+= 3/, 'existing request concurrency must stay unchanged');
-assert.match(voteSource, /candidateSnapshots\.scope === cacheKey \? candidateSnapshots\.items\.get/,
+assert.match(voteSource, /sessionMatchesRoute && candidateSnapshots\.scope === cacheKey \? candidateSnapshots\.items\.get/,
   'vote rendering must reject another owner/session synchronously');
 assert.match(voteSource, /preloadCatalogueItems\(session\.candidates\.map/,
   'snapshot retention must preserve the existing preload path');
+
+// Execute the real screen with a small hook/module harness. This deliberately
+// keeps its existing ownedVote state while the same owner changes route A -> B.
+function createVoteScreenHarness(screenSource = voteSource) {
+  const slots: any[] = [];
+  let cursor = 0;
+  let effects: Array<{ index: number; create: () => unknown }> = [];
+  let data: any = null;
+  const cached = new Map<number, CatalogueMediaSnapshot>();
+  const noop = () => {};
+  const getToken = async () => 'test-token';
+  const getCachedMovie = (tmdbId: number) => cached.get(tmdbId) ?? null;
+  const getCachedSeries = () => null;
+  const preloadCatalogueItems = async () => {};
+  const sameDeps = (a: unknown[] | undefined, b: unknown[]) => a?.length === b.length && a.every((value, index) => Object.is(value, b[index]));
+  const modules: Record<string, unknown> = {
+    react: {
+      useState: (initial: any) => {
+        const index = cursor++;
+        slots[index] ??= { kind: 'state', value: typeof initial === 'function' ? initial() : initial };
+        return [slots[index].value, (value: any) => {
+          slots[index].value = typeof value === 'function' ? value(slots[index].value) : value;
+        }];
+      },
+      useRef: (current: unknown) => { const index = cursor++; slots[index] ??= { current }; return slots[index]; },
+      useCallback: (callback: Function, deps: unknown[]) => {
+        const index = cursor++;
+        if (!sameDeps(slots[index]?.deps, deps)) slots[index] = { value: callback, deps };
+        return slots[index].value;
+      },
+      useMemo: (create: Function, deps: unknown[]) => {
+        const index = cursor++;
+        if (!sameDeps(slots[index]?.deps, deps)) slots[index] = { value: create(), deps };
+        return slots[index].value;
+      },
+      useEffect: (create: () => unknown, deps: unknown[]) => {
+        const index = cursor++;
+        if (!sameDeps(slots[index]?.deps, deps)) {
+          slots[index] = { ...slots[index], deps };
+          effects.push({ index, create });
+        }
+      },
+    },
+    'react/jsx-runtime': { jsx: (type: unknown, props: unknown) => ({ type, props }), jsxs: (type: unknown, props: unknown) => ({ type, props }) },
+    'react-native': { StyleSheet: { create: (value: unknown) => value }, Alert: {} },
+    '../auth/AuthSessionContext': { useAuthSession: () => ({ currentUser: { id: 'same-owner' }, firebaseIdToken: 'test-token', getFirebaseIdToken: getToken }) },
+    '../cache/useCachedResource': { useCachedResource: () => ({ data, isInitialLoading: !data, retry: noop, revalidate: noop }) },
+    '../cache/persistedCache': { getPrivateCacheKey: (ownerId: string, key: string) => `${ownerId}:${key}`, writePersistedCache: async () => {} },
+    '../catalogue/CatalogueCacheContext': { useCatalogueCache: () => ({ getCachedMovie, getCachedSeries, preloadCatalogueItems }) },
+    '../catalogue/catalogueMediaSnapshots': snapshotModel,
+    '../design/tokens': { colors: {}, radii: {}, spacing: {}, touchTargets: {}, typography: {} },
+    './sharedVoteModel': voteModel,
+  };
+  const moduleExports: Record<string, Function> = {};
+  const code = ts.transpileModule(screenSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  runInNewContext(code, {
+    exports: moduleExports, setInterval: () => 1, clearInterval: noop,
+    require: (name: string) => {
+      if (name in modules) return modules[name];
+      if (name.startsWith('../components/') || name.startsWith('../feedback/') || name.startsWith('../sync/')
+        || name === '../api/sharedWatchlists' || name === '../auth/SignInRequired'
+        || name === './WatchlistDetailLayout' || name === 'lucide-react-native') return {};
+      throw new Error(`Unexpected vote screen import: ${name}`);
+    },
+  });
+  const snapshotSlot = () => slots.find(slot => slot.kind === 'state' && slot.value?.items instanceof Map);
+  return {
+    cached,
+    data: (next: unknown) => { data = next; },
+    snapshots: () => snapshotSlot().value as CatalogueSnapshots<CatalogueMediaSnapshot>,
+    restoreSnapshots: (next: CatalogueSnapshots<CatalogueMediaSnapshot>) => { snapshotSlot().value = next; },
+    render: (sessionId: string) => {
+      cursor = 0;
+      effects = [];
+      const tree = moduleExports.SharedVoteScreen({ route: { params: { watchlistId: 'list', sessionId } } });
+      const scheduled = [...effects];
+      return {
+        tree,
+        snapshotEffect: scheduled.find(effect => effect.create.toString().includes('retainCatalogueSnapshots'))?.create,
+        commit: () => {
+          for (const effect of scheduled) {
+            slots[effect.index].cleanup?.();
+            slots[effect.index].cleanup = effect.create();
+          }
+        },
+      };
+    },
+  };
+}
+
+function voteData(id: string) {
+  return {
+    candidateMedia: { candidate: { title: null, posterUrl: null, genres: [] } },
+    isOwner: false,
+    session: {
+      id, status: 'OPEN', closesAt: '2099-01-01T00:00:00.000Z', winningCandidateId: null,
+      candidates: [{ id: 'candidate', contentType: 'movie', tmdbId: 1, voteCount: 0, userHasVoted: false }],
+    },
+  };
+}
+
+function renderedPosterLabels(node: any): string[] {
+  if (!node) return [];
+  if (Array.isArray(node)) return node.flatMap(renderedPosterLabels);
+  if (typeof node !== 'object') return [];
+  const label = node.props?.accessibilityLabel;
+  return [
+    ...(typeof label === 'string' && label.endsWith(' poster') ? [label] : []),
+    ...renderedPosterLabels(node.props?.children),
+  ];
+}
+
+function verifyVoteSnapshotRouteIsolation(screenSource = voteSource) {
+  const screen = createVoteScreenHarness(screenSource);
+  const hydrated = { title: 'Hydrated title', posterUrl: 'https://image.test/1.jpg', genres: ['Drama'] };
+  screen.cached.set(1, hydrated);
+  screen.data(voteData('A'));
+  screen.render('A').commit();
+  const loadedA = screen.render('A');
+  loadedA.commit();
+  screen.cached.clear();
+  assert.deepEqual(renderedPosterLabels(screen.render('A').tree), ['Hydrated title poster'],
+    'a matching session must keep its hydrated poster after provider eviction');
+
+  screen.data(null);
+  const waitingForB = screen.render('B');
+  assert.deepEqual(renderedPosterLabels(waitingForB.tree), ['Unavailable candidate poster'],
+    'route B must reject A snapshots before the previous effects are cleaned up');
+  screen.cached.set(1, hydrated);
+  waitingForB.commit();
+  assert.equal(screen.snapshots().items.size, 0,
+    'while B data is pending, the real snapshot effect must not seed A candidates under B scope');
+  const scopeB = screen.snapshots().scope;
+  loadedA.snapshotEffect!();
+  screen.cached.clear();
+  assert.deepEqual(renderedPosterLabels(screen.render('B').tree), ['Unavailable candidate poster'],
+    'a delayed A effect must not expose its snapshots on route B');
+
+  // Also exercise the fallback guard with a matching cache key but mismatched
+  // owned session, as could occur with an already queued/restored snapshot.
+  screen.restoreSnapshots({ scope: scopeB, items: new Map([['movie:1', hydrated]]) });
+  assert.deepEqual(renderedPosterLabels(screen.render('B').tree), ['Unavailable candidate poster'],
+    'a matching snapshot cache key alone must not bypass the actual session ID');
+
+  screen.data(voteData('B'));
+  screen.render('B').commit();
+  screen.cached.set(1, { ...hydrated, title: 'Current B title' });
+  screen.render('B').commit();
+  screen.cached.clear();
+  assert.deepEqual(renderedPosterLabels(screen.render('B').tree), ['Current B title poster'],
+    'B must resume normal snapshot seeding and eviction fallback once its own data arrives');
+}
+
+verifyVoteSnapshotRouteIsolation();
+const unguardedSeeding = voteSource.replace('const candidates = sessionMatchesRoute ? session?.candidates ?? [] : [];',
+  'const candidates = session?.candidates ?? [];');
+assert.notEqual(unguardedSeeding, voteSource);
+assert.throws(() => verifyVoteSnapshotRouteIsolation(unguardedSeeding), /must not seed A candidates under B scope/,
+  'the executable regression must fail when the pre-fix seeding behavior is restored');
+const unguardedFallback = voteSource.replace('sessionMatchesRoute && candidateSnapshots.scope === cacheKey',
+  'candidateSnapshots.scope === cacheKey');
+assert.notEqual(unguardedFallback, voteSource);
+assert.throws(() => verifyVoteSnapshotRouteIsolation(unguardedFallback), /must not bypass the actual session ID/,
+  'the executable regression must fail when the pre-fix fallback behavior is restored');
 console.log('Catalogue row snapshots, eviction, pruning and owner/dataset isolation QA passed.');

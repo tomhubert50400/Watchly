@@ -114,18 +114,19 @@ export function SharedVoteScreen({ route }: Props) {
 
   const details = ownedVote.ownerId === ownerId ? ownedVote.data : null;
   const session = details?.session ?? null;
+  const sessionMatchesRoute = session?.id === route.params.sessionId;
   const lifecycle = session ? getVoteLifecycle(session, now) : null;
   const leaderState = useMemo(() => session ? getVoteLeaders(session.candidates) : null, [session]);
   const selectedIds = useMemo(() => session ? new Set(getSelectedCandidateIds(session)) : new Set<string>(), [session]);
 
   useEffect(() => {
-    const candidates = session?.candidates ?? [];
+    const candidates = sessionMatchesRoute ? session?.candidates ?? [] : [];
     const updates = candidates.flatMap((candidate) => {
       const item = candidate.contentType === 'movie' ? getCachedMovie(candidate.tmdbId) : getCachedSeries(candidate.tmdbId);
       return item ? [[candidate, catalogueMediaSnapshot(item)] as const] : [];
     });
     setCandidateSnapshots((current) => retainCatalogueSnapshots(current, cacheKey, candidates, updates));
-  }, [cacheKey, getCachedMovie, getCachedSeries, session]);
+  }, [cacheKey, getCachedMovie, getCachedSeries, session, sessionMatchesRoute]);
 
   useEffect(() => {
     if (!session) return;
@@ -299,7 +300,7 @@ export function SharedVoteScreen({ route }: Props) {
               : getCachedSeries(candidate.tmdbId);
             const media = catalogueMedia
               ? { genres: catalogueMedia.genres, posterUrl: catalogueMedia.posterUrl, title: catalogueMedia.title }
-              : (candidateSnapshots.scope === cacheKey ? candidateSnapshots.items.get(catalogueSnapshotKey(candidate)) : null)
+              : (sessionMatchesRoute && candidateSnapshots.scope === cacheKey ? candidateSnapshots.items.get(catalogueSnapshotKey(candidate)) : null)
                 ?? details.candidateMedia[candidate.id];
             const isLeader = leaderState.leaderIds.includes(candidate.id);
             const isSelected = selectedIds.has(candidate.id);
