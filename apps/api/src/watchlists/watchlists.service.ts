@@ -2,6 +2,7 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
+import { removeProfileTitleData } from '../profile/remove-profile-title';
 import { PrivacyVisibility, TrackedContentType } from '../generated/prisma/enums';
 import { UpdateWatchlistSettingsDto, WatchlistContentType, WatchlistItemDto, WatchlistVisibility } from './watchlists.dto';
 
@@ -257,9 +258,11 @@ export class WatchlistsService {
 
     if (watchlist.systemKey === 'planned') {
       await this.withConnectionRetry(() => this.prisma.$transaction(async (transaction) => {
-        const where = { userId, contentType: toTrackedContentType(contentType), tmdbId, status: 'WATCHLISTED' as const };
-        await transaction.userContentState.deleteMany({ where: { ...where, favorite: false } });
-        await transaction.userContentState.updateMany({ where, data: { status: null } });
+        const planned = await transaction.$queryRawUnsafe<{ id: string }[]>(
+          'SELECT id FROM "user_content_states" WHERE "userId" = $1::uuid AND "contentType" = $2::"TrackedContentType" AND "tmdbId" = $3 AND status = \'WATCHLISTED\' FOR UPDATE',
+          userId, toTrackedContentType(contentType), tmdbId,
+        );
+        if (planned.length) await removeProfileTitleData(transaction, userId, contentType, tmdbId);
       }));
       return;
     }

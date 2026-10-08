@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { WatchlistsService } from './watchlists.service';
+import { WatchlistInvitationsService } from '../shared-watchlists/watchlist-invitations.service';
 import { SharedWatchlistsService } from '../shared-watchlists/shared-watchlists.service';
 
 async function run() {
@@ -30,6 +31,15 @@ async function run() {
       let release: (() => void) | undefined;
       const assertLocked = (userId: string) => assert.equal(lockedUser, userId, 'quota reads and writes must hold the same user lock');
       const transaction = {
+        user: { findFirst: async () => ({ privacySettings: { allowWatchlistInvitesFromAnyone: true } }) },
+        notification: {
+          findFirst: async ({ where }: { where: { id: string; userId: string } }) => ({
+            id: where.id, userId: where.userId, actorUserId: 'owner', routeMetadata: { invitationStatus: 'pending' },
+            sharedWatchlist: { id: where.id, name: 'Invitation', ownerId: 'owner' },
+          }),
+          update: async () => ({}),
+          updateMany: async () => ({ count: 1 }),
+        },
         $queryRaw: async (sql: TemplateStringsArray, userId: string) => {
           assert.match(sql.join('?'), /SELECT id FROM "users" WHERE id = \?::uuid FOR UPDATE/);
           const previous = locks.get(userId) ?? Promise.resolve();
@@ -52,7 +62,8 @@ async function run() {
           },
         },
         sharedWatchlist: {
-          findFirst: async ({ where }: { where: { id: string; members: { some: { userId: string } } } }) => members(where.members.some.userId).has(where.id) ? { ownerId: 'owner' } : null,
+          findFirst: async ({ where }: { where: { id: string; ownerId?: string; members?: { some: { userId: string } } } }) => where.ownerId || members(where.members!.some.userId).has(where.id) ? { id: where.id, ownerId: 'owner' } : null,
+          update: async () => ({}),
           create: async ({ data }: { data: { name: string; ownerId: string; members: { create: { userId: string } } } }) => {
             assertLocked(data.ownerId);
             assert.equal(data.members.create.userId, data.ownerId);
@@ -72,7 +83,7 @@ async function run() {
             assertLocked(userId);
             return members(userId).has(watchlistId) ? { id: watchlistId } : null;
           },
-          upsert: async ({ create }: { create: { userId: string; watchlistId: string } }) => {
+          create: async ({ data: create }: { data: { userId: string; watchlistId: string } }) => {
             assertLocked(create.userId);
             members(create.userId).add(create.watchlistId);
             return { id: create.watchlistId };
@@ -85,6 +96,7 @@ async function run() {
   const auth = { getOrCreateUser: async (identity: { subject: string }) => ({ id: identity.subject }) };
   const personalService = new WatchlistsService(auth as never, prisma as never);
   const sharedService = new SharedWatchlistsService(auth as never, prisma as never);
+  const invitations = new WatchlistInvitationsService(auth as never, prisma as never, {} as never, {} as never);
   const identity = (subject: string) => ({ subject }) as never;
   personal.set('owner', 4);
   await personalService.createWatchlist(identity('owner'), 'Fifth');
@@ -92,27 +104,28 @@ async function run() {
   assert.equal(personal.get('owner'), 5);
   await sharedService.createSharedWatchlist(identity('owner'), 'Independent shared quota');
   assert.equal(members('owner').size, 1);
+  for (const id of ['existing', 'invited-list', 'sixth', 'replacement']) members('owner').add(id);
 
   members('member').add('existing');
   for (let i = 0; i < 3; i += 1) members('member').add(`old-${i}`);
   const race = await Promise.allSettled([
     sharedService.createSharedWatchlist(identity('member'), 'Mine'),
-    sharedService.addMember(identity('owner'), 'invited-list', 'member'),
+    invitations.respond(identity('member'), 'invited-list', true),
   ]);
   assert.equal(race.filter((result) => result.status === 'fulfilled').length, 1);
   assert.equal(members('member').size, 5, 'creation and membership must share one quota');
-  await sharedService.addMember(identity('owner'), 'existing', 'member');
+  await invitations.respond(identity('member'), 'existing', true);
   assert.equal(members('member').size, 5, 'adding an existing member at the limit must stay idempotent');
-  await assert.rejects(() => sharedService.addMember(identity('owner'), 'sixth', 'member'), BadRequestException);
+  await assert.rejects(() => invitations.respond(identity('member'), 'sixth', true), BadRequestException);
   await assert.rejects(() => sharedService.createSharedWatchlist(identity('member'), 'Sixth'), BadRequestException);
   await sharedService.leaveSharedWatchlist(identity('member'), 'existing');
   assert.equal(members('member').size, 4);
-  await sharedService.addMember(identity('owner'), 'replacement', 'member');
+  await invitations.respond(identity('member'), 'replacement', true);
   assert.equal(members('member').size, 5, 'leaving must release a membership slot');
   const ownedList = [...members('owner')][0]!;
   await assert.rejects(() => sharedService.leaveSharedWatchlist(identity('owner'), ownedList), BadRequestException);
   await assert.rejects(() => sharedService.leaveSharedWatchlist(identity('stranger'), ownedList), NotFoundException);
-  assert.equal(members('owner').size, 1, 'owner and stranger leave attempts must not remove memberships');
+  assert.equal(members('owner').size, 5, 'owner and stranger leave attempts must not remove memberships');
 
   personal.set('race', 4);
   const personalRace = await Promise.allSettled([

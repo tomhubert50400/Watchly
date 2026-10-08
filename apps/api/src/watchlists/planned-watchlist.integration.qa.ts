@@ -64,13 +64,13 @@ async function run() {
       assert.equal((await lists.listWatchlists(identity, 'series', series.tmdbId)).items.find((list) => list.id === planned.id)?.containsTitle, true);
 
       await lists.removeItem(identity, planned.id, 'movie', movie.tmdbId);
-      assert.equal((await readState())?.status, null);
-      assert.equal((await readState())?.favorite, true, 'Removing a planned title preserves its favorite');
+      assert.equal(await readState(), null, 'Removing a planned movie also removes it from the profile');
       assert.deepEqual((await lists.getWatchlist(identity, planned.id)).items.map((item) => item.contentType), ['series']);
       assert.equal((await lists.getWatchlist(identity, ordinary.id)).items.length, 1, 'Automatic removal leaves ordinary list membership intact');
       await lists.removeItem(identity, planned.id, 'series', series.tmdbId);
       assert.notEqual((await tracking.getState(identity, 'series', series.tmdbId))?.status, 'watchlisted');
 
+      await tracking.upsertState(identity, { ...movie, status: 'watchlisted', favorite: true });
       for (const status of ['WATCHING', 'WATCHED', 'DROPPED', null] as const) {
         await tx.userContentState.update({ where: { userId_contentType_tmdbId: stateKey }, data: { status: 'WATCHLISTED' } });
         assert.equal((await lists.getWatchlist(identity, planned.id)).items.length, 1);
