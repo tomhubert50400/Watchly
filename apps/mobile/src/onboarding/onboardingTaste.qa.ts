@@ -23,7 +23,7 @@ const series = (tmdbId: number): OnboardingTasteItem => ({
 
 assert.equal(ONBOARDING_TASTE_LIMIT_PER_TYPE, 5);
 assert.equal(ONBOARDING_TASTE_TOTAL_LIMIT, 10);
-assert.equal(isOnboardingTasteSelectionValid([]), false);
+assert.equal(isOnboardingTasteSelectionValid([]), true, 'taste selection is optional');
 assert.equal(isOnboardingTasteSelectionValid([movie(1)]), true);
 
 const fiveMovies = Array.from({ length: 5 }, (_, index) => movie(index + 1));

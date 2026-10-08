@@ -19,8 +19,7 @@ export function canAddOnboardingTasteItem(
 }
 
 export function isOnboardingTasteSelectionValid(items: readonly OnboardingTasteItem[]) {
-  return items.length >= 1
-    && items.length <= ONBOARDING_TASTE_TOTAL_LIMIT
+  return items.length <= ONBOARDING_TASTE_TOTAL_LIMIT
     && getOnboardingTasteCount(items, 'movie') <= ONBOARDING_TASTE_LIMIT_PER_TYPE
     && getOnboardingTasteCount(items, 'series') <= ONBOARDING_TASTE_LIMIT_PER_TYPE;
 }

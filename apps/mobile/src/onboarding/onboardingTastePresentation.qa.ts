@@ -49,10 +49,10 @@ assert.match(
   /step === 'import' \|\| step === 'taste'[\s\S]*styles\.importBackAction[\s\S]*styles\.importPrimaryAction/,
   'Taste must reuse the one-third Back and two-thirds primary action layout',
 );
-assert.match(
+assert.doesNotMatch(
   source,
   /disabled=\{step === 'taste' && tasteSelectionCount < 1\}/,
-  'Taste Continue must remain disabled until at least one title is selected',
+  'Taste must allow continuing without selecting a title',
 );
 
 console.log('Onboarding taste presentation QA passed.');

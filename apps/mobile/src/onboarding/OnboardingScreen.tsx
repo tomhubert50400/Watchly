@@ -18,12 +18,9 @@ import {
   View,
 } from 'react-native';
 import {
-  BellOff,
-  BellRing,
   Camera,
   CheckCircle2,
   ChevronDown,
-  ChevronRight,
 } from 'lucide-react-native';
 import {
   CatalogueSearchItem,
@@ -140,7 +137,6 @@ export function OnboardingScreen() {
   const [isFinishing, setIsFinishing] = useState(false);
   const [isProfileEditing, setIsProfileEditing] = useState(false);
   const [notificationOutcome, setNotificationOutcome] = useState<ReleasePushSetupResult | null>(null);
-  const [notificationSkipConfirmationVisible, setNotificationSkipConfirmationVisible] = useState(false);
   const [notificationStatus, setNotificationStatus] = useState<'idle' | 'requesting'>('idle');
   const [pendingImportTitleCount, setPendingImportTitleCount] = useState(0);
   const [pendingImportWatchlistCount, setPendingImportWatchlistCount] = useState(0);
@@ -154,6 +150,7 @@ export function OnboardingScreen() {
   const [tasteItems, setTasteItems] = useState<OnboardingTasteItem[]>([]);
   const copyAttempted = useRef(false);
   const importDataRef = useRef<ImportDataScreenHandle>(null);
+  const notificationRequestStarted = useRef(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const stepTransitionProgress = useRef(new Animated.Value(0)).current;
   const stepTransitioning = useRef(false);
@@ -286,6 +283,13 @@ export function OnboardingScreen() {
     tasteItems,
   ]);
 
+  useEffect(() => {
+    if (!draftReady || !currentUser || !firebaseIdToken || step !== 'notifications' || stepTransition || notificationRequestStarted.current) return;
+
+    notificationRequestStarted.current = true;
+    void allowNotifications();
+  }, [allowNotifications, currentUser, draftReady, firebaseIdToken, step, stepTransition]);
+
   if (!currentUser || !draftReady) {
     return (
       <Screen title="">
@@ -407,29 +411,14 @@ export function OnboardingScreen() {
     setError(null);
     if (step === 'import') moveToStep('profile');
     if (step === 'taste') moveToStep('import');
-    if (step === 'notifications' && notificationSkipConfirmationVisible) {
-      setNotificationSkipConfirmationVisible(false);
-    } else if (step === 'notifications') {
+    if (step === 'notifications') {
       moveToStep(importSatisfied ? 'import' : 'taste');
     }
-  }
-
-  function requestNotificationSkip() {
-    const notificationBlocked = notificationOutcome?.status === 'denied'
-      || notificationOutcome?.status === 'unavailable';
-    if (notificationBlocked) {
-      void finishOnboarding();
-      return;
-    }
-
-    setError(null);
-    setNotificationSkipConfirmationVisible(true);
   }
 
   async function allowNotifications() {
     if (!firebaseIdToken || !currentUser || notificationStatus === 'requesting' || isFinishing) return;
 
-    setNotificationSkipConfirmationVisible(false);
     setNotificationStatus('requesting');
     setNotificationOutcome(null);
     setError(null);
@@ -613,7 +602,6 @@ export function OnboardingScreen() {
                       isCheckingHandle={isCheckingHandle}
                       isFinishing={isFinishing}
                       notificationOutcome={notificationOutcome}
-                      notificationSkipConfirmationVisible={notificationSkipConfirmationVisible}
                       notificationStatus={notificationStatus}
                       onBack={goBack}
                       onContinue={() => {
@@ -625,9 +613,7 @@ export function OnboardingScreen() {
                         }
                         if (pageStep === 'taste') continueTaste();
                       }}
-                      onEnableNotifications={() => void allowNotifications()}
-                      onFinishWithoutNotifications={() => void finishOnboarding()}
-                      onRequestNotificationSkip={requestNotificationSkip}
+                      onFinish={() => void finishOnboarding()}
                       pendingImportTitleCount={pendingImportTitleCount}
                       pendingImportWatchlistCount={pendingImportWatchlistCount}
                       step={pageStep}
@@ -733,16 +719,11 @@ export function OnboardingScreen() {
                   ) : null}
 
                   {pageStep === 'notifications' ? (
-                    notificationSkipConfirmationVisible
-                      ? <NotificationSkipConfirmation />
-                      : (
-                          <NotificationsStep
-                            loading={notificationStatus === 'requesting' || isFinishing}
-                            onEnable={() => void allowNotifications()}
-                            outcome={notificationOutcome}
-                            tasteItems={tasteItems}
-                          />
-                        )
+                    !notificationOutcome || notificationStatus === 'requesting' || isFinishing
+                      ? <LoadingState label={isFinishing ? 'Finishing setup' : 'Setting up notifications'} />
+                      : notificationOutcome.status === 'enabled'
+                        ? <Text style={styles.bodyText}>Notifications are enabled. Continue to finish setting up your profile.</Text>
+                        : <NotificationsStep outcome={notificationOutcome} tasteItems={tasteItems} />
                   ) : null}
                 </View>
               </Screen>
@@ -784,13 +765,10 @@ function OnboardingFooter({
   isCheckingHandle,
   isFinishing,
   notificationOutcome,
-  notificationSkipConfirmationVisible,
   notificationStatus,
   onBack,
   onContinue,
-  onEnableNotifications,
-  onFinishWithoutNotifications,
-  onRequestNotificationSkip,
+  onFinish,
   pendingImportTitleCount,
   pendingImportWatchlistCount,
   step,
@@ -801,65 +779,26 @@ function OnboardingFooter({
   isCheckingHandle: boolean;
   isFinishing: boolean;
   notificationOutcome: ReleasePushSetupResult | null;
-  notificationSkipConfirmationVisible: boolean;
   notificationStatus: 'idle' | 'requesting';
   onBack: () => void;
   onContinue: () => void;
-  onEnableNotifications: () => void;
-  onFinishWithoutNotifications: () => void;
-  onRequestNotificationSkip: () => void;
+  onFinish: () => void;
   pendingImportTitleCount: number;
   pendingImportWatchlistCount: number;
   step: OnboardingStep;
   tasteSelectionCount: number;
 }) {
-  const notificationBlocked = notificationOutcome?.status === 'denied'
-    || notificationOutcome?.status === 'unavailable';
-
   return (
     <View style={styles.footer}>
       {error ? <Text accessibilityLiveRegion="polite" style={styles.errorText}>{error}</Text> : null}
       {step === 'notifications' ? (
-        notificationSkipConfirmationVisible ? (
-          <View style={styles.notificationConfirmationActions}>
-            <Button
-              disabled={notificationStatus === 'requesting' || isFinishing}
-              fullWidth
-              label="Enable notifications"
-              onPress={onEnableNotifications}
-            />
-            <Button
-              disabled={notificationStatus === 'requesting' || isFinishing}
-              fullWidth
-              label="Continue without notifications"
-              loading={isFinishing}
-              onPress={onFinishWithoutNotifications}
-              variant="secondary"
-            />
-          </View>
-        ) : (
-          <View style={styles.actions}>
-            <View style={styles.notificationsBackAction}>
-              <Button
-                disabled={notificationStatus === 'requesting' || isFinishing}
-                fullWidth
-                label="Back"
-                onPress={onBack}
-                variant="secondary"
-              />
-            </View>
-            <View style={styles.notificationsSkipAction}>
-              <Button
-                disabled={notificationStatus === 'requesting' || isFinishing}
-                fullWidth
-                label={notificationBlocked ? 'Continue without' : 'Not now'}
-                loading={isFinishing}
-                onPress={notificationBlocked ? onFinishWithoutNotifications : onRequestNotificationSkip}
-                variant="secondary"
-              />
-            </View>
-          </View>
-        )
+        <Button
+          disabled={!notificationOutcome || notificationStatus === 'requesting' || isFinishing}
+          fullWidth
+          label={error ? 'Try again' : 'Continue to Watchly'}
+          loading={isFinishing}
+          onPress={onFinish}
+        />
       ) : (
         <View style={[styles.actions, step === 'profile' ? styles.profileActions : null]}>
           {step === 'import' || step === 'taste' ? (
@@ -869,12 +808,11 @@ function OnboardingFooter({
               </View>
               <View style={styles.importPrimaryAction}>
                 <Button
-                  disabled={step === 'taste' && tasteSelectionCount < 1}
                   fullWidth
                   label={step === 'import' && pendingImportTitleCount > 0
                     ? `Import ${pendingImportTitleCount} ${pendingImportTitleCount === 1 ? 'title' : 'titles'}`
                     : step === 'import' && pendingImportWatchlistCount > 0 ? 'Import watchlists'
-                    : step === 'import' && !importSatisfied ? 'Skip' : 'Continue'}
+                    : (step === 'import' && !importSatisfied) || (step === 'taste' && tasteSelectionCount === 0) ? 'Skip' : 'Continue'}
                   onPress={onContinue}
                 />
               </View>
@@ -1206,6 +1144,7 @@ function TasteStep({
           {activeSelectionCount}/{activeSelectionLimit}
         </Text>
       </View>
+      <Text style={styles.bodyText}>Optional. You can add movies and TV shows later.</Text>
 
       <TextInput
         autoCapitalize="none"
@@ -1371,17 +1310,12 @@ function TasteCard({
 }
 
 function NotificationsStep({
-  loading,
-  onEnable,
   outcome,
   tasteItems,
 }: {
-  loading: boolean;
-  onEnable: () => void;
-  outcome: ReleasePushSetupResult | null;
+  outcome: ReleasePushSetupResult;
   tasteItems: OnboardingTasteItem[];
 }) {
-  const blocked = outcome?.status === 'denied' || outcome?.status === 'unavailable';
   const [cataloguePosterItems, setCataloguePosterItems] = useState<OnboardingTasteItem[]>([]);
   const tastePosterItems = tasteItems.filter((item) => item.posterUrl);
   const previewItems = [...tastePosterItems, ...cataloguePosterItems]
@@ -1420,7 +1354,7 @@ function NotificationsStep({
     <View style={styles.notificationsContent}>
       <Text style={styles.notificationsHeading}>Stay in the loop</Text>
       <Text style={styles.notificationsIntro}>
-        Get releases, social activity, and every current and future Watchly update with one permission.
+        Notifications let you know when movies and TV shows you follow are released, when someone interacts with your reviews, and when your shared watchlists change.
       </Text>
 
       <View style={styles.notificationPreviewList}>
@@ -1435,70 +1369,29 @@ function NotificationsStep({
         ))}
       </View>
 
-      {blocked ? (
-        <View style={styles.warningPanel}>
-          {outcome.status === 'denied' ? (
-            <Text accessibilityLiveRegion="polite" style={styles.warningText}>
-              You can enable notifications in iPhone Settings &gt; Notifications &gt; Watchly.
-            </Text>
-          ) : (
-            <Text accessibilityLiveRegion="polite" style={styles.warningText}>{outcome.message}</Text>
-          )}
-          {outcome.status === 'denied' ? (
-            <Button
-              fullWidth
-              label="Open Settings"
-              onPress={() => void Linking.openSettings()}
-              variant="secondary"
-            />
-          ) : null}
-        </View>
-      ) : null}
+      <Text style={styles.notificationsIntro}>
+        You can keep using Watchly without notifications and turn them on later in your device settings.
+      </Text>
 
-      <Pressable
-        accessibilityLabel="Enable notifications"
-        accessibilityRole="button"
-        accessibilityState={{ busy: loading, disabled: loading }}
-        disabled={loading}
-        onPress={onEnable}
-        style={({ pressed }) => [
-          styles.notificationEnableAction,
-          loading ? styles.notificationEnableActionDisabled : null,
-          pressed && !loading ? styles.pressed : null,
-        ]}
-      >
-        <View style={styles.notificationEnableIcon}>
-          {loading
-            ? <ActivityIndicator color={colors.textOnAccent} />
-            : <BellRing color={colors.textOnAccent} size={26} strokeWidth={2.2} />}
-        </View>
-        <View style={styles.notificationEnableCopy}>
-          <Text style={styles.notificationEnableLabel}>
-            {loading ? 'Enabling notifications' : 'Enable notifications'}
+      <View style={styles.warningPanel}>
+        {outcome.status === 'denied' ? (
+          <Text accessibilityLiveRegion="polite" style={styles.warningText}>
+            {Platform.OS === 'ios'
+              ? 'You can enable notifications in iPhone Settings > Notifications > Watchly.'
+              : 'You can enable notifications in your device settings > Apps > Watchly > Notifications.'}
           </Text>
-          <Text style={styles.notificationEnableHint}>
-            {loading ? 'Waiting for iPhone permission' : 'Tap to turn on Watchly alerts'}
-          </Text>
-        </View>
-        <ChevronRight color={colors.textOnAccent} size={22} strokeWidth={2.4} />
-      </Pressable>
-    </View>
-  );
-}
-
-function NotificationSkipConfirmation() {
-  return (
-    <View style={styles.notificationSkipConfirmation}>
-      <View style={styles.notificationSkipConfirmationIcon}>
-        <BellOff color={colors.accentText} size={34} strokeWidth={2.1} />
+        ) : (
+          <Text accessibilityLiveRegion="polite" style={styles.warningText}>{outcome.message}</Text>
+        )}
+        {outcome.status === 'denied' ? (
+          <Button
+            fullWidth
+            label="Open Settings"
+            onPress={() => void Linking.openSettings()}
+            variant="secondary"
+          />
+        ) : null}
       </View>
-      <Text accessibilityRole="header" style={styles.notificationSkipConfirmationHeading}>Are you sure?</Text>
-      <Text style={styles.notificationSkipConfirmationCopy}>
-        Without notifications, Watchly won&apos;t be able to alert you when movies and TV shows you follow are released.
-      </Text>
-      <Text style={styles.notificationSkipConfirmationHint}>
-        You can turn notifications on later in Settings.
-      </Text>
     </View>
   );
 }
@@ -1704,9 +1597,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 32,
   },
-  notificationsBackAction: {
-    flex: 1,
-  },
   notificationsContent: {
     flexGrow: 1,
     gap: spacing.md,
@@ -1719,52 +1609,8 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textMuted,
   },
-  notificationsSkipAction: {
-    flex: 2,
-  },
   notificationsScreenContent: {
     flexGrow: 1,
-  },
-  notificationEnableAction: {
-    ...shadows.raised,
-    alignItems: 'center',
-    alignSelf: 'stretch',
-    backgroundColor: colors.accent,
-    borderRadius: radii.lg,
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: 'auto',
-    minHeight: 82,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-  },
-  notificationEnableActionDisabled: {
-    opacity: 0.58,
-  },
-  notificationEnableCopy: {
-    flex: 1,
-    gap: 2,
-  },
-  notificationEnableIcon: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 24,
-    height: 48,
-    justifyContent: 'center',
-    width: 48,
-  },
-  notificationEnableHint: {
-    ...typography.meta,
-    color: colors.textOnAccent,
-    opacity: 0.78,
-  },
-  notificationEnableLabel: {
-    color: colors.textOnAccent,
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  notificationConfirmationActions: {
-    gap: spacing.sm,
   },
   notificationPreview: {
     alignItems: 'center',
@@ -1822,40 +1668,6 @@ const styles = StyleSheet.create({
     color: colors.textSubtle,
     fontSize: 11,
     fontWeight: '600',
-  },
-  notificationSkipConfirmation: {
-    alignItems: 'center',
-    flexGrow: 1,
-    gap: spacing.md,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-  },
-  notificationSkipConfirmationCopy: {
-    ...typography.body,
-    color: colors.text,
-    maxWidth: 340,
-    textAlign: 'center',
-  },
-  notificationSkipConfirmationHeading: {
-    ...typography.title,
-    color: colors.accentText,
-    textAlign: 'center',
-  },
-  notificationSkipConfirmationHint: {
-    ...typography.meta,
-    color: colors.textMuted,
-    maxWidth: 300,
-    textAlign: 'center',
-  },
-  notificationSkipConfirmationIcon: {
-    alignItems: 'center',
-    backgroundColor: colors.panelSoft,
-    borderColor: colors.borderStrong,
-    borderRadius: 38,
-    borderWidth: 1,
-    height: 76,
-    justifyContent: 'center',
-    width: 76,
   },
   photoAction: {
     alignItems: 'center',
