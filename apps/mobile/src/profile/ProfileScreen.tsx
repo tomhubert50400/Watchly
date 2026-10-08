@@ -9,6 +9,7 @@ import {
   getProfile,
   removeAvatar,
   updateProfileBackdrop,
+  updateProfileTopFive,
   type ProfileBackdropSelection,
 } from '../api/profile';
 import { getViewingStats, type ViewingStats } from '../api/viewings';
@@ -34,6 +35,7 @@ import {
   type ProfileModel,
 } from './profileModel';
 import { ProfileBackdropPickerSheet } from './ProfileBackdropPickerSheet';
+import { ProfileTopFive } from './ProfileTopFive';
 import { FavoriteOrderEditor } from './FavoriteOrderEditor';
 import { createFavoriteOrderAutosave } from './favoriteOrderAutosave';
 import { useToast } from '../notifications/ToastContext';
@@ -451,6 +453,20 @@ export function ProfileScreen() {
         </EmptyState>
       ) : profile ? (
         <ProfileBody
+          topFive={<ProfileTopFive key={userId} selection={profile.topFive} candidates={mediaItems}
+            onOpen={(item) => openProfileMediaItem(navigation, item)} onSave={async (items) => {
+              const updated = await updateProfileTopFive(firebaseIdToken!, items);
+              const key = getProfileResourceKey(userId!);
+              const cached = getMemoryResource<CachedProfile>(key)?.data;
+              if (cached) {
+                const next = { ...cached, topFive: updated.items };
+                const savedAt = new Date().toISOString();
+                setMemoryResource(key, next, savedAt);
+                void writePersistedCache(key, next, undefined, savedAt).catch(() => undefined);
+              }
+              notifyUserDataChanged('profile');
+              return updated.items;
+            }} />}
           recentActivity={<RecentViewingActivity mediaItems={[...hydratedPreviewItems, ...mediaItems]} userId={profile.userId} owner />}
           avatarLoading={avatarStatus === 'saving'}
           avatarUrl={avatarUrl}

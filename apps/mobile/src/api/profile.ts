@@ -35,6 +35,7 @@ export type UserProfile = {
   id: string;
   providerAvatarImportEnabled: boolean;
   profileBackdrop: ProfileBackdropSelection | null;
+  topFive?: ProfileBackdropSelection[];
   privacy: ProfilePrivacy;
 };
 
@@ -42,6 +43,10 @@ export type ProfileBackdropSelection = {
   contentType: 'movie' | 'series';
   tmdbId: number;
 };
+
+export function updateProfileTopFive(token: string, items: ProfileBackdropSelection[]) {
+  return apiPut<{ items: ProfileBackdropSelection[] }>('/profile/me/top-five', { items }, { token });
+}
 
 export type OnboardingCompletion = {
   displayName: string | null;
@@ -65,6 +70,7 @@ export type PublicProfile = {
   };
   opinions: ProfileOpinion[];
   profileBackdrop: ProfileBackdropSelection | null;
+  topFive?: ProfileBackdropSelection[];
   profileVisibility: PrivacyVisibility;
   stats: {
     followersCount: number;

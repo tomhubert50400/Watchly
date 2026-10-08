@@ -34,6 +34,7 @@ export function ProfileBody({
   followingCount,
   handle,
   identityAction,
+  topFive,
   mediaEmptyLabels,
   mediaPreviews,
   notice,
@@ -64,6 +65,7 @@ export function ProfileBody({
   followingCount: number;
   handle: string | null;
   identityAction?: ReactNode;
+  topFive?: ReactNode;
   mediaEmptyLabels: {
     favorites: string;
     movies: string;
@@ -107,13 +109,16 @@ export function ProfileBody({
           reviewsCount={reviewsCount}
         /></ScreenReveal>
         {identityAction}
-        <View pointerEvents="none" style={styles.statsDivider} />
-        <ScreenReveal delay={100}><ViewingStatsSummaryCard
-          accessibilityHint={statsAccessibilityHint}
-          onPress={onOpenStats}
-          stats={stats}
-          title={statsTitle}
-        /></ScreenReveal>
+        <View>
+          {topFive}
+          <View pointerEvents="none" style={styles.statsDivider} />
+          <ScreenReveal delay={100}><ViewingStatsSummaryCard
+            accessibilityHint={statsAccessibilityHint}
+            onPress={onOpenStats}
+            stats={stats}
+            title={statsTitle}
+          /></ScreenReveal>
+        </View>
         <View pointerEvents="none" style={styles.statsDivider} />
       </View>
       {notice}

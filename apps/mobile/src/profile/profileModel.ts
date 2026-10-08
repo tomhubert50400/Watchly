@@ -25,6 +25,7 @@ export type ProfileModel = {
   opinions: ProfileOpinion[];
   providerAvatarImportEnabled: boolean;
   profileBackdrop: ProfileBackdropSelection | null;
+  topFive?: ProfileBackdropSelection[];
   stats: {
     followersCount: number;
     followingCount: number;
@@ -49,6 +50,7 @@ export function buildProfileModel(
     opinions,
     providerAvatarImportEnabled: profile.providerAvatarImportEnabled,
     profileBackdrop: profile.profileBackdrop,
+    topFive: profile.topFive ?? [],
     stats: {
       followersCount: response.stats.followersCount,
       followingCount: response.stats.followingCount,

@@ -40,6 +40,7 @@ import type { RootStackParamList } from '../navigation/types';
 import { ReportSheet } from '../reports/ReportSheet';
 import { RecentViewingActivity } from './RecentViewingActivity';
 import { getHydratedProfileOpinionTarget, ProfileBody } from './ProfileBody';
+import { ProfileTopFive } from './ProfileTopFive';
 import { ProfileHeaderButton } from './ProfileHeaderButton';
 import { ProfileSummaryCard } from './ProfileSummaryCard';
 import {
@@ -630,6 +631,7 @@ export function PublicProfileScreen() {
         ) : profile.viewingStats ? (
           <View style={styles.stack}>
             <ProfileBody
+              topFive={<ProfileTopFive key={profile.id} selection={profile.topFive} onOpen={(item) => openProfileMediaItem(navigation, item)} />}
           recentActivity={<RecentViewingActivity mediaItems={[...hydratedPreviewItems, ...mediaItems]} userId={profile.id} />}
               avatarUrl={profile.avatarUrl}
               displayName={profile.displayName}
