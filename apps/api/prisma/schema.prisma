@@ -195,6 +195,8 @@ model User {
   ownedSharedWatchlists      SharedWatchlist[]          @relation("SharedWatchlistOwner")
   sharedWatchlistMemberships SharedWatchlistMember[]
   sharedVotingVotes          SharedVotingVote[]
+  dismissedSharedVotes       SharedVotingDismissal[]
+  createdSharedVotes         SharedVotingSession[] @relation("SharedVoteCreator")
   viewingEvents              ViewingEvent[]
 
   @@map("users")
@@ -247,6 +249,7 @@ model AuthIdentity {
 }
 
 model PrivacySettings {
+  allowWatchlistInvitesFromAnyone Boolean                @default(false)
   userId                    String                    @id @db.Uuid
   profileVisibility         PrivacyVisibility         @default(PUBLIC)
   viewingHistoryVisibility  PrivacyVisibility         @default(PRIVATE)
@@ -648,9 +651,13 @@ model SharedWatchlistItem {
 
 model SharedVotingSession {
   id                 String                  @id @default(uuid()) @db.Uuid
+  creatorId          String?                 @db.Uuid
+  creator            User?                   @relation("SharedVoteCreator", fields: [creatorId], references: [id], onDelete: SetNull)
   watchlistId        String                  @db.Uuid
   title              String                  @db.VarChar(80)
   status             SharedVotingStatus      @default(OPEN)
+  isAnonymous        Boolean                 @default(true)
+  allowMultipleVotes Boolean                 @default(true)
   closesAt           DateTime                @default(dbgenerated("(CURRENT_TIMESTAMP + INTERVAL '7 days')"))
   closedAt           DateTime?
   winningCandidateId String?                 @db.Uuid
@@ -660,11 +667,25 @@ model SharedVotingSession {
   winner             SharedVotingCandidate?  @relation("SharedVotingWinner", fields: [winningCandidateId], references: [id], onDelete: SetNull)
   watchlist          SharedWatchlist         @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
   notifications      Notification[]
+  dismissals         SharedVotingDismissal[]
 
   @@index([watchlistId])
   @@index([status, closesAt])
   @@index([winningCandidateId])
+  @@index([creatorId])
   @@map("shared_voting_sessions")
+}
+
+model SharedVotingDismissal {
+  sessionId String @db.Uuid
+  userId    String @db.Uuid
+  createdAt DateTime @default(now())
+  session   SharedVotingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([sessionId, userId])
+  @@index([userId])
+  @@map("shared_voting_dismissals")
 }
 
 model SharedVotingCandidate {

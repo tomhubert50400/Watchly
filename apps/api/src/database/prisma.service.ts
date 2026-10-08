@@ -117,6 +117,10 @@ export class PrismaService implements OnModuleDestroy {
     return this.client.sharedVotingCandidate;
   }
 
+  get sharedVotingDismissal() {
+    return this.client.sharedVotingDismissal;
+  }
+
   get sharedVotingSession() {
     return this.client.sharedVotingSession;
   }
