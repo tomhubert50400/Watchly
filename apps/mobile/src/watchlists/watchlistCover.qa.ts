@@ -1,7 +1,7 @@
 // @ts-expect-error QA executes under tsx/Node.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { getWatchlistCoverItems, toggleWatchlistCoverItem } from './watchlistCover';
+import { getWatchlistBackgroundItem, getWatchlistCoverItems, toggleWatchlistCoverItem } from './watchlistCover';
 import { saveWatchlistArtwork } from './saveWatchlistArtwork';
 
 const items = Array.from({ length: 20 }, (_, index) => ({ id: String(index), contentType: index % 2 ? 'series' : 'movie' }));
@@ -19,6 +19,13 @@ assert.deepEqual(selected, ['1', '2', '3', '4']);
 selected = toggleWatchlistCoverItem(selected, '2');
 assert.deepEqual(toggleWatchlistCoverItem(selected, '5'), ['1', '3', '4', '5']);
 
+const backgrounds = [{ id: 'empty', posterUrl: null }, { id: 'first', posterUrl: 'first.jpg' }, { id: 'custom', backdropUrl: 'custom.jpg' }];
+assert.equal(getWatchlistBackgroundItem(backgrounds)?.id, 'first', 'A watchlist gets an automatic image without a saved selection');
+assert.equal(getWatchlistBackgroundItem(backgrounds, 'custom')?.id, 'custom', 'The custom selection takes priority');
+assert.equal(getWatchlistBackgroundItem(backgrounds, 'deleted')?.id, 'first', 'Removing the selected title restores automatic artwork');
+assert.equal(getWatchlistBackgroundItem(backgrounds, 'empty')?.id, 'first', 'A title with no artwork must not leave the background empty');
+assert.equal(getWatchlistBackgroundItem([]), undefined, 'Empty lists use the visual fallback');
+
 const artworkButton = readFileSync(new URL('./WatchlistArtworkSheet.tsx', import.meta.url), 'utf8');
 const personalScreen = readFileSync(new URL('./PersonalWatchlistScreen.tsx', import.meta.url), 'utf8');
 const sharedScreen = readFileSync(new URL('./SharedWatchlistScreen.tsx', import.meta.url), 'utf8');
@@ -28,8 +35,9 @@ assert.match(artworkButton, /mode === 'cover' \? styles\.coverArtwork : styles\.
 assert.match(artworkButton, /backgroundItemId: backgroundSelection\[0\] \?\? null/, 'Background selection must persist one title or no title independently of the active tab');
 for (const screen of [personalScreen, sharedScreen]) {
   assert.match(screen, /backgroundItem\?\.posterUrl \?\? backgroundItem\?\.backdropUrl/, 'The saved background must render the selected portrait artwork');
-  assert.match(screen, /headerTransparent: Boolean\(backgroundUrl\)/, 'The selected background must extend behind the native header');
+  assert.match(screen, /background=\{<WatchlistBackground imageUrl=\{backgroundUrl\} \/>\}/, 'Both watchlist kinds always render their background');
 }
+assert.match(artworkButton, /Use automatic background/, 'Resetting the custom choice returns to automatic artwork');
 
 async function verifyArtworkSave() {
   const saved = { coverItemIds: ['1'], backgroundItemId: '2' as string | null };

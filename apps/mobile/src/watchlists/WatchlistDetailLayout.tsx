@@ -1,4 +1,8 @@
-import { PropsWithChildren, ReactNode, RefObject, useRef } from 'react';
+import { PropsWithChildren, ReactNode, RefObject, useLayoutEffect, useRef } from 'react';
+import { useHeaderHeight } from '@react-navigation/elements';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/types';
 import {
   KeyboardAvoidingView,
   GestureResponderEvent,
@@ -15,8 +19,10 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { NativeHeaderTitle } from '../components/NativeHeaderTitle';
 import { ScreenReveal } from '../components/ScreenReveal';
+import { ScreenTopFade } from '../components/ScreenTopFade';
 import { useFocusedFieldVisibility } from '../components/useFocusedFieldVisibility';
 import { MediaPoster } from '../components/MediaPoster';
 import { colors, radii, spacing, typography } from '../design/tokens';
@@ -31,6 +37,10 @@ export type WatchlistDisplayItem = {
 };
 
 type WatchlistPageProps = PropsWithChildren<{
+  title?: string;
+  subtitle?: string;
+  actions?: ReactNode;
+  trashHeader?: ReactNode;
   background?: ReactNode;
   footer?: ReactNode;
   isRefreshing?: boolean;
@@ -41,6 +51,7 @@ type WatchlistPageProps = PropsWithChildren<{
   overlay?: ReactNode;
   scrollRef?: RefObject<ScrollView | null>;
   scrollEnabled?: boolean;
+  headerFade?: boolean;
 }>;
 
 type WatchlistPosterGridProps = {
@@ -63,6 +74,10 @@ type WatchlistPosterGridProps = {
 type WatchlistSectionProps = PropsWithChildren<{ delay?: number }>;
 
 export function WatchlistPage({
+  title,
+  subtitle,
+  actions,
+  trashHeader,
   background,
   children,
   footer,
@@ -74,50 +89,66 @@ export function WatchlistPage({
   overlay,
   scrollRef: providedScrollRef,
   scrollEnabled = true,
+  headerFade = title !== undefined,
 }: WatchlistPageProps) {
   const internalScrollRef = useRef<ScrollView>(null);
   const scrollRef = providedScrollRef ?? internalScrollRef;
-  const visibility = useFocusedFieldVisibility(scrollRef);
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const headerHeight = useHeaderHeight();
+  const topInset = title !== undefined ? headerHeight : 0;
+  const visibility = useFocusedFieldVisibility(scrollRef, topInset);
+  useLayoutEffect(() => {
+    if (title === undefined) return;
+    navigation.setOptions({
+      headerTitle: () => <NativeHeaderTitle title={title} subtitle={subtitle} />,
+      headerRight: () => actions,
+      header: trashHeader ? () => <View style={{ height: headerHeight }}>{trashHeader}</View> : undefined,
+    });
+  }, [actions, headerHeight, navigation, subtitle, title, trashHeader]);
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.keyboardAvoider}
     >
       {background ? <View pointerEvents="none" style={styles.background}>{background}</View> : null}
-      <ScrollView
-        ref={scrollRef}
-        automaticallyAdjustKeyboardInsets={false}
-        contentInsetAdjustmentBehavior={background ? 'automatic' : 'never'}
-        contentContainerStyle={[styles.page, background ? styles.pageWithBackground : null]}
-        keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
-        keyboardShouldPersistTaps="handled"
-        onBlur={visibility.onBlur}
-        onContentSizeChange={(width, height) => {
-          visibility.onContentSizeChange();
-          onContentSizeChange?.(width, height);
-        }}
-        onFocus={visibility.onFocus}
-        onLayout={(event) => {
-          visibility.onLayout();
-          onLayout?.(event);
-        }}
-        onScroll={(event) => {
-          visibility.onScroll(event);
-          onScroll?.(event);
-        }}
-        scrollEnabled={scrollEnabled}
-        scrollEventThrottle={16}
-        refreshControl={onRefresh ? (
-          <RefreshControl
-            onRefresh={onRefresh}
-            refreshing={isRefreshing}
-            tintColor={colors.accent}
-          />
-        ) : undefined}
-        showsVerticalScrollIndicator={false}
-      >
-        {children}
-      </ScrollView>
+      <ScreenTopFade enabled={headerFade && insets.top > 0} topInset={insets.top}>
+        <ScrollView
+          ref={scrollRef}
+          automaticallyAdjustKeyboardInsets={false}
+          automaticallyAdjustContentInsets={false}
+          contentInsetAdjustmentBehavior="never"
+          contentContainerStyle={[styles.page, background ? styles.pageWithBackground : null, { paddingTop: topInset + spacing.xl, paddingBottom: (title !== undefined ? insets.bottom : 0) + spacing.xxxl }]}
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          keyboardShouldPersistTaps="handled"
+          onBlur={visibility.onBlur}
+          onContentSizeChange={(width, height) => {
+            visibility.onContentSizeChange();
+            onContentSizeChange?.(width, height);
+          }}
+          onFocus={visibility.onFocus}
+          onLayout={(event) => {
+            visibility.onLayout();
+            onLayout?.(event);
+          }}
+          onScroll={(event) => {
+            visibility.onScroll(event);
+            onScroll?.(event);
+          }}
+          scrollEnabled={scrollEnabled}
+          scrollEventThrottle={16}
+          refreshControl={onRefresh ? (
+            <RefreshControl
+              onRefresh={onRefresh}
+              refreshing={isRefreshing}
+              tintColor={colors.accent}
+            />
+          ) : undefined}
+          showsVerticalScrollIndicator={false}
+        >
+          {children}
+        </ScrollView>
+      </ScreenTopFade>
       {overlay}
       {footer ? (
         <SafeAreaView edges={['bottom']} style={styles.footer}>

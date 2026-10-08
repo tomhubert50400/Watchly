@@ -12,7 +12,8 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { BlendedArtwork } from '../library/WatchlistRail';
 import { notifyUserDataChanged } from '../sync/userDataEvents';
-import { getWatchlistCoverItems, toggleWatchlistCoverItem } from './watchlistCover';
+import { getWatchlistBackgroundItem, getWatchlistCoverItems, toggleWatchlistCoverItem } from './watchlistCover';
+import { WatchlistBackground } from './WatchlistBackground';
 import { saveWatchlistArtwork } from './saveWatchlistArtwork';
 
 type Props = {
@@ -127,9 +128,10 @@ export function WatchlistArtworkSheet({
     }
   }
 
+  const backgroundPreviewItem = getWatchlistBackgroundItem(items.map(item => ({ ...item, posterUrl: artwork[item.id]?.artworkUrl })), selected[0]);
   const previewItems = mode === 'cover'
     ? getWatchlistCoverItems(items, selected)
-    : items.filter((item) => item.id === selected[0]);
+    : backgroundPreviewItem ? [backgroundPreviewItem] : [];
   const preview = previewItems.map((item) => artwork[item.id]?.artworkUrl ?? null);
   const unavailable = items.slice(0, visibleCount).some((item) => artwork[item.id]?.title === 'Title unavailable');
   return <BottomActionSheet visible title="Customize watchlist" onClose={onClose}
@@ -153,13 +155,13 @@ export function WatchlistArtworkSheet({
         {mode === 'cover' ? (
           <BlendedArtwork blendId={`${mode}-preview-${watchlistId}`} urls={preview} />
         ) : (
-          <MediaPoster posterUrl={preview[0] ?? null} style={styles.backgroundPreviewImage} />
+          preview[0] ? <MediaPoster posterUrl={preview[0]} style={styles.backgroundPreviewImage} /> : <WatchlistBackground imageUrl={null} />
         )}
       </View>
       <Text style={styles.copy}>
         {mode === 'cover'
           ? `Choose up to 4 images. ${selected.length}/4 selected.`
-          : 'Choose one title for the watchlist background.'}
+          : 'Choose a title, or let Watchly pick a background automatically.'}
       </Text>
       {mode === 'cover' && selected.length === 4 ? <Text style={styles.copy}>Deselect a title to choose another.</Text> : null}
       {error ? <InlineStatusBanner detail={error} tone="error" /> : null}
@@ -189,7 +191,7 @@ export function WatchlistArtworkSheet({
       {unavailable && !loading ? <Button label="Retry unavailable titles" variant="ghost" onPress={() => setRetry((value) => value + 1)} /> : null}
       {visibleCount < items.length ? <Button label="Show more titles" variant="secondary" disabled={loading} onPress={() => setVisibleCount((count) => count + 24)} /> : null}
       <Button
-        label={mode === 'cover' ? 'Use automatic cover' : 'Remove background'}
+        label={mode === 'cover' ? 'Use automatic cover' : 'Use automatic background'}
         variant="ghost"
         disabled={saving || selected.length === 0}
         onPress={() => updateSelection(() => [])}
