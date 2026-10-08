@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Camera, ChevronDown, ChevronRight, Ellipsis, FolderPlus, Funnel, Plus, Settings } from 'lucide-react-native';
 import {
@@ -29,12 +29,14 @@ import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
 import { MediaPoster } from '../components/MediaPoster';
-import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
+import { WatchlistBackground } from './WatchlistBackground';
+import { getWatchlistBackgroundItem } from './watchlistCover';
 import { TextInput } from '../components/TextInput';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
 import { hapticError, hapticSelection, hapticSuccess } from '../feedback/haptics';
 import { RootStackParamList } from '../navigation/types';
 import { subscribeToUserData } from '../sync/userDataEvents';
+import { isTitleRemoved, useTitleRemovalUpdates } from '../sync/titleRemovalUpdates';
 import {
   WatchlistDisplayItem,
   WatchlistPage,
@@ -42,6 +44,9 @@ import {
   WatchlistSection,
 } from './WatchlistDetailLayout';
 import { WatchlistActionsMenu } from './WatchlistActionsMenu';
+import { useWatchlistTrashHeader } from './WatchlistTrashHeader';
+import { draggedPosterCenter } from './watchlistTrashTarget';
+import { useWatchlistRemoval } from './useWatchlistRemoval';
 import { WatchlistArtworkSheet } from './WatchlistArtworkSheet';
 import { WatchlistSettingsSheet } from './WatchlistSettingsSheet';
 import { HydratedPersonalWatchlistItem, useWatchlistCache } from './WatchlistCacheContext';
@@ -90,6 +95,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   const [sectionError, setSectionError] = useState<string | null>(null);
   const [sectionName, setSectionName] = useState('');
   const [stateScope, setStateScope] = useState(resourceScope);
+  const [loadedAt, setLoadedAt] = useState(0);
   const [watchlist, setWatchlist] = useState<PersonalWatchlist | null>(() => initialCached?.watchlist ?? null);
   const autoScrollFrameRef = useRef<number | null>(null);
   const dragScale = useRef(new Animated.Value(1)).current;
@@ -116,17 +122,37 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
 
   const isStateCurrent = stateScope === resourceScope;
   const visibleWatchlist = isStateCurrent ? watchlist : null;
-  const visibleItems = isStateCurrent ? hydratedItems : [];
+  const removalRevision = useTitleRemovalUpdates();
+  const visibleItems = useMemo(() => {
+    void removalRevision;
+    return isStateCurrent ? hydratedItems.filter((item) =>
+      !isTitleRemoved(currentUser?.id, `personal:${watchlistId}`, item, loadedAt, visibleWatchlist?.isPlanned)) : [];
+  }, [isStateCurrent, hydratedItems, currentUser?.id, watchlistId, loadedAt, visibleWatchlist?.isPlanned, removalRevision]);
   const filters = useWatchlistFilters(visibleItems, resourceScope);
   const visibleSections = visibleWatchlist?.sections ?? [];
   const groups = useMemo(
     () => groupPersonalWatchlistItems(visibleSections, filters.visibleItems),
     [filters.visibleItems, visibleSections],
   );
-  const backgroundItem = visibleItems.find((item) => item.id === visibleWatchlist?.backgroundItemId);
+  const backgroundItem = getWatchlistBackgroundItem(visibleItems, visibleWatchlist?.backgroundItemId);
   const backgroundUrl = backgroundItem?.posterUrl ?? backgroundItem?.backdropUrl ?? null;
+  const trash = useWatchlistTrashHeader(Boolean(moving));
+  const removal = useWatchlistRemoval({
+    kind: 'personal', watchlistId, name: visibleWatchlist?.name ?? route.params.title, isPlanned: visibleWatchlist?.isPlanned,
+    onRemoved: (item) => {
+      if (requestRef.current.scope !== resourceScope) return;
+      requestRef.current.version += 1;
+      setHydratedItems((current) => current.filter((row) => row.id !== item.id));
+      setWatchlist((current) => current ? {
+        ...current, items: current.items.filter((row) => row.id !== item.id),
+        coverItemIds: current.coverItemIds?.filter((id) => id !== item.id),
+        backgroundItemId: current.backgroundItemId === item.id ? null : current.backgroundItemId,
+      } : current);
+    },
+  });
 
   const loadWatchlist = useCallback(async () => {
+    const startedAt = Date.now();
     const requestScope = resourceScope;
     const requestVersion = requestRef.current.version + 1;
     requestRef.current = { scope: requestScope, version: requestVersion };
@@ -153,6 +179,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
           setHydratedItems(cached.hydratedItems);
           setWatchlist(cached.watchlist);
           setStateScope(requestScope);
+          setLoadedAt(startedAt);
           setIsLoading(false);
           setIsRefreshing(false);
         },
@@ -211,31 +238,15 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     if (measureFrameRef.current !== null) cancelAnimationFrame(measureFrameRef.current);
   }, []);
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerStyle: { backgroundColor: backgroundUrl ? 'transparent' : colors.background },
-      headerTransparent: Boolean(backgroundUrl),
-      headerTitle: () => (
-        <View style={styles.headerTitle}>
-          <Text accessibilityRole="header" numberOfLines={1} style={styles.headerTitleText}>
-            {route.params.title}
-          </Text>
-          <Text numberOfLines={1} style={styles.headerSubtitle}>
-            {visibleItems.length} {visibleItems.length === 1 ? 'title' : 'titles'}
-          </Text>
-        </View>
-      ),
-      headerRight: visibleWatchlist ? () => (
-        <WatchlistActionsMenu key={resourceScope} actions={[
-          { label: 'Filters', nativeIcon: 'line.3.horizontal.decrease', icon: <Funnel color={filters.active ? colors.accentText : colors.text} size={20} />, onPress: filters.open, active: filters.active },
-          { label: 'Add a title', nativeIcon: 'plus', icon: <Plus color={colors.text} size={20} />, onPress: () => navigation.navigate('MainTabs', { screen: 'Explore' }) },
-          { label: 'Create a section', nativeIcon: 'folder.badge.plus', icon: <FolderPlus color={colors.text} size={20} />, onPress: () => openSectionEditor({ mode: 'create' }), disabled: visibleSections.length >= MAX_PERSONAL_WATCHLIST_SECTIONS },
-          { label: 'Cover & background', nativeIcon: 'photo', icon: <Camera color={colors.text} size={20} />, onPress: () => setArtworkScope(resourceScope) },
-          { label: 'Settings', nativeIcon: 'gearshape', icon: <Settings color={colors.text} size={20} />, onPress: () => setSettingsScope(resourceScope) },
-        ]} />
-      ) : undefined,
-    });
-  }, [backgroundUrl, navigation, visibleWatchlist, resourceScope, route.params.title, watchlistId, visibleItems.length, visibleSections.length, filters.active, filters.open]);
+  const headerActions = visibleWatchlist ? (
+    <WatchlistActionsMenu key={resourceScope} actions={[
+      { label: 'Filters', nativeIcon: 'line.3.horizontal.decrease', icon: <Funnel color={filters.active ? colors.accentText : colors.text} size={20} />, onPress: filters.open, active: filters.active },
+      { label: 'Add a title', nativeIcon: 'plus', icon: <Plus color={colors.text} size={20} />, onPress: () => navigation.navigate('MainTabs', { screen: 'Explore' }) },
+      { label: 'Create a section', nativeIcon: 'folder.badge.plus', icon: <FolderPlus color={colors.text} size={20} />, onPress: () => openSectionEditor({ mode: 'create' }), disabled: visibleSections.length >= MAX_PERSONAL_WATCHLIST_SECTIONS },
+      { label: 'Cover & background', nativeIcon: 'photo', icon: <Camera color={colors.text} size={20} />, onPress: () => setArtworkScope(resourceScope) },
+      { label: 'Settings', nativeIcon: 'gearshape', icon: <Settings color={colors.text} size={20} />, onPress: () => setSettingsScope(resourceScope) },
+    ]} />
+  ) : undefined;
 
   function openItem(item: WatchlistDisplayItem) {
     const title = item.title ?? (item.contentType === 'movie' ? 'Film' : 'Series');
@@ -408,6 +419,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     event: GestureResponderEvent,
     geometry: { gripX: number; gripY: number; width: number },
   ) {
+    trash.reset();
     const point = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
     targetRectsRef.current.clear();
     setHoveredGroupId(null);
@@ -442,20 +454,26 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     movingRef.current = nextMoving;
     setMoving(nextMoving);
     animateDragTilt(horizontalVelocity);
-    setHoveredGroupId(findMoveTarget(point));
-    startAutoScroll();
+    const posterCenter = draggedPosterCenter(point, activeMove);
+    trash.update(posterCenter);
+    setHoveredGroupId(trash.isOverTrash(posterCenter) ? null : findMoveTarget(point));
+    if (trash.isOverTrash(posterCenter)) stopAutoScroll();
+    else startAutoScroll();
   }
 
   function endMove(item: WatchlistDisplayItem, event: GestureResponderEvent) {
     if (movingRef.current?.item.id !== item.id) return;
     const point = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY };
+    const droppedInTrash = trash.isOverTrash(draggedPosterCenter(point, movingRef.current));
     const destinationGroupId = findMoveTarget(point);
+    trash.reset();
     resetDragAnimation();
     stopAutoScroll();
     movingRef.current = null;
     setMoving(null);
     setHoveredGroupId(null);
     targetRectsRef.current.clear();
+    if (droppedInTrash) { removal.removeDroppedItem(item); return; }
     if (!destinationGroupId) return;
     const sectionId = resolveDestinationSectionId(destinationGroupId);
     if ((item.sectionId ?? null) === sectionId) return;
@@ -464,6 +482,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
 
   function cancelMove(item: WatchlistDisplayItem) {
     if (movingRef.current?.item.id !== item.id) return;
+    trash.reset();
     resetDragAnimation();
     stopAutoScroll();
     movingRef.current = null;
@@ -540,7 +559,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
 
   if (!firebaseIdToken) {
     return (
-      <WatchlistPage>
+      <WatchlistPage title={route.params.title} headerFade background={<WatchlistBackground imageUrl={null} />}>
         <SignInRequiredCard
           body="You need to be signed in to use private lists. Sign in here to open this watchlist."
           title="Sign in to view this list"
@@ -549,11 +568,14 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
     );
   }
 
-  const canMoveItems = visibleSections.length > 0;
   return (
     <>
-      <WatchlistPage
-        background={backgroundUrl ? <SpotlightAtmosphere imageUrl={backgroundUrl} /> : null}
+      <WatchlistPage title={route.params.title}
+        actions={headerActions}
+        trashHeader={trash.header?.()}
+        subtitle={`${visibleItems.length} ${visibleItems.length === 1 ? 'title' : 'titles'}`}
+        headerFade
+        background={<WatchlistBackground imageUrl={backgroundUrl} />}
         isRefreshing={isRefreshing}
         onContentSizeChange={handleContentSizeChange}
         onLayout={handleScrollLayout}
@@ -635,10 +657,10 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
                         <WatchlistPosterGrid
                           items={shownItems}
                           movingItemId={moving?.item.id}
-                          onMove={canMoveItems ? updateMove : undefined}
-                          onMoveCancel={canMoveItems ? cancelMove : undefined}
-                          onMoveEnd={canMoveItems ? endMove : undefined}
-                          onMoveStart={canMoveItems ? beginMove : undefined}
+                          onMove={updateMove}
+                          onMoveCancel={cancelMove}
+                          onMoveEnd={endMove}
+                          onMoveStart={beginMove}
                           onOpen={openItem}
                         />
                         {group.items.length > SECTION_PREVIEW_ITEM_COUNT ? (
@@ -764,24 +786,6 @@ function toggleSetValue(current: Set<string>, value: string) {
 }
 
 const styles = StyleSheet.create({
-  headerSubtitle: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '500',
-    lineHeight: 13,
-    textAlign: 'center',
-  },
-  headerTitle: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleText: {
-    color: colors.text,
-    fontSize: 17,
-    fontWeight: '800',
-    lineHeight: 20,
-    textAlign: 'center',
-  },
   draggedPoster: {
     position: 'absolute',
     shadowColor: '#02040A',

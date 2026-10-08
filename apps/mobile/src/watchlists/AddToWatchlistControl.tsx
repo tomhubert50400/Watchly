@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { BookmarkPlus, Check, Plus } from 'lucide-react-native';
 import { getTrackingState, upsertTrackingState } from '../api/tracking';
 import {
@@ -36,7 +36,9 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { hapticError, hapticSuccess } from '../feedback/haptics';
 import { useToast } from '../notifications/ToastContext';
+import { PROFILE_TITLE_REMOVAL_MESSAGE, refreshAfterProfileTitleRemoval } from '../profile/profileTitleRemoval';
 import { notifyUserDataChanged, subscribeToUserData, useUserDataRevision } from '../sync/userDataEvents';
+import { beginTitleRemoval } from '../sync/titleRemovalUpdates';
 import { useWatchlistCache } from './WatchlistCacheContext';
 import { WatchlistOption, WatchlistOptionRow } from './WatchlistOptionRow';
 import { loadProgressively, takeHydrationItems } from './requestBoundaries';
@@ -391,11 +393,23 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
     }
   }
 
-  function toggleOption(key: string) {
+  function toggleOption(key: string, confirmedRemoval = false) {
     const option = options.find((item) => item.key === key);
     if (!option) return;
+    if (option.isPlanned && selectedKeysRef.current.has(key) && !confirmedRemoval) {
+      const ownerKey = optionsOwnerKey;
+      Alert.alert('Remove this title from Planned and your profile?', PROFILE_TITLE_REMOVAL_MESSAGE, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => {
+          if (previewOwnerKeyRef.current === ownerKey && selectedKeysRef.current.has(key)) toggleOption(key, true);
+        } },
+      ]);
+      return;
+    }
     const previousSelected = rollbackSelection(selectedKeysRef.current);
     const nextContainsTitle = !previousSelected.has(key);
+    const profileRemoval = option.isPlanned && !nextContainsTitle && currentUser
+      ? beginTitleRemoval(currentUser.id, `personal:${option.id}`, { contentType, tmdbId }, true) : null;
     const nextSelected = rollbackSelection(previousSelected);
     if (nextContainsTitle) nextSelected.add(key);
     else nextSelected.delete(key);
@@ -419,6 +433,7 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
         } else {
           await removeSharedWatchlistItem(token, option.id, contentType, tmdbId);
         }
+        profileRemoval?.commit();
         const confirmed = rollbackSelection(confirmedSelectedKeysRef.current);
         if (nextContainsTitle) confirmed.add(key);
         else confirmed.delete(key);
@@ -429,8 +444,13 @@ export function AddToWatchlistControl({ contentType, tmdbId }: AddToWatchlistCon
           trackingLoadVersionRef.current += 1;
           setPlannedState({ ownerKey: optionsOwnerKey, planned: nextContainsTitle });
         }
-        notifyUserDataChanged('watchlists', ...(option.isPlanned ? ['tracking' as const] : []));
+        if (option.isPlanned && !nextContainsTitle && currentUser) {
+          await refreshAfterProfileTitleRemoval(currentUser.id, contentType, tmdbId);
+        } else {
+          notifyUserDataChanged('watchlists', ...(option.isPlanned ? ['tracking' as const] : []));
+        }
       } catch (saveError) {
+        profileRemoval?.rollback();
         hapticError();
         showToast(saveError instanceof Error ? saveError.message : 'Could not update watchlists.');
       } finally {

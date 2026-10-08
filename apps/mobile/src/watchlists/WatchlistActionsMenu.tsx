@@ -134,7 +134,7 @@ function WatchlistPopupMenu({ actions }: { actions: Action[] }) {
 }
 
 const styles = StyleSheet.create({
-  button: { width: 44, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
+  button: { width: 44, minHeight: 44, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
   nativeTrigger: { alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
   overlay: { flex: 1 },
   menu: { ...shadows.raised, position: 'absolute', backgroundColor: colors.panelElevated, borderRadius: radii.lg, borderWidth: 1, borderColor: colors.borderStrong, overflow: 'hidden' },

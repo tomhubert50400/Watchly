@@ -61,8 +61,8 @@ assert.match(screen, /transformOrigin: \[moving\.gripX, moving\.gripY, 0\]/, 'th
 assert.doesNotMatch(screen, /style=\{styles\.movePanel\}/, 'moving must not replace the watchlist with a destination panel');
 assert.match(screen, /label: 'Add a title'[\s\S]*label: 'Create a section'/, 'the watchlist menu must expose both add actions');
 assert.doesNotMatch(screen, /<Button compact label="Add titles"/, 'separate add-title and section buttons must be removed');
-assert.match(screen, /headerRight:[\s\S]*?<WatchlistActionsMenu/, 'the native header must group actions in one watchlist menu');
-assert.match(screen, /headerTitle:[\s\S]*?visibleItems\.length === 1 \? 'title' : 'titles'/, 'the navigation title must show the title count beneath the watchlist name');
+assert.match(screen, /const headerActions =[\s\S]*?<WatchlistActionsMenu/, 'the shared header must group actions in one watchlist menu');
+assert.match(screen, /subtitle=[\s\S]*?visibleItems\.length === 1 \? 'title' : 'titles'/, 'the shared header must show the title count beneath the watchlist name');
 assert.doesNotMatch(screen, /<SectionHeader title="Titles"/, 'the content must not repeat a titles heading');
 assert.match(screen, /SECTION_PREVIEW_ITEM_COUNT/, 'large sections must start with a bounded grid');
 
