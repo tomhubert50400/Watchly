@@ -11,12 +11,14 @@ import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
 import {
+  NotificationKind,
   PushDeliveryStatus,
   ReleaseNotificationType,
   PushPlatform,
   TrackedContentType,
 } from '../generated/prisma/enums';
 import { ExpoPushGateway, ExpoPushResult } from './expo-push.gateway';
+import { isAccountSuspended } from '../moderation/account-suspension';
 
 const WORKER_INTERVAL_MS = 60_000;
 const RECEIPT_DELAY_MS = 15 * 60_000;
@@ -82,7 +84,7 @@ export class PushService implements OnApplicationBootstrap, OnModuleDestroy {
     );
 
     if (!preferences.pushEnabled || !preferences.releasePushEnabled) {
-      await this.cancelPendingDeliveries(userId, 'PreferenceDisabled');
+      await this.cancelPendingDeliveries(userId, 'PreferenceDisabled', preferences.pushEnabled);
     }
 
     return toPreferencesDto(preferences);
@@ -199,6 +201,23 @@ export class PushService implements OnApplicationBootstrap, OnModuleDestroy {
     const preferences = await this.ensurePreferences(userId);
     if (!preferences.pushEnabled || !preferences.releasePushEnabled) return 0;
 
+    return this.enqueueNotifications(userId, notifications);
+  }
+
+  async enqueueWatchlistInvitation(userId: string, notificationId: string) {
+    const preferences = await this.ensurePreferences(userId);
+    if (!preferences.pushEnabled) return 0;
+    return this.enqueueNotifications(userId, [{ id: notificationId }]);
+  }
+
+  async enqueueWatchlistVote(userId: string, notificationId: string) {
+    const preferences = await this.ensurePreferences(userId);
+    if (!preferences.pushEnabled) return 0;
+    return this.enqueueNotifications(userId, [{ id: notificationId }]);
+  }
+
+  private async enqueueNotifications(userId: string, notifications: { id: string }[]) {
+
     const devices = await this.prisma.withConnectionRetry(() =>
       this.prisma.pushDevice.findMany({
         select: { id: true },
@@ -247,7 +266,10 @@ export class PushService implements OnApplicationBootstrap, OnModuleDestroy {
     const deliveries = await this.prisma.withConnectionRetry(() =>
       this.prisma.pushDelivery.findMany({
         include: {
-          notification: true,
+          notification: { include: { actor: { select: { suspendedAt: true, suspendedUntil: true } },
+            votingSession: { select: { status: true, closesAt: true, closedAt: true } },
+            sharedWatchlist: { select: { name: true, members: { select: { userId: true } } } },
+          } },
           pushDevice: {
             include: { user: { include: { notificationPreference: true } } },
           },
@@ -281,8 +303,32 @@ export class PushService implements OnApplicationBootstrap, OnModuleDestroy {
     const ownedDeliveries = deliveries.filter((delivery) =>
       delivery.notification.userId === delivery.pushDevice.userId
     );
+    const invitations = ownedDeliveries.filter((delivery) => (delivery.notification.kind === NotificationKind.SHARED_LIST_INVITE || delivery.notification.kind === NotificationKind.SHARED_VOTE_UPDATE) && delivery.notification.actorUserId);
+    const blocks = invitations.length ? await this.prisma.withConnectionRetry(() => this.prisma.userBlock.findMany({
+      where: { OR: invitations.flatMap(({ notification }) => [
+        { blockerId: notification.userId, blockedUserId: notification.actorUserId! },
+        { blockerId: notification.actorUserId!, blockedUserId: notification.userId },
+      ]) }, select: { blockerId: true, blockedUserId: true },
+    })) : [];
     const eligible = ownedDeliveries.filter((delivery) => {
       const preferences = delivery.pushDevice.user.notificationPreference;
+      if (delivery.notification.kind === NotificationKind.SHARED_VOTE_UPDATE) {
+        const { routeMetadata: metadata, votingSession: session, sharedWatchlist: list, actor, actorUserId, userId } = delivery.notification;
+        const flags = metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {};
+        const current = flags.final === true
+          ? session?.status === 'CLOSED' && session.closedAt && session.closedAt.getTime() >= now.getTime() - 6 * 3600_000
+          : flags.started === true && session?.status === 'OPEN' && session.closesAt > now && actor && !isAccountSuspended(actor);
+        return Boolean(preferences?.pushEnabled && current && list?.members.some(member => member.userId === userId) &&
+          !blocks.some(block => (block.blockerId === actorUserId && block.blockedUserId === userId) || (block.blockerId === userId && block.blockedUserId === actorUserId)));
+      }
+      if (delivery.notification.kind === NotificationKind.SHARED_LIST_INVITE) {
+        const { routeMetadata: metadata, actor, actorUserId, userId } = delivery.notification;
+        if (!actor || isAccountSuspended(actor) || blocks.some((block) =>
+          (block.blockerId === actorUserId && block.blockedUserId === userId) ||
+          (block.blockerId === userId && block.blockedUserId === actorUserId))) return false;
+        return preferences?.pushEnabled && metadata && typeof metadata === 'object' &&
+          !Array.isArray(metadata) && metadata.invitationStatus === 'pending';
+      }
       const dateKey = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       const expectedKey = delivery.notification.contentType === TrackedContentType.MOVIE
         ? `movie:${delivery.notification.tmdbId}:one-week`
@@ -312,11 +358,13 @@ export class PushService implements OnApplicationBootstrap, OnModuleDestroy {
     try {
       tickets = await this.gateway.send(eligible.map((delivery) => ({
         body: delivery.notification.body,
-        channelId: 'release-alerts',
+        channelId: delivery.notification.kind === NotificationKind.SHARED_VOTE_UPDATE ? 'watchlist-votes' : delivery.notification.kind === NotificationKind.SHARED_LIST_INVITE ? 'watchlist-invitations' : 'release-alerts',
         data: {
-          kind: 'release',
+          kind: delivery.notification.kind === NotificationKind.SHARED_VOTE_UPDATE ? 'shared_vote_update' : delivery.notification.kind === NotificationKind.SHARED_LIST_INVITE ? 'shared_list_invite' : 'release',
           notificationId: delivery.notification.id,
-          url: buildReleaseUrl(delivery.notification),
+          url: delivery.notification.kind === NotificationKind.SHARED_VOTE_UPDATE
+            ? `tvapp://watchlists/shared/${delivery.notification.sharedWatchlistId}?title=${encodeURIComponent(delivery.notification.sharedWatchlist?.name ?? 'Watchlist')}`
+            : delivery.notification.kind === NotificationKind.SHARED_LIST_INVITE ? 'tvapp://alerts' : buildReleaseUrl(delivery.notification),
         },
         sound: 'default',
         title: delivery.notification.title,
@@ -485,13 +533,13 @@ export class PushService implements OnApplicationBootstrap, OnModuleDestroy {
     );
   }
 
-  private async cancelPendingDeliveries(userId: string, errorCode: string) {
+  private async cancelPendingDeliveries(userId: string, errorCode: string, releasesOnly = false) {
     const completedAt = new Date();
     await this.prisma.withConnectionRetry(() =>
       this.prisma.pushDelivery.updateMany({
         data: { completedAt, errorCode, status: PushDeliveryStatus.FAILED },
         where: {
-          notification: { userId },
+          notification: { userId, ...(releasesOnly ? { kind: NotificationKind.RELEASE } : {}) },
           status: PushDeliveryStatus.PENDING,
         },
       }),

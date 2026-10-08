@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  NotificationKind,
   ReleaseNotificationType,
   PushDeliveryStatus,
   TrackedContentType,
@@ -12,6 +13,8 @@ async function run() {
   await verifyGatewayContract();
   await verifyRegistrationIsolation();
   await verifyReleaseDispatch();
+  await verifyInvitationDispatch();
+  await verifyVoteDispatch();
   await verifyInvalidTokenReceiptCleanup();
   await verifyNotificationProjectionDedupe();
   assert.doesNotThrow(() => assertExpoPushToken('ExpoPushToken[valid_token-1]'));
@@ -141,6 +144,119 @@ async function verifyReleaseDispatch() {
   sentMessages = [];
   await service.runWorker();
   assert.equal(sentMessages.length, 0, 'Expired reminders must never dispatch');
+}
+
+async function verifyInvitationDispatch() {
+  let sent: ExpoPushMessage[] = [];
+  const preferences = { pushEnabled: true, releasePushEnabled: false };
+  const queued = new Set<string>();
+  const blocks: { blockerId: string; blockedUserId: string }[] = [];
+  const delivery = {
+    id: 'invite-delivery', attemptCount: 0, pushDeviceId: 'device-a',
+    notification: { id: 'invite', kind: NotificationKind.SHARED_LIST_INVITE, userId: 'recipient', actorUserId: 'owner',
+      actor: { suspendedAt: null, suspendedUntil: null }, body: 'You are invited.', title: 'Watchlist invitation',
+      routeMetadata: { invitationStatus: 'pending' } },
+    pushDevice: { userId: 'recipient', environment: 'development', expoPushToken: 'ExpoPushToken[token-a]',
+      user: { notificationPreference: preferences } },
+  };
+  const prisma = {
+    withConnectionRetry: async <T>(operation: () => Promise<T>) => operation(),
+    userBlock: { findMany: async () => blocks },
+    notificationPreference: { upsert: async () => preferences, update: async () => preferences },
+    pushDevice: { findMany: async ({ where }: { where: { environment: string } }) => {
+      assert.equal(where.environment, 'development'); return [{ id: 'device-a' }];
+    } },
+    pushDelivery: {
+      createMany: async ({ data, skipDuplicates }: { data: { notificationId: string; pushDeviceId: string }[]; skipDuplicates: boolean }) => {
+        assert.equal(skipDuplicates, true);
+        const before = queued.size;
+        data.forEach((row) => queued.add(`${row.notificationId}:${row.pushDeviceId}`));
+        return { count: queued.size - before };
+      },
+      findMany: async ({ where }: { where: { status: PushDeliveryStatus } }) => where.status === PushDeliveryStatus.PENDING ? [delivery] : [],
+      update: async () => ({}), updateMany: async () => ({ count: 1 }),
+    },
+  };
+  const service = createService(prisma, { getReceipts: async () => ({}), send: async (messages: ExpoPushMessage[]) => {
+    sent.push(...messages); return messages.map(() => ({ status: 'ok' as const, id: 'ticket' }));
+  } });
+  assert.equal(await service.enqueueWatchlistInvitation('recipient', 'invite'), 1);
+  await service.runWorker();
+  assert.equal(sent.length, 1, 'Invites dispatch even when release reminders are disabled');
+  assert.equal(sent[0]!.data.url, 'tvapp://alerts');
+  assert.equal(sent[0]!.channelId, 'watchlist-invitations');
+  assert.equal(await service.enqueueWatchlistInvitation('recipient', 'invite'), 0, 'Repeated sends share one delivery');
+  for (const status of ['accepted', 'declined']) {
+    delivery.notification.routeMetadata.invitationStatus = status;
+    sent = []; await service.runWorker(); assert.equal(sent.length, 0);
+  }
+  delivery.notification.routeMetadata.invitationStatus = 'pending';
+  blocks.push({ blockerId: 'recipient', blockedUserId: 'owner' });
+  sent = []; await service.runWorker(); assert.equal(sent.length, 0, 'Blocking suppresses queued invitations');
+  blocks.length = 0;
+  preferences.pushEnabled = false;
+  assert.equal(await service.enqueueWatchlistInvitation('recipient', 'invite-2'), 0);
+  sent = []; await service.runWorker(); assert.equal(sent.length, 0, 'Global push opt-out is respected');
+}
+
+async function verifyVoteDispatch() {
+  const preferences = { pushEnabled: true, releasePushEnabled: false };
+  const blocks: { blockerId: string; blockedUserId: string }[] = [];
+  const delivery = {
+    id: 'vote-delivery', attemptCount: 0, pushDeviceId: 'device',
+    notification: { id: 'vote', kind: NotificationKind.SHARED_VOTE_UPDATE, userId: 'member', actorUserId: 'creator',
+      actor: { suspendedAt: null, suspendedUntil: null }, body: 'Vote now.', title: 'New vote',
+      sharedWatchlistId: 'list', sharedWatchlist: { name: 'Movie night', members: [{ userId: 'member' }] },
+      votingSession: { status: 'OPEN', closesAt: new Date(Date.now() + 60000), closedAt: null as Date | null }, routeMetadata: { started: true, final: false } },
+    pushDevice: { userId: 'member', environment: 'development', expoPushToken: 'ExpoPushToken[token]', user: { notificationPreference: preferences } },
+  };
+  let sent: ExpoPushMessage[] = [];
+  const queued = new Set<string>();
+  const prisma = {
+    withConnectionRetry: async <T>(operation: () => Promise<T>) => operation(),
+    userBlock: { findMany: async () => blocks },
+    notificationPreference: { upsert: async () => preferences }, pushDevice: { findMany: async () => [{ id: 'device' }] },
+    pushDelivery: {
+      createMany: async ({ data }: { data: { notificationId: string }[] }) => {
+        const before = queued.size; data.forEach(row => queued.add(row.notificationId)); return { count: queued.size - before };
+      },
+      findMany: async ({ where }: { where: { status: PushDeliveryStatus } }) => where.status === PushDeliveryStatus.PENDING ? [delivery] : [],
+      update: async () => ({}), updateMany: async () => ({ count: 1 }),
+    },
+  };
+  const service = createService(prisma, { getReceipts: async () => ({}), send: async messages => {
+    sent.push(...messages); return messages.map(() => ({ status: 'ok', id: 'ticket' }));
+  } });
+  assert.equal(await service.enqueueWatchlistVote('member', 'vote'), 1);
+  assert.equal(await service.enqueueWatchlistVote('member', 'vote'), 0);
+  await service.runWorker();
+  assert.equal(sent.length, 1, 'Vote start pushes are independent of release reminders');
+  assert.equal(sent[0]!.data.url, 'tvapp://watchlists/shared/list?title=Movie%20night');
+  assert.equal(sent[0]!.data.kind, 'shared_vote_update');
+  assert.equal(sent[0]!.channelId, 'watchlist-votes');
+  for (const change of ['left', 'closed', 'expired', 'blocked', 'opted-out', 'leader-update']) {
+    delivery.notification.sharedWatchlist.members = change === 'left' ? [] : [{ userId: 'member' }];
+    delivery.notification.votingSession.status = change === 'closed' ? 'CLOSED' : 'OPEN';
+    delivery.notification.votingSession.closesAt = new Date(Date.now() + (change === 'expired' ? -60000 : 60000));
+    blocks.length = 0;
+    if (change === 'blocked') blocks.push({ blockerId: 'member', blockedUserId: 'creator' });
+    preferences.pushEnabled = change !== 'opted-out';
+    delivery.notification.routeMetadata.started = change !== 'leader-update';
+    sent = []; await service.runWorker(); assert.equal(sent.length, 0, `Suppress stale or unwanted vote pushes: ${change}`);
+  }
+  preferences.pushEnabled = false;
+  assert.equal(await service.enqueueWatchlistVote('member', 'another-vote'), 0);
+  preferences.pushEnabled = true;
+  delivery.notification.routeMetadata = { started: false, final: true };
+  delivery.notification.votingSession.status = 'CLOSED';
+  delivery.notification.votingSession.closedAt = new Date();
+  Object.assign(delivery.notification, { actor: null, actorUserId: null });
+  sent = []; await service.runWorker();
+  assert.equal(sent.length, 1, 'Final results are system notifications and reach members after closure');
+  assert.equal(sent[0]!.data.kind, 'shared_vote_update');
+  delivery.notification.votingSession.closedAt = new Date(Date.now() - 6 * 3600_000 - 1);
+  sent = []; await service.runWorker();
+  assert.equal(sent.length, 0, 'Old results must not send stale pushes');
 }
 
 async function verifyNotificationProjectionDedupe() {

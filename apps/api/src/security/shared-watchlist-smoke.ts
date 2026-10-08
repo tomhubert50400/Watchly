@@ -5,6 +5,8 @@ import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
 import { AuthProvider } from '../generated/prisma/enums';
+import { WatchlistInvitationsService } from '../shared-watchlists/watchlist-invitations.service';
+import { TmdbCatalogueService } from '../catalogue/tmdb-catalogue.service';
 import { SharedWatchlistsService } from '../shared-watchlists/shared-watchlists.service';
 
 async function main() {
@@ -16,7 +18,8 @@ async function main() {
   const config = new ConfigService(process.env);
   const prisma = new PrismaService(config);
   const auth = new AuthService(prisma);
-  const sharedWatchlists = new SharedWatchlistsService(auth, prisma);
+  const sharedWatchlists = new SharedWatchlistsService(auth, prisma, undefined, undefined, new TmdbCatalogueService(config, prisma));
+  const invitations = new WatchlistInvitationsService(auth, prisma, {} as never, { enqueueWatchlistInvitation: async () => 0 } as never);
   let userIds: string[] = [];
 
   try {
@@ -32,8 +35,14 @@ async function main() {
       'Shared watchlist detail should be member-only.',
     );
 
-    await sharedWatchlists.addMember(ownerIdentity, watchlist.id, member.id);
-    await sharedWatchlists.addMember(ownerIdentity, watchlist.id, secondMember.id);
+    for (const [person, identity] of [[member, memberIdentity], [secondMember, secondMemberIdentity]] as const) {
+      await prisma.user.update({ where: { id: person.id }, data: { onboardingCompleted: true } });
+      await prisma.userFollow.create({ data: { followerId: person.id, followedUserId: owner.id } });
+      await invitations.invite(ownerIdentity, watchlist.id, person.id);
+      await assertNotFound(() => sharedWatchlists.getSharedWatchlist(identity, watchlist.id), 'Pending invitations must not grant access.');
+      const invitation = await prisma.notification.findUniqueOrThrow({ where: { userId_dedupeKey: { userId: person.id, dedupeKey: `shared-list-invite:${watchlist.id}` } } });
+      await invitations.respond(identity, invitation.id, true);
+    }
     const memberList = await sharedWatchlists.getSharedWatchlist(memberIdentity, watchlist.id);
 
     assert(memberList.memberCount === 3, 'Shared watchlist should include owner and added members.');
@@ -158,13 +167,13 @@ async function main() {
         votingSessionId: session.id,
       },
     });
-    assert(finalBeforeRepeat.length === 2, 'Final result should notify every other member exactly once.');
+    assert(finalBeforeRepeat.length === 3, 'Final result should notify every member exactly once.');
     assert(
-      finalBeforeRepeat.every((notification) => notification.actorUserId === owner.id),
+      finalBeforeRepeat.every((notification) => notification.actorUserId === null),
       'Final result must consistently identify the watchlist owner, never the member who triggers expiry.',
     );
     assert(
-      new Set(finalBeforeRepeat.map((notification) => notification.userId)).size === 2 &&
+      new Set(finalBeforeRepeat.map((notification) => notification.userId)).size === 3 &&
         finalBeforeRepeat.some((notification) => notification.userId === member.id) &&
         finalBeforeRepeat.some((notification) => notification.userId === secondMember.id),
       'Final result must target all other members and no outsider.',
@@ -177,7 +186,7 @@ async function main() {
       },
     });
     assert(closedAgain.winningCandidateId === matrixCandidate!.id, 'Repeated close must preserve the result.');
-    assert(finalAfterRepeat.length === 2, 'Repeated close must not spam final notifications.');
+    assert(finalAfterRepeat.length === 3, 'Repeated close must not spam final notifications.');
 
     const tieSession = await sharedWatchlists.createVotingSession(ownerIdentity, watchlist.id, 'Tie', [
       matrix.id,

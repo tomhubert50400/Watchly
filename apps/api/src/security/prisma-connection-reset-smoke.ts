@@ -9,6 +9,7 @@ import { AuthProvider } from '../generated/prisma/enums';
 import { AvatarStorageService } from '../media/avatar-storage.service';
 import { ProgressService } from '../progress/progress.service';
 import { RatingsService } from '../ratings/ratings.service';
+import { TmdbCatalogueService } from '../catalogue/tmdb-catalogue.service';
 import { SharedWatchlistsService } from '../shared-watchlists/shared-watchlists.service';
 import { TrackingService } from '../tracking/tracking.service';
 import { WatchlistsService } from '../watchlists/watchlists.service';
@@ -29,7 +30,7 @@ async function main() {
   const feed = new FeedService(auth, prisma, new AvatarStorageService(config));
   const progress = new ProgressService(auth, prisma);
   const ratings = new RatingsService(auth, prisma);
-  const sharedWatchlists = new SharedWatchlistsService(auth, prisma);
+  const sharedWatchlists = new SharedWatchlistsService(auth, prisma, undefined, undefined, new TmdbCatalogueService(config, prisma));
   const tracking = new TrackingService(auth, prisma);
   const watchlists = new WatchlistsService(auth, prisma);
   let userId: string | null = null;

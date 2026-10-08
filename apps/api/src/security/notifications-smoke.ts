@@ -12,6 +12,7 @@ import {
 } from '../generated/prisma/enums';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ReleaseEventsService } from '../release-events/release-events.service';
+import { WatchlistInvitationsService } from '../shared-watchlists/watchlist-invitations.service';
 import { SharedWatchlistsService } from '../shared-watchlists/shared-watchlists.service';
 
 async function main() {
@@ -43,7 +44,8 @@ async function main() {
     { enqueueReleaseNotifications: async () => 0 } as never,
     config,
   );
-  const sharedWatchlists = new SharedWatchlistsService(auth, prisma);
+  const sharedWatchlists = new SharedWatchlistsService(auth, prisma, undefined, undefined, new TmdbCatalogueService(config, prisma));
+  const invitations = new WatchlistInvitationsService(auth, prisma, {} as never, { enqueueWatchlistInvitation: async () => 0 } as never);
   let userIds: string[] = [];
 
   try {
@@ -125,8 +127,10 @@ async function main() {
     assert(secondSync.createdCount === 0, 'A complete repeated sync must remain idempotent.');
 
     const watchlist = await sharedWatchlists.createSharedWatchlist(ownerIdentity, 'Notification smoke list');
-    await sharedWatchlists.addMember(ownerIdentity, watchlist.id, member.id);
-    await sharedWatchlists.addMember(ownerIdentity, watchlist.id, member.id);
+    await prisma.user.update({ where: { id: member.id }, data: { onboardingCompleted: true } });
+    await prisma.userFollow.create({ data: { followerId: member.id, followedUserId: owner.id } });
+    await invitations.invite(ownerIdentity, watchlist.id, member.id);
+    await invitations.invite(ownerIdentity, watchlist.id, member.id);
     const invites = await prisma.notification.findMany({
       where: {
         kind: NotificationKind.SHARED_LIST_INVITE,
@@ -136,6 +140,7 @@ async function main() {
     assert(invites.length === 1, 'Repeated member addition must not duplicate invite notifications.');
     assert(invites[0]?.userId === member.id, 'Only the invited member must receive the invite.');
     assert(invites[0]?.actorUserId === owner.id, 'Invite notification must identify its actor.');
+    await invitations.respond(memberIdentity, invites[0]!.id, true);
 
     const first = await sharedWatchlists.addItem(ownerIdentity, watchlist.id, {
       contentType: 'movie',
@@ -182,8 +187,8 @@ async function main() {
       'Vote leader changes must upsert one notification per session and recipient.',
     );
     assert(
-      memberVoteUpdates[0]?.actorUserId === owner.id,
-      'Vote update must identify the latest actor.',
+      memberVoteUpdates[0]?.actorUserId === null,
+      'Anonymous vote updates must not identify the voter.',
     );
     const memberVoteNotificationId = memberVoteUpdates[0]!.id;
     await notifications.markRead(memberIdentity, memberVoteNotificationId);
