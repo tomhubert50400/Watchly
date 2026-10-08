@@ -21,10 +21,12 @@ import {
   Pressable,
   ScrollView,
   ScrollViewProps,
+  StyleProp,
   StyleSheet,
   Text,
   TextInput,
   View,
+  ViewStyle,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radii, spacing, touchTargets, typography } from '../design/tokens';
@@ -40,7 +42,8 @@ type BottomActionSheetProps = PropsWithChildren<{
   dragFromHandleOnly?: boolean;
   footer?: ReactNode;
   onClose: () => void;
-  title: string;
+  title: ReactNode;
+  sheetStyle?: StyleProp<ViewStyle>;
   visible: boolean;
 }>;
 
@@ -127,7 +130,7 @@ export function BottomActionSheetScrollView({
   );
 }
 
-export function BottomActionSheet({ children, dragFromHandleOnly = false, footer, onClose, title, visible }: BottomActionSheetProps) {
+export function BottomActionSheet({ children, dragFromHandleOnly = false, footer, onClose, title, visible, sheetStyle }: BottomActionSheetProps) {
   const safeAreaInsets = useSafeAreaInsets();
   const progress = useRef(new Animated.Value(0)).current;
   const dragY = useRef(new Animated.Value(0)).current;
@@ -259,6 +262,7 @@ export function BottomActionSheet({ children, dragFromHandleOnly = false, footer
           accessibilityViewIsModal
           style={[
             styles.sheet,
+            sheetStyle,
             keyboardInset > 0 && { top: safeAreaInsets.top + spacing.sm },
             {
               transform: [{
