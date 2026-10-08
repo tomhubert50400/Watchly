@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "topFive" JSONB NOT NULL DEFAULT '[]';

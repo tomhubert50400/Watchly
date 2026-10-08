@@ -1,6 +1,7 @@
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   ArrayUnique,
   IsArray,
   IsIn,
@@ -82,6 +83,16 @@ export class UpdateProfileBackdropDto {
   @IsInt()
   @Min(1)
   tmdbId!: number | null;
+}
+
+export class UpdateProfileTopFiveDto {
+  @IsArray()
+  @ArrayMinSize(5)
+  @ArrayMaxSize(5)
+  @ArrayUnique((item: OnboardingTasteItemDto) => `${item?.contentType}:${item?.tmdbId}`)
+  @ValidateNested({ each: true })
+  @Type(() => OnboardingTasteItemDto)
+  items!: OnboardingTasteItemDto[];
 }
 
 export class UpdatePrivacySettingsDto {

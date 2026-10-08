@@ -157,6 +157,7 @@ model User {
   providerAvatarImportDisabled Boolean                  @default(false)
   profileBackdropContentType TrackedContentType?
   profileBackdropTmdbId      Int?
+  topFive                    Json                       @default("[]")
   displayName                String?
   handle                     String?                    @unique @db.VarChar(20)
   onboardingCompleted        Boolean                    @default(false)

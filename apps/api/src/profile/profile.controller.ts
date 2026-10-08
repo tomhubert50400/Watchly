@@ -18,6 +18,7 @@ import {
   CompleteOnboardingDto,
   ConfirmAvatarUploadDto,
   UpdateProfileBackdropDto,
+  UpdateProfileTopFiveDto,
   UpdatePrivacySettingsDto,
   UpdateProfileDto,
 } from './profile.dto';
@@ -84,6 +85,11 @@ export class ProfileController {
     await this.profile.deleteAccount(getIdentity(request));
 
     return { deleted: true };
+  }
+
+  @Put('me/top-five')
+  updateTopFive(@Req() request: AuthenticatedRequest, @Body() body: UpdateProfileTopFiveDto) {
+    return this.profile.updateTopFive(getIdentity(request), body);
   }
 
   @Put('dev-test-user')

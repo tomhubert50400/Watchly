@@ -32,6 +32,7 @@ import {
   CompleteOnboardingDto,
   SharedWatchlistVisibilityValue,
   UpdateProfileBackdropDto,
+  UpdateProfileTopFiveDto,
   UpdatePrivacySettingsDto,
   UpdateProfileDto,
 } from './profile.dto';
@@ -56,6 +57,22 @@ export class ProfileService {
     const userId = await this.getUserId(identity);
 
     return this.getProfileByUserId(userId);
+  }
+
+  async updateTopFive(identity: AuthenticatedIdentity, input: UpdateProfileTopFiveDto) {
+    const items = input.items;
+    if (!Array.isArray(items) || items.length !== 5 || items.some((item) => !item
+      || !['movie', 'series'].includes(item.contentType)
+      || !Number.isSafeInteger(item.tmdbId) || item.tmdbId < 1)
+      || new Set(items.map((item) => `${item.contentType}:${item.tmdbId}`)).size !== items.length) {
+      throw new BadRequestException('Choose exactly five different movies or series.');
+    }
+    const topFive = items.map(({ contentType, tmdbId }) => ({ contentType, tmdbId }));
+    const userId = await this.getUserId(identity);
+    await this.prisma.withConnectionRetry(() => this.prisma.user.update({
+      where: { id: userId }, data: { topFive },
+    }));
+    return { items: topFive };
   }
 
   async getOwnPublicProfilePreview(identity: AuthenticatedIdentity) {
@@ -196,6 +213,7 @@ export class ProfileService {
           onboardingCompleted: true,
           profileBackdropContentType: true,
           profileBackdropTmdbId: true,
+          topFive: true,
           ownedSharedWatchlists: {
             orderBy: { updatedAt: 'desc' },
             select: {
@@ -1099,6 +1117,7 @@ export class ProfileService {
       handle: user.handle,
       id: user.id,
       providerAvatarImportEnabled: !user.providerAvatarImportDisabled,
+      topFive: user.topFive ?? [],
       profileBackdrop: toApiProfileBackdrop(
         user.profileBackdropContentType,
         user.profileBackdropTmdbId,
@@ -1210,6 +1229,7 @@ export class ProfileService {
         trackingStates: [],
       },
       opinions: opinions?.items ?? [],
+      topFive: canViewContent && Array.isArray(user.topFive) && user.topFive.length === 5 ? user.topFive : [],
       profileBackdrop: canViewContent || isBlockedProfile
         ? toApiProfileBackdrop(
             user.profileBackdropContentType,
