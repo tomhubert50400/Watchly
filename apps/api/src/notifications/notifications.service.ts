@@ -79,18 +79,29 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
 
   async list(identity: AuthenticatedIdentity) {
     const userId = await this.getUserId(identity);
+    const pendingInvitations = await this.prisma.withConnectionRetry(() => this.prisma.notification.findMany({
+      where: { userId, kind: NotificationKind.SHARED_LIST_INVITE,
+        routeMetadata: { path: ['invitationStatus'], equals: 'pending' },
+        actor: { blockedUsers: { none: { blockedUserId: userId } }, blockedBy: { none: { blockerId: userId } } },
+      }, orderBy: { createdAt: 'desc' },
+    }));
     const notifications = await this.prisma.withConnectionRetry(() =>
       this.prisma.notification.findMany({
         orderBy: [{ readAt: 'asc' }, { createdAt: 'desc' }],
         take: 30,
         where: {
           userId,
+          id: { notIn: pendingInvitations.map((item) => item.id) },
         },
       }),
     );
 
     return {
-      items: notifications.map(toNotificationDto),
+      items: [...pendingInvitations, ...notifications.filter((item) => {
+        const metadata = item.routeMetadata;
+        return item.kind !== NotificationKind.SHARED_LIST_INVITE || !metadata || typeof metadata !== 'object' ||
+          Array.isArray(metadata) || metadata.invitationStatus !== 'pending';
+      })].map(toNotificationDto),
     };
   }
 

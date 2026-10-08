@@ -18,6 +18,7 @@ import { AuthGuard } from '../auth/auth.guard';
 import { AuthenticatedRequest } from '../auth/auth.types';
 import {
   CreateSharedWatchlistDto,
+  AddVotingCandidatesDto,
   CreateVotingSessionDto,
   SharedWatchlistContentType,
   sharedWatchlistContentTypes,
@@ -25,11 +26,30 @@ import {
   SharedWatchlistMemberDto,
 } from './shared-watchlists.dto';
 import { SharedWatchlistsService } from './shared-watchlists.service';
+import { WatchlistInvitationsService } from './watchlist-invitations.service';
 
 @Controller('shared-watchlists')
 @UseGuards(AuthGuard)
 export class SharedWatchlistsController {
-  constructor(@Inject(SharedWatchlistsService) private readonly watchlists: SharedWatchlistsService) {}
+  constructor(
+    @Inject(SharedWatchlistsService) private readonly watchlists: SharedWatchlistsService,
+    @Inject(WatchlistInvitationsService) private readonly invitations: WatchlistInvitationsService,
+  ) {}
+
+  @Get(':watchlistId/invitees')
+  async searchInvitees(@Req() request: AuthenticatedRequest, @Param('watchlistId') watchlistId: string, @Query('q') query?: string) {
+    return this.invitations.search(getIdentity(request), parseUuid(watchlistId, 'watchlistId'), query);
+  }
+
+  @Put('invitations/:invitationId/accept')
+  async acceptInvitation(@Req() request: AuthenticatedRequest, @Param('invitationId') invitationId: string) {
+    return this.invitations.respond(getIdentity(request), parseUuid(invitationId, 'invitationId'), true);
+  }
+
+  @Put('invitations/:invitationId/decline')
+  async declineInvitation(@Req() request: AuthenticatedRequest, @Param('invitationId') invitationId: string) {
+    return this.invitations.respond(getIdentity(request), parseUuid(invitationId, 'invitationId'), false);
+  }
 
   @Get()
   async list(
@@ -93,7 +113,7 @@ export class SharedWatchlistsController {
     @Param('watchlistId') watchlistId: string,
     @Body() body: SharedWatchlistMemberDto,
   ) {
-    return this.watchlists.addMember(
+    return this.invitations.invite(
       getIdentity(request),
       parseUuid(watchlistId, 'watchlistId'),
       body.userId,
@@ -145,8 +165,19 @@ export class SharedWatchlistsController {
       getIdentity(request),
       parseUuid(watchlistId, 'watchlistId'),
       body.title,
-      body.itemIds,
+      body.itemIds ?? [],
+      { durationMinutes: body.durationMinutes, isAnonymous: body.isAnonymous, allowMultipleVotes: body.allowMultipleVotes, titles: body.titles },
     );
+  }
+
+  @Delete(':watchlistId/voting-sessions/:sessionId/view')
+  async dismissVotingSession(@Req() request: AuthenticatedRequest, @Param('watchlistId') watchlistId: string, @Param('sessionId') sessionId: string) {
+    return this.watchlists.dismissVotingSession(getIdentity(request), parseUuid(watchlistId, 'watchlistId'), parseUuid(sessionId, 'sessionId'));
+  }
+
+  @Delete(':watchlistId/voting-sessions/:sessionId')
+  async deleteVotingSession(@Req() request: AuthenticatedRequest, @Param('watchlistId') watchlistId: string, @Param('sessionId') sessionId: string) {
+    return this.watchlists.deleteVotingSession(getIdentity(request), parseUuid(watchlistId, 'watchlistId'), parseUuid(sessionId, 'sessionId'));
   }
 
   @Put(':watchlistId/voting-sessions/:sessionId/close')
@@ -160,6 +191,13 @@ export class SharedWatchlistsController {
       parseUuid(watchlistId, 'watchlistId'),
       parseUuid(sessionId, 'sessionId'),
     );
+  }
+
+  @Post(':watchlistId/voting-sessions/:sessionId/candidates')
+  async addVotingCandidates(@Req() request: AuthenticatedRequest, @Param('watchlistId') watchlistId: string,
+    @Param('sessionId') sessionId: string, @Body() body: AddVotingCandidatesDto) {
+    return this.watchlists.addVotingCandidates(getIdentity(request), parseUuid(watchlistId, 'watchlistId'),
+      parseUuid(sessionId, 'sessionId'), body.itemIds ?? [], body.titles);
   }
 
   @Put(':watchlistId/voting-sessions/:sessionId/candidates/:candidateId/vote')
