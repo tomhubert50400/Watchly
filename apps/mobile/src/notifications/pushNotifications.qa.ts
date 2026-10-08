@@ -3,6 +3,9 @@
 import assert from 'node:assert/strict';
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import { readFileSync } from 'node:fs';
+// @ts-expect-error QA executes under tsx/Node.
+import { runInNewContext } from 'node:vm';
+import ts from 'typescript';
 
 const appConfig = JSON.parse(readFileSync(new URL('../../app.json', import.meta.url), 'utf8'));
 const appSource = readFileSync(new URL('../../App.tsx', import.meta.url), 'utf8');
@@ -22,11 +25,11 @@ assert.ok(
 assert.ok(
   nativeSource.includes('enableAllPushFromOnboarding') &&
     nativeSource.includes('releasePushEnabled: true') &&
-    onboardingSource.includes('iPhone Settings &gt; Notifications &gt; Watchly') &&
+    onboardingSource.includes('iPhone Settings > Notifications > Watchly') &&
     onboardingSource.includes('Linking.openSettings()') &&
-    onboardingSource.includes('Continue without') &&
-    onboardingSource.includes('every current and future Watchly update'),
-  'Onboarding must enable every current functional category and explain both refusal recovery paths.',
+    onboardingSource.includes('Continue to Watchly') &&
+    onboardingSource.includes('turn them on later in your device settings'),
+  'Onboarding must enable notifications after acceptance and let users continue or open settings after refusal.',
 );
 assert.ok(
   alertSource.includes('maybeEnableReleasePushFromAlert') &&
@@ -67,3 +70,28 @@ console.log('Push notification mobile QA passed.');
 for (const flag of ['shouldPlaySound', 'shouldSetBadge', 'shouldShowBanner', 'shouldShowList']) {
   assert.ok(nativeSource.includes(flag + ': false'), 'Foreground notifications must be silent: ' + flag);
 }
+
+void (async () => {
+  const opened: string[] = [];
+  let receive!: (response: unknown) => Promise<void>;
+  const notifications = {
+    getLastNotificationResponseAsync: async () => null,
+    clearLastNotificationResponseAsync: async () => {},
+    addNotificationResponseReceivedListener: (callback: typeof receive) => { receive = callback; return { remove() {} }; },
+    addNotificationReceivedListener: () => ({ remove() {} }),
+  };
+  const exported: any = {};
+  runInNewContext(ts.transpileModule(observerSource, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
+    exports: exported, URL, require: (name: string) => name === 'react' ? { useEffect: (effect: Function) => effect() }
+      : name === 'expo-notifications' ? notifications : name === 'react-native' ? { Linking: { openURL: async (url: string) => { opened.push(url); } } } : {},
+  });
+  exported.PushNavigationObserver();
+  const tap = async (kind: string, url: string) => { receive({ notification: { request: { content: { data: { kind, url } } } } }); await Promise.resolve(); };
+  await tap('shared_vote_update', 'tvapp://watchlists/shared/list?title=Movie%20night');
+  assert.equal(new URL(opened[0]!).searchParams.get('view'), 'votes');
+  assert.equal(new URL(opened[0]!).searchParams.get('title'), 'Movie night');
+  await tap('release', 'tvapp://film/603');
+  assert.equal(opened[1], 'tvapp://film/603');
+  await tap('shared_vote_update', 'https://example.com');
+  assert.equal(opened.length, 2);
+})();

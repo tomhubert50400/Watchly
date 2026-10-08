@@ -152,6 +152,14 @@ async function getExpoPushToken() {
 
 async function configureAndroidChannel() {
   if (Platform.OS !== 'android') return;
+  await Notifications.setNotificationChannelAsync('watchlist-votes', {
+    importance: Notifications.AndroidImportance.HIGH, name: 'Watchlist votes', vibrationPattern: [0, 200, 120, 200],
+  });
+  await Notifications.setNotificationChannelAsync('watchlist-invitations', {
+    importance: Notifications.AndroidImportance.HIGH,
+    name: 'Watchlist invitations',
+    vibrationPattern: [0, 200, 120, 200],
+  });
   await Notifications.setNotificationChannelAsync('release-alerts', {
     importance: Notifications.AndroidImportance.HIGH,
     lightColor: '#D43A5C',

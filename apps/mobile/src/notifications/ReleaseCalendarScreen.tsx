@@ -18,6 +18,7 @@ import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { MediaPoster } from '../components/MediaPoster';
 import { Screen } from '../components/Screen';
 import { SegmentedControl } from '../components/SegmentedControl';
+import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import { RootStackParamList } from '../navigation/types';
 import { filterReleaseCalendarItems, getReleaseDaysRemaining, getReleaseDisplay, getUpcomingReleases, type ReleaseCalendarFilter, type ReleaseCalendarItem } from './releaseCalendarModel';
@@ -56,6 +57,10 @@ export function ReleaseCalendarScreen({ navigation }: Props) {
   artworkDatasetRef.current = { scope: artworkScope, items };
   const upcomingItems = useMemo(() => getUpcomingReleases(items, now), [items, now]);
   const filteredItems = useMemo(() => filterReleaseCalendarItems(upcomingItems, filter), [upcomingItems, filter]);
+  const getContent = (item: ReleaseCalendarItem) => (
+    item.contentType === 'movie' ? getCachedMovie(item.tmdbId) : getCachedSeries(item.tmdbId)
+  ) ?? (artwork.scope === artworkScope ? artwork.items.get(catalogueSnapshotKey(item)) : null);
+  const atmosphereUrl = filteredItems.map((item) => getContent(item)?.posterUrl).find(Boolean) ?? null;
 
   useEffect(() => {
     const nextDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
@@ -98,6 +103,7 @@ export function ReleaseCalendarScreen({ navigation }: Props) {
 
   return (
     <Screen
+      background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null}
       horizontalPadding={spacing.md}
       refreshControl={<RefreshControl onRefresh={resource.retry} refreshing={resource.isRefreshing} tintColor={colors.accent} />}
       statusBanner={resource.error ? <InlineStatusBanner detail={resource.error} tone="error" /> : undefined}
@@ -118,8 +124,7 @@ export function ReleaseCalendarScreen({ navigation }: Props) {
           <ScreenReveal style={styles.list}>
             {filteredItems.map((item) => {
               const display = getReleaseDisplay(item);
-              const content = (item.contentType === 'movie' ? getCachedMovie(item.tmdbId) : getCachedSeries(item.tmdbId))
-                ?? (artwork.scope === artworkScope ? artwork.items.get(catalogueSnapshotKey(item)) : null);
+              const content = getContent(item);
               const days = getReleaseDaysRemaining(item, now);
               const countdown = days === null ? 'Date pending' : days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : `${days} days`;
               const title = content?.title ?? display.title;
@@ -151,7 +156,7 @@ export function ReleaseCalendarScreen({ navigation }: Props) {
                   </View>
                   <View style={styles.countdown}>
                     {days !== null && days > 1 ? (
-                      <><Text adjustsFontSizeToFit minimumFontScale={0.65} numberOfLines={1} style={styles.days}>{days}</Text><Text style={styles.daysLabel}>days</Text></>
+                      <><Text numberOfLines={1} style={styles.days}>{days}</Text><Text style={styles.daysLabel}>days</Text></>
                     ) : <Text style={[styles.relativeDay, days === null && styles.pending]}>{countdown}</Text>}
                   </View>
                 </Pressable>
@@ -168,7 +173,7 @@ const styles = StyleSheet.create({
   content: { gap: spacing.md },
   list: { gap: spacing.md },
   row: {
-    alignItems: 'center', backgroundColor: colors.panel, borderColor: colors.border,
+    alignItems: 'center', backgroundColor: colors.interactiveSurface, borderColor: colors.border,
     borderRadius: radii.lg, borderWidth: 1, flexDirection: 'row', gap: spacing.sm, padding: spacing.sm,
   },
   poster: { width: 56, height: 84, flexShrink: 0, borderRadius: radii.sm },
@@ -176,7 +181,7 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 15, fontWeight: '700', lineHeight: 20 },
   detail: { ...typography.meta, color: colors.textMuted },
   episode: { fontSize: 12, lineHeight: 17, color: colors.textMuted },
-  countdown: { alignItems: 'center', justifyContent: 'center', width: 78, flexShrink: 0 },
+  countdown: { alignItems: 'center', justifyContent: 'center', minWidth: 78, flexShrink: 0 },
   days: { color: colors.accentText, fontSize: 34, lineHeight: 40, fontWeight: '800', fontVariant: ['tabular-nums'] },
   daysLabel: { color: colors.textMuted, fontSize: 12 },
   relativeDay: { color: colors.accentText, fontSize: 15, fontWeight: '800', textAlign: 'center' },

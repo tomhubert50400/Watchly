@@ -29,7 +29,7 @@ export type NotificationGroup = {
 export type NotificationTarget =
   | { name: 'FilmDetail'; params: { title: string; tmdbId: number } }
   | { name: 'SeriesDetail'; params: { title: string; tmdbId: number } }
-  | { name: 'SharedWatchlist'; params: { title: string; watchlistId: string } }
+  | { name: 'SharedWatchlist'; params: { title: string; watchlistId: string; view?: 'titles' | 'votes' } }
   | { name: 'ReviewReplies'; params: { target: { id: string; type: 'episodeReview' | 'movieReview' } } }
   | {
       name: 'SharedVotingSession';
@@ -40,6 +40,12 @@ export type NotificationMutation = {
   optimistic: NotificationItem[];
   previousReadAtById: ReadonlyMap<string, string | null>;
 };
+
+export function getWatchlistInvitationStatus(item: NotificationItem) {
+  if (item.kind !== 'shared_list_invite') return null;
+  const status = asRecord(item.routeMetadata)?.invitationStatus;
+  return status === 'pending' || status === 'accepted' || status === 'declined' ? status : null;
+}
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -157,6 +163,8 @@ export function mapNotificationTarget(item: NotificationItem): NotificationTarge
   }
 
   if (item.kind === 'shared_list_invite') {
+    const status = getWatchlistInvitationStatus(item);
+    if (status === 'pending' || status === 'declined') return null;
     if (
       !isUuid(item.sharedWatchlistId) ||
       metadata?.route !== 'SharedWatchlist' ||
@@ -167,7 +175,7 @@ export function mapNotificationTarget(item: NotificationItem): NotificationTarge
 
     return {
       name: 'SharedWatchlist',
-      params: { title, watchlistId: item.sharedWatchlistId },
+      params: { title: typeof metadata.watchlistName === 'string' ? metadata.watchlistName : title, watchlistId: item.sharedWatchlistId },
     };
   }
 
@@ -175,16 +183,16 @@ export function mapNotificationTarget(item: NotificationItem): NotificationTarge
     item.kind === 'shared_vote_update' &&
     isUuid(item.sharedWatchlistId) &&
     isUuid(item.votingSessionId) &&
-    metadata?.route === 'SharedVote' &&
+    (metadata?.route === 'SharedVote' || metadata?.route === 'SharedWatchlist') &&
     metadata.watchlistId === item.sharedWatchlistId &&
     metadata.votingSessionId === item.votingSessionId
   ) {
     return {
-      name: 'SharedVotingSession',
+      name: 'SharedWatchlist',
       params: {
-        sessionId: item.votingSessionId,
-        title,
+        title: typeof metadata.watchlistName === 'string' ? metadata.watchlistName : 'Watchlist',
         watchlistId: item.sharedWatchlistId,
+        view: 'votes',
       },
     };
   }

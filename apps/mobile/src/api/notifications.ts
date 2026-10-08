@@ -67,7 +67,8 @@ export function listReleaseAlerts(token: string) {
 }
 
 export function listReleaseCalendar(token: string) {
-  return apiGet<ReleaseCalendarResponse>('/notifications/release-calendar', { token });
+  // The API refreshes release dates for followed titles before returning the calendar.
+  return apiGet<ReleaseCalendarResponse>('/notifications/release-calendar', { token, timeoutMs: 60_000 });
 }
 
 export function getReleaseAlert(

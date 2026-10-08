@@ -95,5 +95,6 @@ export type RootStackParamList = {
   SharedWatchlist: {
     title: string;
     watchlistId: string;
+    view?: 'titles' | 'votes';
   };
 };

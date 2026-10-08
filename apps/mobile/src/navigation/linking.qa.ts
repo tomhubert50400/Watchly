@@ -10,6 +10,7 @@ assert(
 );
 assert(appLinking.config?.screens?.ReviewAccess === 'review-access', 'Review access must have its own deep link.');
 assert(appLinking.config?.screens?.Notifications === 'alerts', 'tvapp://alerts must route to Notifications.');
+assert(appLinking.config?.screens?.SharedWatchlist === 'watchlists/shared/:watchlistId', 'Vote notifications must open the base watchlist page.');
 const mainTabs = appLinking.config?.screens?.MainTabs;
 assert(
   typeof mainTabs === 'object' && mainTabs.screens?.Library === 'library',

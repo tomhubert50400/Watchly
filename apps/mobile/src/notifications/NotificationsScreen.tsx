@@ -16,7 +16,7 @@ import {
   syncNotifications,
 } from '../api/notifications';
 import { useAuthSession } from '../auth/AuthSessionContext';
-import { notifyUserDataChanged } from '../sync/userDataEvents';
+import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { getPrivateCacheKey, writePersistedCache } from '../cache/persistedCache';
 import { setMemoryResource } from '../cache/memoryResourceCache';
@@ -36,6 +36,7 @@ import {
   countUnreadNotifications,
   filterNotifications,
   groupNotifications,
+  getWatchlistInvitationStatus,
   mapNotificationTarget,
   rollbackNotificationMutation,
   type NotificationFilter,
@@ -43,6 +44,7 @@ import {
   type NotificationTarget,
 } from './notificationModel';
 import { loadNotificationItems } from './notificationsLoader';
+import { WatchlistInvitationRow } from './WatchlistInvitationRow';
 
 type NotificationsScreenProps = Pick<NativeStackScreenProps<RootStackParamList, 'Notifications' | 'ReleaseCalendar'>, 'navigation'>;
 type OwnedInbox = { items: NotificationItem[]; ownerId: string | null };
@@ -55,6 +57,7 @@ const filters: Array<{ label: string; value: NotificationFilter }> = [
 
 export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
   const isFocused = useIsFocused();
+  const notificationsRevision = useUserDataRevision('notifications');
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
   const ownerId = currentUser?.id ?? null;
   const ownerIdRef = useRef(ownerId);
@@ -95,7 +98,7 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
   useFocusEffect(useCallback(() => {
     setMutationError(null);
     resource.revalidate();
-  }, [ownerId, resource.revalidate]));
+  }, [notificationsRevision, ownerId, resource.revalidate]));
 
   const loadPendingFollowRequests = useCallback(async (showRefresh = false) => {
     const expectedOwnerId = ownerIdRef.current;
@@ -444,7 +447,19 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
             <View key={group.key}>
               <Text style={styles.groupLabel}>{group.label}</Text>
               <View style={styles.groupItems}>
-                {group.items.map((item) => (
+                {group.items.map((item) => getWatchlistInvitationStatus(item) === 'pending' ? (
+                  <WatchlistInvitationRow key={`${ownerId}:${item.id}`} item={item} onResolved={(result) => {
+                    if (ownerIdRef.current !== ownerId || ownedInboxRef.current.ownerId !== ownerId) return;
+                    persistOwnedItems(ownerId, ownedInboxRef.current.items.map((row) => row.id !== item.id ? row : {
+                      ...row, readAt: new Date().toISOString(),
+                      body: result.status === 'accepted' ? `You joined “${result.title}”.` : `You declined the invitation to “${result.title}”.`,
+                      routeMetadata: { route: result.status === 'accepted' ? 'SharedWatchlist' : 'Notifications',
+                        invitationStatus: result.status, watchlistId: result.watchlistId, watchlistName: result.title },
+                    }));
+                    resource.revalidate();
+                    if (result.status === 'accepted') navigation.navigate('SharedWatchlist', { watchlistId: result.watchlistId, title: result.title });
+                  }} />
+                ) : (
                   <NotificationRow
                     item={item}
                     key={item.id}

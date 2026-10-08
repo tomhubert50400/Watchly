@@ -17,6 +17,7 @@ export const appLinking: LinkingOptions<RootStackParamList> = {
         },
       },
       Notifications: 'alerts',
+      SharedWatchlist: 'watchlists/shared/:watchlistId',
       SeriesDetail: {
         path: 'series/:tmdbId',
         parse: {

@@ -2,6 +2,7 @@ import { apiDelete, apiGet, apiPost, apiPut } from './client';
 import { WatchlistContentType } from './watchlists';
 
 export type SharedWatchlistSummary = {
+  members?: { id: string; displayName: string | null; avatarUrl: string | null }[];
   containsTitle?: boolean;
   createdAt: string;
   id: string;
@@ -20,6 +21,7 @@ export type SharedWatchlistItem = {
 };
 
 export type SharedVotingCandidate = {
+  voters?: { id: string; displayName: string; avatarUrl?: string | null }[];
   contentType: WatchlistContentType;
   id: string;
   itemId: string;
@@ -29,6 +31,9 @@ export type SharedVotingCandidate = {
 };
 
 export type SharedVotingSession = {
+  isCreator?: boolean;
+  allowMultipleVotes?: boolean;
+  isAnonymous?: boolean;
   candidates: SharedVotingCandidate[];
   closedAt: string | null;
   closesAt: string;
@@ -49,7 +54,7 @@ export type SharedWatchlist = {
   isOwner: boolean;
   items: SharedWatchlistItem[];
   memberCount: number;
-  members: { displayName: string | null; id: string }[];
+  members: { avatarUrl?: string | null; displayName: string | null; id: string }[];
   name: string;
   updatedAt: string;
   votingSessions: SharedVotingSession[];
@@ -98,8 +103,28 @@ export function addSharedWatchlistItem(
   return apiPut<SharedWatchlistItem>(`/shared-watchlists/${watchlistId}/items`, input, { token });
 }
 
-export function addSharedWatchlistMember(token: string, watchlistId: string, userId: string) {
-  return apiPut<{ added: true }>(`/shared-watchlists/${watchlistId}/members`, { userId }, { token });
+export type WatchlistInvitee = {
+  id: string;
+  avatarUrl: string | null;
+  displayName: string;
+  handle: string | null;
+  isFollowing: boolean;
+  followsYou: boolean;
+  state: 'available' | 'member' | 'pending' | 'restricted' | 'recently_invited';
+};
+
+export function searchWatchlistInvitees(token: string, watchlistId: string, query: string) {
+  return apiGet<{ items: WatchlistInvitee[] }>(`/shared-watchlists/${watchlistId}/invitees?q=${encodeURIComponent(query)}`, { token });
+}
+
+export function inviteSharedWatchlistMember(token: string, watchlistId: string, userId: string) {
+  return apiPut<{ invited: true }>(`/shared-watchlists/${watchlistId}/members`, { userId }, { token });
+}
+
+export function respondToWatchlistInvitation(token: string, invitationId: string, accept: boolean) {
+  return apiPut<{ status: 'accepted' | 'declined'; watchlistId: string; title: string }>(
+    `/shared-watchlists/invitations/${invitationId}/${accept ? 'accept' : 'decline'}`, {}, { token },
+  );
 }
 
 export function removeSharedWatchlistItem(
@@ -118,11 +143,15 @@ export function removeSharedWatchlistItem(
 export function createSharedVotingSession(
   token: string,
   watchlistId: string,
-  input: { itemIds: string[]; title: string },
+  input: { itemIds?: string[]; titles?: { contentType: 'movie' | 'series'; tmdbId: number }[]; title: string; durationMinutes?: number; isAnonymous?: boolean; allowMultipleVotes?: boolean },
 ) {
   return apiPost<SharedVotingSession>(`/shared-watchlists/${watchlistId}/voting-sessions`, input, {
     token,
   });
+}
+
+export function addSharedVotingCandidates(token: string, watchlistId: string, sessionId: string, titles: { contentType: 'movie' | 'series'; tmdbId: number }[]) {
+  return apiPost<SharedVotingSession>(`/shared-watchlists/${watchlistId}/voting-sessions/${sessionId}/candidates`, { titles }, { token });
 }
 
 export function voteForSharedCandidate(
@@ -160,4 +189,12 @@ export function closeSharedVotingSession(
     {},
     { token },
   );
+}
+
+export function dismissSharedVotingSession(token: string, watchlistId: string, sessionId: string) {
+  return apiDelete<{ hidden: true }>(`/shared-watchlists/${watchlistId}/voting-sessions/${sessionId}/view`, { token });
+}
+
+export function deleteSharedVotingSession(token: string, watchlistId: string, sessionId: string) {
+  return apiDelete<{ deleted: true }>(`/shared-watchlists/${watchlistId}/voting-sessions/${sessionId}`, { token });
 }

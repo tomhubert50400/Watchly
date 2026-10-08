@@ -83,6 +83,16 @@ assert.deepEqual(mapNotificationTarget(releases), {
   name: 'FilmDetail',
   params: { title: 'Matrix', tmdbId: 603 },
 });
+for (const invitationStatus of ['pending', 'declined']) {
+  assert.equal(mapNotificationTarget(notification({
+    kind: 'shared_list_invite', sharedWatchlistId: WATCHLIST_ID,
+    routeMetadata: { invitationStatus, route: 'SharedWatchlist', watchlistId: WATCHLIST_ID },
+  })), null, 'Unaccepted invitations must not navigate to member-only content');
+}
+assert.deepEqual(mapNotificationTarget(notification({
+  kind: 'shared_list_invite', sharedWatchlistId: WATCHLIST_ID,
+  routeMetadata: { invitationStatus: 'accepted', route: 'SharedWatchlist', watchlistId: WATCHLIST_ID, watchlistName: 'Movie night' },
+})), { name: 'SharedWatchlist', params: { title: 'Movie night', watchlistId: WATCHLIST_ID } });
 assert.deepEqual(mapNotificationTarget(notification({ contentType: 'series', tmdbId: 1399 })), {
   name: 'SeriesDetail',
   params: { title: 'Matrix', tmdbId: 1399 },
@@ -109,11 +119,11 @@ assert.deepEqual(mapNotificationTarget(notification({
   type: 'shared_vote_update',
   votingSessionId: SESSION_ID,
 })), {
-  name: 'SharedVotingSession',
+  name: 'SharedWatchlist',
   params: {
-    sessionId: SESSION_ID,
-    title: 'Shared vote update',
+    title: 'Watchlist',
     watchlistId: WATCHLIST_ID,
+    view: 'votes',
   },
 });
 assert.deepEqual(mapNotificationTarget(notification({

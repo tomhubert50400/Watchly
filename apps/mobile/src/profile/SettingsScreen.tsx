@@ -27,7 +27,7 @@ import {
   Users,
 } from 'lucide-react-native';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, Share, StyleSheet, Switch, Text, View } from 'react-native';
 import {
   deleteAccount,
   exportAccountData,
@@ -78,6 +78,7 @@ type SavedSettings = {
 };
 
 const defaultPrivacy: ProfilePrivacy = {
+  allowWatchlistInvitesFromAnyone: false,
   episodeProgressVisibility: 'public',
   profileVisibility: 'public',
   ratingsVisibility: 'public',
@@ -248,6 +249,7 @@ export function SettingsScreen() {
         }),
         updatePrivacy(firebaseIdToken, {
           profileVisibility: privacy.profileVisibility,
+          allowWatchlistInvitesFromAnyone: privacy.allowWatchlistInvitesFromAnyone ?? false,
           viewingHistoryVisibility: privacy.viewingHistoryVisibility,
         }),
         Promise.all(changedWatchlists.map((watchlist) =>
@@ -712,6 +714,19 @@ export function SettingsScreen() {
                 last
                 onPress={() => navigation.navigate('BlockedUsers')}
               />
+              <View style={styles.privacyPreference}>
+                <View style={styles.rowIcon}><Users color={colors.textMuted} size={19} /></View>
+                <View style={styles.rowCopy}>
+                  <Text style={styles.rowTitle}>Watchlist invitations from anyone</Text>
+                  <Text style={styles.rowBody}>When off, only people you follow can invite you. You always choose whether to join.</Text>
+                </View>
+                <Switch accessibilityLabel="Allow watchlist invitations from anyone"
+                  value={privacy.allowWatchlistInvitesFromAnyone ?? false}
+                  onValueChange={(value) => {
+                    setPrivacy((current) => ({ ...current, allowWatchlistInvitesFromAnyone: value }));
+                    setMessage(null);
+                  }} />
+              </View>
             </PrivacyPanel>
           </SettingsSection>
 
