@@ -42,6 +42,7 @@ import {
   toApiProfileBackdrop,
 } from './profile-backdrop';
 import { isUniqueHandleError, normalizeProfileHandle } from './profile-handle';
+import { removeProfileTitleData } from './remove-profile-title';
 
 @Injectable()
 export class ProfileService {
@@ -73,6 +74,17 @@ export class ProfileService {
       where: { id: userId }, data: { topFive },
     }));
     return { items: topFive };
+  }
+
+  async removeTitle(identity: AuthenticatedIdentity, contentType: 'movie' | 'series', tmdbId: number) {
+    if (contentType !== 'movie' && contentType !== 'series') {
+      throw new BadRequestException('contentType must be movie or series.');
+    }
+    if (!Number.isSafeInteger(tmdbId) || tmdbId < 1) {
+      throw new BadRequestException('tmdbId must be a positive integer.');
+    }
+    const userId = await this.getUserId(identity);
+    await this.prisma.withConnectionRetry(() => this.prisma.$transaction((tx) => removeProfileTitleData(tx, userId, contentType, tmdbId)));
   }
 
   async getOwnPublicProfilePreview(identity: AuthenticatedIdentity) {
@@ -679,6 +691,7 @@ export class ProfileService {
       this.prisma.$transaction(async (tx) => {
       await tx.privacySettings.upsert({
         create: {
+          allowWatchlistInvitesFromAnyone: input.allowWatchlistInvitesFromAnyone,
           episodeProgressVisibility: profileVisibility ?? (input.episodeProgressVisibility
             ? toPrivacyVisibility(input.episodeProgressVisibility)
             : undefined),
@@ -696,6 +709,7 @@ export class ProfileService {
             : undefined),
         },
         update: {
+          allowWatchlistInvitesFromAnyone: input.allowWatchlistInvitesFromAnyone,
           ...(input.episodeProgressVisibility
             ? { episodeProgressVisibility: toPrivacyVisibility(input.episodeProgressVisibility) }
             : {}),
@@ -790,7 +804,7 @@ export class ProfileService {
 
             const completedImports = completedImportIds.length > 0
               ? await tx.dataImport.findMany({
-                select: { id: true, preview: true },
+                select: { id: true },
                 where: {
                   id: { in: completedImportIds },
                   status: DataImportStatus.COMPLETED,
@@ -803,28 +817,16 @@ export class ProfileService {
               throw new BadRequestException('A completed import does not belong to this account.');
             }
 
-            const importAddedTitles = completedImports.some((item) =>
-              getCompletedImportTitleCount(item.preview) > 0
-            );
-            const backgroundImport = !importAddedTitles && tasteItems.length === 0
-              ? await tx.dataImport.findFirst({ where: { userId, background: true }, select: { id: true } })
-              : null;
-
             const tasteMovieCount = tasteItems.filter((item) => item.contentType === 'movie').length;
             const tasteSeriesCount = tasteItems.length - tasteMovieCount;
 
             if (
-              !importAddedTitles
-              && !backgroundImport
-              && (
-                tasteItems.length < 1
-                || tasteItems.length > 10
-                || tasteMovieCount > 5
-                || tasteSeriesCount > 5
-              )
+              tasteItems.length > 10
+              || tasteMovieCount > 5
+              || tasteSeriesCount > 5
             ) {
               throw new BadRequestException(
-                'Choose up to 5 movies and 5 TV shows, or start an import.',
+                'Choose up to 5 movies and 5 TV shows.',
               );
             }
 
@@ -1123,6 +1125,7 @@ export class ProfileService {
         user.profileBackdropTmdbId,
       ),
       privacy: {
+        allowWatchlistInvitesFromAnyone: privacySettings.allowWatchlistInvitesFromAnyone,
         episodeProgressVisibility: fromPrivacyVisibility(
           privacySettings.episodeProgressVisibility,
         ),
@@ -1635,17 +1638,6 @@ function dedupeTasteItems(items: CompleteOnboardingDto['tasteItems']) {
   });
 
   return [...unique.values()];
-}
-
-function getCompletedImportTitleCount(value: unknown) {
-  if (!value || typeof value !== 'object' || !('result' in value)) return 0;
-
-  const result = value.result;
-  if (!result || typeof result !== 'object' || !('titlesProcessed' in result)) return 0;
-
-  return typeof result.titlesProcessed === 'number' && result.titlesProcessed > 0
-    ? result.titlesProcessed
-    : 0;
 }
 
 const PROFILE_SEARCH_LIMIT = 20;

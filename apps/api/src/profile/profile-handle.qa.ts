@@ -17,14 +17,10 @@ async function run() {
     id: 'viewer-id',
     onboardingCompleted: false,
   };
+  let tasteWriteCount = 0;
   const transactionClient = {
     dataImport: {
       findMany: async () => [],
-      findFirst: async ({ where }: { where: { userId: string; background: boolean } }): Promise<{ id: string } | null> => {
-        assert.equal(where.userId, 'viewer-id');
-        assert.equal(where.background, true);
-        return null;
-      },
     },
     user: {
       findUniqueOrThrow: async () => ({
@@ -44,7 +40,7 @@ async function run() {
       },
     },
     userContentState: {
-      upsert: async () => ({}),
+      upsert: async () => { tasteWriteCount += 1; return {}; },
     },
   };
   const prisma = {
@@ -78,13 +74,22 @@ async function run() {
       })),
     }),
     (error: unknown) => error instanceof BadRequestException
-      && error.message === 'Choose up to 5 movies and 5 TV shows, or start an import.',
+      && error.message === 'Choose up to 5 movies and 5 TV shows.',
     'onboarding must reject more than five selections from one media type',
   );
 
-  await assert.rejects(service.completeOnboarding(identity, {
+  const emptyProfile = await service.completeOnboarding(identity, {
     displayName: 'Handle tester', handle: '@Cinema_Fan', tasteItems: [],
-  }), /or start an import/, 'an analysis alone must not bypass taste selection');
+  });
+  assert.equal(emptyProfile.onboardingCompleted, true, 'onboarding may finish without titles or an import');
+  assert.equal(tasteWriteCount, 0, 'an empty selection must not create watched titles');
+  storedUser.onboardingCompleted = false;
+  const omittedTaste = await service.completeOnboarding(identity, {
+    displayName: 'Handle tester', handle: '@Cinema_Fan',
+  });
+  assert.equal(omittedTaste.onboardingCompleted, true, 'taste items may also be omitted');
+  assert.equal(tasteWriteCount, 0);
+  storedUser.onboardingCompleted = false;
 
   assert.deepEqual(await service.completeOnboarding(identity, {
     displayName: 'Handle tester',
@@ -97,14 +102,10 @@ async function run() {
     onboardingCompleted: true,
   });
   assert.equal(storedUser.handle, 'cinema_fan', 'handles must be stored without @ and lowercase');
-  storedUser.onboardingCompleted = false;
-  transactionClient.dataImport.findFirst = async ({ where }) => {
-    assert.equal(where.userId, 'viewer-id');
-    assert.equal(where.background, true);
-    return { id: 'authorized-background-import' };
-  };
+  assert.equal(tasteWriteCount, 1, 'selected titles must still be saved');
   await service.completeOnboarding(identity, { displayName: 'Handle tester', handle: 'cinema_fan', tasteItems: [] });
-  assert.equal(storedUser.onboardingCompleted, true, 'a started background import must let onboarding finish without manual picks');
+  assert.equal(storedUser.onboardingCompleted, true, 'repeating completion with no picks must remain valid');
+  assert.equal(tasteWriteCount, 1, 'repeating completion must preserve existing titles');
   assert.deepEqual(await service.getHandleAvailability(identity, '@Cinema_Fan'), {
     available: true,
     handle: 'cinema_fan',

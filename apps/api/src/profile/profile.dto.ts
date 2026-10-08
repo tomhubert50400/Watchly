@@ -4,6 +4,7 @@ import {
   ArrayMinSize,
   ArrayUnique,
   IsArray,
+  IsBoolean,
   IsIn,
   IsInt,
   IsOptional,
@@ -96,6 +97,10 @@ export class UpdateProfileTopFiveDto {
 }
 
 export class UpdatePrivacySettingsDto {
+  @ValidateIf((_, value) => value !== undefined)
+  @IsBoolean()
+  allowWatchlistInvitesFromAnyone?: boolean;
+
   @IsOptional()
   @IsIn(privacyVisibilities)
   profileVisibility?: PrivacyVisibilityValue;

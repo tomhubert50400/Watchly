@@ -5,6 +5,7 @@ import {
   Get,
   Inject,
   Param,
+  ParseIntPipe,
   Post,
   Put,
   Query,
@@ -90,6 +91,18 @@ export class ProfileController {
   @Put('me/top-five')
   updateTopFive(@Req() request: AuthenticatedRequest, @Body() body: UpdateProfileTopFiveDto) {
     return this.profile.updateTopFive(getIdentity(request), body);
+  }
+
+  @Delete('me/movies/:tmdbId')
+  async removeMovie(@Req() request: AuthenticatedRequest, @Param('tmdbId', ParseIntPipe) tmdbId: number) {
+    await this.profile.removeTitle(getIdentity(request), 'movie', tmdbId);
+    return { deleted: true };
+  }
+
+  @Delete('me/titles/:contentType/:tmdbId')
+  async removeTitle(@Req() request: AuthenticatedRequest, @Param('contentType') contentType: 'movie' | 'series', @Param('tmdbId', ParseIntPipe) tmdbId: number) {
+    await this.profile.removeTitle(getIdentity(request), contentType, tmdbId);
+    return { deleted: true };
   }
 
   @Put('dev-test-user')
