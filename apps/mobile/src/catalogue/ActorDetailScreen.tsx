@@ -9,6 +9,7 @@ import { Button } from '../components/Button';
 import { EmptyState } from '../components/EmptyState';
 import { LoadingState } from '../components/LoadingState';
 import { Screen } from '../components/Screen';
+import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { UserAvatar } from '../components/UserAvatar';
 import { colors, spacing, typography } from '../design/tokens';
 import type { RootStackParamList } from '../navigation/types';
@@ -20,8 +21,9 @@ export function ActorDetailScreen() {
   const resource = useCachedResource({ key: getPublicCacheKey(`actor:${params.tmdbId}`), load });
   const actor = resource.data?.item;
   const biography = actor?.biography.trim() ?? '';
+  const atmosphereUrl = actor?.credits.find(item => item.mediaType === 'movie')?.posterUrl ?? null;
   return (
-    <Screen contentReady={Boolean(actor)} safeAreaEdges={[]} title={actor?.name ?? params.name}>
+    <Screen background={<SpotlightAtmosphere blurRadius={28} imageUrl={atmosphereUrl} />} contentReady={Boolean(actor)} title={actor?.name ?? params.name}>
       {!actor && resource.isInitialLoading ? <LoadingState variant="profile" label="Loading actor" /> : null}
       {!actor && resource.error ? <EmptyState title="Could not load actor" body={resource.error}><Button label="Retry" onPress={resource.retry} /></EmptyState> : null}
       {actor ? <View style={styles.content}>
@@ -73,20 +75,22 @@ function ActorBiography({ biography }: { biography: string }) {
     return () => cancelAnimationFrame(frame);
   }, [biography, expanded, preview.length, reduceMotion]);
 
-  return <Text style={styles.body}>
-    {biography.slice(0, visibleLength)}{visibleLength < biography.length ? '…' : ''}
+  return <>
+    <Text style={styles.body}>
+      {biography.slice(0, visibleLength)}{visibleLength < biography.length ? '…' : ''}
+    </Text>
     {canExpand ? <Text
       accessibilityRole="button"
       accessibilityState={{ expanded }}
       onPress={() => setExpanded(value => !value)}
       style={styles.readMore}
-    >{expanded ? ' Read less' : ' Read more'}</Text> : null}
-  </Text>;
+    >{expanded ? 'Read less' : 'Read more'}</Text> : null}
+  </>;
 }
 
 const styles = StyleSheet.create({
   content: { gap: spacing.lg },
   biography: { gap: spacing.sm },
   body: { ...typography.body, color: colors.textMuted },
-  readMore: { color: colors.accentText, fontWeight: '700' },
+  readMore: { ...typography.body, alignSelf: 'flex-start', color: colors.accentText, fontWeight: '700' },
 });

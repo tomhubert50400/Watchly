@@ -1,4 +1,5 @@
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { useState } from 'react';
 import { RotateCcw, Star } from 'lucide-react-native';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -21,6 +22,7 @@ const RETRY_ALL_KEY = 'retry-all';
 type ReviewTab = 'matched' | 'skipped';
 
 export function ImportMatchesScreen({ route }: Props) {
+  const headerHeight = useHeaderHeight();
   const { width } = useWindowDimensions();
   const { firebaseIdToken } = useAuthSession();
   const [matchedItems, setMatchedItems] = useState(route.params.matchedItems);
@@ -84,7 +86,7 @@ export function ImportMatchesScreen({ route }: Props) {
     retryItems([item], getSkippedKey(item));
 
   return (
-    <SafeAreaView edges={['bottom']} style={styles.screen}>
+    <SafeAreaView edges={['bottom']} style={[styles.screen, { paddingTop: headerHeight }]}>
       <ScreenReveal delay={0} accessibilityRole="tablist" style={styles.tabs}>
         <ReviewTabButton
           active={activeTab === 'matched'}

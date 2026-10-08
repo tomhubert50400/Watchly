@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
+import '../cache/cachedResourcePause.qa';
 
 const code = ts.transpileModule(readFileSync(new URL('./DiscoverScreen.tsx', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
@@ -13,7 +14,7 @@ function mount(signedIn: boolean) {
   const slots: any[] = [];
   let cursor = 0;
   let effects: Array<{ index: number; create: Function; deps: unknown[] }> = [];
-  let resources: Array<{ enabled: boolean }> = [];
+  let resources: Array<{ enabled: boolean; paused: boolean }> = [];
   const browse: Array<{ filters: any; resolve: (value: any) => void; reject: (error: Error) => void }> = [];
   const images: Array<{ urls: string[]; isCurrent: () => boolean }> = [];
   const details: Array<{ resolve: () => void }> = [];
@@ -55,9 +56,9 @@ function mount(signedIn: boolean) {
       getDiscoverBrowse: (_token: unknown, filters: unknown) => new Promise((resolve, reject) => browse.push({ filters, resolve, reject })),
     },
     '../cache/useCachedResource': {
-      useCachedResource: (options: { enabled?: boolean }) => {
+      useCachedResource: (options: { enabled?: boolean; paused?: boolean }) => {
         const index = resources.length;
-        resources.push({ enabled: options.enabled ?? true });
+        resources.push({ enabled: options.enabled ?? true, paused: options.paused ?? false });
         return { data: index === 0 ? data : collections, retry: noop, revalidate: noop };
       },
       preloadCachedResource: ({ load }: { load: Function }) => load(),
@@ -75,6 +76,7 @@ function mount(signedIn: boolean) {
   return {
     browse, images, details,
     enabled: () => resources.map(resource => resource.enabled),
+    paused: () => resources.map(resource => resource.paused),
     render: (isActive: boolean) => {
       cursor = 0; effects = []; resources = [];
       const tree = moduleExports.DiscoverScreen({ isActive });
@@ -89,12 +91,14 @@ function mount(signedIn: boolean) {
 async function verify(signedIn: boolean) {
   const screen = mount(signedIn);
   screen.render(false);
-  assert.deepEqual(screen.enabled(), [false, false], 'inactive Discover must disable both resources');
+  assert.deepEqual(screen.enabled(), [true, true], 'inactive Discover must keep both resources available');
+  assert.deepEqual(screen.paused(), [true, true], 'inactive Discover must pause both resources');
   assert.equal(screen.browse.length, 0);
   assert.equal(screen.images.length, 0);
   assert.equal(screen.details.length, 0);
   screen.render(true);
   assert.deepEqual(screen.enabled(), [true, true]);
+  assert.deepEqual(screen.paused(), [false, false]);
   assert.equal(screen.browse.length, 1, 'focus starts only the first optional browse request');
   assert.equal(screen.details.length, 1);
   assert.equal(screen.images[0].isCurrent(), true);

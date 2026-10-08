@@ -48,9 +48,9 @@ export function DiscoverScreen({ isActive = true }: { isActive?: boolean }) {
   const resourceKey = `discover:${mood ?? 'all'}:v1`;
   const resource = useCachedResource({
     key: currentUser ? getPrivateCacheKey(currentUser.id, resourceKey) : getPublicCacheKey(resourceKey),
-    load, enabled: isActive && (!currentUser || Boolean(firebaseIdToken)), staleTimeMs: 5 * 60 * 1000,
+    load, enabled: !currentUser || Boolean(firebaseIdToken), paused: !isActive, staleTimeMs: 5 * 60 * 1000,
   });
-  const collections = useCachedResource({ key: getPublicCacheKey('discover:collections:v1'), load: getDiscoverCollections, enabled: isActive, staleTimeMs: 60 * 60 * 1000 });
+  const collections = useCachedResource({ key: getPublicCacheKey('discover:collections:v1'), load: getDiscoverCollections, paused: !isActive, staleTimeMs: 60 * 60 * 1000 });
   useEffect(() => {
     let cancelled = false;
     if (!isActive || (currentUser && !firebaseIdToken)) return;

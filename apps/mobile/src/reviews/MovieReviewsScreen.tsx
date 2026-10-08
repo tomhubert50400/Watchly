@@ -1,4 +1,5 @@
 import { useIsFocused } from '@react-navigation/native';
+import { useHeaderHeight } from '@react-navigation/elements';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useRef, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
@@ -13,6 +14,7 @@ import { useUserDataRevision } from '../sync/userDataEvents';
 import { MovieCommunityReviewCard } from './MovieCommunityPanel';
 
 export function MovieReviewsScreen({ route }: NativeStackScreenProps<RootStackParamList, 'MovieReviews'>) {
+  const headerHeight = useHeaderHeight();
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
   const focused = useIsFocused();
   const revision = useUserDataRevision('opinions', 'socialGraph', 'profile');
@@ -74,7 +76,8 @@ export function MovieReviewsScreen({ route }: NativeStackScreenProps<RootStackPa
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingTop: headerHeight + spacing.xl }]}
+        contentInsetAdjustmentBehavior="never"
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         ListHeaderComponent={<View style={styles.header}><Text style={styles.title}>{route.params.title}</Text><Text style={styles.muted}>Watchly reviews · Newest first</Text></View>}
         renderItem={({ item }) => <MovieCommunityReviewCard review={item} artworkUrl={route.params.artworkUrl} />}

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
-import { ChevronLeft, SlidersHorizontal } from 'lucide-react-native';
+import { SlidersHorizontal } from 'lucide-react-native';
 import type { CatalogueSearchType } from '../api/catalogue';
 import { browseGenreLabel, browseResourceKey, collectionFilters, discoverMoods, getDiscoverBrowse, type BrowseFilters } from '../api/discover';
 import { getHomeCategory, homeCategoryResourceKey } from '../api/homeCategories';
@@ -69,8 +69,8 @@ function DiscoverGrid({ type, onType, filters, onFilters, category }: { type: Ca
     finally { if (request === version.current) { busy.current = false; setLoadingMore(false); } }
   };
   const items = [...new Map([...(resource.data?.items ?? []), ...pages.items].map(item => [item.id, item])).values()].filter(item => type === 'all' || item.mediaType === type);
-  return <Screen contentReady={Boolean(resource.data)} title="" leading={category ? undefined : <Pressable accessibilityRole="button" accessibilityLabel="Back to Discover" onPress={() => navigation.goBack()} style={styles.back}><ChevronLeft size={22} color={colors.text} /><Text style={styles.backText}>Discover</Text></Pressable>} background={<SpotlightAtmosphere imageUrl={items[0]?.posterUrl ?? null} />} refreshControl={<RefreshControl refreshing={resource.isRefreshing} onRefresh={resource.retry} tintColor={colors.accent} />}>
-    <View style={[styles.content, category && { paddingTop: spacing.xxxl + spacing.md }]}>
+  return <Screen contentReady={Boolean(resource.data)} title="" background={<SpotlightAtmosphere imageUrl={items[0]?.posterUrl ?? null} />} refreshControl={<RefreshControl refreshing={resource.isRefreshing} onRefresh={resource.retry} tintColor={colors.accent} />}>
+    <View style={styles.content}>
       <ScreenReveal delay={0} style={styles.titleRow}>
         <Text accessibilityRole="header" style={styles.title}>{category?.title ?? 'Explore'}</Text>
         {!category ? <Pressable accessibilityRole="button" accessibilityLabel="Filters" onPress={onFilters} style={({ pressed }) => [styles.filterButton, pressed && { opacity: 0.7 }]}>
@@ -89,4 +89,4 @@ function DiscoverGrid({ type, onType, filters, onFilters, category }: { type: Ca
     </View>
   </Screen>;
 }
-const styles = StyleSheet.create({ content: { gap: spacing.lg }, titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }, filterButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, title: { ...typography.heading, color: colors.text, flexShrink: 1 }, back: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 44, paddingHorizontal: spacing.sm, borderRadius: 24, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.interactiveSurface }, backText: { ...typography.body, color: colors.text }, description: { ...typography.body, color: colors.muted }, grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md } });
+const styles = StyleSheet.create({ content: { gap: spacing.lg }, titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md }, filterButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }, title: { ...typography.heading, color: colors.text, flexShrink: 1 }, description: { ...typography.body, color: colors.muted }, grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md } });
