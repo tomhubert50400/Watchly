@@ -233,7 +233,7 @@ export function SharedVoteScreen({ route }: Props) {
 
   if (!ownerId || !firebaseIdToken) {
     return (
-      <WatchlistPage>
+      <WatchlistPage title={route.params.title}>
         <SignInRequiredCard
           body="You need to be signed in to join this private shared vote. Sign in here to continue."
           title="Sign in to join this vote"
@@ -242,11 +242,11 @@ export function SharedVoteScreen({ route }: Props) {
     );
   }
   if (resource.isInitialLoading && !details) {
-    return <WatchlistPage><LoadingState label="Loading vote" /></WatchlistPage>;
+    return <WatchlistPage title={route.params.title}><LoadingState label="Loading vote" /></WatchlistPage>;
   }
   if (resource.error && !details) {
     return (
-      <WatchlistPage>
+      <WatchlistPage title={route.params.title}>
         <EmptyState body={resource.error} title="Vote unavailable">
           <Button label="Retry" onPress={resource.retry} />
         </EmptyState>
@@ -262,13 +262,14 @@ export function SharedVoteScreen({ route }: Props) {
   const totalVotes = session.candidates.reduce((total, candidate) => total + candidate.voteCount, 0);
   const candidateSubtitle = lifecycle === 'open'
     ? selectedIds.size === 0
-      ? 'Choose one or more titles'
+      ? session.allowMultipleVotes === false ? 'Choose one title' : 'Choose one or more titles'
       : `${selectedIds.size} ${selectedIds.size === 1 ? 'title selected' : 'titles selected'}`
     : `${totalVotes} ${totalVotes === 1 ? 'vote' : 'votes'}`;
 
   return (
-    <WatchlistPage isRefreshing={resource.isRefreshing} onRefresh={resource.retry}>
+    <WatchlistPage title={route.params.title} isRefreshing={resource.isRefreshing} onRefresh={resource.retry}>
       {statusBanner}
+      <Text style={styles.meta}>{session.isAnonymous !== false ? 'Anonymous votes' : 'Named votes, visible to members'}</Text>
 
       <ScreenReveal delay={50} style={styles.statusRow}>
         <View style={styles.statusPrimary}>
@@ -330,6 +331,9 @@ export function SharedVoteScreen({ route }: Props) {
                   <Text style={styles.voteCount}>
                     {candidate.voteCount === 1 ? '1 vote' : `${candidate.voteCount} votes`}
                   </Text>
+                  {session.isAnonymous === false && candidate.voters?.length ? <Text style={styles.meta}>
+                    {candidate.voters.map(voter => voter.displayName).join(', ')}
+                  </Text> : null}
                 </View>
                 <Pressable
                   accessibilityLabel={`${isSelected ? 'Remove your vote from' : 'Vote for'} ${media?.title ?? 'this candidate'}`}

@@ -82,6 +82,7 @@ export function beginOptimisticVote(
   session: SharedVotingSession,
   candidateId: string,
   now = new Date(),
+  voter?: { id: string; displayName: string; avatarUrl?: string | null },
 ): VoteMutation | null {
   if (getVoteLifecycle(session, now) !== 'open') {
     return null;
@@ -94,13 +95,18 @@ export function beginOptimisticVote(
 
   const candidates = session.candidates.map((item) => {
     if (item.id !== candidateId) {
-      return item;
+      return session.allowMultipleVotes === false && !candidate.userHasVoted && item.userHasVoted
+        ? { ...item, userHasVoted: false, voteCount: Math.max(0, item.voteCount - 1), ...(voter && session.isAnonymous === false ? { voters: item.voters?.filter(row => row.id !== voter.id) } : {}) }
+        : item;
     }
 
     const userHasVoted = !item.userHasVoted;
     return {
       ...item,
       userHasVoted,
+      ...(voter && session.isAnonymous === false ? { voters: userHasVoted
+        ? [...(item.voters ?? []).filter(row => row.id !== voter.id), voter]
+        : (item.voters ?? []).filter(row => row.id !== voter.id) } : {}),
       voteCount: Math.max(0, item.voteCount + (userHasVoted ? 1 : -1)),
     };
   });
@@ -172,4 +178,14 @@ function withComputedLeaders(session: SharedVotingSession): SharedVotingSession 
     ...session,
     leaders: session.candidates.filter((candidate) => leaderSet.has(candidate.id)),
   };
+}
+
+export function isRecentVoteResult(session: SharedVotingSession, now = new Date()) {
+  const endedAt = Math.min(Date.parse(session.closedAt ?? session.closesAt), Date.parse(session.closesAt));
+  return getVoteLifecycle(session, now) !== 'open' && now.getTime() < endedAt + 6 * 3600_000;
+}
+
+export function getVotePercentage(session: SharedVotingSession, candidateId: string) {
+  const total = session.candidates.reduce((sum, candidate) => sum + candidate.voteCount, 0);
+  return total ? Math.round(100 * (session.candidates.find(candidate => candidate.id === candidateId)?.voteCount ?? 0) / total) : 0;
 }

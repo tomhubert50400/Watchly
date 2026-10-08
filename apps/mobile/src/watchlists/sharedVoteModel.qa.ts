@@ -8,6 +8,8 @@ import {
   canCloseVote,
   getSelectedCandidateIds,
   getVoteLifecycle,
+  isRecentVoteResult,
+  getVotePercentage,
   getVoteLeaders,
   getVoteRemainingLabel,
   rollbackVoteMutation,
@@ -123,3 +125,22 @@ assert.equal(
 
 assert.equal(beginOptimisticClose(session(), false, NOW), null);
 console.log('Shared vote model QA passed.');
+
+{
+  const current = session({ allowMultipleVotes: false });
+  const next = beginOptimisticVote(current, 'candidate-c', NOW)!;
+  assert.deepEqual(getSelectedCandidateIds(next.optimistic), ['candidate-c']);
+  assert.equal(next.optimistic.candidates[0]!.voteCount, current.candidates[0]!.voteCount - 1);
+}
+
+{
+  const result = session({ status: 'CLOSED', closedAt: NOW.toISOString() });
+  assert.equal(isRecentVoteResult(result, new Date(NOW.getTime() + 6 * 3600000 - 1)), true);
+  assert.equal(isRecentVoteResult(result, new Date(NOW.getTime() + 6 * 3600000)), false);
+  assert.equal(isRecentVoteResult(session(), NOW), false);
+  assert.equal(getVotePercentage(session(), 'candidate-a'), 67);
+  const voted = beginOptimisticVote(session({ isAnonymous: false }), 'candidate-b', NOW, { id: 'viewer', displayName: 'Viewer', avatarUrl: 'avatar.jpg' })!;
+  assert.equal(voted.optimistic.candidates[1]!.voters?.[0]?.avatarUrl, 'avatar.jpg');
+  const anonymous = beginOptimisticVote(session({ isAnonymous: true }), 'candidate-b', NOW, { id: 'viewer', displayName: 'Viewer' })!;
+  assert.ok(!anonymous.optimistic.candidates[1]!.voters);
+}
