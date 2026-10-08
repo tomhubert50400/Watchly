@@ -129,4 +129,14 @@ for (const file of [
   );
 }
 
+const opinionSheetSource = readFileSync(new URL('../opinions/OpinionSheet.tsx', import.meta.url), 'utf8');
+const signedOutRating = opinionSheetSource.match(/\{!isSignedIn \? \(\s*(<Pressable[\s\S]*?<\/Pressable>)\s*\) : \(/)?.[1];
+assert.ok(signedOutRating, 'signed-out rating stars must share one pressable surface');
+assert.match(signedOutRating, /accessibilityRole="button"[\s\S]*onPress=\{openTrigger\}/,
+  'signed-out rating must open sign-in only on a completed button press');
+assert.match(signedOutRating, /pointerEvents="none"[\s\S]*<StarRatingDisplay rating=\{0\}/,
+  'all five signed-out stars must belong to the same button');
+assert.doesNotMatch(signedOutRating, /onResponder|onStartShouldSetResponder|onMoveShouldSetResponder|onPressIn|onTouchStart/,
+  'signed-out stars must let the scroll view cancel the press instead of capturing a rating gesture');
+
 console.log('Sign-in placement QA passed.');

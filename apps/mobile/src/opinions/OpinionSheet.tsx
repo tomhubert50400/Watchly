@@ -496,6 +496,23 @@ export function OpinionSheet({
             <View style={[styles.inlineRatingHeader, triggerVariant === 'inline' && styles.inlineHeaderHeight]}>
               <Text style={[styles.activityLabel, triggerVariant === 'inline' && styles.inlineRatingTitle]}>Your rating</Text>
             </View>
+            {!isSignedIn ? (
+              <Pressable
+                accessibilityLabel={`Sign in to rate ${mediaLabel}`}
+                accessibilityRole="button"
+                onPress={openTrigger}
+                style={[styles.activityStars, triggerVariant === 'inline' && styles.inlineStars]}
+              >
+                <View
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                  pointerEvents="none"
+                  style={styles.activityStarDisplay}
+                >
+                  <StarRatingDisplay rating={0} size={26} spread spaceAround={triggerVariant === 'inline'} />
+                </View>
+              </Pressable>
+            ) : (
             <View
               accessibilityActions={[
                 { label: 'Increase rating by half a star', name: 'increment' },
@@ -533,6 +550,7 @@ export function OpinionSheet({
                 <StarRatingDisplay rating={opinion.draftRating ?? 0} size={26} spread spaceAround={triggerVariant === 'inline'} />
               </View>
             </View>
+            )}
           </View>
           {reviewsEnabled ? <>{triggerVariant !== 'inline' ? <View style={styles.activityDivider} /> : null}
           <Pressable
