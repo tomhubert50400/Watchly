@@ -1,4 +1,10 @@
 export const rootStackScreenOptions = {
+  headerShown: true,
+  headerTransparent: true,
+  headerStyle: { backgroundColor: 'transparent' },
+  headerShadowVisible: false,
+  headerBlurEffect: 'none',
+  scrollEdgeEffects: { top: 'hidden' },
   headerBackButtonDisplayMode: 'minimal',
 } as const;
 
@@ -22,6 +28,7 @@ type BackRoute = {
 
 const routeLabels: Record<string, string> = {
   MainTabs: 'Home',
+  Explore: 'Discover',
   Library: 'Watchlists',
   ReleaseAlerts: 'Release alerts',
   Notifications: 'Alerts',

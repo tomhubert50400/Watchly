@@ -17,7 +17,7 @@ const scrollableSheetFiles = [
   '../auth/SignInRequired.tsx',
   '../opinions/OpinionSheet.tsx',
   '../watchlists/AddToWatchlistControl.tsx',
-  '../watchlists/SharedWatchlistScreen.tsx',
+  '../watchlists/WatchlistMembersSheet.tsx',
 ];
 
 assert.equal(getBottomSheetDragOffset(64), 64, 'downward drag must follow the finger');

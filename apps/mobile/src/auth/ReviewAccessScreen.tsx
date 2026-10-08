@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScreenReveal } from '../components/ScreenReveal';
-import { useFocusedFieldVisibility } from '../components/useFocusedFieldVisibility';
+import { Screen } from '../components/Screen';
 import { Button } from '../components/Button';
 import { colors, radii, spacing } from '../design/tokens';
 import type { RootStackParamList } from '../navigation/types';
@@ -16,8 +16,6 @@ export function ReviewAccessScreen({ navigation }: NativeStackScreenProps<RootSt
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const busy = useRef(false);
-  const scrollRef = useRef<ScrollView>(null);
-  const visibility = useFocusedFieldVisibility(scrollRef);
   const passwordInput = useRef<TextInput>(null);
 
   const close = () => navigation.reset({
@@ -46,8 +44,7 @@ export function ReviewAccessScreen({ navigation }: NativeStackScreenProps<RootSt
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.root}>
-      <ScrollView ref={scrollRef} {...visibility} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <Screen title=""><View style={styles.content}>
         <Text style={styles.title}>Explore Watchly</Text>
         {currentUser ? (
           <ScreenReveal delay={100} style={styles.form}>
@@ -75,14 +72,12 @@ export function ReviewAccessScreen({ navigation }: NativeStackScreenProps<RootSt
         )}
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
         <Button label="Close" onPress={close} variant="ghost" disabled={submitting} />
-      </ScrollView>
-    </KeyboardAvoidingView>
+    </View></Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { backgroundColor: colors.background, flex: 1 },
-  content: { flexGrow: 1, gap: spacing.lg, padding: spacing.xl },
+  content: { flexGrow: 1, gap: spacing.lg },
   title: { color: colors.text, fontSize: 28, fontWeight: '700' },
   description: { color: colors.textMuted, fontSize: 15, lineHeight: 23 },
   form: { gap: spacing.md },

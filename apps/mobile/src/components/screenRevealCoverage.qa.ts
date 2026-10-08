@@ -22,6 +22,7 @@ routes.add('ExploreScreen');
 // These pages use an existing shared composition or their own onboarding transition.
 const shared: Record<string, string> = {
   PersonalWatchlistScreen: 'WatchlistSection',
+  SharedWatchlistScreen: 'WatchlistSection',
   ProfileScreen: 'ProfileBody',
   PublicProfileScreen: 'ProfileBody',
   OnboardingScreen: 'stepTrackTranslateX',

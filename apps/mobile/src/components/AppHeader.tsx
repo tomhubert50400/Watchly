@@ -3,10 +3,10 @@ import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { colors, spacing, typography } from '../design/tokens';
 import { resolveDynamicTypeLayout } from './dynamicTypeLayout';
 
-type AppHeaderProps = {
+export type AppHeaderProps = {
   eyebrow?: string;
   leading?: ReactNode;
-  title: string;
+  title: ReactNode;
   trailing?: ReactNode;
 };
 
@@ -17,7 +17,7 @@ export function AppHeader({ eyebrow, leading, title, trailing }: AppHeaderProps)
       {leading ? <View style={styles.leading}>{leading}</View> : null}
       <View style={styles.copy}>
         {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
-        {title ? (
+        {title ? (typeof title === 'string' ? (
           <Text
             accessibilityRole="header"
             maxFontSizeMultiplier={dynamicTypeLayout.headerTitleMaxFontSizeMultiplier}
@@ -26,7 +26,7 @@ export function AppHeader({ eyebrow, leading, title, trailing }: AppHeaderProps)
           >
             {title}
           </Text>
-        ) : null}
+        ) : title) : null}
       </View>
       {trailing ? <View style={[styles.trailing, dynamicTypeLayout.headerStacked && styles.trailingStacked]}>{trailing}</View> : null}
     </View>

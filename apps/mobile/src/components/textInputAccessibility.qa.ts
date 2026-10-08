@@ -7,7 +7,7 @@ import { resolveTextInputAccessibilityLabel } from './textInputAccessibility';
 
 const textInput = readFileSync(new URL('./TextInput.tsx', import.meta.url), 'utf8');
 
-for (const label of ['New list name', 'Vote title', 'Profile code']) {
+for (const label of ['New list name', 'Vote title', 'Search accounts']) {
   assert.equal(
     resolveTextInputAccessibilityLabel(label, undefined),
     label,

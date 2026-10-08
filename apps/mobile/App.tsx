@@ -33,6 +33,7 @@ import { appLinking } from './src/navigation/linking';
 import { ReviewAccessScreen } from './src/auth/ReviewAccessScreen';
 import { goBackIfFocused, detailBackOptions, needsCustomStackBackButton, resolvePreviousPageLabel, rootStackScreenOptions } from './src/navigation/stackConfig';
 import { StackBackButton } from './src/navigation/StackBackButton';
+import { NativeHeaderTitle } from './src/components/NativeHeaderTitle';
 import { mainTabs, MainTabName } from './src/navigation/tabConfig';
 import { RootStackParamList, RootTabParamList } from './src/navigation/types';
 import { NotificationsScreen } from './src/notifications/NotificationsScreen';
@@ -236,9 +237,8 @@ function AppNavigator() {
             ) : null,
           } : {}),
           headerShadowVisible: false,
-          headerStyle: { backgroundColor: colors.background },
           headerTintColor: colors.text,
-          headerTitleStyle: styles.stackHeaderTitle,
+          headerTitle: ({ children }) => <NativeHeaderTitle title={children} />,
         })}
       >
         {needsOnboarding ? (
@@ -254,12 +254,7 @@ function AppNavigator() {
             <Stack.Screen
               component={DiscoverResultsScreen}
               name="DiscoverResults"
-              options={({ route }) => ({
-                headerShown: Boolean(route.params.homeCategory),
-                headerStyle: { backgroundColor: 'transparent' },
-                headerTransparent: true,
-                title: '',
-              })}
+              options={{ title: '' }}
             />
             <Stack.Screen
               component={ProfileConnectionsScreen}
@@ -351,12 +346,6 @@ const styles = StyleSheet.create({
   appRoot: {
     backgroundColor: colors.background,
     flex: 1,
-  },
-  stackHeaderTitle: {
-    color: colors.text,
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: 0,
   },
   tabBar: {
     backgroundColor: 'transparent',

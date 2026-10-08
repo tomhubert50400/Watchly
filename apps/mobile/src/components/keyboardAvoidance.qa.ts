@@ -16,7 +16,7 @@ const bottomSheet = source('./BottomActionSheet.tsx');
 const textInput = source('./TextInput.tsx');
 const screen = source('./Screen.tsx');
 const watchlistPage = source('../watchlists/WatchlistDetailLayout.tsx');
-const sharedWatchlist = source('../watchlists/SharedWatchlistScreen.tsx');
+const watchlistMembers = source('../watchlists/WatchlistMembersSheet.tsx');
 const opinionSheet = source('../opinions/OpinionSheet.tsx');
 const addToWatchlist = source('../watchlists/AddToWatchlistControl.tsx');
 const watchlists = source('../watchlists/WatchlistsScreen.tsx');
@@ -49,9 +49,10 @@ assert.match(visibility, /Keyboard\.addListener\('keyboardDidChangeFrame', revea
   'keyboard size changes must trigger a fresh measurement');
 assert.match(visibility, /getNativeScrollRef\(\)\?\.measureInWindow/,
   'visibility must use the real viewport');
-for (const layout of [screen, watchlistPage, reviewAccess, bottomSheet]) {
+for (const layout of [screen, watchlistPage, bottomSheet]) {
   assert.match(layout, /useFocusedFieldVisibility\(/, 'every form container must reveal its focused input');
 }
+assert.match(reviewAccess, /<Screen /, 'The demo form must reuse Screen and its focused-field visibility handling');
 assert.equal(resolveFocusedFieldScrollOffset({ ...reviewFrame, viewportHeight: 500, keyboardTop: 460 }), 148,
   'native insets must clip the visible viewport at the keyboard');
 assert.match(report, /multiline\s+scrollEnabled/, 'long reports must scroll inside the editor');
@@ -169,18 +170,18 @@ assert.match(
   'the native watchlist name field must keep its text vertically centered',
 );
 assert.match(
-  sharedWatchlist,
-  /const memberForm = watchlist\.isOwner \? \([\s\S]*<TextInput[\s\S]*value=\{memberUserId\}[\s\S]*<Button[\s\S]*label="Add member"/,
-  'the member field and validation action must stay together',
+  watchlistMembers,
+  /<WatchlistSearchField[\s\S]*value=\{query\}[\s\S]*<Button compact label="Invite"/,
+  'account search and invitation actions must stay together',
 );
 assert.match(
-  sharedWatchlist,
-  /<BottomActionSheetScrollView[\s\S]*\{memberForm\}[\s\S]*<\/BottomActionSheetScrollView>/,
+  watchlistMembers,
+  /<BottomActionSheetScrollView[\s\S]*label="Search accounts"[\s\S]*<\/BottomActionSheetScrollView>/,
   'member controls must be inside the scrollable body',
 );
 assert.match(
-  sharedWatchlist,
-  /footer=\{isVoteComposerOpen \? \([\s\S]*label="Create vote"/,
+  readFileSync(new URL('../watchlists/CreateSharedVoteSheet.tsx', import.meta.url), 'utf8'),
+  /footer=\{<Button label="Create vote"/,
   'vote creation must stay above the keyboard',
 );
 assert.match(opinionSheet, /footer=\{sheetFooter\}/, 'opinion save actions must use the sheet footer');

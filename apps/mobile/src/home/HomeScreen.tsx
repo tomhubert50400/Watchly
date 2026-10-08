@@ -2,8 +2,10 @@ import { Fragment, memo, useCallback, useMemo } from 'react';
 import { CompositeNavigationProp, useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import Constants, { AppOwnership, ExecutionEnvironment } from 'expo-constants';
 import { Bell, CalendarDays } from 'lucide-react-native';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   CatalogueSearchItem,
   getEpisodeDetails,
@@ -71,6 +73,13 @@ export function getHomeNotificationsKey(userId: string) {
 
 export function HomeScreen() {
   const navigation = useNavigation<HomeNavigation>();
+  const insets = useSafeAreaInsets();
+  // Preserve Home's original native-tab spacing now that insets are managed by Screen.
+  const headerTopSpacing = Platform.OS === 'ios'
+    && Constants.appOwnership !== AppOwnership.Expo
+    && Constants.executionEnvironment !== ExecutionEnvironment.StoreClient
+    ? insets.top - 35
+    : -35;
   const {
     currentUser,
     firebaseIdToken,
@@ -148,7 +157,7 @@ export function HomeScreen() {
 
   if (catalogue.isInitialLoading && !catalogue.data) {
     return (
-      <Screen contentReady={Boolean(catalogue.data)} headerTopSpacing={-35} leading={<BrandWordmark height={44} />} title="">
+      <Screen contentReady={Boolean(catalogue.data)} headerTopSpacing={headerTopSpacing} leading={<BrandWordmark height={44} />} title="">
         <View style={styles.blockingState}>
           <LoadingState variant="detail" label="Loading home" />
         </View>
@@ -158,7 +167,7 @@ export function HomeScreen() {
 
   if (catalogue.error && !catalogue.data) {
     return (
-      <Screen contentReady={Boolean(catalogue.data)} headerTopSpacing={-35} leading={<BrandWordmark height={44} />} title="">
+      <Screen contentReady={Boolean(catalogue.data)} headerTopSpacing={headerTopSpacing} leading={<BrandWordmark height={44} />} title="">
         <EmptyState body={catalogue.error} title="Home is unavailable">
           <Button label="Retry" onPress={catalogue.retry} />
         </EmptyState>
@@ -169,7 +178,7 @@ export function HomeScreen() {
   return (
     <Screen contentReady={Boolean(catalogue.data)}
       background={atmosphereUrl ? <SpotlightAtmosphere imageUrl={atmosphereUrl} /> : null}
-      headerTopSpacing={-35}
+      headerTopSpacing={headerTopSpacing}
       horizontalPadding={false}
       refreshControl={
         <RefreshControl

@@ -1,5 +1,6 @@
 import { useScrollToTop } from '@react-navigation/native';
-import { PropsWithChildren, ReactNode, RefObject, useRef } from 'react';
+import { HeaderHeightContext } from '@react-navigation/elements';
+import { PropsWithChildren, ReactNode, RefObject, useContext, useRef } from 'react';
 import {
   GestureResponderHandlers,
   KeyboardAvoidingView,
@@ -12,12 +13,13 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing } from '../design/tokens';
 import { useFocusedFieldVisibility } from './useFocusedFieldVisibility';
-import { AppHeader } from './AppHeader';
+import { ScreenHeader } from './ScreenHeader';
 import { ScreenReveal } from './ScreenReveal';
 import { ScreenTopFade } from './ScreenTopFade';
 
 type ScreenProps = PropsWithChildren<{
   background?: ReactNode;
+  contentInsetAdjustmentBehavior?: ScrollViewProps['contentInsetAdjustmentBehavior'];
   contentReady?: boolean;
   eyebrow?: string;
   footer?: ReactNode;
@@ -41,6 +43,7 @@ type ScreenProps = PropsWithChildren<{
 export function Screen({
   background,
   children,
+  contentInsetAdjustmentBehavior,
   contentReady = true,
   eyebrow,
   footer,
@@ -63,7 +66,8 @@ export function Screen({
   const fallbackScrollViewRef = useRef<ScrollView>(null);
   const scrollViewRef = providedScrollViewRef ?? fallbackScrollViewRef;
   const insets = useSafeAreaInsets();
-  const topInset = safeAreaEdges.includes('top') ? insets.top : 0;
+  const nativeHeaderHeight = useContext(HeaderHeightContext) ?? 0;
+  const topInset = Math.max(nativeHeaderHeight, safeAreaEdges.includes('top') ? insets.top : 0);
   const visibility = useFocusedFieldVisibility(scrollViewRef, topInset);
   const sidePadding = typeof horizontalPadding === 'number'
     ? horizontalPadding
@@ -92,12 +96,12 @@ export function Screen({
         behavior={!useNativeKeyboardInsets && Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardAvoider}
       >
-        <ScreenTopFade enabled={topInset > 0} topInset={topInset}>
+        <ScreenTopFade enabled={topInset > 0} topInset={insets.top}>
           <ScrollView
             {...visibility}
             automaticallyAdjustContentInsets={topInset > 0 ? false : undefined}
             automaticallyAdjustKeyboardInsets={useNativeKeyboardInsets}
-            contentInsetAdjustmentBehavior={topInset > 0 ? 'never' : undefined}
+            contentInsetAdjustmentBehavior={topInset > 0 ? 'never' : contentInsetAdjustmentBehavior}
             contentContainerStyle={[
               styles.content,
               {
@@ -116,17 +120,15 @@ export function Screen({
             style={styles.container}
           >
             {hasHeader ? (
-              <ScreenReveal
+              <ScreenHeader
+                eyebrow={eyebrow} leading={leading} title={title} trailing={trailing}
                 style={[
-                  styles.headerShell,
                   headerTopSpacing !== undefined ? { marginTop: Math.min(0, headerTopSpacing), paddingTop: Math.max(0, headerTopSpacing) } : null,
                   background ? styles.transparentHeader : null,
                   headerMode === 'sticky' ? styles.stickyHeader : null,
                   { paddingHorizontal: chromePadding },
                 ]}
-              >
-                <AppHeader eyebrow={eyebrow} leading={leading} title={title} trailing={trailing} />
-              </ScreenReveal>
+              />
             ) : null}
             {statusBanner ? <View style={[styles.banner, { marginHorizontal: chromePadding }]}>{statusBanner}</View> : null}
             <ScreenReveal delay={50} ready={contentReady} style={[styles.body, { paddingHorizontal: sidePadding }]}>{children}</ScreenReveal>
@@ -166,11 +168,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-  },
-  headerShell: {
-    backgroundColor: colors.background,
-    paddingBottom: spacing.lg,
-    paddingTop: spacing.xl,
   },
   footer: {
     backgroundColor: colors.background,
