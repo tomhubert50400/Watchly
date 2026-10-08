@@ -1,0 +1,26 @@
+diff --git a/lib/module/unstable/NativeBottomTabView.native.js b/lib/module/unstable/NativeBottomTabView.native.js
+index 188a36d4b29671df4835f89aeb449dec0260173b..c046e2898af69b38eb4236f3fcac3e5dfcfc87ec 100644
+--- a/lib/module/unstable/NativeBottomTabView.native.js
++++ b/lib/module/unstable/NativeBottomTabView.native.js
+@@ -158,6 +158,8 @@ export function NativeBottomTabView({
+           focused: true
+         })) : undefined;
+         return /*#__PURE__*/_jsx(BottomTabsScreen, {
++          // Watchly screens already own their safe-area padding and scroll origin.
++          overrideScrollViewContentInsetAdjustmentBehavior: false,
+           onWillDisappear: () => onTransitionStart({
+             closing: true,
+             route
+diff --git a/src/unstable/NativeBottomTabView.native.tsx b/src/unstable/NativeBottomTabView.native.tsx
+index 6f194e633a915589c19e65f8d1ae41c4578bfc02..cf123a6f1c14788fb5e9d91d59af29a07057da92 100644
+--- a/src/unstable/NativeBottomTabView.native.tsx
++++ b/src/unstable/NativeBottomTabView.native.tsx
+@@ -237,6 +237,8 @@ export function NativeBottomTabView({ state, navigation, descriptors }: Props) {
+ 
+           return (
+             <BottomTabsScreen
++              // Watchly screens already own their safe-area padding and scroll origin.
++              overrideScrollViewContentInsetAdjustmentBehavior={false}
+               onWillDisappear={() =>
+                 onTransitionStart({ closing: true, route })
+               }

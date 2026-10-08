@@ -1,3 +1,159 @@
+diff --git a/android/src/main/java/com/swmansion/rnscreens/ScreenViewManager.kt b/android/src/main/java/com/swmansion/rnscreens/ScreenViewManager.kt
+index 0c169a39f2b61e7494b35066ec917ff1fe58b419..977f6ee3010e60b73682640cd37da5d2c86d6ff2 100644
+--- a/android/src/main/java/com/swmansion/rnscreens/ScreenViewManager.kt
++++ b/android/src/main/java/com/swmansion/rnscreens/ScreenViewManager.kt
+@@ -383,6 +383,9 @@ open class ScreenViewManager :
+         view.screenId = if (value.isNullOrEmpty()) null else value
+     }
+ 
++    @ReactProp(name = "topScrollEdgeEffect")
++    override fun setTopScrollEdgeEffect(view: Screen, value: String?) = Unit // iOS only
++
+     override fun getExportedCustomDirectEventTypeConstants(): MutableMap<String, Any> =
+         mutableMapOf(
+             ScreenDismissedEvent.EVENT_NAME to hashMapOf("registrationName" to "onDismissed"),
+diff --git a/android/src/paper/java/com/facebook/react/viewmanagers/RNSScreenManagerDelegate.java b/android/src/paper/java/com/facebook/react/viewmanagers/RNSScreenManagerDelegate.java
+index d814ca97dfb46792724cfa3aed190b1f01f06483..48b775d7c22933357ded45c23f90146c66080df2 100644
+--- a/android/src/paper/java/com/facebook/react/viewmanagers/RNSScreenManagerDelegate.java
++++ b/android/src/paper/java/com/facebook/react/viewmanagers/RNSScreenManagerDelegate.java
+@@ -28,6 +28,9 @@ public class RNSScreenManagerDelegate<T extends View, U extends BaseViewManager<
+       case "screenId":
+         mViewManager.setScreenId(view, value == null ? "" : (String) value);
+         break;
++      case "topScrollEdgeEffect":
++        mViewManager.setTopScrollEdgeEffect(view, (String) value);
++        break;
+       case "sheetAllowedDetents":
+         mViewManager.setSheetAllowedDetents(view, (ReadableArray) value);
+         break;
+diff --git a/android/src/paper/java/com/facebook/react/viewmanagers/RNSScreenManagerInterface.java b/android/src/paper/java/com/facebook/react/viewmanagers/RNSScreenManagerInterface.java
+index 555e05c6a048e437ab1f38cbd71363c10f747067..d5caba49f1d2973e01148d8374ae0a7819f00d5f 100644
+--- a/android/src/paper/java/com/facebook/react/viewmanagers/RNSScreenManagerInterface.java
++++ b/android/src/paper/java/com/facebook/react/viewmanagers/RNSScreenManagerInterface.java
+@@ -48,4 +48,5 @@ public interface RNSScreenManagerInterface<T extends View>  {
+   void setNavigationBarTranslucent(T view, boolean value);
+   void setNavigationBarHidden(T view, boolean value);
+   void setNativeBackButtonDismissalEnabled(T view, boolean value);
++  void setTopScrollEdgeEffect(T view, @Nullable String value);
+ }
+diff --git a/ios/RNSScreen.h b/ios/RNSScreen.h
+index 83085603e99877628515652149cfb5b4726f6b45..5212f706771f6a081161a861dfe57f85e044cef5 100644
+--- a/ios/RNSScreen.h
++++ b/ios/RNSScreen.h
+@@ -89,6 +89,8 @@ namespace react = facebook::react;
+ @property (nonatomic, copy) NSDictionary *gestureResponseDistance;
+ @property (nonatomic) int activityState;
+ @property (nonatomic, nullable) NSString *screenId;
++@property (nonatomic, copy, nullable) NSString *topScrollEdgeEffect;
++- (void)updateTopScrollEdgeEffect;
+ @property (weak, nonatomic) UIView<RNSScreenContainerDelegate> *reactSuperview;
+ 
+ #if !TARGET_OS_TV
+diff --git a/ios/RNSScreen.mm b/ios/RNSScreen.mm
+index b62a2e2ec7a47a724b1ae80252266a481e0ec178..f51c1ec9229ee9e17da1e25b79634554a5df9f1c 100644
+--- a/ios/RNSScreen.mm
++++ b/ios/RNSScreen.mm
+@@ -45,6 +45,24 @@ namespace react = facebook::react;
+ constexpr NSInteger SHEET_FIT_TO_CONTENTS = -1;
+ constexpr NSInteger SHEET_LARGEST_UNDIMMED_DETENT_NONE = -1;
+ 
++// Unlike the first-descendant finder, this also handles a background before the ScrollView.
++static UIScrollView *RNSFindContentScrollViewForEdgeEffect(UIView *view)
++{
++  if ([view isKindOfClass:UIScrollView.class]) {
++    return (UIScrollView *)view;
++  }
++  for (UIView *child in view.subviews) {
++    if ([child isKindOfClass:RNSScreenView.class] || [child isKindOfClass:RNSScreenStackHeaderConfig.class]) {
++      continue;
++    }
++    UIScrollView *scrollView = RNSFindContentScrollViewForEdgeEffect(child);
++    if (scrollView != nil) {
++      return scrollView;
++    }
++  }
++  return nil;
++}
++
+ struct ContentWrapperBox {
+   __weak RNSScreenContentWrapper *contentWrapper{nil};
+   float contentHeightErrata{0.f};
+@@ -1155,6 +1173,32 @@ RNS_IGNORE_SUPER_CALL_END
+ 
+ #pragma mark - RNSScrollViewBehaviorOverriding
+ 
++- (void)updateTopScrollEdgeEffect
++{
++#if RNS_IPHONE_OS_VERSION_AVAILABLE(26_0) && !TARGET_OS_TV && !TARGET_OS_VISION
++  if (@available(iOS 26, *)) {
++    if (_topScrollEdgeEffect == nil) {
++      return;
++    }
++    UIScrollView *scrollView = RNSFindContentScrollViewForEdgeEffect(self);
++    UIScrollEdgeEffect *effect = scrollView.topEdgeEffect;
++    UIScrollEdgeEffectStyle *style = UIScrollEdgeEffectStyle.automaticStyle;
++    if ([_topScrollEdgeEffect isEqualToString:@"soft"]) {
++      style = UIScrollEdgeEffectStyle.softStyle;
++    } else if ([_topScrollEdgeEffect isEqualToString:@"hard"]) {
++      style = UIScrollEdgeEffectStyle.hardStyle;
++    }
++    BOOL hidden = [_topScrollEdgeEffect isEqualToString:@"hidden"];
++    if (effect.hidden != hidden) {
++      effect.hidden = hidden;
++    }
++    if (effect.style != style) {
++      effect.style = style;
++    }
++  }
++#endif
++}
++
+ - (BOOL)shouldOverrideScrollViewContentInsetAdjustmentBehavior
+ {
+   // RNSScreenView does not have a property to control this behavior.
+@@ -1250,6 +1294,10 @@ RNS_IGNORE_SUPER_CALL_END
+ 
+   [self setFullScreenSwipeEnabled:newScreenProps.fullScreenSwipeEnabled];
+ 
++  if (newScreenProps.topScrollEdgeEffect != oldScreenProps.topScrollEdgeEffect) {
++    self.topScrollEdgeEffect = RCTNSStringFromStringNilIfEmpty(newScreenProps.topScrollEdgeEffect);
++  }
++
+   [self setFullScreenSwipeShadowEnabled:newScreenProps.fullScreenSwipeShadowEnabled];
+ 
+   [self setGestureEnabled:newScreenProps.gestureEnabled];
+@@ -1357,6 +1405,7 @@ RNS_IGNORE_SUPER_CALL_END
+ - (void)finalizeUpdates:(RNComponentViewUpdateMask)updateMask
+ {
+   [super finalizeUpdates:updateMask];
++  [self updateTopScrollEdgeEffect];
+ #if !TARGET_OS_TV && !TARGET_OS_VISION
+   if (updateMask & RNComponentViewUpdateMaskProps) {
+     [self updateFormSheetPresentationStyle];
+@@ -1381,6 +1430,7 @@ RNS_IGNORE_SUPER_CALL_END
+ - (void)didSetProps:(NSArray<NSString *> *)changedProps
+ {
+   [super didSetProps:changedProps];
++  [self updateTopScrollEdgeEffect];
+ #if !TARGET_OS_TV && !TARGET_OS_VISION
+   if (self.stackPresentation == RNSScreenStackPresentationFormSheet) {
+     [self updateFormSheetPresentationStyle];
+@@ -1563,6 +1613,7 @@ Class<RCTComponentViewProtocol> RNSScreenCls(void)
+ - (void)viewDidLayoutSubviews
+ {
+   [super viewDidLayoutSubviews];
++  [self.screenView updateTopScrollEdgeEffect];
+ 
+   // The below code makes the screen view adapt dimensions provided by the system. We take these
+   // into account only when the view is mounted under RNSNavigationController in which case system
+@@ -2053,6 +2104,7 @@ RCT_EXPORT_VIEW_PROPERTY(stackAnimation, RNSScreenStackAnimation)
+ RCT_EXPORT_VIEW_PROPERTY(swipeDirection, RNSScreenSwipeDirection)
+ RCT_EXPORT_VIEW_PROPERTY(transitionDuration, NSNumber)
+ RCT_EXPORT_VIEW_PROPERTY(screenId, NSString);
++RCT_EXPORT_VIEW_PROPERTY(topScrollEdgeEffect, NSString);
+ 
+ RCT_EXPORT_VIEW_PROPERTY(onAppear, RCTDirectEventBlock);
+ RCT_EXPORT_VIEW_PROPERTY(onDisappear, RCTDirectEventBlock);
 diff --git a/ios/RNSScreenStackHeaderConfig.mm b/ios/RNSScreenStackHeaderConfig.mm
 index 57ff861b84b6b85e5c9e91775e1638a31ffd68ab..2166c4167d283cafb8d9991958636839cd6b3c0f 100644
 --- a/ios/RNSScreenStackHeaderConfig.mm
@@ -198,6 +354,18 @@ index b4e3c15d85691b493ab75284485b62b917067e84..3216922635da74fa9f081e87f104c4eb
      [self layoutNavigationBar];
    }
  }
+diff --git a/src/components/Screen.tsx b/src/components/Screen.tsx
+index d23d6f39b2ab1e8bff4d8597222a84cd71df0f00..74b387e9f3b0c3594a84c85800126edfec09b230 100644
+--- a/src/components/Screen.tsx
++++ b/src/components/Screen.tsx
+@@ -189,6 +189,7 @@ export const InnerScreen = React.forwardRef<View, ScreenProps>(
+         <DelayedFreeze freeze={freeze}>
+           <AnimatedScreen
+             {...props}
++            topScrollEdgeEffect={props.scrollEdgeEffects?.top ?? 'automatic'}
+             /**
+              * This messy override is to conform NativeProps used by codegen and
+              * our Public API. To see reasoning go to this PR:
 diff --git a/src/components/bottom-tabs/BottomTabsScreen.tsx b/src/components/bottom-tabs/BottomTabsScreen.tsx
 index ce02d94844d248fe4c0f607392d409d603a77c9b..33b2ef7d5335bcb9d7fbe6c6519c141c8bb31883 100644
 --- a/src/components/bottom-tabs/BottomTabsScreen.tsx
@@ -267,3 +435,28 @@ index ce02d94844d248fe4c0f607392d409d603a77c9b..33b2ef7d5335bcb9d7fbe6c6519c141c
      };
    } else {
      // iOS-specific: SFSymbol, image as a template usage
+diff --git a/src/fabric/ScreenNativeComponent.ts b/src/fabric/ScreenNativeComponent.ts
+index 177b8eea84e7998f86ef67f097e48c079bd8b933..3b09b9183b9f4bc31c0dda81c5a392c16a4e6c44 100644
+--- a/src/fabric/ScreenNativeComponent.ts
++++ b/src/fabric/ScreenNativeComponent.ts
+@@ -80,6 +80,7 @@ export interface NativeProps extends ViewProps {
+   onHeaderBackButtonClicked?: DirectEventHandler<ScreenEvent>;
+   onSheetDetentChanged?: DirectEventHandler<SheetDetentChangedEvent>;
+   screenId?: WithDefault<string, ''>;
++  topScrollEdgeEffect?: WithDefault<string, 'automatic'>;
+   sheetAllowedDetents?: number[];
+   sheetLargestUndimmedDetent?: WithDefault<Int32, -1>;
+   sheetGrabberVisible?: WithDefault<boolean, false>;
+diff --git a/src/types.tsx b/src/types.tsx
+index dcd6aded6708ab214958d162430fe1992e9e5e06..a5055129d8daa130f144e989cec224a1d3c48559 100644
+--- a/src/types.tsx
++++ b/src/types.tsx
+@@ -107,6 +107,8 @@ export type SearchBarPlacement =
+   | 'integratedCentered';
+ 
+ export interface ScreenProps extends ViewProps {
++  /** Top-edge portion of the iOS 26 scrollEdgeEffects API, backported for Watchly. */
++  scrollEdgeEffects?: { top?: 'automatic' | 'hard' | 'soft' | 'hidden' };
+   active?: 0 | 1 | Animated.AnimatedInterpolation<number>;
+   activityState?: 0 | 1 | 2 | Animated.AnimatedInterpolation<number>;
+   /**
