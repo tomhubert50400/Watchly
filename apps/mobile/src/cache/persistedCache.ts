@@ -85,6 +85,12 @@ export async function clearPrivateCacheForUser(
   }
 }
 
+export async function removePersistedCachesWithPrefix(prefix: string, storage: PersistedCacheStorage = defaultStorage) {
+  validateCacheKey(prefix);
+  const keys = (await storage.getAllKeys()).filter((key) => key.startsWith(prefix));
+  if (keys.length) await storage.multiRemove(keys);
+}
+
 function getPrivateCachePrefix(userId: string) {
   if (!userId || userId.includes(':')) {
     throw new Error('A non-empty user ID without colons is required to clear private cache data.');

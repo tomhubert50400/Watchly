@@ -1,8 +1,11 @@
 // Node types are intentionally not part of the Expo runtime TypeScript configuration.
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import { readFileSync } from 'node:fs';
+// @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
+import { mock } from 'node:test';
 import { ApiError, apiGet, apiPostFormData } from './client';
 import { analyzeDataImport, cancelDataImport, confirmDataImport, previewDataImport, startBackgroundImport } from './imports';
+import { listNotifications, listReleaseCalendar } from './notifications';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
@@ -194,6 +197,7 @@ async function main() {
       missingRouteError.message === 'Something went wrong on the server. Try again.',
       'Missing API routes must not expose framework messages.',
     );
+    await verifyCalendarTimeout();
     await verifyImportBatches();
     await verifyImportAnalysis();
   } finally {
@@ -201,6 +205,43 @@ async function main() {
   }
 
   console.log('Mobile API client QA passed.');
+}
+
+async function verifyCalendarTimeout() {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  let respond: (response: Response) => void = () => {};
+  let signal: AbortSignal | null | undefined;
+  globalThis.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => {
+    signal = init?.signal;
+    return new Promise<Response>((resolve, reject) => {
+      respond = resolve;
+      signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+    });
+  }) as typeof fetch;
+
+  try {
+    const calendar = listReleaseCalendar('token').catch((error: unknown) => error);
+    mock.timers.tick(20_000);
+    assert(!signal?.aborted, 'Calendar must allow synchronization to finish beyond the default 15 seconds.');
+    respond(new Response(JSON.stringify({ items: [] }), { status: 200 }));
+    const result = await calendar;
+    assert(!(result instanceof Error), 'A calendar response after 20 seconds must succeed.');
+    mock.timers.tick(60_000);
+    assert(!signal?.aborted, 'A completed calendar request must clear its timeout.');
+
+    const stalled = listReleaseCalendar('token').catch((error: unknown) => error);
+    mock.timers.tick(59_999);
+    assert(!signal?.aborted, 'Calendar must keep the full synchronization budget.');
+    mock.timers.tick(1);
+    const error = await stalled;
+    assert(error instanceof ApiError && error.message === 'API request timed out.', 'Calendar must still time out at 60 seconds.');
+
+    const notifications = listNotifications('token').catch((error: unknown) => error);
+    mock.timers.tick(15_000);
+    assert(await notifications instanceof ApiError, 'Other notification requests must retain the default timeout.');
+  } finally {
+    mock.timers.reset();
+  }
 }
 
 async function verifyImportBatches() {

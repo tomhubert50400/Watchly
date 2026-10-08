@@ -15,10 +15,15 @@ export function getProfileHistory(token: string, userId: string, preview = false
   return apiGet<ProfileHistory>(`/profile/users/${encodeURIComponent(userId)}/history${preview ? '?preview=true' : ''}`, { token });
 }
 
+export function removeProfileTitle(token: string, contentType: 'movie' | 'series', tmdbId: number) {
+  return apiDelete<{ deleted: true }>(`/profile/me/titles/${contentType}/${tmdbId}`, { token });
+}
+
 export type PrivacyVisibility = 'public' | 'private';
 export type SharedWatchlistVisibility = 'members' | 'private';
 
 export type ProfilePrivacy = {
+  allowWatchlistInvitesFromAnyone?: boolean;
   episodeProgressVisibility: PrivacyVisibility;
   profileVisibility: PrivacyVisibility;
   ratingsVisibility: PrivacyVisibility;
@@ -200,6 +205,7 @@ export type UpdateProfileInput = {
 };
 
 export type UpdatePrivacyInput = {
+  allowWatchlistInvitesFromAnyone?: boolean;
   episodeProgressVisibility?: PrivacyVisibility;
   profileVisibility?: PrivacyVisibility;
   ratingsVisibility?: PrivacyVisibility;

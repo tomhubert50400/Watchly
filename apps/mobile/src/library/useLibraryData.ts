@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { getMovieDetails, getSeriesDetails, type MovieDetails, type SeriesDetails } from '../api/catalogue';
 import { listReleaseAlerts } from '../api/notifications';
 import { listSeriesProgressSummaries } from '../api/progress';
@@ -11,6 +11,7 @@ import { getPrivateCacheKey } from '../cache/persistedCache';
 import { useCachedResource } from '../cache/useCachedResource';
 import { useCatalogueCache } from '../catalogue/CatalogueCacheContext';
 import { useUserDataRevision } from '../sync/userDataEvents';
+import { isTitleRemoved, useTitleRemovalUpdates } from '../sync/titleRemovalUpdates';
 import { createRequestCoalescer, takeHydrationItems } from '../watchlists/requestBoundaries';
 import { loadWatchlistPreviewUrls } from '../watchlists/watchlistPreview';
 import { calculateResumeEpisode, LibraryItemBase, mapLibrarySourceErrors, mergeLibraryItems, shouldShowTrackedTitle } from './libraryModel';
@@ -25,6 +26,7 @@ export type LibraryMediaItem = LibraryItemBase & {
   title: string;
 };
 export type LibraryListItem = {
+  members?: { id: string; displayName: string | null; avatarUrl: string | null }[];
   id: string; isOwner: boolean; itemCount: number; key: string; kind: 'personal' | 'shared';
   isPlanned?: boolean;
   showOnHome?: boolean;
@@ -32,7 +34,7 @@ export type LibraryListItem = {
   previewItems?: WatchlistPreviewItem[];
 };
 export type WatchlistPreviewItem = { contentType: 'movie' | 'series'; tmdbId: number; title: string; posterUrl: string | null };
-export type LibraryData = { items: LibraryMediaItem[]; lists: LibraryListItem[]; partialError: string | null };
+export type LibraryData = { items: LibraryMediaItem[]; lists: LibraryListItem[]; partialError: string | null; loadedAt?: number };
 type CatalogueLoaders = {
   loadMovie: (tmdbId: number) => Promise<MovieDetails>;
   loadSeries: (tmdbId: number) => Promise<SeriesDetails>;
@@ -60,16 +62,33 @@ export function useLibraryData(enabled = true) {
   const { refreshMovie, refreshSeries } = useCatalogueCache();
   const key = getLibraryResourceKey(currentUser?.id ?? 'visitor');
   const load = useCallback(async (cached?: LibraryData): Promise<LibraryData> => {
+    const loadedAt = Date.now();
     void libraryRevision;
     if (!currentUser) throw new Error('Sign in to load your library.');
     const token = await getFirebaseIdToken();
     if (!token) throw new Error('Sign in again to load your library.');
-    return loadLibraryData(token, cached, {
+    const data = await loadLibraryData(token, cached, {
       loadMovie: refreshMovie,
       loadSeries: refreshSeries,
     });
+    return { ...data, loadedAt: data.partialError ? cached?.loadedAt ?? 0 : loadedAt };
   }, [currentUser, getFirebaseIdToken, key, libraryRevision, refreshMovie, refreshSeries]);
-  return { key, ...useCachedResource({ enabled: enabled && Boolean(currentUser), key, load }) };
+  const resource = useCachedResource({ enabled: enabled && Boolean(currentUser), key, load });
+  const removalRevision = useTitleRemovalUpdates();
+  const data = useMemo(() => {
+    void removalRevision;
+    return resource.data ? { ...resource.data, items: resource.data.items.filter((item) =>
+      !isTitleRemoved(currentUser?.id, 'profile', item, resource.data?.loadedAt)),
+    lists: resource.data.lists.map((list) => {
+      if (!list.previewItems) return list;
+      const previewItems = list.previewItems.filter((item) =>
+        !isTitleRemoved(currentUser?.id, `${list.kind}:${list.id}`, item, resource.data?.loadedAt, list.isPlanned));
+      const removedCount = list.previewItems.length - previewItems.length;
+      return removedCount ? { ...list, previewItems, posterUrls: previewItems.map((item) => item.posterUrl),
+        itemCount: Math.max(0, list.itemCount - removedCount) } : list;
+    }) } : resource.data;
+  }, [resource.data, currentUser?.id, removalRevision]);
+  return { key, ...resource, data };
 }
 
 export async function loadLibraryData(
@@ -111,7 +130,7 @@ export async function loadLibraryData(
   } else {
     const summaries: Omit<LibraryListItem, 'posterUrls'>[] = [
       ...(personal.status === 'fulfilled' ? personal.value.items : []).map((list) => ({ id: list.id, isOwner: true, isPlanned: list.isPlanned, showOnHome: list.showOnHome ?? true, itemCount: list.itemCount, key: `personal:${list.id}`, kind: 'personal' as const, memberCount: null, name: list.name, updatedAt: list.updatedAt })),
-      ...(shared.status === 'fulfilled' ? shared.value.items : []).map((list) => ({ id: list.id, isOwner: list.isOwner, itemCount: list.itemCount, key: `shared:${list.id}`, kind: 'shared' as const, memberCount: list.memberCount, name: list.name, updatedAt: list.updatedAt })),
+      ...(shared.status === 'fulfilled' ? shared.value.items : []).map((list) => ({ id: list.id, isOwner: list.isOwner, itemCount: list.itemCount, key: `shared:${list.id}`, kind: 'shared' as const, members: list.members, memberCount: list.memberCount, name: list.name, updatedAt: list.updatedAt })),
     ].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     const previewKeys = new Set(
       takeHydrationItems(summaries, MAX_LIBRARY_LIST_PREVIEWS).map((list) => list.key),

@@ -16,6 +16,7 @@ type UseCachedResourceOptions<T> = {
   key: string;
   load: (cached?: T) => Promise<T>;
   enabled?: boolean;
+  paused?: boolean;
   staleTimeMs?: number;
 };
 
@@ -113,6 +114,7 @@ export function useCachedResource<T>({
   key,
   load,
   enabled = true,
+  paused = false,
   staleTimeMs = DEFAULT_STALE_TIME_MS,
 }: UseCachedResourceOptions<T>): UseCachedResourceResult<T> {
   const [state, dispatch] = useReducer(
@@ -164,6 +166,11 @@ export function useCachedResource<T>({
       dispatch(memoryEntry
         ? { type: 'cacheLoaded', data: memoryEntry.data, savedAt: memoryEntry.savedAt }
         : { type: 'reset' });
+    }
+
+    if (paused) {
+      requestVersions.invalidate();
+      return;
     }
 
     if (
@@ -234,7 +241,7 @@ export function useCachedResource<T>({
     return () => {
       requestVersions.invalidate();
     };
-  }, [enabled, key, load, retryRevision, revalidateRevision, staleTimeMs]);
+  }, [enabled, key, load, paused, retryRevision, revalidateRevision, staleTimeMs]);
 
   if (!enabled || keyChangedDuringRender) {
     const memoryState = enabled ? createCachedResourceStateFromMemory<T>(key) : null;
@@ -247,6 +254,7 @@ export function useCachedResource<T>({
 
   return {
     ...state,
+    ...(paused ? { isInitialLoading: false, isRefreshing: false } : {}),
     revalidate,
     retry,
   };
