@@ -1,6 +1,6 @@
 import type { LibraryListItem, WatchlistPreviewItem } from '../library/useLibraryData';
 
-export type HomeWatchlistItem = WatchlistPreviewItem & { listId: string; listKind: 'personal' | 'shared'; listName: string };
+export type HomeWatchlistItem = WatchlistPreviewItem & { listId: string; listKind: 'personal' | 'shared'; listName: string; isPlanned: boolean };
 export const HOME_WATCHLIST_ITEM_LIMIT = 12;
 
 export function selectHomeWatchlistItems(lists: LibraryListItem[]): HomeWatchlistItem[] {
@@ -15,7 +15,7 @@ export function selectHomeWatchlistItems(lists: LibraryListItem[]): HomeWatchlis
       const key = `${item.contentType}:${item.tmdbId}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      result.push({ ...item, listId: list.id, listKind: list.kind, listName: list.name });
+      result.push({ ...item, listId: list.id, listKind: list.kind, listName: list.name, isPlanned: Boolean(list.isPlanned) });
       if (result.length === HOME_WATCHLIST_ITEM_LIMIT) return result;
     }
   }

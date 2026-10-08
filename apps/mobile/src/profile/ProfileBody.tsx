@@ -25,6 +25,7 @@ type ProfileMediaPreviews = {
 
 export function ProfileBody({
   avatarLoading = false,
+  canRemoveTitles = false,
   avatarUrl,
   displayName,
   emptyActivityAction,
@@ -56,6 +57,7 @@ export function ProfileBody({
   statsTitle,
 }: {
   avatarLoading?: boolean;
+  canRemoveTitles?: boolean;
   avatarUrl: string | null;
   displayName: string | null;
   emptyActivityAction?: ReactNode;
@@ -128,6 +130,7 @@ export function ProfileBody({
           <ScreenReveal delay={150}><ProfileMediaRail
             emptyLabel={mediaEmptyLabels.series}
             items={mediaPreviews.series}
+            canRemoveTitles={canRemoveTitles}
             onOpen={onOpenMediaItem}
             onViewAll={() => onViewAllMedia('series')}
             title="Series"
@@ -135,6 +138,7 @@ export function ProfileBody({
           <ScreenReveal delay={200}><ProfileMediaRail
             emptyLabel={mediaEmptyLabels.movies}
             items={mediaPreviews.movies}
+            canRemoveTitles={canRemoveTitles}
             onOpen={onOpenMediaItem}
             onViewAll={() => onViewAllMedia('movies')}
             title="Movies"
@@ -142,6 +146,7 @@ export function ProfileBody({
           <ScreenReveal delay={200}><ProfileMediaRail
             emptyLabel={mediaEmptyLabels.favorites}
             items={mediaPreviews.favorites}
+            canRemoveTitles={canRemoveTitles}
             onEdit={onEditFavorites}
             onOpen={onOpenMediaItem}
             onViewAll={() => onViewAllMedia('favorites')}
@@ -150,6 +155,7 @@ export function ProfileBody({
           <ScreenReveal delay={200}><ProfileMediaRail
             emptyLabel="No planned titles yet."
             items={mediaPreviews.planned}
+            canRemoveTitles={canRemoveTitles}
             onOpen={onOpenMediaItem}
             onViewAll={() => onViewAllMedia('planned')}
             title="Planned"

@@ -10,6 +10,7 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
+import { UserAvatar } from '../components/UserAvatar';
 import { colors, radii, shadows, spacing } from '../design/tokens';
 import type { LibraryListItem } from './useLibraryData';
 
@@ -22,12 +23,16 @@ export function WatchlistRail({ lists, onOpen }: { lists: LibraryListItem[]; onO
         name={list.name}
         onPress={() => onOpen(list)}
         posterUrls={list.posterUrls}
+        members={list.kind === 'shared' ? list.members : undefined}
+        memberCount={list.memberCount ?? undefined}
       />
     ))}
   </ScrollView></HorizontalScrollFade>;
 }
 
 type WatchlistCardProps = {
+  members?: LibraryListItem['members'];
+  memberCount?: number;
   accessibilityHint?: string;
   accessibilityLabel?: string;
   blendId: string;
@@ -41,6 +46,8 @@ type WatchlistCardProps = {
 };
 
 export function WatchlistCard({
+  members,
+  memberCount,
   accessibilityHint,
   accessibilityLabel,
   blendId,
@@ -77,6 +84,11 @@ export function WatchlistCard({
         </Defs>
         <Rect width="100%" height="100%" fill={`url(#${blendId}-shade)`} />
       </Svg>
+      {members?.length ? <View pointerEvents="none" style={styles.members}>
+        {members.slice(0, 5).map((member) => <UserAvatar key={member.id} size={28} avatarUrl={member.avatarUrl}
+          displayName={member.displayName} style={{ opacity: 1, backgroundColor: colors.panelElevated, borderWidth: 2, borderColor: colors.background }} />)}
+        {(memberCount ?? 0) > 5 ? <Text style={styles.memberCount}>+{memberCount! - 5}</Text> : null}
+      </View> : null}
       <View style={styles.caption}>
         <Text numberOfLines={2} style={styles.title}>{name}</Text>
         {subtitle ? <Text numberOfLines={2} style={styles.subtitle}>{subtitle}</Text> : null}
@@ -202,6 +214,8 @@ function getArtworkLayers(count: number) {
 }
 
 const styles = StyleSheet.create({
+  members: { position: 'absolute', left: spacing.sm, top: spacing.sm, flexDirection: 'row', alignItems: 'center', gap: 5, opacity: 1 },
+  memberCount: { color: colors.text, fontSize: 12, paddingHorizontal: 6 },
   artwork: {
     ...StyleSheet.absoluteFillObject,
   },
@@ -237,7 +251,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.panelElevated,
   },
   pressed: {
-    opacity: 0.8,
+    transform: [{ scale: 0.99 }],
   },
   rail: {
     gap: spacing.sm,

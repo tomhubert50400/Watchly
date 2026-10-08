@@ -33,6 +33,11 @@ const planned = {
   })),
 };
 assert.equal(selectHomeWatchlistItems([planned]).length, 12, 'One large Planned list can fill all 12 Home slots');
+assert(selectHomeWatchlistItems([planned]).every((item) => item.isPlanned), 'Home actions retain the Planned source flag');
+assert(selectHomeWatchlistItems([personal, shared]).every((item) => !item.isPlanned), 'Other sources never imply profile removal');
+const retainedDuplicate = selectHomeWatchlistItems([{ ...planned, previewItems: [] }, duplicate]);
+assert.equal(retainedDuplicate[0]?.listId, duplicate.id, 'Removing Planned membership preserves the title in another list');
+assert.equal(retainedDuplicate[0]?.isPlanned, false, 'The replacement card uses its own source removal rules');
 assert.equal(selectHomeWatchlistItems([planned, shared]).length, 12, 'Multiple lists remain capped at 12 unique titles');
 assert.deepEqual(selectHomeWatchlistItems([{ ...planned, showOnHome: false }]), [], 'Planned respects Home exclusion');
 

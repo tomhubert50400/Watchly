@@ -6,6 +6,7 @@ import { SectionHeader } from '../components/SectionHeader';
 import { colors, spacing, typography } from '../design/tokens';
 import type { LibraryMediaItem } from '../library/useLibraryData';
 import { getProfileMediaStatus } from './profileMediaModel';
+import { ProfileTitleMenu } from './ProfileTitleMenu';
 import {
   getProfileMediaDisplayTitle,
   useHydratedProfileMediaItem,
@@ -20,6 +21,7 @@ type ProfileMediaRailProps = {
   onEdit?: () => void;
   onViewAll?: () => void;
   title: string;
+  canRemoveTitles?: boolean;
 };
 
 export function ProfileMediaRail({
@@ -29,6 +31,7 @@ export function ProfileMediaRail({
   onEdit,
   onViewAll,
   title,
+  canRemoveTitles = false,
 }: ProfileMediaRailProps) {
   return (
     <View style={styles.section}>
@@ -62,7 +65,7 @@ export function ProfileMediaRail({
           keyExtractor={(item) => item.key}
           maxToRenderPerBatch={4}
           renderItem={({ item }) => (
-            <ProfileMediaPoster item={item} onOpen={onOpen} />
+            <ProfileMediaPoster canRemoveTitles={canRemoveTitles} item={item} onOpen={onOpen} />
           )}
           showsHorizontalScrollIndicator={false}
           windowSize={3}
@@ -78,21 +81,24 @@ export const ProfileMediaPoster = memo(function ProfileMediaPoster({
   item,
   onOpen,
   width = PROFILE_MEDIA_CARD_WIDTH,
+  canRemoveTitles = false,
 }: {
   item: LibraryMediaItem;
   onOpen: (item: LibraryMediaItem) => void;
   width?: number;
+  canRemoveTitles?: boolean;
 }) {
   const hydratedItem = useHydratedProfileMediaItem(item);
   const meta = getMediaMeta(hydratedItem);
   const title = getProfileMediaDisplayTitle(hydratedItem);
 
   return (
-    <Pressable
-      accessibilityLabel={`Open ${title}, ${meta}`}
-      accessibilityRole="button"
-      onPress={() => onOpen(hydratedItem)}
-      style={({ pressed }) => [{ width }, pressed ? styles.cardPressed : null]}
+    <ProfileTitleMenu
+      enabled={canRemoveTitles}
+      contentType={item.contentType}
+      label={`Open ${title}, ${meta}`}
+      onOpen={() => onOpen(hydratedItem)}
+      title={title} tmdbId={item.tmdbId} width={width}
     >
       <MediaPoster
         accessibilityLabel={`${title} poster`}
@@ -101,7 +107,7 @@ export const ProfileMediaPoster = memo(function ProfileMediaPoster({
       />
       <Text numberOfLines={1} style={styles.title}>{title}</Text>
       <Text numberOfLines={1} style={styles.meta}>{meta}</Text>
-    </Pressable>
+    </ProfileTitleMenu>
   );
 });
 
@@ -132,10 +138,6 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1 },
   edit: { minHeight: 44, justifyContent: 'center' },
   editLabel: { ...typography.meta, color: colors.accentText },
-  cardPressed: {
-    opacity: 0.78,
-    transform: [{ scale: 0.98 }],
-  },
   empty: {
     ...typography.body,
     color: colors.textSubtle,

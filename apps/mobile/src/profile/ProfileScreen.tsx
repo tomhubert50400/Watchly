@@ -53,6 +53,7 @@ import { chooseAndUploadProfileAvatar, copyRemoteProfileAvatar } from './uploadP
 import { useHydratedProfileMediaItems } from './useHydratedProfileMediaItems';
 import { useProfileBackdropArtwork } from './useProfileBackdropArtwork';
 import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
+import { isTitleRemoved, useTitleRemovalUpdates } from '../sync/titleRemovalUpdates';
 import {
   hydrateProfileOpinions,
   type HydratedProfileOpinion,
@@ -60,6 +61,7 @@ import {
 
 type ProfileNavigation = NativeStackNavigationProp<RootStackParamList>;
 export type CachedProfile = Omit<ProfileModel, 'opinions'> & {
+  loadedAt?: number;
   opinions: HydratedProfileOpinion[];
   viewingStats: ViewingStats;
 };
@@ -74,6 +76,7 @@ export async function loadProfileData(
   loadSeries: (tmdbId: number) => Promise<SeriesDetails>,
   cached?: CachedProfile,
 ): Promise<CachedProfile> {
+  const loadedAt = Date.now();
   const [profile, response, viewingStats] = await Promise.all([
     getProfile(token),
     getOwnProfileOpinions(token),
@@ -87,7 +90,7 @@ export async function loadProfileData(
     loadSeries,
   );
 
-  return { ...model, opinions, viewingStats: hydratedViewingStats };
+  return { ...model, opinions, viewingStats: hydratedViewingStats, loadedAt };
 }
 
 export function ProfileScreen() {
@@ -137,7 +140,27 @@ export function ProfileScreen() {
       resource.revalidate();
     }
   }, [firebaseIdToken, resource.revalidate, userId]));
-  const profile = resource.data;
+  const removalRevision = useTitleRemovalUpdates();
+  const profile = useMemo(() => {
+    void removalRevision;
+    const data = resource.data;
+    if (!data) return data;
+    const removed = (item: { contentType: 'movie' | 'series'; tmdbId: number }) =>
+      isTitleRemoved(userId, 'profile', item, data.loadedAt);
+    return { ...data,
+      profileBackdrop: data.profileBackdrop && removed(data.profileBackdrop) ? null : data.profileBackdrop,
+      opinions: data.opinions.filter(({ content }) => !removed(content.contentType === 'movie'
+        ? content : { contentType: 'series', tmdbId: content.seriesTmdbId })),
+      viewingStats: { ...data.viewingStats, highlights: data.viewingStats.highlights.filter((item) => !removed(item)) },
+    };
+  }, [resource.data, userId, removalRevision]);
+  useEffect(() => {
+    if (profile && backdropOverride !== undefined
+      && profile.profileBackdrop?.contentType === backdropOverride?.contentType
+      && profile.profileBackdrop?.tmdbId === backdropOverride?.tmdbId) {
+      setBackdropOverride(undefined);
+    }
+  }, [profile, backdropOverride]);
   const loadedMediaItems = mediaResource.data?.items ?? EMPTY_PROFILE_MEDIA_ITEMS;
   const mediaItems = useMemo(() => {
     if (!favoriteOrder || favoriteOrder.userId !== userId) return loadedMediaItems;
@@ -212,9 +235,11 @@ export function ProfileScreen() {
     ? backdropCandidates
     : EMPTY_PROFILE_MEDIA_ITEMS;
   const hydratedBackdropCandidates = useHydratedProfileMediaItems(backdropPickerSources);
-  const profileBackdrop = backdropOverride === undefined
+  const selectedBackdrop = backdropOverride === undefined
     ? profile?.profileBackdrop ?? null
     : backdropOverride;
+  const profileBackdrop = selectedBackdrop && isTitleRemoved(userId, 'profile', selectedBackdrop, resource.data?.loadedAt)
+    ? null : selectedBackdrop;
   const selectedBackdropUrl = useProfileBackdropArtwork(profileBackdrop);
   const atmosphereUrl = selectedBackdropUrl
     ?? profile?.viewingStats.highlights[0]?.artworkUrl
@@ -467,6 +492,7 @@ export function ProfileScreen() {
               notifyUserDataChanged('profile');
               return updated.items;
             }} />}
+          canRemoveTitles
           recentActivity={<RecentViewingActivity mediaItems={[...hydratedPreviewItems, ...mediaItems]} userId={profile.userId} owner />}
           avatarLoading={avatarStatus === 'saving'}
           avatarUrl={avatarUrl}

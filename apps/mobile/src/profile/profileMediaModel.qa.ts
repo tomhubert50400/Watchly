@@ -346,12 +346,12 @@ const allTimeRouteSource = appSource.slice(
   appSource.indexOf('<Stack.Screen', allTimeComponentIndex + 1),
 );
 assert(
-  appSource.includes('headerTransparent: true'),
-  'Profile media pages must let their blurred background continue behind the native header',
+  mediaScreenSource.includes('paddingTop: headerHeight + spacing.md') && !mediaScreenSource.includes('<ScreenHeader'),
+  'Profile media pages must let their blurred background continue behind the transparent native header',
 );
 assert(
-  allTimeRouteSource.includes('headerTransparent: true'),
-  'All Time must let the profile backdrop continue behind its native header',
+  allTimeRouteSource.includes('headerTransparent: true') && !allTimeRouteSource.includes('headerShown: false'),
+  'All Time must preserve its transparent native header',
 );
 
 console.log('Profile media model QA passed.');

@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Globe, Lock } from 'lucide-react-native';
@@ -15,17 +15,19 @@ import { colors, radii, spacing, typography } from '../design/tokens';
 import type { LibraryMediaItem } from '../library/useLibraryData';
 import type { RootStackParamList } from '../navigation/types';
 import { useUserDataRevision } from '../sync/userDataEvents';
+import { isTitleRemoved, useTitleRemovalUpdates } from '../sync/titleRemovalUpdates';
 
 export function RecentViewingActivity({ userId, owner = false, mediaItems = [] }: { userId: string; owner?: boolean; mediaItems?: readonly LibraryMediaItem[] }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { currentUser, getFirebaseIdToken } = useAuthSession();
   const revision = useUserDataRevision('viewings', 'opinions', 'episodeProgress', 'profile', 'socialGraph');
   const key = getPrivateCacheKey(currentUser?.id ?? 'visitor', `profile:recent-viewings:${userId}:v1`);
-  const load = useCallback(async (): Promise<ProfileHistory> => {
+  const load = useCallback(async (): Promise<ProfileHistory & { loadedAt?: number }> => {
+    const loadedAt = Date.now();
     const token = await getFirebaseIdToken();
     if (!token) throw new Error('Sign in to view activity.');
     try {
-      return await getProfileHistory(token, userId, true);
+      return { ...await getProfileHistory(token, userId, true), loadedAt };
     } catch (error) {
       if (error instanceof ApiError && (error.status === 403 || error.status === 404)) {
         return { visibility: 'private', items: [], opinions: [] };
@@ -39,7 +41,12 @@ export function RecentViewingActivity({ userId, owner = false, mediaItems = [] }
   useFocusEffect(useCallback(() => {
     if (savedAt.current && (!owner || Date.now() - Date.parse(savedAt.current) >= 5 * 60 * 1000)) resource.revalidate();
   }, [key, owner, resource.revalidate]));
-  const data = resource.data;
+  const removalRevision = useTitleRemovalUpdates();
+  const data = useMemo(() => {
+    void removalRevision;
+    return owner && resource.data ? { ...resource.data, items: resource.data.items.filter((item) =>
+      !isTitleRemoved(userId, 'profile', { contentType: item.contentType === 'movie' ? 'movie' : 'series', tmdbId: item.tmdbId }, resource.data?.loadedAt)) } : resource.data;
+  }, [owner, resource.data, userId, removalRevision]);
   const status = data ? 'ready' : resource.error ? 'error' : 'loading';
   if (!owner && (data && data.visibility !== 'public')) return null;
   return <View style={styles.section}>

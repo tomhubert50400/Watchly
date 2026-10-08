@@ -1,4 +1,5 @@
-import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
+import { useHeaderHeight } from '@react-navigation/elements';
+import { useCallback, useMemo, useState } from 'react';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Check, Funnel } from 'lucide-react-native';
@@ -15,6 +16,8 @@ import { SpotlightAtmosphere } from '../components/SpotlightAtmosphere';
 import { colors, spacing, typography } from '../design/tokens';
 import type { LibraryMediaItem } from '../library/useLibraryData';
 import { useLibraryData } from '../library/useLibraryData';
+import { useAuthSession } from '../auth/AuthSessionContext';
+import { isTitleRemoved, useTitleRemovalUpdates } from '../sync/titleRemovalUpdates';
 import type { RootStackParamList } from '../navigation/types';
 import { ProfileMediaPoster } from './ProfileMediaRail';
 import { getProfileMediaItems, groupProfileMediaByStatus } from './profileMediaModel';
@@ -28,6 +31,7 @@ export function ProfileMediaScreen() {
   const route = useRoute<Route>();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const cardWidth = (width - spacing.xl * 2 - spacing.sm * 2) / 3;
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
@@ -36,10 +40,16 @@ export function ProfileMediaScreen() {
   const providedItems = route.params.items;
   const usesProvidedItems = providedItems !== undefined;
   const resource = useLibraryData(!usesProvidedItems);
+  const { currentUser } = useAuthSession();
+  const removalRevision = useTitleRemovalUpdates();
   const loadedItems = providedItems ?? resource.data?.items ?? route.params.initialItems;
   const sourceItems = useMemo(
-    () => getProfileMediaItems(loadedItems ?? [], route.params.filter),
-    [loadedItems, route.params.filter],
+    () => {
+      void removalRevision;
+      return getProfileMediaItems(loadedItems ?? [], route.params.filter).filter((item) => usesProvidedItems
+        || !isTitleRemoved(currentUser?.id, 'profile', item, resource.data?.loadedAt));
+    },
+    [loadedItems, route.params.filter, usesProvidedItems, currentUser?.id, resource.data?.loadedAt, removalRevision],
   );
   const groups = useMemo(() => groupProfileMediaByStatus(sourceItems), [sourceItems]);
   const genreResource = useProfileMediaGenres(sourceItems, genresEnabled);
@@ -68,14 +78,10 @@ export function ProfileMediaScreen() {
     }
   }, [navigation]);
 
-  useLayoutEffect(() => {
-    navigation.setOptions({ headerRight: undefined });
-  }, [navigation]);
-
   return (
-    <SafeAreaView edges={['top']} style={styles.screen}>
+    <SafeAreaView edges={[]} style={styles.screen}>
       {atmosphereUrl ? <View pointerEvents="none" style={StyleSheet.absoluteFill}><SpotlightAtmosphere imageUrl={atmosphereUrl} /></View> : null}
-      <ScreenReveal style={styles.content}>
+      <ScreenReveal style={[styles.content, { paddingTop: headerHeight + spacing.md }]}>
         {!loadedItems && resource.isInitialLoading ? (
           <LoadingState variant="grid" label="Loading your titles" />
         ) : !loadedItems && resource.error ? (
@@ -98,7 +104,7 @@ export function ProfileMediaScreen() {
               data={visibleItems}
               numColumns={3}
               keyExtractor={(item) => item.key}
-              renderItem={({ item }) => <ProfileMediaPoster item={item} onOpen={openItem} width={cardWidth} />}
+              renderItem={({ item }) => <ProfileMediaPoster canRemoveTitles={!usesProvidedItems} item={item} onOpen={openItem} width={cardWidth} />}
               columnWrapperStyle={styles.row}
               contentContainerStyle={[styles.grid, { paddingBottom: spacing.xxxl + insets.bottom }]}
               initialNumToRender={18}
@@ -134,7 +140,7 @@ export function ProfileMediaScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  content: { flex: 1, paddingTop: spacing.xxxl + spacing.md },
+  content: { flex: 1 },
   filterRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginHorizontal: spacing.xl, marginBottom: spacing.lg },
   selector: { flex: 1, minWidth: 0 },
   grid: { paddingHorizontal: spacing.xl, gap: spacing.lg, flexGrow: 1 },
