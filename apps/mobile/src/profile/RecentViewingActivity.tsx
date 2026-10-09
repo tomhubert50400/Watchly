@@ -1,25 +1,33 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Globe, Lock } from 'lucide-react-native';
 import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { getProfileHistory, type ProfileHistory } from '../api/profile';
 import { ApiError } from '../api/client';
+import { removeViewing } from '../api/viewings';
 import { useAuthSession } from '../auth/AuthSessionContext';
 import { useCachedResource } from '../cache/useCachedResource';
 import { getPrivateCacheKey } from '../cache/persistedCache';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
+import { PosterActionsMenu } from '../components/PosterActionsMenu';
 import { StarRatingDisplay } from '../components/StarRatingDisplay';
 import { colors, radii, spacing, typography } from '../design/tokens';
 import type { LibraryMediaItem } from '../library/useLibraryData';
 import type { RootStackParamList } from '../navigation/types';
-import { useUserDataRevision } from '../sync/userDataEvents';
+import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
 import { isTitleRemoved, useTitleRemovalUpdates } from '../sync/titleRemovalUpdates';
+import { useToast } from '../notifications/ToastContext';
 
 export function RecentViewingActivity({ userId, owner = false, mediaItems = [] }: { userId: string; owner?: boolean; mediaItems?: readonly LibraryMediaItem[] }) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { currentUser, getFirebaseIdToken } = useAuthSession();
+  const { showToast } = useToast();
+  const [removedIds, setRemovedIds] = useState<string[]>([]);
+  const removingIds = useRef(new Set<string>());
+  const currentOwner = useRef(currentUser?.id);
+  currentOwner.current = currentUser?.id;
   const revision = useUserDataRevision('viewings', 'opinions', 'episodeProgress', 'profile', 'socialGraph');
   const key = getPrivateCacheKey(currentUser?.id ?? 'visitor', `profile:recent-viewings:${userId}:v1`);
   const load = useCallback(async (): Promise<ProfileHistory & { loadedAt?: number }> => {
@@ -42,11 +50,27 @@ export function RecentViewingActivity({ userId, owner = false, mediaItems = [] }
     if (savedAt.current && (!owner || Date.now() - Date.parse(savedAt.current) >= 5 * 60 * 1000)) resource.revalidate();
   }, [key, owner, resource.revalidate]));
   const removalRevision = useTitleRemovalUpdates();
+  async function removeActivity(id: string) {
+    if (!owner || currentOwner.current !== userId || removingIds.current.has(id)) return;
+    removingIds.current.add(id);
+    setRemovedIds((ids) => [...ids, id]);
+    try {
+      const token = await getFirebaseIdToken();
+      if (!token || currentOwner.current !== userId) throw new Error('Sign in again to remove this viewing.');
+      await removeViewing(token, id);
+      if (currentOwner.current === userId) notifyUserDataChanged('viewings', 'episodeProgress', 'tracking', 'profile');
+    } catch (error) {
+      setRemovedIds((ids) => ids.filter((removedId) => removedId !== id));
+      if (currentOwner.current === userId) showToast(error instanceof Error ? error.message : 'Could not remove this viewing.');
+    } finally {
+      removingIds.current.delete(id);
+    }
+  }
   const data = useMemo(() => {
     void removalRevision;
     return owner && resource.data ? { ...resource.data, items: resource.data.items.filter((item) =>
-      !isTitleRemoved(userId, 'profile', { contentType: item.contentType === 'movie' ? 'movie' : 'series', tmdbId: item.tmdbId }, resource.data?.loadedAt)) } : resource.data;
-  }, [owner, resource.data, userId, removalRevision]);
+      !removedIds.includes(item.id) && !isTitleRemoved(userId, 'profile', { contentType: item.contentType === 'movie' ? 'movie' : 'series', tmdbId: item.tmdbId }, resource.data?.loadedAt)) } : resource.data;
+  }, [owner, resource.data, userId, removalRevision, removedIds]);
   const status = data ? 'ready' : resource.error ? 'error' : 'loading';
   if (!owner && (data && data.visibility !== 'public')) return null;
   return <View style={styles.section}>
@@ -63,7 +87,10 @@ export function RecentViewingActivity({ userId, owner = false, mediaItems = [] }
       const media = mediaItems.find((media) => media.tmdbId === item.tmdbId && media.contentType === (item.contentType === 'movie' ? 'movie' : 'series'));
       const artworkUrl = media?.backdropUrl ?? item.posterUrl;
       const title = item.title ?? (item.contentType === 'movie' ? 'Movie' : 'Series');
-      return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${title}`} key={item.id} onPress={() => navigation.navigate(item.contentType === 'movie' ? 'FilmDetail' : 'SeriesDetail', { title, tmdbId: item.tmdbId })} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
+      return <PosterActionsMenu key={item.id} enabled={owner && currentUser?.id === userId} actionLabel="Remove viewing"
+        label={`Open ${title}`} title={title} width={210} onRemove={() => void removeActivity(item.id)}
+        onOpen={() => navigation.navigate(item.contentType === 'movie' ? 'FilmDetail' : 'SeriesDetail', { title, tmdbId: item.tmdbId })}>
+        <View style={styles.row}>
         <ImageBackground source={artworkUrl ? { uri: artworkUrl } : undefined} resizeMode="cover" style={styles.artwork}>
           <Svg pointerEvents="none" style={StyleSheet.absoluteFill} width="100%" height="100%">
             <Defs><LinearGradient id={`activity-${item.id}`} x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor="#090C13" stopOpacity="0.12" /><Stop offset="0.4" stopColor="#090C13" stopOpacity="0.4" /><Stop offset="1" stopColor="#090C13" stopOpacity="0.95" /></LinearGradient></Defs>
@@ -71,7 +98,8 @@ export function RecentViewingActivity({ userId, owner = false, mediaItems = [] }
           </Svg>
         <View style={styles.copy}><Text numberOfLines={1} style={styles.title}>{title}</Text><Text numberOfLines={1} style={styles.cardMeta}>{item.contentType === 'episode' ? `S${item.seasonNumber} E${item.episodeNumber} · ` : ''}{new Date(item.watchedAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</Text>{opinion?.score != null ? <StarRatingDisplay rating={opinion.score} size={13} /> : null}</View>
         </ImageBackground>
-      </Pressable>;
+        </View>
+      </PosterActionsMenu>;
     })}
     </ScrollView></HorizontalScrollFade>
     {status === 'loading' ? <Text style={styles.meta}>Loading activity…</Text> : status === 'error' ? <Text style={styles.meta}>Activity could not load. Try again later.</Text> : data?.items.length === 0 ? <Text style={styles.meta}>{owner ? 'Your next viewing will appear here.' : 'No viewings yet.'}</Text> : null}

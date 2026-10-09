@@ -1,4 +1,8 @@
-import { apiGet, apiPost, apiPut } from './client';
+import { apiDelete, apiGet, apiPost, apiPut } from './client';
+
+export function removeViewing(token: string, id: string) {
+  return apiDelete<{ deleted: true }>(`/viewings/events/${encodeURIComponent(id)}`, { token });
+}
 
 export type ViewingHistoryItem = { id: string; watchedAt: string | null };
 export type ViewingHistoryDate = { id: string; watchedDate: string | null };

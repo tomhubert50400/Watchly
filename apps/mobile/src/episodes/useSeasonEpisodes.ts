@@ -215,7 +215,7 @@ export function useSeasonEpisodes({
               // Keep the locally persisted state until a later silent refresh can reconcile it.
             }
           }
-          notifyUserDataChanged('episodeProgress');
+          notifyUserDataChanged('episodeProgress', 'viewings', 'tracking');
         }
       }
     };
