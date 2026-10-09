@@ -1,4 +1,4 @@
-export type NotificationKind = 'release' | 'shared_list_invite' | 'shared_vote_update' | 'review_reply';
+export type NotificationKind = 'release' | 'shared_list_invite' | 'shared_vote_update' | 'review_reply' | 'follow';
 export type NotificationFilter = 'all' | 'releases' | 'lists';
 
 export type NotificationItem = {
@@ -27,6 +27,7 @@ export type NotificationGroup = {
 };
 
 export type NotificationTarget =
+  | { name: 'PublicProfile'; params: { userId: string } }
   | { name: 'FilmDetail'; params: { title: string; tmdbId: number } }
   | { name: 'SeriesDetail'; params: { title: string; tmdbId: number } }
   | { name: 'SharedWatchlist'; params: { title: string; watchlistId: string; view?: 'titles' | 'votes' } }
@@ -147,6 +148,12 @@ export function mapNotificationTarget(item: NotificationItem): NotificationTarge
   }
 
   const metadata = asRecord(item.routeMetadata);
+
+  if (item.kind === 'follow') {
+    return isUuid(item.actorUserId) && metadata?.route === 'PublicProfile' && metadata.userId === item.actorUserId
+      ? { name: 'PublicProfile', params: { userId: item.actorUserId } }
+      : null;
+  }
 
   if (
     item.kind === 'review_reply' &&

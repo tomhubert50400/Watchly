@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { BellRing, CalendarDays, ListPlus, MessageCircle, Vote } from 'lucide-react-native';
+import { BellRing, CalendarDays, ListPlus, MessageCircle, UserPlus, Vote } from 'lucide-react-native';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import {
   acceptFollowRequest,
@@ -191,7 +191,7 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
       }
 
       if (ownerIdRef.current === expectedOwnerId) {
-        notifyUserDataChanged('profile', 'socialGraph');
+        notifyUserDataChanged('profile', 'socialGraph', 'notifications');
       }
     } catch (error) {
       if (ownerIdRef.current === expectedOwnerId) {
@@ -351,6 +351,8 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
       navigation.navigate(target.name, target.params);
     } else if (target.name === 'SharedVotingSession') {
       navigation.navigate(target.name, target.params);
+    } else if (target.name === 'PublicProfile') {
+      navigation.navigate(target.name, target.params);
     } else {
       navigation.navigate('ReviewReplies', target.params);
     }
@@ -372,7 +374,7 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
     return (
       <Screen contentReady={!resource.isInitialLoading || items.length > 0 || visibleFollowRequests.length > 0} title="">
         <SignInRequiredCard
-          body="You need to be signed in to use this section. Sign in here to see follow requests, releases, and shared-list alerts."
+          body="You need to be signed in to use this section. Sign in here to see new followers, follow requests, releases, and shared-list alerts."
           title="Sign in to view Alerts"
         />
       </Screen>
@@ -437,7 +439,7 @@ export function NotificationsScreen({ navigation }: NotificationsScreenProps) {
       {groups.length === 0 && !(visibleFollowRequests.length > 0 && filter === 'all') ? (
         <ScreenReveal delay={100} style={styles.empty}>
           <EmptyState
-            body={items.length === 0 ? 'Follow requests, release updates, and shared-list activity will appear here.' : 'No alerts match this filter.'}
+            body={items.length === 0 ? 'New followers, follow requests, release updates, and shared-list activity will appear here.' : 'No alerts match this filter.'}
             title={items.length === 0 ? 'You are all caught up' : 'No matching alerts'}
           />
         </ScreenReveal>
@@ -519,7 +521,9 @@ function NotificationRow({
         ? Vote
         : item.kind === 'review_reply'
           ? MessageCircle
-          : BellRing;
+          : item.kind === 'follow'
+            ? UserPlus
+            : BellRing;
 
   return (
     <Pressable

@@ -57,6 +57,21 @@ const releases = notification({ id: 'release' });
 const invite = notification({ id: 'invite', kind: 'shared_list_invite', type: 'shared_list_invite' });
 const vote = notification({ id: 'vote', kind: 'shared_vote_update', type: 'shared_vote_update' });
 const reply = notification({ id: 'reply', kind: 'review_reply', type: 'review_reply' });
+const follow = notification({
+  id: 'follow', kind: 'follow', type: 'follow', title: 'New follower',
+  actorUserId: SESSION_ID, contentType: null, tmdbId: null,
+  routeMetadata: { route: 'PublicProfile', userId: SESSION_ID },
+});
+assert.deepEqual(filterNotifications([follow], 'all'), [follow]);
+assert.deepEqual(filterNotifications([follow], 'lists'), []);
+assert.deepEqual(filterNotifications([follow], 'releases'), []);
+assert.equal(countUnreadNotifications([follow]), 1);
+assert.equal(countUnreadNotifications(beginMarkAllRead([follow]).optimistic), 0);
+assert.deepEqual(mapNotificationTarget(follow), { name: 'PublicProfile', params: { userId: SESSION_ID } });
+assert.equal(mapNotificationTarget({ ...follow, actorUserId: null }), null);
+assert.equal(mapNotificationTarget({ ...follow, actorUserId: 'invalid' }), null);
+assert.equal(mapNotificationTarget({ ...follow, routeMetadata: { route: 'PublicProfile', userId: WATCHLIST_ID } }), null);
+assert.equal(mapNotificationTarget({ ...follow, routeMetadata: null }), null);
 assert.deepEqual(filterNotifications([releases, invite, vote, reply], 'all').map((item) => item.id), ['release', 'invite', 'vote', 'reply']);
 assert.deepEqual(filterNotifications([releases, invite, vote], 'releases').map((item) => item.id), ['release']);
 assert.deepEqual(filterNotifications([releases, invite, vote], 'lists').map((item) => item.id), ['invite', 'vote']);
