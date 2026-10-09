@@ -74,5 +74,10 @@ export async function hydrateWatchlistItems<T extends { id: string; contentType:
 }
 
 function needsHydration(item: { title: string | null }) {
-  return !item.title || item.title === 'Loading title' || item.title === 'Title unavailable' || /^TMDB \d+$/.test(item.title);
+  return getWatchlistItemLoadingState(item) !== 'ready';
+}
+
+export function getWatchlistItemLoadingState(item: { title: string | null }): 'loading' | 'error' | 'ready' {
+  if (item.title === 'Title unavailable') return 'error';
+  return !item.title || item.title === 'Title' || item.title === 'Loading title' || /^TMDB \d+$/.test(item.title) ? 'loading' : 'ready';
 }

@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   GestureResponderEvent,
   LayoutChangeEvent,
@@ -25,6 +26,7 @@ import { ScreenReveal } from '../components/ScreenReveal';
 import { ScreenTopFade } from '../components/ScreenTopFade';
 import { useFocusedFieldVisibility } from '../components/useFocusedFieldVisibility';
 import { MediaPoster } from '../components/MediaPoster';
+import { getWatchlistItemLoadingState } from './personalWatchlistHydration';
 import { colors, radii, spacing, typography } from '../design/tokens';
 
 export type WatchlistDisplayItem = {
@@ -183,6 +185,7 @@ export function WatchlistPosterGrid({
     <ScreenReveal delay={100} style={styles.grid}>
         {items.map((item, index) => {
         const title = item.title?.trim() || 'Title unavailable';
+        const loading = getWatchlistItemLoadingState(item) === 'loading';
 
         return (
           <Pressable
@@ -232,12 +235,14 @@ export function WatchlistPosterGrid({
               pressed ? styles.pressed : null,
             ]}
           >
-            <MediaPoster
+            {loading ? <View style={[styles.poster, styles.loadingPoster, { width: itemWidth }]}>
+              <ActivityIndicator accessibilityLabel="Loading title" color={colors.accentText} />
+            </View> : <MediaPoster
               accessibilityLabel={`${title} poster`}
               posterUrl={item.posterUrl}
               style={[styles.poster, { width: itemWidth }]}
-            />
-            <Text numberOfLines={2} style={styles.itemTitle}>{title}</Text>
+            />}
+            <Text numberOfLines={2} style={styles.itemTitle}>{loading ? 'Loading title' : title}</Text>
             <Text style={styles.itemMeta}>{item.contentType === 'movie' ? 'Film' : 'Series'}</Text>
           </Pressable>
         );
@@ -258,6 +263,7 @@ function resolveColumnCount(availableWidth: number, fontScale: number) {
 }
 
 const styles = StyleSheet.create({
+  loadingPoster: { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.panelElevated },
   background: {
     ...StyleSheet.absoluteFillObject,
   },

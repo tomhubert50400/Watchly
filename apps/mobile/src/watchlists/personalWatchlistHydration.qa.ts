@@ -6,6 +6,7 @@ import type { SharedWatchlistItem } from '../api/sharedWatchlists';
 import {
   hydratePersonalWatchlistItems,
   hydrateWatchlistItems,
+  getWatchlistItemLoadingState,
   type HydratedPersonalWatchlistItem,
 } from './personalWatchlistHydration';
 
@@ -118,8 +119,8 @@ async function run() {
   assert.deepEqual(refreshed, freshItems.map((item) => ({ ...item, ...metadata(item) })),
     'reuse must match both content type and TMDB id while retaining fresh ids, sections and order');
 
-  const legacyItems = makeItems(3);
-  const legacyTitles = ['TMDB 1', 'Loading title', 'Title unavailable'];
+  const legacyItems = makeItems(4);
+  const legacyTitles = ['TMDB 1', 'Loading title', 'Title unavailable', 'Title'];
   let retries = 0;
   const recovered = await hydratePersonalWatchlistItems({
     isCurrent: () => true,
@@ -130,7 +131,7 @@ async function run() {
       ...item, backdropUrl: null, posterUrl: null, title: legacyTitles[index],
     })),
   });
-  assert.equal(retries, 3, 'legacy placeholders and failed titles must be retried');
+  assert.equal(retries, 4, 'legacy placeholders and failed titles must be retried');
   assert.deepEqual(recovered, legacyItems.map((item) => ({ ...item, ...metadata(item) })));
 
   const failedItems = makeItems(17);
@@ -148,6 +149,16 @@ async function run() {
   });
   assert.deepEqual(failedResult[16], { ...failedItems[16], ...metadata(failedItems[16]) },
     'one failed lookup must not prevent later titles from loading');
+  assert.equal(getWatchlistItemLoadingState({ title: 'Title' }), 'loading');
+  assert.equal(getWatchlistItemLoadingState(failedResult[2]), 'error');
+  assert.equal(getWatchlistItemLoadingState(failedResult[16]), 'ready');
+  const retriedIds: string[] = [];
+  const retried = await hydratePersonalWatchlistItems({
+    items: failedItems, previousItems: failedResult, isCurrent: () => true, onProgress: () => undefined,
+    load: async item => { retriedIds.push(item.id); return metadata(item); },
+  });
+  assert.deepEqual(retriedIds, [failedItems[2].id], 'Retry missing titles must only request failed metadata');
+  assert(retried.every(item => getWatchlistItemLoadingState(item) === 'ready'));
 
   const cancelledBatch = deferred<void>();
   let current = true;
