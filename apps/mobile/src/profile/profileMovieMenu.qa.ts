@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
+import './recentViewingActivity.qa';
 
 function mount({ enabled = true, fail = false, kind = 'profile', planned = false, contentType = 'movie', deferred = false, home = false } = {}) {
   const alerts: any[] = [];
