@@ -211,13 +211,17 @@ export class ProgressService {
     const userId = await this.getUserId(identity);
 
     await this.prisma.withConnectionRetry(() =>
-      this.prisma.userEpisodeProgress.deleteMany({
-      where: {
-        episodeNumber,
-        seasonNumber,
-        seriesTmdbId,
-        userId,
-      },
+      this.prisma.$transaction(async (transaction) => {
+        await transaction.userEpisodeProgress.deleteMany({
+          where: { episodeNumber, seasonNumber, seriesTmdbId, userId },
+        });
+        await transaction.viewingEvent.deleteMany({
+          where: { contentType: 'EPISODE', tmdbId: seriesTmdbId, episodeNumber, seasonNumber, userId },
+        });
+        await transaction.userContentState.updateMany({
+          where: { contentType: 'SERIES', tmdbId: seriesTmdbId, userId, status: 'WATCHED' },
+          data: { status: 'WATCHING' },
+        });
       }),
     );
   }

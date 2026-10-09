@@ -19,8 +19,9 @@ function matches(row: Row, where: Row): boolean {
 
 function table(defaults: Row = {}) {
   const rows: Row[] = [];
+  let nextId = 0;
   const create = async ({ data }: { data: Row }) => {
-    const row = { id: String(rows.length + 1), createdAt: new Date(), updatedAt: new Date(), ...defaults, ...data };
+    const row = { id: String(++nextId), createdAt: new Date(), updatedAt: new Date(), ...defaults, ...data };
     rows.push(row);
     return row;
   };
@@ -36,6 +37,14 @@ function table(defaults: Row = {}) {
     },
     findMany: async ({ where }: Query) => rows.filter((row) => matches(row, where)),
     findFirst: async ({ where }: Query) => rows.find((row) => matches(row, where)) ?? null,
+    deleteMany: async ({ where }: Query) => {
+      for (let index = rows.length - 1; index >= 0; index -= 1) {
+        if (matches(rows[index]!, where)) rows.splice(index, 1);
+      }
+    },
+    updateMany: async ({ where, data }: Query & { data: Row }) => {
+      rows.forEach((row) => { if (matches(row, where)) Object.assign(row, data); });
+    },
     findUniqueOrThrow: async ({ where }: Query) => {
       const row = rows.find((item) => matches(item, where));
       assert.ok(row);
@@ -119,6 +128,46 @@ async function run() {
   assert.equal(rewatched.summary.watchMinutes, 510);
   assert.equal(rewatched.more.rewatchCount, 1);
   assert.equal((await viewings.getStatsForUser('another-user')).summary.totalViewCount, 0);
+  const episode = stores.viewingEvent.rows.find((row) => row.tmdbId === 40 && row.episodeNumber === 2)!;
+  await stores.viewingEvent.create({ data: { ...episode, id: 'rewatched-episode' } });
+  await stores.viewingEvent.create({ data: { ...episode, id: 'another-user-episode', userId: 'another-user' } });
+  await progress.clearEpisodeProgress(identity, 40, 1, 2);
+  assert.equal(stores.userEpisodeProgress.rows.some((row) => row.seriesTmdbId === 40 && row.episodeNumber === 2), false);
+  assert.equal(stores.viewingEvent.rows.some((row) => row.userId === 'owner' && row.tmdbId === 40 && row.episodeNumber === 2), false,
+    'unchecking an episode removes all its viewings from recent activity');
+  assert.ok(stores.viewingEvent.rows.some((row) => row.id === 'another-user-episode'), 'another user keeps their activity');
+  assert.ok(stores.viewingEvent.rows.some((row) => row.tmdbId === 40 && row.episodeNumber === 1), 'other episodes keep their activity');
+  assert.equal((await summary()).totalViewCount, 7, 'unwatched episodes no longer count in viewing statistics');
+  await progress.markEpisodeWatched(identity, 40, 1, 2);
+  assert.equal(stores.viewingEvent.rows.filter((row) => row.userId === 'owner' && row.tmdbId === 40 && row.episodeNumber === 2).length, 1,
+    'checking the episode again creates one new viewing');
+
+  const movieState = stores.userContentState.rows.find((row) => row.tmdbId === 10)!;
+  movieState.favorite = true;
+  await stores.userMovieRating.create({ data: { userId: 'owner', tmdbId: 10, scoreHalfSteps: 8 } });
+  const movieViews = stores.viewingEvent.rows.filter((row) => row.userId === 'owner' && row.tmdbId === 10);
+  await viewings.removeViewing(identity, movieViews[0]!.id as string);
+  assert.equal((await viewings.getMovieSummary(identity, 10)).viewCount, 1, 'removing one viewing preserves rewatches');
+  assert.equal(movieState.status, 'WATCHED', 'a remaining viewing keeps the movie watched');
+  await viewings.removeViewing(identity, movieViews[0]!.id as string);
+  assert.equal((await viewings.getMovieSummary(identity, 10)).viewCount, 1, 'retrying a deletion does not remove another viewing');
+  await viewings.removeViewing(identity, movieViews[1]!.id as string);
+  assert.equal(movieState.status, null, 'removing the last viewing clears the watched fallback');
+  assert.equal(movieState.favorite, true, 'viewing removal preserves favorites');
+  assert.equal(stores.userMovieRating.rows.length, 1, 'viewing removal preserves ratings');
+  await viewings.removeViewing(identity, 'another-user-episode');
+  assert.ok(stores.viewingEvent.rows.some((row) => row.id === 'another-user-episode'), 'a viewing belonging to another user cannot be removed');
+
+  const episodeView = stores.viewingEvent.rows.find((row) => row.userId === 'owner' && row.tmdbId === 40 && row.episodeNumber === 2)!;
+  await stores.viewingEvent.create({ data: { ...episodeView, id: 'episode-rewatch' } });
+  await viewings.removeViewing(identity, 'episode-rewatch');
+  assert.ok(stores.userEpisodeProgress.rows.some((row) => row.seriesTmdbId === 40 && row.episodeNumber === 2), 'remaining episode viewings keep progress');
+  await viewings.removeViewing(identity, episodeView.id as string);
+  assert.equal(stores.userEpisodeProgress.rows.some((row) => row.seriesTmdbId === 40 && row.episodeNumber === 2), false,
+    'removing the last episode viewing clears only its progress');
+  await progress.clearEpisodeProgress(identity, 20, 1, 2);
+  assert.equal(stores.userContentState.rows.find((row) => row.tmdbId === 20)!.status, 'WATCHING',
+    'a series with an unchecked episode is no longer marked fully watched');
   console.log('Your activity to viewing stats QA passed.');
 }
 

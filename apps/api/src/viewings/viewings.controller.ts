@@ -2,9 +2,11 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Inject,
   Param,
+  ParseUUIDPipe,
   Post,
   Put,
   Req,
@@ -20,6 +22,11 @@ import { SaveViewingHistoryDto } from './viewing-history.dto';
 @UseGuards(AuthGuard)
 export class ViewingsController {
   constructor(@Inject(ViewingsService) private readonly viewings: ViewingsService) {}
+
+  @Delete('events/:id')
+  removeViewing(@Req() request: AuthenticatedRequest, @Param('id', new ParseUUIDPipe()) id: string) {
+    return this.viewings.removeViewing(getIdentity(request), id);
+  }
 
   @Put('history')
   saveHistory(@Req() request: AuthenticatedRequest, @Body() input: SaveViewingHistoryDto) {

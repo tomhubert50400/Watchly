@@ -154,6 +154,31 @@ export class ViewingsService {
     return this.getMovieSummaryForUser(await this.getUserId(identity), tmdbId);
   }
 
+  async removeViewing(identity: AuthenticatedIdentity, id: string) {
+    const userId = await this.getUserId(identity);
+    return this.prisma.$transaction(async (tx) => {
+      const event = await tx.viewingEvent.findFirst({ where: { id, userId } });
+      if (!event) return { deleted: true };
+      await tx.viewingEvent.deleteMany({ where: { id, userId } });
+      const remaining = await tx.viewingEvent.findFirst({ where: {
+        userId, contentType: event.contentType, tmdbId: event.tmdbId,
+        seasonNumber: event.seasonNumber, episodeNumber: event.episodeNumber,
+      } });
+      if (!remaining) {
+        if (event.contentType === 'EPISODE') {
+          await tx.userEpisodeProgress.deleteMany({ where: {
+            userId, seriesTmdbId: event.tmdbId, seasonNumber: event.seasonNumber!, episodeNumber: event.episodeNumber!,
+          } });
+        }
+        await tx.userContentState.updateMany({
+          where: { userId, contentType: event.contentType === 'MOVIE' ? 'MOVIE' : 'SERIES', tmdbId: event.tmdbId, status: 'WATCHED' },
+          data: { status: event.contentType === 'MOVIE' ? null : 'WATCHING' },
+        });
+      }
+      return { deleted: true };
+    }, { isolationLevel: 'Serializable' });
+  }
+
   async saveHistory(identity: AuthenticatedIdentity, input: SaveViewingHistoryDto) {
     const entries = resolveViewingHistory(input);
     const userId = await this.getUserId(identity);
