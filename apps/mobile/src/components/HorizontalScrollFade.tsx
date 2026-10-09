@@ -6,18 +6,18 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 const FADE_WIDTH = 24;
 
 export function HorizontalScrollFade({ children }: { children: ReactElement<ScrollViewProps> }) {
-  const metrics = useRef({ width: 0, contentWidth: 0, offset: 0 });
-  const [edges, setEdges] = useState({ width: 0, left: 0, right: 0 });
+  const metrics = useRef({ width: 0, height: 0, contentWidth: 0, offset: 0 });
+  const [edges, setEdges] = useState({ width: 0, height: 0, left: 0, right: 0 });
 
   if (!UIManager.hasViewManagerConfig('RNCMaskedView')) return children;
 
   const updateEdges = () => {
-    const { width, contentWidth, offset } = metrics.current;
+    const { width, height, contentWidth, offset } = metrics.current;
     const maxOffset = Math.max(0, contentWidth - width);
     const clampedOffset = Math.max(0, Math.min(offset, maxOffset));
     const left = width > 0 ? Math.min(1, clampedOffset / FADE_WIDTH) : 0;
     const right = width > 0 ? Math.min(1, (maxOffset - clampedOffset) / FADE_WIDTH) : 0;
-    setEdges(current => current.width === width && current.left === left && current.right === right ? current : { width, left, right });
+    setEdges(current => current.width === width && current.height === height && current.left === left && current.right === right ? current : { width, height, left, right });
   };
 
   return (
@@ -25,7 +25,7 @@ export function HorizontalScrollFade({ children }: { children: ReactElement<Scro
       androidRenderingMode="software"
       style={children.props.style}
       maskElement={
-        <Svg height="100%" width="100%" pointerEvents="none">
+        <Svg height={edges.height || '100%'} width={edges.width || '100%'} pointerEvents="none">
           <Defs>
             <LinearGradient id="horizontalScrollFade" gradientUnits="userSpaceOnUse" x1="0" x2={edges.width || 1} y1="0" y2="0">
               <Stop offset="0" stopColor="black" stopOpacity={1 - edges.left} />
@@ -34,7 +34,7 @@ export function HorizontalScrollFade({ children }: { children: ReactElement<Scro
               <Stop offset="1" stopColor="black" stopOpacity={1 - edges.right} />
             </LinearGradient>
           </Defs>
-          <Rect fill="url(#horizontalScrollFade)" height="100%" width="100%" />
+          <Rect fill="url(#horizontalScrollFade)" height={edges.height || '100%'} width={edges.width || '100%'} />
         </Svg>
       }
     >
@@ -43,6 +43,7 @@ export function HorizontalScrollFade({ children }: { children: ReactElement<Scro
         scrollEventThrottle: 16,
         onLayout: event => {
           metrics.current.width = event.nativeEvent.layout.width;
+          metrics.current.height = event.nativeEvent.layout.height;
           updateEdges();
           children.props.onLayout?.(event);
         },
