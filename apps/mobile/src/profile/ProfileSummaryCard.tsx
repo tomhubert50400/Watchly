@@ -82,7 +82,7 @@ export function ProfileSummaryCard({
           </View>
         ) : (
           <View style={styles.socialRow}>
-            <SocialStat label="followers" onPress={onFollowersPress} value={followersCount} />
+            <SocialStat label={followersCount > 1 ? 'followers' : 'follower'} onPress={onFollowersPress} value={followersCount} />
             <Text style={styles.dot}>·</Text>
             <SocialStat
               label={secondaryLabel}
