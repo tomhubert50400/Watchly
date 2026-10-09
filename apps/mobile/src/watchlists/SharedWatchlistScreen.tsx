@@ -31,6 +31,8 @@ import { isTitleRemoved, useTitleRemovalUpdates } from '../sync/titleRemovalUpda
 import { notifyUserDataChanged, useUserDataRevision } from '../sync/userDataEvents';
 import { CreateSharedVoteSheet, type SharedVoteOptions } from './CreateSharedVoteSheet';
 import { WatchlistActionsMenu } from './WatchlistActionsMenu';
+import { AddWatchlistTitlesSheet } from './AddWatchlistTitlesSheet';
+import { WatchlistHydrationStatus } from './WatchlistHydrationStatus';
 import { WatchlistMembersSheet } from './WatchlistMembersSheet';
 import { useWatchlistTrashHeader } from './WatchlistTrashHeader';
 import { draggedPosterCenter } from './watchlistTrashTarget';
@@ -120,6 +122,7 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
   const [isCreatingVote, setIsCreatingVote] = useState(false);
   const [isMembersSheetOpen, setIsMembersSheetOpen] = useState(false);
   const [artworkScope, setArtworkScope] = useState<string | null>(null);
+  const [addTitlesScope, setAddTitlesScope] = useState<string | null>(null);
   const [isVoteComposerOpen, setIsVoteComposerOpen] = useState(false);
   const [voteError, setVoteError] = useState<string | null>(null);
   const [votesExpanded, toggleVotesExpanded] = useVoteExpansion(ownerId, route.params.watchlistId, 'section', true);
@@ -248,8 +251,8 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
 
   const headerActions = watchlist ? (
     <WatchlistActionsMenu key={resourceScope} actions={[
-      { label: 'Filters', nativeIcon: 'line.3.horizontal.decrease', icon: <Funnel color={filters.active ? colors.accentText : colors.text} size={20} />, onPress: filters.open, active: filters.active },
-      { label: 'Add titles', nativeIcon: 'plus', icon: <Plus color={colors.text} size={20} />, onPress: () => navigation.navigate('MainTabs', { screen: 'Explore' }) },
+      { label: 'Filters & sort', nativeIcon: 'line.3.horizontal.decrease', icon: <Funnel color={filters.active || filters.sort !== 'original' ? colors.accentText : colors.text} size={20} />, onPress: filters.open, active: filters.active || filters.sort !== 'original' },
+      { label: 'Add titles', nativeIcon: 'plus', icon: <Plus color={colors.text} size={20} />, onPress: () => setAddTitlesScope(resourceScope) },
       { label: 'New vote', nativeIcon: 'checkmark.bubble', icon: <Vote color={colors.text} size={20} />, onPress: () => { setVoteError(null); setIsVoteComposerOpen(true); } },
       ...(watchlist.isOwner ? [{ label: 'Cover & background', nativeIcon: 'photo', icon: <Camera color={colors.text} size={20} />, onPress: () => setArtworkScope(resourceScope) }] : []),
       { label: `Members (${watchlist.memberCount})`, nativeIcon: 'person.2', icon: <Users color={colors.text} size={20} />, onPress: () => setIsMembersSheetOpen(true) },
@@ -476,10 +479,9 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
           importantForAccessibility={view === 'titles' ? 'auto' : 'no-hide-descendants'}>
         <WatchlistSection delay={50}>
           <WatchlistFilterStatus filters={filters} />
+          <WatchlistHydrationStatus items={details.hydratedItems} onRetry={resource.retry} />
           {details.hydratedItems.length === 0 ? (
-            <Text style={styles.emptyCopy}>
-              Add titles from their detail pages before starting a vote.
-            </Text>
+            <Button label="Add titles" onPress={() => setAddTitlesScope(resourceScope)} />
           ) : (
             <WatchlistPosterGrid items={filters.visibleItems} onOpen={openItem} movingItemId={moving?.item.id}
               onMoveStart={(item, event, geometry) => {
@@ -498,6 +500,8 @@ export function SharedWatchlistScreen({ navigation, route }: Props) {
         error={voteError} isCreating={isCreatingVote} onClose={() => setIsVoteComposerOpen(false)}
         onCreate={handleCreateVote} /> : null}
       <WatchlistFiltersSheet filters={filters} />
+      {addTitlesScope === resourceScope ? <AddWatchlistTitlesSheet key={`add:${resourceScope}`}
+        kind="shared" watchlistId={watchlist.id} items={watchlist.items} onClose={() => setAddTitlesScope(null)} /> : null}
       {artworkScope === resourceScope && watchlist.isOwner ? <WatchlistArtworkSheet key={resourceScope}
         kind="shared" watchlistId={watchlist.id} items={watchlist.items}
         backgroundItemId={watchlist.backgroundItemId} coverItemIds={watchlist.coverItemIds}
@@ -529,5 +533,4 @@ const styles = StyleSheet.create({
   votesTitle: { ...typography.title, color: colors.text },
   votes: { gap: spacing.sm },
   hiddenVotes: { display: 'none' },
-  emptyCopy: { ...typography.body, color: colors.textMuted, paddingVertical: spacing.sm },
 });

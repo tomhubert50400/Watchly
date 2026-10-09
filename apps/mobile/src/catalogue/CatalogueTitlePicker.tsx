@@ -12,7 +12,7 @@ export const catalogueTitleKey = (item: Pick<WatchlistDisplayItem, 'contentType'
 
 export function CatalogueTitlePicker({ items, selected, onChange, limit, excluded = [], disabled = false, label, selectionHint, emptyLabel = 'Search the catalogue to add a title.', appearance = 'default' }: {
   items: WatchlistDisplayItem[]; selected: WatchlistDisplayItem[]; onChange: (items: WatchlistDisplayItem[]) => void;
-  limit: number; excluded?: Pick<WatchlistDisplayItem, 'contentType' | 'tmdbId'>[]; disabled?: boolean;
+  limit?: number; excluded?: Pick<WatchlistDisplayItem, 'contentType' | 'tmdbId'>[]; disabled?: boolean;
   label: string; selectionHint?: string; emptyLabel?: string;
   appearance?: 'default' | 'top-five';
 }) {
@@ -51,7 +51,7 @@ export function CatalogueTitlePicker({ items, selected, onChange, limit, exclude
   return <View style={styles.content}>
     <WatchlistSearchField label={label} placeholder="Search the full catalogue" accent={topFive} value={query} onChangeText={value => { setQuery(value); setVisibleCount(24); }} />
     <View style={topFive && styles.selectionSummary}>
-      <Text style={[styles.caption, topFive && styles.counter]}><Text style={topFive && styles.counterNumber}>{selected.length}/{limit}</Text>{topFive ? '' : ' selected'}{selectionHint ? ` · ${selectionHint}` : ''}</Text>
+      <Text style={[styles.caption, topFive && styles.counter]}><Text style={topFive && styles.counterNumber}>{selected.length}{limit === undefined ? '' : `/${limit}`}</Text>{topFive ? '' : ' selected'}{selectionHint ? ` · ${selectionHint}` : ''}</Text>
       {topFive ? selected.map((item, index) => <Pressable key={catalogueTitleKey(item)} accessibilityRole="button"
         accessibilityLabel={`Remove ${item.title ?? 'Title'} from selection`} accessibilityHint={`Number ${index + 1} in your Top 5`}
         accessibilityState={{ disabled }} disabled={disabled}
@@ -65,7 +65,7 @@ export function CatalogueTitlePicker({ items, selected, onChange, limit, exclude
     <View style={searchList ? styles.resultsList : [styles.grid, topFive && styles.topFiveGrid]}>{shown.slice(0, topFive ? 25 : visibleCount).map(item => {
       const rank = selected.findIndex(row => catalogueTitleKey(row) === catalogueTitleKey(item));
       const checked = rank !== -1;
-      const unavailable = disabled || (!checked && selected.length >= limit);
+      const unavailable = disabled || (!checked && limit !== undefined && selected.length >= limit);
       const indicator = <View style={[styles.check, topFive && styles.topFiveCheck, searchList && styles.listCheck, checked && styles.checked]}>
         {checked ? topFive ? <Text style={styles.rank}>{rank + 1}</Text> : <Check size={15} color={colors.textOnAccent} /> : null}
       </View>;
@@ -111,10 +111,10 @@ const styles = StyleSheet.create({
   topFiveTitle: { fontSize: 10, lineHeight: 13, fontWeight: '500' },
   topFiveCheck: { width: 19, height: 19, borderRadius: 10 },
   rank: { color: colors.textOnAccent, fontSize: 11, fontWeight: '800' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  card: { width: 58, gap: spacing.xs, marginBottom: spacing.sm },
-  poster: { width: 58, height: 87, borderRadius: radii.sm },
-  title: { ...typography.meta, color: colors.text, fontSize: 11 }, disabled: { opacity: 0.45 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', rowGap: spacing.sm, columnGap: 0, marginHorizontal: -spacing.sm / 2 },
+  card: { width: '33.333333%', paddingHorizontal: spacing.sm / 2, gap: spacing.xs, marginBottom: spacing.sm },
+  poster: { width: '100%', aspectRatio: 2 / 3, borderRadius: radii.sm },
+  title: { ...typography.meta, color: colors.text, fontSize: 13 }, disabled: { opacity: 0.45 },
   check: { position: 'absolute', right: 3, top: 3, width: 21, height: 21, borderRadius: 11, borderWidth: 1, borderColor: colors.text, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center' },
   checked: { backgroundColor: colors.accent, borderColor: colors.accent },
 });

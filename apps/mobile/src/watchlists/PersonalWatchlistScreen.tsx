@@ -44,6 +44,8 @@ import {
   WatchlistSection,
 } from './WatchlistDetailLayout';
 import { WatchlistActionsMenu } from './WatchlistActionsMenu';
+import { AddWatchlistTitlesSheet } from './AddWatchlistTitlesSheet';
+import { WatchlistHydrationStatus } from './WatchlistHydrationStatus';
 import { useWatchlistTrashHeader } from './WatchlistTrashHeader';
 import { draggedPosterCenter } from './watchlistTrashTarget';
 import { useWatchlistRemoval } from './useWatchlistRemoval';
@@ -81,6 +83,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
   const [editor, setEditor] = useState<SectionEditor | null>(null);
   const [artworkScope, setArtworkScope] = useState<string | null>(null);
+  const [addTitlesScope, setAddTitlesScope] = useState<string | null>(null);
   const [settingsScope, setSettingsScope] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
@@ -240,8 +243,8 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
 
   const headerActions = visibleWatchlist ? (
     <WatchlistActionsMenu key={resourceScope} actions={[
-      { label: 'Filters', nativeIcon: 'line.3.horizontal.decrease', icon: <Funnel color={filters.active ? colors.accentText : colors.text} size={20} />, onPress: filters.open, active: filters.active },
-      { label: 'Add a title', nativeIcon: 'plus', icon: <Plus color={colors.text} size={20} />, onPress: () => navigation.navigate('MainTabs', { screen: 'Explore' }) },
+      { label: 'Filters & sort', nativeIcon: 'line.3.horizontal.decrease', icon: <Funnel color={filters.active || filters.sort !== 'original' ? colors.accentText : colors.text} size={20} />, onPress: filters.open, active: filters.active || filters.sort !== 'original' },
+      { label: 'Add titles', nativeIcon: 'plus', icon: <Plus color={colors.text} size={20} />, onPress: () => setAddTitlesScope(resourceScope) },
       { label: 'Create a section', nativeIcon: 'folder.badge.plus', icon: <FolderPlus color={colors.text} size={20} />, onPress: () => openSectionEditor({ mode: 'create' }), disabled: visibleSections.length >= MAX_PERSONAL_WATCHLIST_SECTIONS },
       { label: 'Cover & background', nativeIcon: 'photo', icon: <Camera color={colors.text} size={20} />, onPress: () => setArtworkScope(resourceScope) },
       { label: 'Settings', nativeIcon: 'gearshape', icon: <Settings color={colors.text} size={20} />, onPress: () => setSettingsScope(resourceScope) },
@@ -603,13 +606,12 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
         ) : visibleWatchlist ? (
           <WatchlistSection>
             <WatchlistFilterStatus filters={filters} />
+            <WatchlistHydrationStatus items={visibleItems} onRetry={() => void refreshWatchlist()} />
             {visibleItems.length === 0 && visibleSections.length === 0 ? (
-              <Text style={styles.emptyCopy}>
-                Add films or series from detail pages, or create a section to start shaping this list.
-              </Text>
+              <Button label="Add titles" onPress={() => setAddTitlesScope(resourceScope)} />
             ) : groups.filter((group) => !filters.active || group.items.length > 0).map((group) => {
-              const collapsed = collapsedGroups.has(group.id);
-              const expanded = expandedGroups.has(group.id);
+              const collapsed = !filters.query.trim() && collapsedGroups.has(group.id);
+              const expanded = Boolean(filters.query.trim()) || expandedGroups.has(group.id);
               const shownItems = expanded ? group.items : group.items.slice(0, SECTION_PREVIEW_ITEM_COUNT);
               return (
                 <View
@@ -663,7 +665,7 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
                           onMoveStart={beginMove}
                           onOpen={openItem}
                         />
-                        {group.items.length > SECTION_PREVIEW_ITEM_COUNT ? (
+                        {!filters.query.trim() && group.items.length > SECTION_PREVIEW_ITEM_COUNT ? (
                           <Button
                             compact
                             label={expanded ? 'Show less' : `Show all ${group.items.length}`}
@@ -681,6 +683,9 @@ export function PersonalWatchlistScreen({ navigation, route }: PersonalWatchlist
         ) : null}
       </WatchlistPage>
       <WatchlistFiltersSheet filters={filters} />
+      {addTitlesScope === resourceScope && visibleWatchlist ? <AddWatchlistTitlesSheet key={`add:${resourceScope}`}
+        kind="personal" watchlistId={watchlistId} items={visibleWatchlist.items} isPlanned={visibleWatchlist.isPlanned}
+        onClose={() => setAddTitlesScope(null)} /> : null}
       {visibleWatchlist ? <WatchlistSettingsSheet key={`settings:${resourceScope}`}
         watchlistId={watchlistId} removeWatchedMovies={visibleWatchlist.removeWatchedMovies ?? false}
         isPlanned={visibleWatchlist.isPlanned ?? false}
@@ -799,10 +804,6 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     borderWidth: 2,
     width: '100%',
-  },
-  emptyCopy: {
-    ...typography.body,
-    color: colors.textMuted,
   },
   emptySection: {
     ...typography.meta,

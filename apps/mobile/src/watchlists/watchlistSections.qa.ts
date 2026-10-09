@@ -59,7 +59,7 @@ assert.match(screen, /Animated\.spring\(dragScale,[\s\S]*?useNativeDriver: false
 assert.match(screen, /transform: \[\{ rotate: rotation \}, \{ scale: dragScale \}\]/, 'the carried poster must animate its tilt and lift');
 assert.match(screen, /transformOrigin: \[moving\.gripX, moving\.gripY, 0\]/, 'the poster must swing around the point held by the user');
 assert.doesNotMatch(screen, /style=\{styles\.movePanel\}/, 'moving must not replace the watchlist with a destination panel');
-assert.match(screen, /label: 'Add a title'[\s\S]*label: 'Create a section'/, 'the watchlist menu must expose both add actions');
+assert.match(screen, /label: 'Add titles'[\s\S]*label: 'Create a section'/, 'the watchlist menu must expose both add actions');
 assert.doesNotMatch(screen, /<Button compact label="Add titles"/, 'separate add-title and section buttons must be removed');
 assert.match(screen, /const headerActions =[\s\S]*?<WatchlistActionsMenu/, 'the shared header must group actions in one watchlist menu');
 assert.match(screen, /subtitle=[\s\S]*?visibleItems\.length === 1 \? 'title' : 'titles'/, 'the shared header must show the title count beneath the watchlist name');

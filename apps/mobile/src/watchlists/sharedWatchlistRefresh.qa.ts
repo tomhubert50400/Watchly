@@ -5,6 +5,7 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import * as voteModel from './sharedVoteModel';
 import * as watchlistCover from './watchlistCover';
+import { hydrateWatchlistItems } from './personalWatchlistHydration';
 
 const code = ts.transpileModule(readFileSync(new URL('./SharedWatchlistScreen.tsx', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
@@ -17,6 +18,7 @@ let revision = 0;
 let requests = 0;
 let effects: Array<() => void> = [];
 let pending: Promise<void> = Promise.resolve();
+let hydrationPending: Promise<unknown> = Promise.resolve();
 let load: Function;
 const item = (id: number) => ({ id: String(id), contentType: 'movie', tmdbId: id });
 let serverItems = [item(1), item(2)];
@@ -77,6 +79,7 @@ const modules: Record<string, unknown> = {
   './InlineSharedVote': { InlineSharedVote: 'inline-vote' },
   './VoteTitlePicker': { VoteTitlePicker: 'title-picker', voteMediaKey: (item: any) => `${item.contentType}:${item.tmdbId}` },
   './CreateSharedVoteSheet': { CreateSharedVoteSheet: 'vote-sheet' },
+  './AddWatchlistTitlesSheet': { AddWatchlistTitlesSheet: 'add-titles-sheet' },
   '../components/SectionHeader': { SectionHeader: 'section-header' },
   '../components/SegmentedControl': { SegmentedControl: 'segmented-control' },
   '../components/TextInput': { TextInput: 'input' },
@@ -85,7 +88,10 @@ const modules: Record<string, unknown> = {
   './sharedVoteModel': voteModel,
   './watchlistCover': watchlistCover,
   './useWatchlistRemoval': { useWatchlistRemoval: () => ({}) },
-  './personalWatchlistHydration': { hydrateWatchlistItems: async () => {} },
+  './personalWatchlistHydration': { hydrateWatchlistItems: (options: Parameters<typeof hydrateWatchlistItems>[0]) => {
+    hydrationPending = hydrateWatchlistItems(options);
+    return hydrationPending;
+  } },
   './WatchlistFilters': { useWatchlistFilters: (items: unknown[]) => ({ visibleItems: items }) },
   './WatchlistDetailLayout': { WatchlistPage: 'page', WatchlistSection: 'section', WatchlistPosterGrid: 'grid' },
   '../feedback/haptics': { hapticSuccess: noop, hapticError: noop },
@@ -124,6 +130,7 @@ function gridItems(node: any): any[] | undefined {
 async function settle() {
   await pending;
   render();
+  await hydrationPending;
   return gridItems(render()) ?? [];
 }
 function nodes(node: any): any[] {
@@ -134,6 +141,8 @@ function nodes(node: any): any[] {
 void (async () => {
   render();
   assert.equal((await settle()).length, 2, 'opening a cached empty list must display titles added since the cache was saved');
+  assert.ok(gridItems(render())?.every(row => row.title === 'Film' && row.posterUrl === 'poster'),
+    'new shared entries must load real titles and posters instead of retaining the Title placeholder');
   assert.equal(requests, 1, 'ordinary renders must not repeatedly reload the list');
   focused = false;
   render();
@@ -144,6 +153,8 @@ void (async () => {
   focused = true;
   render();
   assert.equal((await settle()).length, 3, 'returning from Add titles must refresh the grid');
+  assert.ok(gridItems(render())?.every(row => row.title === 'Film' && row.posterUrl === 'poster'),
+    'titles added while away must hydrate alongside already cached metadata');
   serverItems.push(item(4));
   revision++;
   render();
@@ -487,6 +498,72 @@ void (async () => {
   deleteConfirmation.find(button => button.text === 'Delete vote').onPress();
   assert.equal(deletedResult, 'vote', 'The creator can delete a completed vote from its options');
   assert.ok(!readFileSync(new URL('./InlineSharedVote.tsx', import.meta.url), 'utf8').includes('Available for 6 hours'));
+
+  // Exercise the shared add sheet with both APIs, partial failure and account changes.
+  slots.length = 0;
+  const titleKey = (row: any) => `${row.contentType}:${row.tmdbId}`;
+  modules['../catalogue/CatalogueTitlePicker'] = { CatalogueTitlePicker: 'catalogue-picker', catalogueTitleKey: titleKey };
+  const writes: string[] = [];
+  const changes: string[][] = [];
+  let closed = 0;
+  let owner = 'user';
+  let finishAdd!: () => void;
+  let failThird = true;
+  modules['../auth/AuthSessionContext'] = { useAuthSession: () => ({ currentUser: { id: owner }, getFirebaseIdToken: getToken }) };
+  const add = (kind: string) => async (_token: string, listId: string, row: any) => {
+    assert.equal(listId, 'target-list');
+    writes.push(`${kind}:${row.tmdbId}`);
+    if (row.tmdbId === 2) await new Promise<void>(resolve => { finishAdd = resolve; });
+    if (row.tmdbId === 3 && failThird) throw new Error('Offline');
+  };
+  modules['../api/watchlists'] = { addWatchlistItem: add('personal') };
+  api.addSharedWatchlistItem = add('shared');
+  (modules['../sync/userDataEvents'] as any).notifyUserDataChanged = (...domains: string[]) => changes.push(domains);
+  const AddTitles = loadComponent('./AddWatchlistTitlesSheet.tsx', 'AddWatchlistTitlesSheet');
+  let listKind = 'personal';
+  const addProps = () => ({ kind: listKind, watchlistId: 'target-list', items: [item(1)], isPlanned: listKind === 'personal', onClose: () => { closed++; } });
+  const renderAdd = () => {
+    cursor = 0; effects = [];
+    const tree = nodes(AddTitles(addProps()));
+    effects.forEach(effect => effect());
+    return tree;
+  };
+  const addPicker = () => renderAdd().find(node => node.type === 'catalogue-picker');
+  const addButton = () => renderAdd().find(node => node.type === 'button');
+  const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(addPicker().props.excluded[0].tmdbId, 1);
+  addPicker().props.onChange([item(1), item(2), item(3)]);
+  const addPress = addButton().props.onPress;
+  addPress(); addPress();
+  await tick();
+  assert.deepEqual(writes, ['personal:2'], 'existing titles are skipped and repeated taps do not duplicate writes');
+  renderAdd().find(node => node.type === 'sheet').props.onClose();
+  assert.equal(closed, 0, 'the sheet remains open during saving');
+  assert.equal(addPicker().props.disabled, true);
+  finishAdd(); await tick();
+  assert.deepEqual(writes, ['personal:2', 'personal:3']);
+  assert.deepEqual(Array.from(addPicker().props.selected, (row: any) => row.tmdbId), [3], 'only failed titles remain selected');
+  assert.ok(addPicker().props.excluded.some((row: any) => row.tmdbId === 2), 'successful additions cannot be selected again');
+  assert.equal(closed, 0);
+  assert.deepEqual(changes, [['watchlists', 'tracking']], 'Planned additions also refresh tracking');
+  failThird = false;
+  addButton().props.onPress(); await tick();
+  assert.deepEqual(writes, ['personal:2', 'personal:3', 'personal:3'], 'retry sends only the failed selection');
+  assert.equal(closed, 1);
+  slots.length = 0; listKind = 'shared';
+  addPicker().props.onChange([item(3)]);
+  addButton().props.onPress(); await tick();
+  assert.equal(writes.at(-1), 'shared:3', 'shared additions use the shared API');
+  assert.deepEqual(changes.at(-1), ['watchlists']);
+  slots.length = 0;
+  addPicker().props.onChange([item(2), item(3)]);
+  addButton().props.onPress(); await tick();
+  const beforeSwitch = writes.length;
+  owner = 'other-user'; renderAdd();
+  finishAdd(); await tick();
+  assert.equal(writes.length, beforeSwitch, 'an account change stops remaining writes');
+  assert.equal(closed, 2, 'a stale completion cannot close the new account sheet');
+  console.log('Watchlist add QA passed: both APIs, exclusions, double submit, partial retry, Planned refresh and account cancellation.');
   console.log('Inline vote QA passed: optimistic vote, rapid toggle queue, rollback, global search, 10-title limit, immediate additions and collapsible results.');
   console.log('Shared watchlist freshness QA passed: stale refresh during and after saves, concurrent sessions, fresh member votes, collapsed pending saves and cached list refresh.');
   console.log('Shared vote UI QA passed: section order, member menu, modal options, title limit and duplicate submit.');

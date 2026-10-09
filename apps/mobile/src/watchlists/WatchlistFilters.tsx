@@ -8,41 +8,54 @@ import { EmptyState } from '../components/EmptyState';
 import { InlineStatusBanner } from '../components/InlineStatusBanner';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { colors, spacing, typography } from '../design/tokens';
-import { filterWatchlistItems, type WatchlistMediaType } from './watchlistFiltersModel';
+import { filterWatchlistItems, searchAndSortWatchlistItems, type WatchlistMediaType, type WatchlistSort } from './watchlistFiltersModel';
+import { WatchlistSearchField } from './WatchlistSearchField';
 
-type FilterState = { scope: string; mediaType: WatchlistMediaType; genre: string | null; open: boolean };
+type FilterState = { scope: string; mediaType: WatchlistMediaType; genre: string | null; open: boolean; query: string; sort: WatchlistSort };
+const sortOptions: { label: string; value: WatchlistSort }[] = [
+  { label: 'List order', value: 'original' }, { label: 'Recently added', value: 'newest' },
+  { label: 'Oldest added', value: 'oldest' }, { label: 'Title A–Z', value: 'title' },
+];
 const mediaTypes: Array<{ label: string; value: WatchlistMediaType }> = [
   { label: 'All', value: 'all' },
   { label: 'Movies', value: 'movie' },
   { label: 'Series', value: 'series' },
 ];
 
-export function useWatchlistFilters<T extends { contentType: 'movie' | 'series'; tmdbId: number }>(items: readonly T[], scope: string) {
-  const initial: FilterState = { scope, mediaType: 'all', genre: null, open: false };
+export function useWatchlistFilters<T extends { contentType: 'movie' | 'series'; tmdbId: number; title?: string | null; createdAt?: string }>(items: readonly T[], scope: string) {
+  const initial: FilterState = { scope, mediaType: 'all', genre: null, open: false, query: '', sort: 'original' };
   const [selection, setSelection] = useState(initial);
   const state = selection.scope === scope ? selection : initial;
   const update = useCallback((next: Partial<FilterState>) => setSelection((current) => ({
-    ...(current.scope === scope ? current : { scope, mediaType: 'all', genre: null, open: false }),
+    ...(current.scope === scope ? current : { scope, mediaType: 'all', genre: null, open: false, query: '', sort: 'original' }),
     ...next,
   })), [scope]);
   const genreItems = useMemo(() => items.filter((item) => state.mediaType === 'all' || item.contentType === state.mediaType), [items, state.mediaType]);
   const genres = useMediaGenres(genreItems, true);
   const selectedGenres = state.genre ? genres.genresByKey : null;
   const visibleItems = useMemo(
-    () => filterWatchlistItems(items, state.mediaType, state.genre, selectedGenres ?? {}),
-    [items, state.mediaType, state.genre, selectedGenres],
+    () => searchAndSortWatchlistItems(filterWatchlistItems(items, state.mediaType, state.genre, selectedGenres ?? {}), state.query, state.sort),
+    [items, state.mediaType, state.genre, selectedGenres, state.query, state.sort],
   );
   const open = useCallback(() => update({ open: true }), [update]);
   const close = useCallback(() => update({ open: false }), [update]);
-  const clear = useCallback(() => update({ mediaType: 'all', genre: null }), [update]);
-  return { ...state, active: state.mediaType !== 'all' || state.genre !== null, isOpen: state.open, open, close, clear, update, genres, visibleItems, total: items.length };
+  const clear = useCallback(() => update({ mediaType: 'all', genre: null, query: '', sort: 'original' }), [update]);
+  return { ...state, active: state.mediaType !== 'all' || state.genre !== null || Boolean(state.query.trim()), isOpen: state.open, open, close, clear, update, genres, visibleItems, total: items.length };
 }
 
 type Filters = ReturnType<typeof useWatchlistFilters>;
 
 export function WatchlistFiltersSheet({ filters }: { filters: Filters }) {
-  return <BottomActionSheet title="Filters" visible={filters.isOpen} onClose={filters.close}>
+  return <BottomActionSheet title="Filters & sort" visible={filters.isOpen} onClose={filters.close}>
     <BottomActionSheetScrollView>
+      <Text style={styles.heading}>Sort by</Text>
+      {sortOptions.map(option => <Pressable key={option.value} accessibilityRole="radio"
+        accessibilityState={{ checked: filters.sort === option.value }} style={styles.row}
+        onPress={() => filters.update({ sort: option.value })}>
+        <Text style={styles.label}>{option.label}</Text>
+        {filters.sort === option.value ? <Check size={20} color={colors.accentText} /> : null}
+      </Pressable>)}
+      <Text style={styles.heading}>Type</Text>
       <SegmentedControl options={mediaTypes} value={filters.mediaType} onChange={(mediaType) => filters.update({ mediaType })} />
       <Text style={styles.heading}>Genre</Text>
       {[null, ...filters.genres.genres].map((genre) => (
@@ -54,19 +67,20 @@ export function WatchlistFiltersSheet({ filters }: { filters: Filters }) {
       ))}
       {filters.genres.loading ? <ActivityIndicator accessibilityLabel="Loading genres" color={colors.accent} style={styles.loading} /> : null}
       {filters.genres.error ? <InlineStatusBanner tone="error" detail="Some genres could not be loaded." onRetry={filters.genres.retry} /> : null}
-      {filters.active ? <Button label="Clear filters" variant="ghost" onPress={filters.clear} /> : null}
+      {filters.active || filters.sort !== 'original' ? <Button label="Reset filters & sort" variant="ghost" onPress={filters.clear} /> : null}
     </BottomActionSheetScrollView>
   </BottomActionSheet>;
 }
 
 export function WatchlistFilterStatus({ filters }: { filters: Filters }) {
-  if (!filters.active) return null;
   return <View style={styles.status}>
-    <Text style={styles.count}>{filters.visibleItems.length} of {filters.total} titles</Text>
+    <WatchlistSearchField label="Search this watchlist" placeholder="Search this watchlist" value={filters.query}
+      onChangeText={query => filters.update({ query })} />
+    {filters.active || filters.sort !== 'original' ? <Text style={styles.count}>{filters.visibleItems.length} of {filters.total} titles · {sortOptions.find(option => option.value === filters.sort)?.label}</Text> : null}
     {filters.genre && filters.genres.loading ? <ActivityIndicator accessibilityLabel="Loading matching titles" color={colors.accent} /> : null}
     {filters.genre && filters.genres.error ? <InlineStatusBanner tone="error" detail="Some genres could not be loaded. Results may be incomplete." onRetry={filters.genres.retry} /> : null}
-    {filters.visibleItems.length === 0 && !(filters.genre && filters.genres.loading) ? (
-      <EmptyState title="No matching titles" body="Choose another type or genre to see more titles.">
+    {filters.active && filters.visibleItems.length === 0 && !(filters.genre && filters.genres.loading) ? (
+      <EmptyState title="No matching titles" body="Try another search, type or genre.">
         <Button label="Clear filters" variant="secondary" onPress={filters.clear} />
       </EmptyState>
     ) : null}
