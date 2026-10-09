@@ -92,6 +92,10 @@ export class NotificationsService implements OnApplicationBootstrap, OnModuleDes
         where: {
           userId,
           id: { notIn: pendingInvitations.map((item) => item.id) },
+          OR: [
+            { kind: { not: NotificationKind.FOLLOW } },
+            { actor: { blockedUsers: { none: { blockedUserId: userId } }, blockedBy: { none: { blockerId: userId } } } },
+          ],
         },
       }),
     );
@@ -784,6 +788,7 @@ function fromNotificationKind(kind: NotificationKind) {
 
   if (kind === NotificationKind.SHARED_LIST_INVITE) return 'shared_list_invite';
   if (kind === NotificationKind.SHARED_VOTE_UPDATE) return 'shared_vote_update';
+  if (kind === NotificationKind.FOLLOW) return 'follow';
   return 'review_reply';
 }
 

@@ -90,6 +90,7 @@ enum NotificationKind {
   SHARED_LIST_INVITE
   SHARED_VOTE_UPDATE
   REVIEW_REPLY
+  FOLLOW
 }
 
 enum ReleaseDatePrecision {

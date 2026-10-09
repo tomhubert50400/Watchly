@@ -9,7 +9,8 @@ import { AuthService } from '../auth/auth.service';
 import { AuthenticatedIdentity } from '../auth/auth.types';
 import { assertUuid } from '../blocks/blocks.service';
 import { PrismaService } from '../database/prisma.service';
-import { FollowStatus, PrivacyVisibility } from '../generated/prisma/enums';
+import { Prisma } from '../generated/prisma/client';
+import { FollowStatus, NotificationKind, PrivacyVisibility } from '../generated/prisma/enums';
 
 @Injectable()
 export class FollowsService {
@@ -34,21 +35,27 @@ export class FollowsService {
     const requestedStatus = await this.getRequestedFollowStatus(followerId, targetUserId);
 
     const follow = await this.prisma.withConnectionRetry(() =>
-      this.prisma.userFollow.upsert({
-      create: {
-        followedUserId: targetUserId,
-        followerId,
-        status: requestedStatus,
-      },
-      update: requestedStatus === FollowStatus.ACCEPTED
-        ? { status: FollowStatus.ACCEPTED }
-        : {},
-      where: {
-        followerId_followedUserId: {
-          followedUserId: targetUserId,
-          followerId,
-        },
-      },
+      this.prisma.$transaction(async (tx) => {
+        const savedFollow = await tx.userFollow.upsert({
+          create: {
+            followedUserId: targetUserId,
+            followerId,
+            status: requestedStatus,
+          },
+          update: requestedStatus === FollowStatus.ACCEPTED
+            ? { status: FollowStatus.ACCEPTED }
+            : {},
+          where: {
+            followerId_followedUserId: {
+              followedUserId: targetUserId,
+              followerId,
+            },
+          },
+        });
+        if (savedFollow.status === FollowStatus.ACCEPTED) {
+          await createFollowNotification(tx, savedFollow);
+        }
+        return savedFollow;
       }),
     );
 
@@ -108,22 +115,27 @@ export class FollowsService {
 
     assertUuid(followerId);
 
-    const result = await this.prisma.withConnectionRetry(() =>
-      this.prisma.userFollow.updateMany({
-        data: {
-          status: FollowStatus.ACCEPTED,
-        },
-        where: {
-          followedUserId,
-          followerId,
-          status: FollowStatus.PENDING,
-        },
+    await this.prisma.withConnectionRetry(() =>
+      this.prisma.$transaction(async (tx) => {
+        const result = await tx.userFollow.updateMany({
+          data: {
+            status: FollowStatus.ACCEPTED,
+          },
+          where: {
+            followedUserId,
+            followerId,
+            status: FollowStatus.PENDING,
+          },
+        });
+        if (result.count === 0) {
+          throw new NotFoundException('Follow request not found.');
+        }
+        const follow = await tx.userFollow.findUniqueOrThrow({
+          where: { followerId_followedUserId: { followedUserId, followerId } },
+        });
+        await createFollowNotification(tx, follow);
       }),
     );
-
-    if (result.count === 0) {
-      throw new NotFoundException('Follow request not found.');
-    }
 
     return { accepted: true, userId: followerId };
   }
@@ -212,6 +224,33 @@ export class FollowsService {
       ? FollowStatus.PENDING
       : FollowStatus.ACCEPTED;
   }
+}
+
+async function createFollowNotification(
+  tx: Prisma.TransactionClient,
+  follow: {
+    id: string;
+    followedUserId: string;
+    followerId: string;
+  },
+) {
+  const follower = await tx.user.findUniqueOrThrow({
+    where: { id: follow.followerId },
+    select: { displayName: true, handle: true },
+  });
+  const name = follower.displayName?.trim() || follower.handle || 'A Watchly member';
+  await tx.notification.createMany({
+    data: [{
+      actorUserId: follow.followerId,
+      body: `${name} started following you.`,
+      dedupeKey: `follow:${follow.id}`,
+      kind: NotificationKind.FOLLOW,
+      routeMetadata: { route: 'PublicProfile', userId: follow.followerId },
+      title: 'New follower',
+      userId: follow.followedUserId,
+    }],
+    skipDuplicates: true,
+  });
 }
 
 function toFollowState(
