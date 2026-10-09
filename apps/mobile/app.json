@@ -4,6 +4,10 @@
     "slug": "tv-app",
     "scheme": ["tvapp", "com.tom.tvapp.dev", "msauth.com.tom.tvapp.dev"],
     "version": "1.0.0",
+    "runtimeVersion": { "policy": "fingerprint" },
+    "updates": {
+      "url": "https://u.expo.dev/58f2b198-56a0-4c86-bb77-af0a628faf04"
+    },
     "newArchEnabled": true,
     "orientation": "portrait",
     "plugins": [

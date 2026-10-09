@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
+import { requireOptionalNativeModule } from 'expo';
 import type { ComponentType } from 'react';
 import { appEnvironment, publicEnv } from '../config/publicEnv';
 import { sanitizeMobileErrorEvent } from './errorTrackingEvent';
@@ -20,6 +21,9 @@ export function initializeErrorTracking() {
     beforeSend: sanitizeMobileErrorEvent,
     dsn,
     environment: appEnvironment,
+    integrations: (integrations) => requireOptionalNativeModule('ExpoUpdates')
+      ? integrations
+      : integrations.filter((integration) => integration.name !== 'ExpoUpdatesListener'),
     onReady: () => {
       void runNativeCrashMonitoringProbe().catch(() => undefined);
     },

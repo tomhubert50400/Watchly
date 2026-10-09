@@ -24,6 +24,7 @@
       }
     },
     "staging": {
+      "channel": "staging",
       "distribution": "internal",
       "environment": "preview",
       "env": {
@@ -47,6 +48,7 @@
       "extends": "staging"
     },
     "production": {
+      "channel": "production",
       "autoIncrement": true,
       "environment": "production",
       "env": {
