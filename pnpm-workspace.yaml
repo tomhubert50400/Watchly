@@ -2,6 +2,9 @@ packages:
   - apps/*
   - packages/*
 
+# Keep native fingerprints identical on Windows and macOS builders.
+virtualStoreDirMaxLength: 60
+
 patchedDependencies:
   '@react-navigation/bottom-tabs@7.8.12': patches/@react-navigation__bottom-tabs@7.8.12.patch
   react-native-screens@4.16.0: patches/react-native-screens@4.16.0.patch

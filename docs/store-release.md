@@ -24,6 +24,7 @@ This file is the source of truth for the first Watchly beta and the future publi
 `expo-updates` is configured for the next native build. Existing TestFlight builds without this module cannot receive these updates. No update is published as part of local configuration or staging tests.
 
 - Runtime compatibility uses Expo's `fingerprint` policy. Native dependencies or native configuration changes require a new compatible build.
+- Keep `virtualStoreDirMaxLength: 60` in `pnpm-workspace.yaml`: pnpm's platform-specific defaults otherwise produce different native dependency paths and runtime fingerprints on Windows and EAS macOS builders.
 - The `staging` channel uses EAS `preview` variables. The `production` channel uses EAS `production` variables and is inherited by `testflight`.
 - Check the target channel, runtime fingerprint and resolved API environment before publishing. Never publish staging variables to production.
 - Run the commands below from `apps/mobile` only after the corresponding build is installed and the update is approved for release. The environment flags are required because EAS Update does not inherit a build profile's `env` block.
