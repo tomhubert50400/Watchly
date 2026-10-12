@@ -3,7 +3,6 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CalendarDays, ChevronRight, Search, X } from 'lucide-react-native';
 import {
-  Image,
   ImageBackground,
   InputAccessoryView,
   Keyboard,
@@ -17,6 +16,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { MediaLogo } from '../components/MediaLogo';
 import {
   CatalogueSearchItem,
   CatalogueSearchType,
@@ -628,7 +628,7 @@ function ExploreFeature({
             accessible
             style={styles.featureLogoFrame}
           >
-            <Image
+            <MediaLogo
               accessibilityIgnoresInvertColors
               accessible={false}
               resizeMode="contain"

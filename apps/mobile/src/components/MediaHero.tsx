@@ -8,6 +8,7 @@ import Svg, {
 } from 'react-native-svg';
 import { colors, spacing } from '../design/tokens';
 import { mediaHeroGradientStops } from './mediaHeroGradient';
+import { MediaLogo } from './MediaLogo';
 
 type MediaHeroProps = {
   actionAccessory?: ReactNode;
@@ -76,7 +77,7 @@ export function MediaHero({
                 accessible
                 style={styles.logoFrame}
               >
-                <Image
+                <MediaLogo
                   accessibilityIgnoresInvertColors
                   accessible={false}
                   resizeMode="contain"

@@ -1,6 +1,7 @@
 // Node types are intentionally not part of the Expo runtime TypeScript configuration.
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import assert from 'node:assert/strict';
+import './mediaLogo.qa';
 import { mediaHeroFadeColors, mediaHeroGradientStops } from './mediaHeroGradient';
 
 assert.equal(mediaHeroFadeColors.length, 24, 'The backdrop fade needs enough steps to avoid a hard band.');

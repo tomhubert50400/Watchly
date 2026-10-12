@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react-native';
-import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { MediaLogo } from '../components/MediaLogo';
 import type { DiscoverItem } from '../api/discover';
 import { HorizontalScrollFade } from '../components/HorizontalScrollFade';
 import { colors, radii, spacing, typography } from '../design/tokens';
@@ -34,7 +35,7 @@ export function DiscoverCarousel({ items, onOpen }: { items: DiscoverItem[]; onO
             <ImageBackground source={{ uri: item.backdropUrl ?? item.posterUrl ?? undefined }} style={styles.artwork}>
               <View style={styles.scrim} />
               <View style={styles.copy}>
-                {details?.logoUrl ? <Image accessibilityLabel={item.title} resizeMode="contain" source={{ uri: details.logoUrl }} style={[styles.logo, { aspectRatio: details.logoAspectRatio ?? 3 }]} /> : <Text numberOfLines={2} style={styles.title}>{item.title}</Text>}
+                {details?.logoUrl ? <MediaLogo accessibilityLabel={item.title} resizeMode="contain" source={{ uri: details.logoUrl }} style={[styles.logo, { aspectRatio: details.logoAspectRatio ?? 3 }]} /> : <Text numberOfLines={2} style={styles.title}>{item.title}</Text>}
                 <Text style={styles.meta}>{item.mediaType === 'movie' ? 'Movie' : 'TV Show'}{item.releaseDate ? ` · ${item.releaseDate.slice(0, 4)}` : ''}</Text>
               </View>
             </ImageBackground>

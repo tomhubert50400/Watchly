@@ -1,4 +1,5 @@
-import { Image, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
+import { MediaLogo } from '../components/MediaLogo';
 import { colors, radii, shadows, spacing, typography } from '../design/tokens';
 import type { HomeHeroItem } from './homeData';
 
@@ -51,7 +52,7 @@ function HeroCopy({ item, metadata }: { item: HomeHeroItem; metadata: string[] }
           accessible
           style={styles.logoFrame}
         >
-          <Image
+          <MediaLogo
             accessibilityIgnoresInvertColors
             accessible={false}
             resizeMode="contain"
