@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "580389352237",
+    "project_id": "watchly-production-zerqua",
+    "storage_bucket": "watchly-production-zerqua.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:580389352237:android:d14dd4fa9b227fa38699a4",
+        "android_client_info": {
+          "package_name": "com.trywatchly.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "580389352237-ufrukbmbkhvs47p1kfjiknhqedotlpae.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAJPfA2DWec2cG4sLGIkZzyZZodlxCWZtQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "580389352237-ufrukbmbkhvs47p1kfjiknhqedotlpae.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "580389352237-gllhdo624ogtiplh6a3f39jn7kgtv6p2.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.trywatchly.app"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

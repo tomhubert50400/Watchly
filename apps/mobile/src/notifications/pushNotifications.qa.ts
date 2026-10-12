@@ -15,6 +15,28 @@ const observerSource = readFileSync(new URL('./PushNavigationObserver.tsx', impo
 const onboardingSource = readFileSync(new URL('../onboarding/OnboardingScreen.tsx', import.meta.url), 'utf8');
 const registrationSyncSource = readFileSync(new URL('./PushRegistrationSync.tsx', import.meta.url), 'utf8');
 const settingsSource = readFileSync(new URL('../profile/SettingsScreen.tsx', import.meta.url), 'utf8');
+const dynamicConfigSource = readFileSync(new URL('../../app.config.js', import.meta.url), 'utf8');
+
+for (const variant of ['development', 'staging', 'production']) {
+  const module = { exports: null as unknown as (input: { config: typeof appConfig.expo }) => typeof appConfig.expo };
+  runInNewContext(dynamicConfigSource, { module, process: { env: {
+    APP_VARIANT: variant, EXPO_PUBLIC_APP_ENV: variant, EXPO_PUBLIC_DISCORD_APPLICATION_ID: '123456789',
+  } } });
+  const resolved = module.exports({ config: appConfig.expo });
+  if (variant !== 'production') {
+    assert.equal(resolved.android.googleServicesFile, undefined, 'Other environments must not register devices in production Firebase.');
+    continue;
+  }
+  assert.equal(resolved.android.googleServicesFile, './google-services.production.json', 'Production Android must include native Firebase configuration for push registration.');
+  const googleServices = JSON.parse(readFileSync(new URL(`../../${resolved.android.googleServicesFile}`, import.meta.url), 'utf8'));
+  assert.equal(googleServices.project_info.project_id, 'watchly-production-zerqua');
+  assert.equal(googleServices.project_info.project_number, '580389352237');
+  assert.ok(googleServices.client.some((client: { client_info: { mobilesdk_app_id: string; android_client_info: { package_name: string } } }) =>
+    client.client_info.android_client_info.package_name === resolved.android.package &&
+    client.client_info.mobilesdk_app_id.startsWith('1:580389352237:android:')
+  ), 'The native Firebase application must match the production Android package and sender.');
+  assert.equal(googleServices.private_key, undefined, 'Private service account credentials must never be bundled in the app.');
+}
 
 assert.ok(
   appConfig.expo.plugins.some((plugin: unknown) =>

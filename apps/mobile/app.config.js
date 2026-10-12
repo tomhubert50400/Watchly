@@ -40,6 +40,9 @@ module.exports = ({ config }) => {
     android: {
       ...config.android,
       package: applicationId,
+      ...(variant === 'production'
+        ? { googleServicesFile: './google-services.production.json' }
+        : {}),
     },
     extra: {
       ...config.extra,
