@@ -363,31 +363,34 @@ export class ReleaseEventsService {
       return previous ? hasCandidateChanged(previous, candidate) : false;
     }).length;
 
-    await this.prisma.withConnectionRetry(() =>
-      Promise.all(candidates.map((candidate) => {
-        return this.prisma.releaseEvent.upsert({
-          create: {
-            ...candidate,
-            lastSyncedAt: now,
-            regionCode: null,
-            source: 'TMDB',
-            status: ReleaseEventStatus.ACTIVE,
-            timeZone: null,
-          },
-          update: {
-            ...candidate,
-            lastSyncedAt: now,
-            regionCode: null,
-            source: 'TMDB',
-            status: ReleaseEventStatus.ACTIVE,
-            timeZone: null,
-          },
-          where: {
-            sourceKey: candidate.sourceKey,
-          },
-        });
-      })),
-    );
+    for (let offset = 0; offset < candidates.length; offset += SCHEDULE_BATCH_SIZE) {
+      const batch = candidates.slice(offset, offset + SCHEDULE_BATCH_SIZE);
+      await this.prisma.withConnectionRetry(() =>
+        Promise.all(batch.map((candidate) => {
+          return this.prisma.releaseEvent.upsert({
+            create: {
+              ...candidate,
+              lastSyncedAt: now,
+              regionCode: null,
+              source: 'TMDB',
+              status: ReleaseEventStatus.ACTIVE,
+              timeZone: null,
+            },
+            update: {
+              ...candidate,
+              lastSyncedAt: now,
+              regionCode: null,
+              source: 'TMDB',
+              status: ReleaseEventStatus.ACTIVE,
+              timeZone: null,
+            },
+            where: {
+              sourceKey: candidate.sourceKey,
+            },
+          });
+        })),
+      );
+    }
 
     let withdrawnCount = 0;
     for (const scope of reconciliationScopes) {

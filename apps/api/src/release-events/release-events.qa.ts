@@ -179,6 +179,27 @@ async function run() {
     'a failed episode scope must remain visible even when season events were synchronized',
   );
 
+  failSeasonFetch = false;
+  episodes = Array.from({ length: 1200 }, (_, index) => ({
+    airDate: '2099-04-01', episodeNumber: index + 1, seasonNumber: 2, title: `Episode ${index + 1}`,
+  }));
+  let pendingWrites = 0;
+  let peakWrites = 0;
+  const upsert = prisma.releaseEvent.upsert;
+  prisma.releaseEvent.upsert = async (args) => {
+    pendingWrites += 1;
+    peakWrites = Math.max(peakWrites, pendingWrites);
+    try {
+      await Promise.resolve();
+      return await upsert(args);
+    } finally {
+      pendingWrites -= 1;
+    }
+  };
+  const longSeries = await service.syncContent(TrackedContentType.SERIES, 20, { force: true });
+  assert.equal(longSeries.events.length, 1202, 'Large seasons must retain every episode and season.');
+  assert.ok(peakWrites <= 4, `A long series must not flood the database pool (${peakWrites} concurrent writes).`);
+
   console.log('Release events QA passed: idempotency, postponement, withdrawal, and run status.');
 }
 
