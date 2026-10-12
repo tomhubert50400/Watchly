@@ -4,6 +4,7 @@ import {
   Alert,
   GestureResponderEvent,
   Image,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -650,7 +651,7 @@ export function OpinionSheet({
             <Text accessibilityLiveRegion="polite" style={styles.scoreLabel}>
               {opinion.draftRating === null ? 'Tap to rate' : `${opinion.draftRating} / 5`}
             </Text>
-            <Text style={styles.help}>Ratings save automatically. Tap or slide across the stars. With VoiceOver, swipe up or down to adjust.</Text>
+            <Text style={styles.help}>Ratings save automatically. Tap or slide across the stars. With {Platform.OS === 'android' ? 'TalkBack' : 'VoiceOver'}, swipe up or down to adjust.</Text>
           </View>
 
           {reviewsEnabled ? (
