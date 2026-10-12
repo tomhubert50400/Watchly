@@ -1,6 +1,9 @@
 // @ts-expect-error QA executes under tsx/Node.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
+import ts from 'typescript';
+import * as tokens from '../design/tokens';
 import { getWatchlistBackgroundItem, getWatchlistCoverItems, toggleWatchlistCoverItem } from './watchlistCover';
 import { saveWatchlistArtwork } from './saveWatchlistArtwork';
 
@@ -25,6 +28,48 @@ assert.equal(getWatchlistBackgroundItem(backgrounds, 'custom')?.id, 'custom', 'T
 assert.equal(getWatchlistBackgroundItem(backgrounds, 'deleted')?.id, 'first', 'Removing the selected title restores automatic artwork');
 assert.equal(getWatchlistBackgroundItem(backgrounds, 'empty')?.id, 'first', 'A title with no artwork must not leave the background empty');
 assert.equal(getWatchlistBackgroundItem([]), undefined, 'Empty lists use the visual fallback');
+
+// Compare the effective native gradient centers, including Android's elliptical scaling.
+const artworkCode = ts.transpileModule(readFileSync(new URL('../library/WatchlistRail.tsx', import.meta.url), 'utf8'), {
+  compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS },
+}).outputText;
+function renderArtwork(platform: string, count: number) {
+  const exports: Record<string, Function> = {};
+  const jsx = (type: unknown, props: unknown) => ({ type, props });
+  const modules: Record<string, unknown> = {
+    'react/jsx-runtime': { jsx, jsxs: jsx },
+    'lucide-react-native': {},
+    'react-native': { Platform: { OS: platform }, StyleSheet: { create: (styles: unknown) => styles }, Image: 'Image', View: 'View' },
+    'react-native-svg': { default: 'Svg', Defs: 'Defs', RadialGradient: 'RadialGradient', Mask: 'Mask', Rect: 'Rect', Stop: 'Stop', Image: 'SvgImage' },
+    '../components/HorizontalScrollFade': {},
+    '../components/UserAvatar': {},
+    '../design/tokens': tokens,
+  };
+  runInNewContext(artworkCode, { exports, require: (name: string) => {
+    assert(name in modules, `Unexpected artwork import: ${name}`);
+    return modules[name];
+  } });
+  return exports.BlendedArtwork({ blendId: 'cover-qa', urls: Array.from({ length: count }, (_, i) => `image-${i}`) });
+}
+for (const count of [2, 3, 4]) {
+  const iosGradients = renderArtwork('ios', count).props.children.props.children[0].props.children[0];
+  const androidGradients = renderArtwork('android', count).props.children.props.children[0].props.children[0];
+  for (let i = 0; i < count; i++) {
+    const expected = iosGradients[i].props;
+    const actual = androidGradients[i].props;
+    assert.equal(actual.cx, expected.cx, 'Horizontal collage placement must stay unchanged');
+    assert.equal(actual.rx, expected.rx, 'Horizontal fade radius must stay unchanged');
+    assert.equal(actual.ry, expected.ry, 'Vertical fade radius must stay unchanged');
+    assert(Math.abs(actual.cy * actual.ry / actual.rx - expected.cy) < 0.001,
+      `Android's ${count}-image cover must center gradient ${i} at the same visible height as iOS`);
+  }
+}
+for (const platform of ['ios', 'android']) {
+  assert.equal(renderArtwork(platform, 0).type, 'View', 'Empty covers retain the placeholder');
+  const single = renderArtwork(platform, 1);
+  assert.equal(single.type, 'Image', 'Single covers retain the native image');
+  assert.equal(single.props.source.uri, 'image-0');
+}
 
 const artworkButton = readFileSync(new URL('./WatchlistArtworkSheet.tsx', import.meta.url), 'utf8');
 const personalScreen = readFileSync(new URL('./PersonalWatchlistScreen.tsx', import.meta.url), 'utf8');

@@ -1,5 +1,5 @@
 import { Check } from 'lucide-react-native';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, {
   Defs,
   Image as SvgImage,
@@ -138,7 +138,8 @@ export function BlendedArtwork({ blendId, urls }: { blendId: string; urls: Array
           {layers.map((layer, index) => (
             <RadialGradient
               cx={layer.cx}
-              cy={layer.cy}
+              // Android scales numeric cy by ry/rx when drawing an elliptical gradient.
+              cy={Platform.OS === 'android' ? layer.cy * layer.rx / layer.ry : layer.cy}
               gradientUnits="userSpaceOnUse"
               id={`${blendId}-gradient-${index}`}
               key={`${blendId}-gradient-${index}`}
