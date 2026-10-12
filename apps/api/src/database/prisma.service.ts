@@ -12,10 +12,12 @@ export class PrismaService implements OnModuleDestroy {
   private static pool: pg.Pool | null = null;
   private static resetPromise: Promise<void> | null = null;
   private readonly connectionString: string;
+  private readonly poolMax: number;
   private readonly logger = new Logger(PrismaService.name);
 
   constructor(@Inject(ConfigService) config: ConfigService) {
     this.connectionString = config.getOrThrow<string>('DATABASE_URL');
+    this.poolMax = Number(config.get<number>('DATABASE_POOL_MAX') ?? 10);
 
     if (!PrismaService.client || !PrismaService.pool) {
       const connection = this.createConnection();
@@ -266,7 +268,7 @@ export class PrismaService implements OnModuleDestroy {
       connectionString: this.connectionString,
       connectionTimeoutMillis: 5000,
       idleTimeoutMillis: 30000,
-      max: 10,
+      max: this.poolMax,
       maxLifetimeSeconds: 300,
     });
     registerPrismaPoolErrorHandler(pool, (error) => {

@@ -33,6 +33,7 @@ export const apiEnvironmentSchema = Joi.object({
   CORS_ADDITIONAL_ORIGIN: Joi.string().uri().optional(),
   CORS_ORIGIN: Joi.string().uri().optional(),
   DATABASE_URL: Joi.string().uri().required(),
+  DATABASE_POOL_MAX: Joi.number().integer().min(1).default(10),
   DEMO_AUTH_USERNAME: Joi.string().trim().max(128).allow('').optional(),
   DEMO_AUTH_PASSWORD_HASH: Joi.string().pattern(/^scrypt:[a-f0-9]{32}:[a-f0-9]{128}$/).allow('').optional(),
   ERROR_TRACKING_DSN: Joi.string().uri().when('APP_ENV', {

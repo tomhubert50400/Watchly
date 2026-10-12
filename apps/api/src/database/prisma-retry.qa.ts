@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { ConfigService } from '@nestjs/config';
 import { isPrismaConnectionError, isPrismaTransactionConflict, registerPrismaPoolErrorHandler } from './prisma-retry';
 import { PrismaService } from './prisma.service';
 
@@ -50,6 +51,19 @@ assert.equal(
 );
 
 async function verifyRetries() {
+  for (const configuredMax of [undefined, 1, 3]) {
+    const configuredService = new PrismaService(new ConfigService({
+      DATABASE_URL: 'postgresql://localhost:5432/pool-configuration-qa',
+      DATABASE_POOL_MAX: configuredMax,
+    }));
+    try {
+      const configuredPool = (configuredService as unknown as { pool: { options: { max: number } } }).pool;
+      assert.equal(configuredPool.options.max, configuredMax ?? 10,
+        'The pool must honor the local connection limit and preserve the default elsewhere.');
+    } finally {
+      await configuredService.$disconnect();
+    }
+  }
   const service = Object.create(PrismaService.prototype) as PrismaService;
   let resets = 0;
   service.resetConnection = async () => { resets += 1; };

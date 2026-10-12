@@ -16,6 +16,12 @@ const completeConfiguration = {
 };
 
 assert.equal(apiEnvironmentSchema.validate(completeConfiguration).error, undefined);
+assert.equal(apiEnvironmentSchema.validate(completeConfiguration).value.DATABASE_POOL_MAX, 10);
+assert.equal(apiEnvironmentSchema.validate({ ...completeConfiguration, DATABASE_POOL_MAX: '1' }).value.DATABASE_POOL_MAX, 1);
+for (const poolMax of [0, -1, 1.5, 'invalid']) {
+  assert.ok(apiEnvironmentSchema.validate({ ...completeConfiguration, DATABASE_POOL_MAX: poolMax }).error,
+    'Database pool size must be a positive integer.');
+}
 assert.equal(
   apiEnvironmentSchema.validate({
     APP_ENV: 'development',
