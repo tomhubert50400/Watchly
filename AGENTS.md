@@ -56,6 +56,8 @@ Points de départ à vérifier dans le code actuel, sans limiter la recherche à
 
 - Pour un correctif de comportement, ajouter ou adapter un test pertinent qui reproduit le problème lorsque c'est automatisable.
 - Lorsqu'un élément partagé change, vérifier la nouvelle fonctionnalité et les usages existants affectés.
+- Pour toute modification de la version Apple (iOS), vérifier également le parcours concerné sur Android, y compris le rendu, les interactions et les éventuelles régressions. Utiliser l'émulateur Android lorsqu'aucun appareil Android physique n'est disponible.
+- Lorsque l'utilisateur demande « lance le staging », lancer le staging pour Apple (iOS) et Android ensemble dans la même session, démarrer un émulateur Android et y ouvrir l'application de staging. Réutiliser les services et l'émulateur déjà actifs lorsqu'ils correspondent à cet environnement.
 - Exécuter les contrôles adaptés à la modification. `pnpm check` regroupe lint, typecheck et tests du dépôt ; une modification documentaire seule ne nécessite pas de lancer l'application.
 - Pour une modification visuelle ou gestuelle, distinguer les contrôles automatisés de la validation dans l'application et sur appareil. Ne pas prétendre avoir observé un rendu sans l'avoir vérifié.
 - Relire le diff : chaque ligne doit servir la demande, sans duplication évitable ni changement annexe.
