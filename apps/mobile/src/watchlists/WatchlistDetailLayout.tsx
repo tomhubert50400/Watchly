@@ -1,5 +1,5 @@
 import { PropsWithChildren, ReactNode, RefObject, useLayoutEffect, useRef } from 'react';
-import { useHeaderHeight } from '@react-navigation/elements';
+import { useContentHeaderHeight } from '../navigation/useContentHeaderHeight';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
@@ -97,7 +97,7 @@ export function WatchlistPage({
   const scrollRef = providedScrollRef ?? internalScrollRef;
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const headerHeight = useHeaderHeight();
+  const headerHeight = useContentHeaderHeight();
   const topInset = title !== undefined ? headerHeight : 0;
   const visibility = useFocusedFieldVisibility(scrollRef, topInset);
   useLayoutEffect(() => {

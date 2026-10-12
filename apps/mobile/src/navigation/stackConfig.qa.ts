@@ -2,6 +2,7 @@
 // @ts-expect-error QA executes under tsx/Node, where this built-in module is available.
 import { readFileSync } from 'node:fs';
 import './nativeHeaderCoverage.qa';
+import './androidHeaderLayout.qa';
 import { goBackIfFocused, detailBackOptions, needsCustomStackBackButton, resolvePreviousPageLabel, rootStackScreenOptions } from './stackConfig';
 
 function assert(condition: unknown, message: string): asserts condition {

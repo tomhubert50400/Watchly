@@ -1,6 +1,5 @@
 import { useScrollToTop } from '@react-navigation/native';
-import { HeaderHeightContext } from '@react-navigation/elements';
-import { PropsWithChildren, ReactNode, RefObject, useContext, useRef } from 'react';
+import { PropsWithChildren, ReactNode, RefObject, useRef } from 'react';
 import {
   GestureResponderHandlers,
   KeyboardAvoidingView,
@@ -12,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing } from '../design/tokens';
+import { useContentHeaderHeight } from '../navigation/useContentHeaderHeight';
 import { useFocusedFieldVisibility } from './useFocusedFieldVisibility';
 import { ScreenHeader } from './ScreenHeader';
 import { ScreenReveal } from './ScreenReveal';
@@ -66,7 +66,7 @@ export function Screen({
   const fallbackScrollViewRef = useRef<ScrollView>(null);
   const scrollViewRef = providedScrollViewRef ?? fallbackScrollViewRef;
   const insets = useSafeAreaInsets();
-  const nativeHeaderHeight = useContext(HeaderHeightContext) ?? 0;
+  const nativeHeaderHeight = useContentHeaderHeight();
   const topInset = Math.max(nativeHeaderHeight, safeAreaEdges.includes('top') ? insets.top : 0);
   const visibility = useFocusedFieldVisibility(scrollViewRef, topInset);
   const sidePadding = typeof horizontalPadding === 'number'

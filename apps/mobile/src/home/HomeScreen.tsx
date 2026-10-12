@@ -79,7 +79,7 @@ export function HomeScreen() {
     && Constants.appOwnership !== AppOwnership.Expo
     && Constants.executionEnvironment !== ExecutionEnvironment.StoreClient
     ? insets.top - 35
-    : -35;
+    : Platform.OS === 'android' ? spacing.sm : -35;
   const {
     currentUser,
     firebaseIdToken,

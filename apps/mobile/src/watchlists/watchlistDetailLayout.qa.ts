@@ -82,7 +82,7 @@ runInNewContext(ts.transpileModule(sharedLayout, {
 }).outputText, { exports: exported, require: (name: string) => ({
   react: { useRef: (current: unknown) => ({ current }), useLayoutEffect: (effect: () => void) => effect() },
   '@react-navigation/native': { useNavigation: () => ({ setOptions: (options: unknown) => { nativeOptions = options; } }) },
-  '@react-navigation/elements': { useHeaderHeight: () => 106 },
+  '../navigation/useContentHeaderHeight': { useContentHeaderHeight: () => 106 },
   'react/jsx-runtime': { jsx, jsxs: jsx },
   'react-native': { ScrollView: 'scroll', Platform: { OS: 'ios' }, StyleSheet: { create: (value: unknown) => value } },
   'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 62, bottom: 34 }) },

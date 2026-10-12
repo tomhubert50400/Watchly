@@ -1,5 +1,5 @@
 import { useIsFocused } from '@react-navigation/native';
-import { useHeaderHeight } from '@react-navigation/elements';
+import { useContentHeaderHeight } from '../navigation/useContentHeaderHeight';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useRef, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
@@ -14,7 +14,7 @@ import { useUserDataRevision } from '../sync/userDataEvents';
 import { MovieCommunityReviewCard } from './MovieCommunityPanel';
 
 export function MovieReviewsScreen({ route }: NativeStackScreenProps<RootStackParamList, 'MovieReviews'>) {
-  const headerHeight = useHeaderHeight();
+  const headerHeight = useContentHeaderHeight();
   const { currentUser, firebaseIdToken, getFirebaseIdToken } = useAuthSession();
   const focused = useIsFocused();
   const revision = useUserDataRevision('opinions', 'socialGraph', 'profile');

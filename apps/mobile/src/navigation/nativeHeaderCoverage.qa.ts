@@ -54,6 +54,7 @@ runInNewContext(ts.transpileModule(source('../components/Screen.tsx'), {
   'react/jsx-runtime': { jsx, jsxs: jsx },
   '@react-navigation/native': { useScrollToTop: () => {} },
   '@react-navigation/elements': { HeaderHeightContext: {} },
+  '../navigation/useContentHeaderHeight': { useContentHeaderHeight: () => headerHeight },
   'react-native': { ScrollView: 'scroll', Platform: { OS: 'ios' }, StyleSheet: { create: (value: unknown) => value } },
   'react-native-safe-area-context': { useSafeAreaInsets: () => ({ top: 62, bottom: 34 }) },
   '../design/tokens': { colors: {}, spacing: { xl: 24, xxxl: 48 } },

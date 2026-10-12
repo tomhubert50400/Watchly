@@ -1,9 +1,9 @@
-import { useHeaderHeight } from '@react-navigation/elements';
-import { useCallback, useMemo, useState } from 'react';
+import { useContentHeaderHeight } from '../navigation/useContentHeaderHeight';
+import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Check, Funnel } from 'lucide-react-native';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenReveal } from '../components/ScreenReveal';
 import { Button } from '../components/Button';
@@ -31,12 +31,23 @@ export function ProfileMediaScreen() {
   const route = useRoute<Route>();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
+  const headerHeight = useContentHeaderHeight();
   const cardWidth = (width - spacing.xl * 2 - spacing.sm * 2) / 3;
   const [selectedSection, setSelectedSection] = useState<string | null>(null);
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [genreSheetOpen, setGenreSheetOpen] = useState(false);
   const [genresEnabled, setGenresEnabled] = useState(false);
+  const genreButton = useMemo(() => (
+    <Pressable accessibilityRole="button" accessibilityLabel={`Filter by genre: ${selectedGenre ?? 'All genres'}`}
+      accessibilityState={{ expanded: genreSheetOpen, selected: selectedGenre !== null }}
+      onPress={() => { setGenresEnabled(true); setGenreSheetOpen(true); }}
+      style={({ pressed }) => [styles.genreButton, pressed && styles.pressed]}>
+      <Funnel size={20} color={selectedGenre ? colors.accentText : colors.text} />
+    </Pressable>
+  ), [genreSheetOpen, selectedGenre]);
+  useLayoutEffect(() => {
+    if (Platform.OS === 'android') navigation.setOptions({ headerRight: () => genreButton });
+  }, [genreButton, navigation]);
   const providedItems = route.params.items;
   const usesProvidedItems = providedItems !== undefined;
   const resource = useLibraryData(!usesProvidedItems);
@@ -92,12 +103,7 @@ export function ProfileMediaScreen() {
           <>
             <View style={styles.filterRow}>
               <SegmentedControl options={sections} value={activeSection.value} onChange={setSelectedSection} containerStyle={styles.selector} />
-              <Pressable accessibilityRole="button" accessibilityLabel={`Filter by genre: ${selectedGenre ?? 'All genres'}`}
-                accessibilityState={{ expanded: genreSheetOpen, selected: selectedGenre !== null }}
-                onPress={() => { setGenresEnabled(true); setGenreSheetOpen(true); }}
-                style={({ pressed }) => [styles.genreButton, pressed && styles.pressed]}>
-                <Funnel size={20} color={selectedGenre ? colors.accentText : colors.text} />
-              </Pressable>
+              {Platform.OS !== 'android' ? genreButton : null}
             </View>
             <FlatList
               key={`${route.params.filter}:${activeSection.value}:${selectedGenre ?? 'all'}`}
