@@ -116,7 +116,6 @@ function ExploreNavigator() {
 function FallbackTabBarBackground() {
   return (
     <BlurView
-      experimentalBlurMethod="dimezisBlurView"
       intensity={45}
       style={StyleSheet.absoluteFill}
       tint="systemThinMaterialDark"

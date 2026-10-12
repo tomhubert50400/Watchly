@@ -1,6 +1,6 @@
 import MaskedView from '@react-native-masked-view/masked-view';
 import { cloneElement, type ReactElement, useRef, useState } from 'react';
-import { type ScrollViewProps, StyleSheet, UIManager } from 'react-native';
+import { Platform, type ScrollViewProps, StyleSheet, UIManager } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 const FADE_WIDTH = 24;
@@ -9,7 +9,7 @@ export function HorizontalScrollFade({ children }: { children: ReactElement<Scro
   const metrics = useRef({ width: 0, height: 0, contentWidth: 0, offset: 0 });
   const [edges, setEdges] = useState({ width: 0, height: 0, left: 0, right: 0 });
 
-  if (!UIManager.hasViewManagerConfig('RNCMaskedView')) return children;
+  if (Platform.OS === 'android' || !UIManager.hasViewManagerConfig('RNCMaskedView')) return children;
 
   const updateEdges = () => {
     const { width, height, contentWidth, offset } = metrics.current;

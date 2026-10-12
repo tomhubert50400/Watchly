@@ -10,6 +10,7 @@ const code = ts.transpileModule(readFileSync(new URL('./HorizontalScrollFade.tsx
 const slots: any[] = [];
 let cursor = 0;
 let available = true;
+const platform = { OS: 'ios' };
 const forwarded: unknown[] = [];
 const child = { type: 'scroll', props: {
   style: { marginHorizontal: -24 }, horizontal: true,
@@ -29,7 +30,7 @@ const modules: Record<string, unknown> = {
     },
   },
   'react/jsx-runtime': { jsx, jsxs: jsx },
-  'react-native': { StyleSheet: { create: (value: unknown) => value }, UIManager: { hasViewManagerConfig: () => available } },
+  'react-native': { Platform: platform, StyleSheet: { create: (value: unknown) => value }, UIManager: { hasViewManagerConfig: () => available } },
   '@react-native-masked-view/masked-view': { default: 'masked' },
   'react-native-svg': { default: 'svg', Defs: 'defs', LinearGradient: 'gradient', Rect: 'rect', Stop: 'stop' },
 };
@@ -63,6 +64,11 @@ layout(700, 180);
 assert.equal(render().props.maskElement.props.width, 700);
 assert.equal(render().props.style, child.props.style, 'the outer rail retains its original layout');
 assert.equal(forwarded.length, 9, 'existing layout, content-size and scroll callbacks must still run');
+platform.OS = 'android';
+assert.equal(render(), child, 'Android must retain the native list and its callbacks without a software layer');
+assert.equal(render().props.onScroll, child.props.onScroll);
+assert.equal(render().props.style, child.props.style);
+platform.OS = 'ios';
 available = false;
 assert.equal(render(), child, 'clients without masking keep the original scroll view');
 console.log('Horizontal fade QA passed: async height, text growth, resizing, edges, overscroll, callbacks and native fallback.');
