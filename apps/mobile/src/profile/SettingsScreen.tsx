@@ -49,6 +49,7 @@ import { notifyUserDataChanged } from '../sync/userDataEvents';
 import { reauthenticateAndRevokeApple } from '../auth/firebase';
 import { useMicrosoftAuth } from '../auth/microsoftAuth';
 import { getMissingGoogleClientConfig, googleClientIds } from '../auth/googleAuthConfig';
+import { requestNativeGoogleIdToken } from '../auth/googleNativeAuth';
 import { authProviders } from '../auth/providerConfig';
 import { SignInRequiredCard } from '../auth/SignInRequired';
 import { ScreenReveal } from '../components/ScreenReveal';
@@ -340,7 +341,7 @@ export function SettingsScreen() {
     if (accountAction || currentUser?.providers?.includes('GOOGLE')) return;
 
     const missingConfig = getMissingGoogleClientConfig(Platform.OS);
-    if (missingConfig.length > 0 || !googleRequest) {
+    if (missingConfig.length > 0 || (Platform.OS !== 'android' && !googleRequest)) {
       setMessage({ text: `Google setup is incomplete: ${missingConfig.join(', ')}.`, tone: 'error' });
       return;
     }
@@ -349,9 +350,15 @@ export function SettingsScreen() {
     setMessage(null);
 
     try {
-      const response = await promptGoogleAsync();
-      if (response.type === 'cancel' || response.type === 'dismiss') return;
-      const idToken = response.type === 'success' ? response.params.id_token : null;
+      let idToken: string | null;
+      if (Platform.OS === 'android') {
+        idToken = await requestNativeGoogleIdToken();
+        if (idToken === null) return;
+      } else {
+        const response = await promptGoogleAsync();
+        if (response.type === 'cancel' || response.type === 'dismiss') return;
+        idToken = response.type === 'success' ? response.params.id_token : null;
+      }
       if (typeof idToken !== 'string' || idToken.length === 0) {
         throw new Error('Google did not return an ID token.');
       }

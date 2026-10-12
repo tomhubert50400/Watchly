@@ -27,6 +27,11 @@ const easConfig = JSON.parse(
   };
 };
 const authCardSource = readFileSync(new URL('./ProfileAuthCard.tsx', import.meta.url), 'utf8');
+assert.match(
+  authCardSource,
+  /authProviders\.filter\(\(provider\) =>[\s\S]*?provider\.presentation === 'primary'[\s\S]*?&& \(provider\.id !== 'apple' \|\| Platform\.OS !== 'android'\)/,
+  'Android sign-in must omit Apple instead of rendering an unavailable button',
+);
 const firebaseSource = readFileSync(new URL('./firebase.ts', import.meta.url), 'utf8');
 const settingsSource = readFileSync(new URL('../profile/SettingsScreen.tsx', import.meta.url), 'utf8');
 const stagingLauncherSource = readFileSync(

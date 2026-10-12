@@ -1,0 +1,22 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.watchlygoogleauth'
+version = '1.0.0'
+
+android {
+  namespace 'expo.modules.watchlygoogleauth'
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  implementation 'androidx.credentials:credentials:1.6.0'
+  implementation 'androidx.credentials:credentials-play-services-auth:1.6.0'
+  // Google ID 1.2.x requires newer Kotlin metadata than Expo SDK 54 supports.
+  implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'
+}

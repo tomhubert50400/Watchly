@@ -18,6 +18,7 @@ import type { ProviderSignInResult, TotpSignInChallenge } from './AuthSessionCon
 import { getMissingFirebaseConfig } from './firebase';
 import { providerName } from './externalOAuth';
 import { getMissingGoogleClientConfig, googleClientIds } from './googleAuthConfig';
+import { requestNativeGoogleIdToken } from './googleNativeAuth';
 import { useMicrosoftAuth } from './microsoftAuth';
 import { authProviders, type AuthProviderConfig } from './providerConfig';
 import { getTotpErrorMessage, isValidTotpCode, normalizeTotpCode } from './totpChallenge';
@@ -119,7 +120,7 @@ export function ProfileAuthCard({
   const canUseApple = appleAvailable && missingFirebaseConfig.length === 0 && status !== 'loading';
   const canUseGoogle = missingFirebaseConfig.length === 0
     && missingGoogleConfig.length === 0
-    && Boolean(request)
+    && (Platform.OS === 'android' || Boolean(request))
     && status !== 'loading';
 
   async function startAppleSignIn() {
@@ -254,6 +255,21 @@ export function ProfileAuthCard({
     if (!canUseGoogle) return;
     showToast(`Connecting with ${provider.name}.`, 'info');
     setLocalStatus('loading');
+    if (Platform.OS === 'android') {
+      try {
+        const idToken = await requestNativeGoogleIdToken();
+        if (!idToken) {
+          setLocalStatus('idle');
+          return;
+        }
+        applyProviderResult(await signInWithGoogle(idToken));
+      } catch (error) {
+        console.warn('Google sign-in failed', safeError(error));
+        setLocalStatus('error');
+        setMessage(accountError(error));
+      }
+      return;
+    }
     try {
       await promptAsync();
     } catch {
@@ -294,7 +310,10 @@ export function ProfileAuthCard({
     setMessage(null);
   }
 
-  const primaryProviders = authProviders.filter((provider) => provider.presentation === 'primary');
+  const primaryProviders = authProviders.filter((provider) => (
+    provider.presentation === 'primary'
+    && (provider.id !== 'apple' || Platform.OS !== 'android')
+  ));
   const secondaryProviders = authProviders.filter((provider) => provider.presentation === 'secondary');
 
   return (

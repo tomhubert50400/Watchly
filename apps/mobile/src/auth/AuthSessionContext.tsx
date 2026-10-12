@@ -27,6 +27,7 @@ import {
   subscribeToFirebaseIdTokenState,
 } from './firebase';
 import { requestExternalOAuthTicket } from './externalOAuth';
+import { clearNativeGoogleSession } from './googleNativeAuth';
 import type { MicrosoftTokens } from './microsoftAuth';
 
 type AuthSessionStatus = 'idle' | 'loading' | 'signedIn' | 'error';
@@ -506,6 +507,9 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
         performGuaranteedSignOut(signedOutUserId, {
           clearPrivateCacheForUser,
           signOutFromFirebase,
+        }),
+        clearNativeGoogleSession().catch(() => {
+          console.warn('Could not clear the native Google session.');
         }),
         signedOutFirebaseIdToken
           ? revokeStoredPushDevice(signedOutFirebaseIdToken).catch(() => false)
