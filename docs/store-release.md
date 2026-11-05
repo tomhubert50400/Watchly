@@ -122,7 +122,7 @@ Please test sign-in, onboarding, discovery, tracking a film and an episode, rati
 - [x] Build and upload the store-signed TestFlight binary, version `1.0.0` build `3`.
 - [x] Complete Apple processing and add build `3` to the automatic `Watchly Internal` group with an internal tester.
 - [ ] Build a new TestFlight binary and test it on a physical iPhone. The latest uploaded build is `1.0.0` (`20`), from 2026-10-09; it predates the October Android and push changes and `supportsTablet: false`, which change the native fingerprint.
-- [ ] Replace the expired Sentry organization token before the public production build (see below).
+- [x] Replace the expired Sentry organization token (done 2026-11-05 in EAS `production` and `preview`, `SENTRY_ALLOW_FAILURE` removed). Confirm the upload report in the next store build log.
 - [x] Database backups: daily encrypted dumps to R2 with an automated restore drill, see `docs/security/backup-restore-readiness.md`. First production backup and restore drill passed on 2026-11-05.
 - [x] iPad is not supported in the first public release: `supportsTablet` is `false`, so no iPad screenshots are required. Takes effect from the next native build.
 - [ ] Complete Google Play device verification, register the Android Firebase/OAuth application, build an AAB and upload it to the internal track.
