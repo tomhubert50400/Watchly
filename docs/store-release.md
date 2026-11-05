@@ -40,6 +40,21 @@ For production, set both variant flags to `production` and use `--channel produc
 
 Local Metro tests use the installed staging development client and do not validate remote update delivery. See [Expo's setup guide](https://docs.expo.dev/eas-update/getting-started/) and [runtime compatibility](https://docs.expo.dev/eas-update/runtime-versions/).
 
+## Sentry upload token
+
+Production builds upload Hermes source maps and dSYMs to Sentry with `SENTRY_AUTH_TOKEN`. While the token is expired, the `testflight` and `production-internal` profiles set `SENTRY_ALLOW_FAILURE=true`, so builds succeed but production crashes are not symbolicated.
+
+1. In Sentry (organization `watchly-ja`), open Settings > Developer Settings > Organization Tokens and create a token. Organization tokens carry the `org:ci` scope needed for source maps and debug files.
+2. Store it as a secret in both EAS environments, from `apps/mobile`:
+
+```powershell
+pnpm dlx eas-cli@latest env:create --environment production --name SENTRY_AUTH_TOKEN --visibility secret --force
+pnpm dlx eas-cli@latest env:create --environment preview --name SENTRY_AUTH_TOKEN --visibility secret --force
+```
+
+3. Remove `SENTRY_ALLOW_FAILURE` from the `testflight` and `production-internal` profiles in `eas.json`, so a failed upload fails the build.
+4. In the next build log, check the `Source Map Upload Report` and the dSYM upload, then tick the release gate.
+
 ## App Store metadata
 
 **Subtitle**
