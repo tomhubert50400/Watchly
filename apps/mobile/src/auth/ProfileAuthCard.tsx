@@ -8,6 +8,7 @@ import Svg, { Path, Rect } from 'react-native-svg';
 import { ApiError } from '../api/client';
 import type { ExternalAuthProvider } from '../api/externalAuth';
 import { BrandLogo } from '../brand/BrandLogo';
+import { AndroidVersionLabel } from '../components/AndroidVersionLabel';
 import { Button } from '../components/Button';
 import { TextInput } from '../components/TextInput';
 import { colors, radii, spacing, typography } from '../design/tokens';
@@ -419,6 +420,7 @@ export function ProfileAuthCard({
           </>
         )}
       </View>
+      {embedded ? null : <AndroidVersionLabel />}
     </View>
   );
 }
@@ -570,7 +572,7 @@ const styles = StyleSheet.create({
   secondaryItem: { alignItems: 'center', gap: spacing.xs },
   secondaryRow: { flexDirection: 'row', gap: spacing.lg, justifyContent: 'center' },
   setupMessage: { ...typography.meta, color: colors.textMuted, marginTop: spacing.md, textAlign: 'center' },
-  shell: { paddingHorizontal: spacing.lg, paddingTop: spacing.xxl, position: 'relative' },
+  shell: { gap: spacing.lg, paddingHorizontal: spacing.lg, paddingTop: spacing.xxl, position: 'relative' },
   shellEmbedded: { paddingHorizontal: 0, paddingTop: 0 },
   title: { color: colors.text, fontSize: 25, fontWeight: '900', lineHeight: 30, marginTop: spacing.md, textAlign: 'center' },
   totpForm: { gap: spacing.sm, marginTop: spacing.lg },
