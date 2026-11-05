@@ -58,17 +58,11 @@
     },
     "production-internal": {
       "extends": "production",
-      "distribution": "internal",
-      "env": {
-        "SENTRY_ALLOW_FAILURE": "true"
-      }
+      "distribution": "internal"
     },
     "testflight": {
       "extends": "production",
-      "credentialsSource": "local",
-      "env": {
-        "SENTRY_ALLOW_FAILURE": "true"
-      }
+      "credentialsSource": "local"
     }
   },
   "submit": {
