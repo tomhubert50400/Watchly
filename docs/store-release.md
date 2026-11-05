@@ -42,7 +42,7 @@ Local Metro tests use the installed staging development client and do not valida
 
 ## Sentry upload token
 
-Production builds upload Hermes source maps and dSYMs to Sentry with `SENTRY_AUTH_TOKEN`. While the token is expired, the `testflight` and `production-internal` profiles set `SENTRY_ALLOW_FAILURE=true`, so builds succeed but production crashes are not symbolicated.
+Production builds upload Hermes source maps and dSYMs to Sentry with `SENTRY_AUTH_TOKEN`, and a failed upload fails the build. When the token expires, replace it as follows.
 
 1. In Sentry (organization `watchly-ja`), open Settings > Developer Settings > Organization Tokens and create a token. Organization tokens carry the `org:ci` scope needed for source maps and debug files.
 2. Store it as a secret in both EAS environments, from `apps/mobile`:
