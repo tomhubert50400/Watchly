@@ -20,7 +20,7 @@ A failed step fails the run, and GitHub sends a failure e-mail to the repository
 
 1. **R2 bucket.** Create a private bucket dedicated to backups (for example `watchly-db-backups`), separate from the media bucket. Create an R2 API token with *Object Read & Write* limited to this bucket.
 2. **Database URL.** In Railway, open the production Postgres service and copy `DATABASE_PUBLIC_URL` (TCP proxy). The internal URL is not reachable from GitHub.
-3. **Passphrase.** Generate a long random passphrase and store it in your password manager. Without it, no backup can be restored. Never commit it.
+3. **Passphrase.** The setup script below generates a random passphrase and asks you to store it in your password manager. Without it, no backup can be restored. Never commit it.
 4. **GitHub secrets.** Run `powershell -ExecutionPolicy Bypass -File scripts/setup-db-backup-secrets.ps1` from the repository root. It generates the passphrase (step 3), prompts for the other values without echoing them and stores them with `gh`. The resulting secrets are:
 
 | Secret | Value |
