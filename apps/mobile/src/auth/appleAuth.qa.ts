@@ -102,7 +102,12 @@ assert.equal(productionInternalProfile.distribution, 'internal');
 assert.equal(productionInternalProfile.developmentClient, undefined);
 assert.equal(testflightProfile.extends, 'production');
 assert.equal(testflightProfile.distribution, undefined);
-assert.equal(testflightProfile.env?.SENTRY_ALLOW_FAILURE, 'true');
+assert.equal(
+  testflightProfile.env?.SENTRY_ALLOW_FAILURE,
+  undefined,
+  'store builds must fail when Sentry symbol upload fails',
+);
+assert.equal(productionInternalProfile.env?.SENTRY_ALLOW_FAILURE, undefined);
 assert.match(
   stagingLauncherSource,
   /--max-workers 4/,
