@@ -52,7 +52,7 @@ pnpm dlx eas-cli@latest env:create --environment production --name SENTRY_AUTH_T
 pnpm dlx eas-cli@latest env:create --environment preview --name SENTRY_AUTH_TOKEN --visibility secret --force
 ```
 
-3. Remove `SENTRY_ALLOW_FAILURE` from the `testflight` and `production-internal` profiles in `eas.json`, so a failed upload fails the build.
+3. Never work around an expired token with `SENTRY_ALLOW_FAILURE`: production crashes would no longer be symbolicated.
 4. In the next build log, check the `Source Map Upload Report` and the dSYM upload, then tick the release gate.
 
 ## App Store metadata
