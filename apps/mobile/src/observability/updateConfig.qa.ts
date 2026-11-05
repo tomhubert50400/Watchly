@@ -64,3 +64,36 @@ for (const nativeUpdatesAvailable of [false, true]) {
   assert.equal(updatesLoads, nativeUpdatesAvailable ? 1 : 0, 'compatible builds retain update monitoring');
 }
 console.log('Update startup QA passed: old development clients, native update builds and retained error monitoring.');
+
+const settingsSource = readFileSync(new URL('../profile/SettingsScreen.tsx', import.meta.url), 'utf8').replaceAll('\r\n', '\n');
+const authCardSource = readFileSync(new URL('../auth/ProfileAuthCard.tsx', import.meta.url), 'utf8');
+const versionSource = readFileSync(new URL('../components/AndroidVersionLabel.tsx', import.meta.url), 'utf8');
+assert.match(settingsSource.slice(settingsSource.indexOf('if (!firebaseIdToken) {\n    return'), settingsSource.indexOf("if (status === 'loading' && !savedSettings)")), /<AndroidVersionLabel\s*\/>/, 'signed-out settings must show the version without an account');
+assert.match(authCardSource, /\{embedded \? null : <AndroidVersionLabel\s*\/>\}/, 'standalone sign-in shows the version, embedded cards leave it to their host so it never appears twice');
+assert.doesNotMatch(versionSource, /useAuthSession|firebaseIdToken/, 'the version label must not depend on authentication');
+const versionCode = ts.transpileModule(versionSource.slice(
+  versionSource.indexOf('function getAndroidVersionLabel()'),
+  versionSource.indexOf('const styles ='),
+) + '\ngetAndroidVersionLabel();', {
+  compilerOptions: { target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const application = { nativeApplicationVersion: '1.0.0', nativeBuildVersion: '6' };
+const runningUpdate = {
+  isEnabled: true, isEmbeddedLaunch: false,
+  updateId: '01a133f5-76fc-7bf1-899c-5bd5f41fdda2',
+  initialContext: { downloadedUpdate: { updateId: 'newer-but-not-running' } },
+};
+for (const test of [
+  { dev: false, application, updates: runningUpdate, expected: 'APK 1.0.0 (6) · Update f41fdda2' },
+  { dev: false, application, updates: { ...runningUpdate, isEmbeddedLaunch: true }, expected: 'APK 1.0.0 (6) · Original' },
+  { dev: false, application, updates: { ...runningUpdate, isEnabled: false }, expected: 'APK 1.0.0 (6) · Original' },
+  { dev: true, application, updates: runningUpdate, expected: 'APK 1.0.0 (6) · Development' },
+  { dev: true, application: null, updates: null, expected: 'APK 2.0.0 · Development' },
+]) {
+  assert.equal(runInNewContext(versionCode, {
+    __DEV__: test.dev,
+    appConfig: { expo: { version: '2.0.0' } },
+    requireOptionalNativeModule: (name: string) => name === 'ExpoApplication' ? test.application : test.updates,
+  }), test.expected, 'settings must identify the installed APK and the running update, including embedded and development launches');
+}
+console.log('Settings version QA passed: native version, running update, embedded fallback and older development clients.');
