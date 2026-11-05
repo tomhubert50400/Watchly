@@ -1,7 +1,47 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
+import ts from 'typescript';
 
 const source = readFileSync(new URL('./OnboardingScreen.tsx', import.meta.url), 'utf8');
+
+const trackSource = source.slice(
+  source.indexOf('  const transitionSteps:'),
+  source.indexOf('\n  return (', source.indexOf('  const transitionSteps:')),
+);
+const trackScript = ts.transpileModule(`(() => { ${trackSource}\nreturn { transitionSteps, stepTrackLeft, stepTrackTranslateX }; })();`, {
+  compilerOptions: { target: ts.ScriptTarget.ES2022 },
+}).outputText;
+
+for (const windowWidth of [360, 412, 768]) {
+  for (const direction of [1, -1] as const) {
+    const from = direction === 1 ? 'profile' : 'taste';
+    const to = 'import';
+    const context = {
+      windowWidth,
+      step: from,
+      stepTransition: { direction, from, to } as { direction: number; from: string; to: string } | null,
+      stepTransitionProgress: {
+        interpolate: ({ outputRange }: { outputRange: number[] }) => ({ outputRange }),
+      },
+    };
+    const moving = runInNewContext(trackScript, context);
+    const sourceIndex = moving.transitionSteps.indexOf(from);
+    const destinationIndex = moving.transitionSteps.indexOf(to);
+    assert.equal(moving.stepTrackLeft + sourceIndex * windowWidth + moving.stepTrackTranslateX.outputRange[0], 0);
+    assert.equal(moving.stepTrackLeft + destinationIndex * windowWidth + moving.stepTrackTranslateX.outputRange[1], 0);
+
+    context.step = to;
+    context.stepTransition = null;
+    const settled = runInNewContext(trackScript, context);
+    assert.equal(typeof settled.stepTrackTranslateX, 'object',
+      'the settled track must keep a native animated transform, replacing it with static zero can leave Android offscreen');
+    assert.deepEqual(Array.from(settled.stepTrackTranslateX.outputRange), [0, 0],
+      'the native track must stay at zero after completion, including when progress is reset for the next transition');
+    assert.deepEqual(Array.from(settled.transitionSteps), [to]);
+    assert.equal(settled.stepTrackLeft, 0);
+  }
+}
 
 assert.match(
   source,
@@ -37,11 +77,6 @@ assert.match(
   source,
   /const stepTrackLeft = stepTransition\?\.direction === -1 \? -windowWidth : 0/,
   'the backward track must keep the current page in the viewport before native animation attaches',
-);
-assert.match(
-  source,
-  /outputRange: stepTransition\.direction === 1[\s\S]*\[0, -windowWidth\][\s\S]*\[0, windowWidth\]/,
-  'the pager must travel one full viewport in the requested direction',
 );
 assert.match(
   source,

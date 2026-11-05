@@ -561,14 +561,15 @@ export function OnboardingScreen() {
       : [stepTransition.to, stepTransition.from]
     : [step];
   const stepTrackLeft = stepTransition?.direction === -1 ? -windowWidth : 0;
-  const stepTrackTranslateX = stepTransition
-    ? stepTransitionProgress.interpolate({
-        inputRange: [0, 1],
-        outputRange: stepTransition.direction === 1
-          ? [0, -windowWidth]
-          : [0, windowWidth],
-      })
-    : 0;
+  // Keep native ownership at rest so Android clears the completed slide offset.
+  const stepTrackTranslateX = stepTransitionProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: !stepTransition
+      ? [0, 0]
+      : stepTransition.direction === 1
+        ? [0, -windowWidth]
+        : [0, windowWidth],
+  });
 
   return (
     <View style={styles.root}>
