@@ -52,6 +52,7 @@ import { getMissingGoogleClientConfig, googleClientIds } from '../auth/googleAut
 import { requestNativeGoogleIdToken } from '../auth/googleNativeAuth';
 import { authProviders } from '../auth/providerConfig';
 import { SignInRequiredCard } from '../auth/SignInRequired';
+import { AndroidVersionLabel } from '../components/AndroidVersionLabel';
 import { ScreenReveal } from '../components/ScreenReveal';
 import { BottomActionSheet, BottomActionSheetScrollView } from '../components/BottomActionSheet';
 import { Button } from '../components/Button';
@@ -631,6 +632,7 @@ export function SettingsScreen() {
             />
           )}
           <LegalSection onOpen={openLegalDocument} />
+          <AndroidVersionLabel />
         </View>
       </Screen>
     );
@@ -654,6 +656,7 @@ export function SettingsScreen() {
           <Button label="Try again" onPress={() => setLoadAttempt((attempt) => attempt + 1)} />
         </EmptyState>
         <LegalSection onOpen={openLegalDocument} />
+        <AndroidVersionLabel />
       </Screen>
     );
   }
@@ -942,6 +945,7 @@ export function SettingsScreen() {
               {accountAction === 'signOut' ? 'Signing out' : 'Sign out'}
             </Text>
           </Pressable>
+          <AndroidVersionLabel />
         </View>
       </Screen>
 
@@ -1316,7 +1320,9 @@ function LegalSection({ onOpen }: { onOpen: (document: LegalDocumentId) => void 
         <LegalRow icon={Scale} label="Legal notice" onPress={() => onOpen('legalNotice')} />
         <LegalRow icon={Code2} label="Licenses and credits" last onPress={() => onOpen('licenses')} />
       </View>
-      <Text style={styles.version}>Watchly {appConfig.expo.version}</Text>
+      {Platform.OS !== 'android' ? (
+        <Text style={styles.version}>Watchly {appConfig.expo.version}</Text>
+      ) : null}
     </SettingsSection>
   );
 }
