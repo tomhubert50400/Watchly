@@ -40,6 +40,18 @@ For production, set both variant flags to `production` and use `--channel produc
 
 Local Metro tests use the installed staging development client and do not validate remote update delivery. See [Expo's setup guide](https://docs.expo.dev/eas-update/getting-started/) and [runtime compatibility](https://docs.expo.dev/eas-update/runtime-versions/).
 
+## Starting production builds
+
+EAS evaluates `app.config.js` once before it loads the EAS `production` variables, and the production branch requires `EXPO_PUBLIC_DISCORD_APPLICATION_ID`. Without it, `eas build` fails with only `expo/bin/cli config --json exited with non-zero code: 1`. The value is the public Discord application ID already shipped in the bundle, so set it in the shell first:
+
+```powershell
+$env:EXPO_PUBLIC_DISCORD_APPLICATION_ID = '1541733697399693354'
+npx eas-cli@latest build --platform ios --profile testflight --auto-submit-with-profile production --non-interactive
+npx eas-cli@latest build --platform android --profile production-internal --non-interactive
+```
+
+`production-internal` produces an installable APK for device testing while Google Play is not set up.
+
 ## Sentry upload token
 
 Production builds upload Hermes source maps and dSYMs to Sentry with `SENTRY_AUTH_TOKEN`, and a failed upload fails the build. When the token expires, replace it as follows.
