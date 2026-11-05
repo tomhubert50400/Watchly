@@ -66,3 +66,6 @@ Record each manual restore (date, backup file, target, verification result) in t
 | Date | Backup | Target | Result |
 | --- | --- | --- | --- |
 | 2026-11-05 | Local dump of a database migrated with all 60 migrations | Local PostgreSQL 18 container | Restored, `db:verify` and `security:backup-readiness` passed. Wrong passphrase and wrong `RESTORE_CONFIRM` were refused. |
+| 2026-11-05 | First production backup `watchly-20261105T123434Z.dump.gpg` (1.02 MB), GitHub Actions run 42028217983 | CI PostgreSQL 18 container | Uploaded to R2, restored, `db:verify` and `security:backup-readiness` passed. |
+
+Production setup completed on 2026-11-05: R2 bucket `watchly-db-backups` (public access disabled), Railway TCP proxy enabled on the production Postgres service, all GitHub secrets set except the optional heartbeat.
