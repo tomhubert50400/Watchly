@@ -33,6 +33,7 @@ Write-Host '  Railway > production > Postgres > Variables > DATABASE_PUBLIC_URL'
 $dbUrl = Read-Secret '  Paste DATABASE_PUBLIC_URL'
 if ($dbUrl -notmatch '^postgres(ql)?://') { throw 'This does not look like a PostgreSQL URL.' }
 if ($dbUrl -match 'railway\.internal') { throw 'This is the internal URL. Use DATABASE_PUBLIC_URL.' }
+if ($dbUrl -match '\$\{\{') { throw 'This is an unresolved Railway reference. Enable Public Access, then copy the displayed value (eye icon).' }
 Set-RepoSecret 'PROD_DATABASE_URL' $dbUrl
 $dbUrl = $null
 

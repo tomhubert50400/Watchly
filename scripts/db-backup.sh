@@ -13,6 +13,10 @@ out_dir="${1:?usage: db-backup.sh <output-dir>}"
 : "${DATABASE_URL:?DATABASE_URL is required}"
 : "${BACKUP_ENCRYPTION_PASSPHRASE:?BACKUP_ENCRYPTION_PASSPHRASE is required}"
 
+case "$DATABASE_URL" in
+  *'${{'*) echo "DATABASE_URL contains an unresolved Railway reference. Store the resolved value." >&2; exit 1 ;;
+esac
+
 # Prisma URLs may carry ?schema=public, which libpq rejects.
 db_url="$(printf '%s' "$DATABASE_URL" | sed -E 's/([?&])schema=[^&]*&?/\1/; s/[?&]$//')"
 
