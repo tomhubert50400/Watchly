@@ -107,7 +107,7 @@ Please test sign-in, onboarding, discovery, tracking a film and an episode, rati
 - [x] Build and upload the store-signed TestFlight binary, version `1.0.0` build `3`.
 - [x] Complete Apple processing and add build `3` to the automatic `Watchly Internal` group with an internal tester.
 - [ ] Install and test build `1.0.0` (`3`) on a physical iPhone.
-- [ ] Replace the expired Sentry organization token before the public production build.
-- [ ] Enable managed database backups and perform a restore drill. Railway Hobby currently has no backups or PITR.
-- [ ] Decide whether the first public release supports iPad. If `supportsTablet` stays enabled, provide the required 13-inch iPad screenshots and device validation.
+- [ ] Replace the expired Sentry organization token before the public production build (see below).
+- [x] Database backups: daily encrypted dumps to R2 with an automated restore drill, see `docs/security/backup-restore-readiness.md`. Remaining: create the R2 bucket, add the GitHub secrets and run the workflow once.
+- [x] iPad is not supported in the first public release: `supportsTablet` is `false`, so no iPad screenshots are required. Takes effect from the next native build.
 - [ ] Complete Google Play device verification, register the Android Firebase/OAuth application, build an AAB and upload it to the internal track.
