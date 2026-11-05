@@ -37,7 +37,7 @@
     "userInterfaceStyle": "dark",
     "ios": {
       "bundleIdentifier": "com.tom.tvapp.dev",
-      "supportsTablet": true,
+      "supportsTablet": false,
       "usesAppleSignIn": true,
       "infoPlist": {
         "CFBundleDevelopmentRegion": "en",
